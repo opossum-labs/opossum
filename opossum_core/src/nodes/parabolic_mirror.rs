@@ -448,11 +448,12 @@ impl AnalysisRayTrace for ParabolicMirror {
         if rays.is_empty() {
             return Ok(LightResult::default());
         }
-        let Some(runtime) = self.node_attr_mut().runtime_mut() else {
+        let face = self.face_of_port(in_port)?;
+        let Some(geometry) = self.node_attr_mut().runtime_geometry_mut() else {
             return Err(OpossumError::Analysis("no surface found. Aborting".into()));
         };
-        let mut reflected_rays = runtime.interact(
-            in_port,
+        let mut reflected_rays = geometry.interact(
+            face,
             &mut rays,
             &Refraction(None),
             ReflectedPart::Main,

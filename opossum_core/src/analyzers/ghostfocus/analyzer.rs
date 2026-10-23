@@ -46,13 +46,10 @@ impl GhostFocusAnalyzer {
                 self.node_group_report(g, analysis_report)?;
             } else {
                 let node_name = &node_ref.name().to_string();
-                let hit_maps = node_ref.hit_maps();
-                for hit_map in &hit_maps {
-                    let critical_positions = hit_map.1.critical_fluences();
-                    let lidt = *node_ref
-                        .get_optic_surface(hit_map.0)
-                        .expect("OpticSurface not found!")
-                        .lidt();
+                for (surface_name, surface) in node_ref.surfaces_with_hits() {
+                    let hit_map = surface.hit_map();
+                    let critical_positions = hit_map.critical_fluences();
+                    let lidt = *surface.lidt();
                     if !critical_positions.is_empty() {
                         for (i, (rays_uuid, (fluence, hist_idx, bounce))) in
                             critical_positions.iter().enumerate()
@@ -71,7 +68,6 @@ impl GhostFocusAnalyzer {
                                 origin_str.clone().into(),
                             )?;
                             let fluence_data = hit_map
-                                .1
                                 .get_rays_hit_map(*bounce, *rays_uuid)
                                 .unwrap()
                                 .calc_fluence_map(
@@ -110,7 +106,7 @@ impl GhostFocusAnalyzer {
                                 &format!(
                                     "{} critical fluence on surface '{}' of node '{}'",
                                     count_str(i + 1),
-                                    hit_map.0,
+                                    surface_name,
                                     node_name
                                 ),
                                 &Uuid::new_v4().as_simple().to_string(),

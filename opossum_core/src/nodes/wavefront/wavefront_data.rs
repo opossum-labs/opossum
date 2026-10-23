@@ -541,17 +541,14 @@ mod test {
     use super::*;
     use crate::{
         analyzers::propagation_strategy::MissedSurfaceStrategy,
-        core_optics::{optic_surface::OpticSurface, surface_effect::Refraction},
+        core_optics::surface_effect::Refraction,
         degree,
         error::OpmResult,
-        geometry::{Face, Geometry, SurfaceShape},
+        geometry::{Face, Geometry, SurfaceGeometry, SurfaceShape},
         joule,
         light::{Ray, Rays, rays::ReflectedPart},
         millimeter, nanometer,
-        nodes::{
-            WaveFrontData, WaveFrontMap, test_helper::helper::traced_at,
-            wavefront::zernike::ZernikeNoll,
-        },
+        nodes::{WaveFrontData, WaveFrontMap, wavefront::zernike::ZernikeNoll},
         refractive_index::refr_index_vaccuum,
         utils::geom_transformation::Isometry,
     };
@@ -574,15 +571,14 @@ mod test {
             joule!(1.),
         )?;
 
-        let plane = Geometry::from(Face::new(
+        let mut plane = Geometry::from(Face::new(
             SurfaceShape::Plane,
             Isometry::new_along_z(millimeter!(10.0))?,
         ));
-        let mut plane = traced_at(plane, OpticSurface::default())?;
         let vacuum = refr_index_vaccuum();
         let mut refract = |rays: &mut Rays| {
             plane.interact(
-                "input_1",
+                SurfaceGeometry::FACE,
                 rays,
                 &Refraction(Some(&vacuum)),
                 ReflectedPart::Ghost,

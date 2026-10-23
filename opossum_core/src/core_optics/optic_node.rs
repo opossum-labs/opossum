@@ -13,7 +13,6 @@ use crate::{
     core_optics::{
         NodeAttrExt, OpticNodeExt, OpticPorts, SurfacePorts,
         node_attr::{HasNodeAttr, NodePositioning},
-        runtime_geometry::RuntimeGeometry,
         volumetric::Volumetric,
     },
     error::{OpmResult, OpossumError},
@@ -83,8 +82,12 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
     fn reset_data(&mut self) {
         self.set_light_data(None);
         self.reset_optic_surfaces();
-        if let Some(runtime) = self.node_attr_mut().runtime_mut() {
-            runtime.clear_inversion();
+        if let Some(body) = self
+            .node_attr_mut()
+            .runtime_geometry_mut()
+            .and_then(|geometry| geometry.kind_mut().as_body_mut())
+        {
+            *body.inversion_mut() = None;
         }
     }
 
@@ -114,8 +117,8 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
         let name = self.name().to_owned();
         let Some(body) = self
             .node_attr_mut()
-            .runtime_mut()
-            .and_then(RuntimeGeometry::body_mut)
+            .runtime_geometry_mut()
+            .and_then(|geometry| geometry.kind_mut().as_body_mut())
         else {
             return Err(OpossumError::Other(format!(
                 "volume node '{name}' encloses no body"

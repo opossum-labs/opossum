@@ -5,9 +5,8 @@ use crate::{
     apertures::Outline,
     coatings::CoatingType,
     core_optics::{
-        NodeAttrExt, OpticNode, PortType, SurfaceConfig, SurfacePorts,
+        NodeAttrExt, OpticNode, OpticPorts, PortType, SurfaceConfig, SurfacePorts,
         optic_surface::OpticSurface,
-        runtime_geometry::{RuntimeGeometry, RuntimeSurfaces},
         surface_effect::{Refraction, SurfaceEffect},
     },
     error::{OpmResult, OpossumError},
@@ -150,12 +149,28 @@ pub trait OpticNodeExt {
     /// surface property for a face.
     fn install_geometry(&mut self, ports: &SurfacePorts) -> OpmResult<()>;
 
+    /// Return the face of this node's geometry the port of the given (physical) name sits on (see
+    /// [`OpticNode::surface_ports`]).
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the node has no such port.
+    fn face_of_port(&self, port: &str) -> OpmResult<FaceIndex>;
+
+    /// Return the optic surface the port of the given (physical) name sits on, or `None` if the
+    /// node has no such port or no runtime geometry.
+    fn get_optic_surface(&self, port: &str) -> Option<&OpticSurface>;
+
+    /// Return the optic surface the port of the given (physical) name sits on, as
+    /// [`OpticNodeExt::get_optic_surface`] does, mutably.
+    fn get_optic_surface_mut(&mut self, port: &str) -> Option<&mut OpticSurface>;
+
     /// Lets a surface of this node act on the ray bundles of an analysis (see
-    /// [`RuntimeGeometry::propagate`]) and warns if rays were lost there.
+    /// [`Geometry::propagate`]) and warns if rays were lost there.
     ///
     /// # Arguments
     ///
-    /// * `optic_surf_name` - the name of the surface (its port name).
+    /// * `optic_surf_name` - the (physical) name of the port whose surface acts.
     /// * `effect` - what the surface does to a ray that hits it.
     /// * `rays_bundle` - the bundles of the analysis.
     /// * `strategy` - the analysis.
@@ -293,12 +308,12 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         if self.effective_node_iso().is_none() {
             return Err(OpossumError::Other("no effective node iso defined".into()));
         }
-        let surf = self.get_optic_surface(surf_name).ok_or_else(|| {
+        let face = self.surface_ports().face_of(surf_name).ok_or_else(|| {
             OpossumError::Other(format!("no surface with name {surf_name} defined"))
         })?;
         self.node_attr()
-            .runtime()
-            .and_then(|runtime| runtime.geometry().kind().face(surf.face()))
+            .runtime_geometry()
+            .and_then(|geometry| geometry.face(face))
             .map(|face| *face.frame())
             .ok_or_else(|| {
                 OpossumError::Other(format!("the surface {surf_name} is no face of the node"))
@@ -387,44 +402,61 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
     }
 
     fn install_geometry(&mut self, surface_ports: &SurfacePorts) -> OpmResult<()> {
-        let Some(placed) = self.placed_geometry()? else {
+        let Some(mut placed) = self.placed_geometry()? else {
             return Err(OpossumError::Other(format!(
                 "node '{}' has no geometry to install surfaces from",
                 self.name()
             )));
         };
-        let kind = placed.kind();
-        let mut ports = self.node_attr().raw_ports().clone();
-        let mut surfaces = RuntimeSurfaces::default();
-        for (port_names, port_type, installed) in [
-            (surface_ports.inputs, PortType::Input, &mut surfaces.inputs),
-            (
-                surface_ports.outputs,
-                PortType::Output,
-                &mut surfaces.outputs,
-            ),
+        let mut ports = OpticPorts::new();
+        for (port_names, port_type) in [
+            (surface_ports.inputs, PortType::Input),
+            (surface_ports.outputs, PortType::Output),
         ] {
             for &(name, face) in port_names {
-                let Some(face_name) = kind.face_name(face) else {
+                if placed.kind().surface(face).is_none() {
                     return Err(OpossumError::Other(format!(
                         "surface '{name}' sits on face {face}, which does not exist (face count: {})",
-                        kind.face_count()
+                        placed.kind().face_count()
                     )));
-                };
-                let config = self.surface_config(&face_name)?;
-                if !ports.ports_raw(&port_type).contains(name) {
-                    ports.add(&port_type, name)?;
                 }
-                installed.insert(
-                    name.to_string(),
-                    OpticSurface::new(face, *config.coating(), config.lidt())?,
-                );
+                ports.add(&port_type, name)?;
+            }
+        }
+        for face in (0..placed.kind().face_count()).map(FaceIndex::new) {
+            let Some(face_name) = placed.kind().face_name(face) else {
+                continue;
+            };
+            let config = self.surface_config(&face_name)?;
+            if let Some(surface) = placed.kind_mut().surface_mut(face) {
+                surface.set_config(&config);
             }
         }
         self.node_attr_mut().set_ports(ports);
-        let runtime = RuntimeGeometry::new(placed, surfaces)?;
-        self.node_attr_mut().set_runtime(runtime);
+        self.node_attr_mut().set_runtime_geometry(placed);
         Ok(())
+    }
+
+    fn face_of_port(&self, port: &str) -> OpmResult<FaceIndex> {
+        self.surface_ports().face_of(port).ok_or_else(|| {
+            OpossumError::Analysis(format!(
+                "Cannot find surface: \"{port}\" of node: \"{}\"",
+                self.name()
+            ))
+        })
+    }
+
+    fn get_optic_surface(&self, port: &str) -> Option<&OpticSurface> {
+        let face = self.surface_ports().face_of(port)?;
+        self.node_attr().runtime_geometry()?.kind().surface(face)
+    }
+
+    fn get_optic_surface_mut(&mut self, port: &str) -> Option<&mut OpticSurface> {
+        let face = self.surface_ports().face_of(port)?;
+        self.node_attr_mut()
+            .runtime_geometry_mut()?
+            .kind_mut()
+            .surface_mut(face)
     }
 
     fn pass_through_surface_generic(
@@ -438,22 +470,14 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
     ) -> OpmResult<()> {
         let uuid = self.node_attr().uuid();
         let node_name = self.name().to_string();
-
-        let Some(runtime) = self.node_attr_mut().runtime_mut() else {
+        let face = self.face_of_port(optic_surf_name)?;
+        let Some(geometry) = self.node_attr_mut().runtime_geometry_mut() else {
             return Err(OpossumError::Analysis(format!(
                 "Cannot find surface: \"{optic_surf_name}\" of node: \"{node_name}\""
             )));
         };
         let rays_before: usize = rays_bundle.iter().map(|r| r.nr_of_rays(true)).sum();
-        runtime.propagate(
-            optic_surf_name,
-            rays_bundle,
-            effect,
-            part,
-            backward,
-            uuid,
-            strategy,
-        )?;
+        geometry.propagate(face, rays_bundle, effect, part, backward, uuid, strategy)?;
         let rays_after: usize = rays_bundle.iter().map(|r| r.nr_of_rays(true)).sum();
         self.warn_about_lost_rays(rays_before, rays_after);
         Ok(())
@@ -527,8 +551,8 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         let mut cut = false;
         if let Some(window) = self
             .node_attr()
-            .runtime()
-            .and_then(|runtime| runtime.geometry().kind().window())
+            .runtime_geometry()
+            .and_then(|geometry| geometry.kind().window())
         {
             for rays in bundles.iter_mut() {
                 cut |= rays.invalidate_outside(window);
@@ -575,7 +599,9 @@ mod test {
         },
         degree,
         geometry::{Extruded, SurfaceGeometry},
-        millimeter,
+        joule,
+        light::Ray,
+        millimeter, nanometer,
         nodes::{BeamSplitter, Dummy, Lens},
         properties::Properties,
     };
@@ -705,6 +731,57 @@ mod test {
         assert!(matches!(coating("input_1")?, CoatingType::Fresnel));
         assert!(matches!(coating("output_1")?, CoatingType::IdealAR));
         Ok(())
+    }
+    /// Pass a ray along the axis through the given port of a node, as a ray trace does.
+    fn pass_along_the_axis<T: OpticNodeExt>(node: &mut T, port: &str) -> OpmResult<Rays> {
+        let rays = Rays::from(Ray::new_collimated(
+            millimeter!(0.0, 0.0, -10.0),
+            nanometer!(1053.0),
+            joule!(1.0),
+        )?);
+        let mut bundles = vec![rays.clone()];
+        node.pass_through_surface_generic(
+            port,
+            &Refraction(None),
+            &mut bundles,
+            &RayTraceConfig::default(),
+            false,
+            ReflectedPart::Ghost,
+        )?;
+        Ok(rays)
+    }
+    /// A face is one surface, however many ports sit on it: light passing a single surface forward
+    /// (through `input_1`) and backward (through `output_1`) is recorded in its one hit map, under
+    /// the name of the face.
+    #[test]
+    fn both_ports_of_a_single_surface_record_on_its_one_face() -> OpmResult<()> {
+        let mut node = Dummy::default();
+        let forward = pass_along_the_axis(&mut node, "input_1")?;
+        let backward = pass_along_the_axis(&mut node, "output_1")?;
+        let surfaces = node.surfaces_with_hits();
+        let [(name, surface)] = surfaces.as_slice() else {
+            return Err(OpossumError::Other(format!(
+                "expected one surface with hits, got {}",
+                surfaces.len()
+            )));
+        };
+        assert_eq!(name, "surface");
+        for rays in [forward, backward] {
+            assert!(surface.hit_map().get_rays_hit_map(0, rays.uuid()).is_some());
+        }
+        Ok(())
+    }
+    /// A port the node does not have has no surface to trace at.
+    #[test]
+    fn an_unknown_port_is_an_error() {
+        let error = pass_along_the_axis(&mut Dummy::default(), "output_2")
+            .expect_err("a port the dummy does not have was traced");
+        assert!(
+            error
+                .to_string()
+                .contains("Cannot find surface: \"output_2\""),
+            "{error}"
+        );
     }
     /// An LIDT given to a whole node reaches every one of its surfaces.
     #[test]

@@ -6,13 +6,13 @@
 
 use nalgebra::{Point2, Point3, Vector3};
 use num_traits::Zero;
-use serde::{Deserialize, Serialize};
 use std::ops::Range;
 use uom::si::f64::Length;
 
 use super::{Side, face_hits};
 use crate::{
     apertures::Outline,
+    core_optics::optic_surface::OpticSurface,
     error::{OpmResult, OpossumError},
     gain::Inversion,
     geometry::{
@@ -28,12 +28,11 @@ use crate::{
 /// The profile is the outline of the [`Rim`], stated in the plane perpendicular to the rim's axis;
 /// it is the component's optic shape. The center thickness is not stored separately: it is where
 /// the rear face's vertex sits, together with any tilt of that face.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Extruded {
     rim: Rim,
-    front: Face,
-    rear: Face,
-    #[serde(skip)]
+    front: OpticSurface,
+    rear: OpticSurface,
     inversion: Option<Inversion>,
 }
 
@@ -65,8 +64,8 @@ impl Extruded {
         rear.move_by(&axis);
         Ok(Self {
             rim: Rim::new(outline, axis),
-            front,
-            rear,
+            front: front.into(),
+            rear: rear.into(),
             inversion: None,
         })
     }
@@ -81,7 +80,7 @@ impl Extruded {
     pub const REAR: FaceIndex = FaceIndex::new(1);
     /// Return the face with the given number and the side of it the profile lies on: behind the
     /// front face and in front of the rear face.
-    const fn face_and_side(&self, index: FaceIndex) -> Option<(&Face, Side)> {
+    const fn surface_and_side(&self, index: FaceIndex) -> Option<(&OpticSurface, Side)> {
         match index {
             Self::FRONT => Some((&self.front, Side::Behind)),
             Self::REAR => Some((&self.rear, Side::InFront)),
@@ -92,8 +91,15 @@ impl Extruded {
 
 /// Both faces end at the rim of the profile, on the sheet through their vertex.
 impl GeometryKind for Extruded {
-    fn face(&self, index: FaceIndex) -> Option<&Face> {
-        self.face_and_side(index).map(|(face, _)| face)
+    fn surface(&self, face: FaceIndex) -> Option<&OpticSurface> {
+        self.surface_and_side(face).map(|(surface, _)| surface)
+    }
+    fn surface_mut(&mut self, face: FaceIndex) -> Option<&mut OpticSurface> {
+        match face {
+            Self::FRONT => Some(&mut self.front),
+            Self::REAR => Some(&mut self.rear),
+            _ => None,
+        }
     }
     fn face_count(&self) -> usize {
         2
@@ -106,7 +112,8 @@ impl GeometryKind for Extruded {
         }
     }
     fn includes(&self, face: FaceIndex, point: &Point3<Length>) -> bool {
-        GeometryKind::face(self, face).is_some_and(|surface| self.rim.bounds(surface, point))
+        GeometryKind::surface(self, face)
+            .is_some_and(|surface| self.rim.bounds(surface.face(), point))
     }
     fn window(&self) -> Option<&Rim> {
         None
@@ -230,14 +237,18 @@ impl Extruded {
 /// than being reflected on a barrel surface.
 impl Body for Extruded {
     fn contains(&self, point: &Point3<Length>) -> bool {
-        self.rim.contains(point) && self.front.is_behind(point) && !self.rear.is_behind(point)
+        self.rim.contains(point)
+            && self.front.face().is_behind(point)
+            && !self.rear.face().is_behind(point)
     }
     fn path_length_inside(&self, ray: &Ray) -> Option<Length> {
         // A ray leaving the body through its lateral boundary meets no hit there: that boundary is
         // not part of the model.
-        let hits = face_hits([&self.front, &self.rear].into_iter(), ray, |face, point| {
-            self.includes(face, point)
-        });
+        let hits = face_hits(
+            [self.front.face(), self.rear.face()].into_iter(),
+            ray,
+            |face, point| self.includes(face, point),
+        );
         self.chord_through(ray.position(), ray.direction(), hits)
     }
     fn bounding_box(&self) -> OpmResult<BoundingBox> {
@@ -252,8 +263,8 @@ impl Body for Extruded {
             ));
         };
         let transversal_reach = outline.transversal_reach();
-        let front_z = self.surface_z_range(&self.front, transversal_reach)?;
-        let rear_z = self.surface_z_range(&self.rear, transversal_reach)?;
+        let front_z = self.surface_z_range(self.front.face(), transversal_reach)?;
+        let rear_z = self.surface_z_range(self.rear.face(), transversal_reach)?;
         // Which of the two bounds the body from below is not assumed here: a turned solid
         // encloses the same volume as an upright one, so the two are simply united.
         BoundingBox::new(
@@ -273,7 +284,7 @@ impl Body for Extruded {
         *self.rim.frame()
     }
     fn side(&self, face: FaceIndex) -> Option<Side> {
-        self.face_and_side(face).map(|(_, side)| side)
+        self.surface_and_side(face).map(|(_, side)| side)
     }
     fn inversion(&self) -> Option<&Inversion> {
         self.inversion.as_ref()
@@ -835,8 +846,8 @@ mod test {
         )?;
         let frame = |index: FaceIndex| {
             extruded
-                .face(index)
-                .map(|face| *face.frame())
+                .surface(index)
+                .map(|surface| *surface.face().frame())
                 .ok_or_else(|| OpossumError::Other(format!("there is no face {index}")))
         };
         assert_eq!(frame(Extruded::FRONT)?, axis);

@@ -10,8 +10,8 @@ use crate::{
     },
     coatings::CoatingConstantR,
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, SurfacePorts,
-        node_attr::HasNodeAttr, surface_effect::Refraction,
+        NodeAttr, OpticNode, OpticNodeExt, PortType, SurfacePorts, node_attr::HasNodeAttr,
+        surface_effect::Refraction,
     },
     error::{OpmResult, OpossumError},
     geometry::{
@@ -184,9 +184,10 @@ impl AnalysisRayTrace for ThinMirror {
             return Ok(LightResult::default());
         };
         if let LightData::Geometric(mut rays) = data.clone() {
-            let reflected = if let Some(runtime) = self.node_attr_mut().runtime_mut() {
-                let mut reflected_rays = runtime.interact(
-                    in_port,
+            let face = self.face_of_port(in_port)?;
+            let reflected = if let Some(geometry) = self.node_attr_mut().runtime_geometry_mut() {
+                let mut reflected_rays = geometry.interact(
+                    face,
                     &mut rays,
                     &Refraction(None),
                     ReflectedPart::Main,
@@ -225,7 +226,7 @@ mod test {
     use crate::{
         analyzers::{RayTraceConfig, energy::EnergyConfig},
         apertures::{Bore, CircleShape, OpticShape, Outline},
-        core_optics::{Alignable, PortType, node_attr::NodePositioning},
+        core_optics::{Alignable, NodeAttrExt, PortType, node_attr::NodePositioning},
         degree,
         geometry::body::OPTIC_SHAPE,
         joule,

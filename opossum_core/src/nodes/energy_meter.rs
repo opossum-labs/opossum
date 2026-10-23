@@ -213,8 +213,12 @@ impl OpticNode for EnergyMeter {
         self.set_light_data(None);
         self.apodization_warning = false;
         self.reset_optic_surfaces();
-        if let Some(runtime) = self.node_attr_mut().runtime_mut() {
-            runtime.clear_inversion();
+        if let Some(body) = self
+            .node_attr_mut()
+            .runtime_geometry_mut()
+            .and_then(|geometry| geometry.kind_mut().as_body_mut())
+        {
+            *body.inversion_mut() = None;
         }
     }
 

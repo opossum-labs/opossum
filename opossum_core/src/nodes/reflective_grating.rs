@@ -10,8 +10,8 @@ use crate::{
     },
     coatings::CoatingType,
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, SurfacePorts,
-        hit_map::rays_hit_map::HitPoint, node_attr::HasNodeAttr, surface_effect::SurfaceEffect,
+        NodeAttr, OpticNode, OpticNodeExt, PortType, SurfacePorts, hit_map::rays_hit_map::HitPoint,
+        node_attr::HasNodeAttr, surface_effect::SurfaceEffect,
     },
     error::{OpmResult, OpossumError},
     geometry::{
@@ -250,11 +250,12 @@ impl AnalysisRayTrace for ReflectiveGrating {
                     * iso.transform_vector_f64(&Vector3::x()),
                 order: diffraction_order,
             };
-            let Some(runtime) = self.node_attr_mut().runtime_mut() else {
+            let face = self.face_of_port(in_port)?;
+            let Some(geometry) = self.node_attr_mut().runtime_geometry_mut() else {
                 return Err(OpossumError::Analysis("no surface found. Aborting".into()));
             };
-            let mut diffracted_rays = runtime.interact(
-                in_port,
+            let mut diffracted_rays = geometry.interact(
+                face,
                 &mut rays,
                 &diffraction,
                 ReflectedPart::Main,
@@ -315,7 +316,7 @@ mod test {
     use crate::{
         J_per_cm2,
         analyzers::{RayTraceConfig, energy::EnergyConfig},
-        core_optics::{PortType, node_attr::NodePositioning},
+        core_optics::{NodeAttrExt, PortType, node_attr::NodePositioning},
         degree, joule,
         light::{Ray, Rays, spectrum_helper::create_he_ne_spec},
         millimeter, nanometer,

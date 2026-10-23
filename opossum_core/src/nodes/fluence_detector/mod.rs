@@ -10,6 +10,7 @@ use crate::{
     core_optics::{
         NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, SurfacePorts,
         hit_map::fluence_estimator::FluenceEstimator, optic_node::APERTURE_LIMIT_NOTE,
+        optic_surface::OpticSurface,
     },
     error::OpmResult,
     geometry::{
@@ -120,8 +121,11 @@ impl OpticNode for FluenceDetector {
             )));
         }
         let mut props = Properties::default();
-        let hit_maps = self.hit_maps();
-        let Some(hit_map) = hit_maps.get("input_1") else {
+        let Some(hit_map) = self
+            .get_optic_surface("input_1")
+            .map(OpticSurface::hit_map)
+            .filter(|hit_map| !hit_map.is_empty())
+        else {
             warn!("could not get surface hitmap using default");
             return Ok(NodeReportResult::None);
         };

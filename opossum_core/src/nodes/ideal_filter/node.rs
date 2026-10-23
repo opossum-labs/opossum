@@ -215,11 +215,12 @@ impl AnalysisRayTrace for IdealFilter {
         };
         let mut rays = r.clone();
         let rays_before = rays.nr_of_rays(true);
-        let Some(runtime) = self.node_attr_mut().runtime_mut() else {
+        let face = self.face_of_port(in_port)?;
+        let Some(geometry) = self.node_attr_mut().runtime_geometry_mut() else {
             return Err(OpossumError::Analysis("no surface found. Aborting".into()));
         };
-        runtime.interact(
-            in_port,
+        geometry.interact(
+            face,
             &mut rays,
             &filter_type,
             ReflectedPart::Ghost,

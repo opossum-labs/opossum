@@ -90,6 +90,19 @@ impl SurfacePorts {
         inputs: &[("input_1", Extruded::FRONT)],
         outputs: &[("output_1", Extruded::REAR)],
     };
+    /// Return the face the port of the given (physical) name sits on.
+    ///
+    /// # Returns
+    ///
+    /// The face, or `None` if there is no such port.
+    #[must_use]
+    pub fn face_of(&self, port: &str) -> Option<FaceIndex> {
+        self.inputs
+            .iter()
+            .chain(self.outputs)
+            .find(|(name, _)| *name == port)
+            .map(|(_, face)| *face)
+    }
 }
 
 /// Structure defining the optical ports (input / output terminals) of an [`OpticNode`](crate::core_optics::OpticNode).

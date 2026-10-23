@@ -172,25 +172,23 @@ mod test {
     use crate::{
         analyzers::propagation_strategy::MissedSurfaceStrategy,
         apertures::{CircleShape, Outline},
-        core_optics::optic_surface::OpticSurface,
-        geometry::Geometry,
+        geometry::{Geometry, SurfaceGeometry},
         joule,
         light::{Rays, rays::ReflectedPart},
         millimeter, nanometer,
-        nodes::test_helper::helper::traced_at,
     };
     /// A ray that hits a filter keeps its direction and wavelength and is attenuated as a single ray
     /// would be (see [`Ray::filter_energy`]). A ray that misses it keeps its energy.
     #[test]
     fn a_filter_attenuates_the_rays_that_hit_it() -> OpmResult<()> {
         let outline = Outline::new(CircleShape::new(millimeter!(5.0))?, Vec::new())?;
-        let mut plane = traced_at(Geometry::plane(Some(outline)), OpticSurface::default())?;
+        let mut plane = Geometry::plane(Some(outline));
         let ray_at =
             |y| Ray::new_collimated(millimeter!(0.0, y, -10.0), nanometer!(1054.0), joule!(1.0));
         let filter = FilterType::Constant(FilterConst::new(percent!(30.0))?);
         let mut rays = Rays::from(vec![ray_at(1.0)?, ray_at(10.0)?]);
         plane.interact(
-            "input_1",
+            SurfaceGeometry::FACE,
             &mut rays,
             &filter,
             ReflectedPart::Ghost,

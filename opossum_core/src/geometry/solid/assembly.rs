@@ -2,15 +2,15 @@
 //! Several solids, each with its own material, sharing interfaces.
 
 use nalgebra::Point3;
-use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 use super::Side;
 use crate::{
+    core_optics::optic_surface::OpticSurface,
     error::{OpmResult, OpossumError},
     gain::Inversion,
     geometry::{
-        Face, FaceIndex, Geometry, GeometryKind, Rim,
+        FaceIndex, Geometry, GeometryKind, Rim,
         body::{Body, BoundingBox},
     },
     light::Ray,
@@ -20,7 +20,7 @@ use crate::{
 };
 
 /// One solid of an [`Assembly`], placed where it sits in the assembly, with its material.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Part {
     geometry: Geometry,
     material: AssetRef<Material>,
@@ -61,7 +61,7 @@ impl Part {
 }
 
 /// Refers to one face of one part of an [`Assembly`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FaceId {
     part: usize,
     face: FaceIndex,
@@ -87,7 +87,7 @@ impl FaceId {
 /// links the two. They have to describe the same surface at the same place, with the two parts on
 /// opposite sides of it (see [`Assembly::new`]). Light crosses the interface only where both parts
 /// reach.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Interface {
     a: FaceId,
     b: FaceId,
@@ -111,12 +111,11 @@ impl Interface {
 ///
 /// Covers cemented components (doublet, beam splitter cube), components with an air gap between
 /// their parts, and bonded crystals with undoped end caps.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Assembly {
     frame: Isometry,
     parts: Vec<Part>,
     interfaces: Vec<Interface>,
-    #[serde(skip)]
     inversion: Option<Inversion>,
 }
 
@@ -148,7 +147,10 @@ impl Assembly {
                     .get(id.part)
                     .and_then(|part| {
                         let kind = part.geometry.kind();
-                        Some((kind.face(id.face)?, kind.as_body()?.side(id.face)?))
+                        Some((
+                            kind.surface(id.face)?.face(),
+                            kind.as_body()?.side(id.face)?,
+                        ))
                     })
                     .ok_or_else(|| {
                         OpossumError::Other(format!(
@@ -181,21 +183,21 @@ impl Assembly {
             inversion: None,
         })
     }
-    /// Return the part a face of the assembly belongs to, and the number the face has in the solid
-    /// of that part.
+    /// Return the number of the part a face of the assembly belongs to, and the number the face has
+    /// in the solid of that part.
     ///
     /// The faces of an assembly are those of its parts, part after part.
     ///
     /// # Arguments
     ///
     /// * `face` - the number of the face in the assembly.
-    fn locate(&self, face: FaceIndex) -> Option<(&Part, FaceIndex)> {
+    fn locate(&self, face: FaceIndex) -> Option<(usize, FaceIndex)> {
         let face = usize::from(face);
         let mut first_face = 0;
-        for part in &self.parts {
+        for (index, part) in self.parts.iter().enumerate() {
             let count = part.geometry.kind().face_count();
             if face < first_face + count {
-                return Some((part, FaceIndex::new(face - first_face)));
+                return Some((index, FaceIndex::new(face - first_face)));
             }
             first_face += count;
         }
@@ -205,9 +207,17 @@ impl Assembly {
 
 /// A face of an assembly is a face of one of its parts and ends where that part's solid says.
 impl GeometryKind for Assembly {
-    fn face(&self, index: FaceIndex) -> Option<&Face> {
-        self.locate(index)
-            .and_then(|(part, own_face)| part.geometry.kind().face(own_face))
+    fn surface(&self, face: FaceIndex) -> Option<&OpticSurface> {
+        let (part, own_face) = self.locate(face)?;
+        self.parts.get(part)?.geometry.kind().surface(own_face)
+    }
+    fn surface_mut(&mut self, face: FaceIndex) -> Option<&mut OpticSurface> {
+        let (part, own_face) = self.locate(face)?;
+        self.parts
+            .get_mut(part)?
+            .geometry
+            .kind_mut()
+            .surface_mut(own_face)
     }
     fn face_count(&self) -> usize {
         self.parts
@@ -222,8 +232,11 @@ impl GeometryKind for Assembly {
             .map(|_| format!("surface {}", usize::from(face) + 1))
     }
     fn includes(&self, face: FaceIndex, point: &Point3<Length>) -> bool {
-        self.locate(face)
-            .is_some_and(|(part, own_face)| part.geometry.kind().includes(own_face, point))
+        self.locate(face).is_some_and(|(part, own_face)| {
+            self.parts
+                .get(part)
+                .is_some_and(|part| part.geometry.kind().includes(own_face, point))
+        })
     }
     fn window(&self) -> Option<&Rim> {
         None
@@ -275,8 +288,13 @@ impl Body for Assembly {
         self.frame
     }
     fn side(&self, face: FaceIndex) -> Option<Side> {
-        self.locate(face)
-            .and_then(|(part, own_face)| part.geometry.kind().as_body()?.side(own_face))
+        let (part, own_face) = self.locate(face)?;
+        self.parts
+            .get(part)?
+            .geometry
+            .kind()
+            .as_body()?
+            .side(own_face)
     }
     /// The inversion of the assembly as one medium, as a gain model sees its body.
     fn inversion(&self) -> Option<&Inversion> {
@@ -293,7 +311,7 @@ mod test {
     use crate::{
         apertures::{CircleShape, Outline},
         degree,
-        geometry::{ParametricSolid, SurfaceShape},
+        geometry::{Face, ParametricSolid, SurfaceShape},
         joule,
         light::Ray,
         millimeter, nanometer,
@@ -462,13 +480,15 @@ mod test {
         let moved = placed_at(&doublet, &frame);
         assert_eq!(moved.face_count(), 4);
         assert!(moved.window().is_none());
-        assert!(moved.face(FaceIndex::new(4)).is_none());
+        assert!(moved.surface(FaceIndex::new(4)).is_none());
         // the vertices of the crown front, of the crown rear and flint front (cemented) and of the
         // flint rear
         for (index, z) in [0.0, 5.0, 5.0, 10.0].into_iter().enumerate() {
             let (Some(face), Some(moved_face)) = (
-                doublet.face(FaceIndex::new(index)),
-                moved.face(FaceIndex::new(index)),
+                doublet
+                    .surface(FaceIndex::new(index))
+                    .map(OpticSurface::face),
+                moved.surface(FaceIndex::new(index)).map(OpticSurface::face),
             ) else {
                 return Err(OpossumError::Other(format!("there is no face {index}")));
             };
@@ -789,16 +809,6 @@ mod test {
             surface.to_string().contains("enclose a volume"),
             "{surface}"
         );
-        Ok(())
-    }
-    #[test]
-    fn an_assembly_survives_a_round_trip_through_a_file() -> OpmResult<()> {
-        let splitter_cube = Geometry::Assembly(cube()?);
-        let text =
-            ron::to_string(&splitter_cube).map_err(|e| OpossumError::Other(e.to_string()))?;
-        let read: Geometry =
-            ron::from_str(&text).map_err(|e| OpossumError::Other(e.to_string()))?;
-        assert_eq!(read, splitter_cube);
         Ok(())
     }
 }

@@ -791,7 +791,7 @@ mod test {
             energy::{AnalysisEnergy, EnergyConfig},
             raytrace::AnalysisRayTrace,
         },
-        core_optics::{OpticNode, node_attr::NodePositioning},
+        core_optics::{OpticNode, OpticNodeExt, node_attr::NodePositioning},
         joule,
         light::{LightResult, Ray, Rays},
         millimeter, nanometer,

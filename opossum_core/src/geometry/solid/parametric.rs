@@ -2,11 +2,11 @@
 //! Solids bounded by several faces, each stating which of its sides is inside.
 
 use nalgebra::Point3;
-use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 use super::{Side, face_hits};
 use crate::{
+    core_optics::optic_surface::OpticSurface,
     error::{OpmResult, OpossumError},
     gain::Inversion,
     geometry::{
@@ -21,11 +21,10 @@ use crate::{
 ///
 /// Built from flat faces only, such a solid is always convex (prisms, corner cubes, roof prisms);
 /// curved faces with their outside as inner side also allow concave shapes.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ParametricSolid {
     frame: Isometry,
-    faces: Vec<(Face, Side)>,
-    #[serde(skip)]
+    faces: Vec<(OpticSurface, Side)>,
     inversion: Option<Inversion>,
 }
 
@@ -47,7 +46,10 @@ impl ParametricSolid {
         }
         Ok(Self {
             frame: Isometry::identity(),
-            faces,
+            faces: faces
+                .into_iter()
+                .map(|(face, side)| (face.into(), side))
+                .collect(),
             inversion: None,
         })
     }
@@ -60,7 +62,7 @@ impl ParametricSolid {
     fn inner_sides<'a>(&'a self, point: &'a Point3<Length>) -> impl Iterator<Item = bool> + 'a {
         self.faces
             .iter()
-            .map(move |(face, side)| side.contains(face.is_behind(point)))
+            .map(move |(surface, side)| side.contains(surface.face().is_behind(point)))
     }
 }
 
@@ -68,8 +70,15 @@ impl ParametricSolid {
 /// the inner side of every *other* face. As for every component, a face is the part of its surface
 /// on the sheet through its vertex.
 impl GeometryKind for ParametricSolid {
-    fn face(&self, index: FaceIndex) -> Option<&Face> {
-        self.faces.get(usize::from(index)).map(|(face, _)| face)
+    fn surface(&self, face: FaceIndex) -> Option<&OpticSurface> {
+        self.faces
+            .get(usize::from(face))
+            .map(|(surface, _)| surface)
+    }
+    fn surface_mut(&mut self, face: FaceIndex) -> Option<&mut OpticSurface> {
+        self.faces
+            .get_mut(usize::from(face))
+            .map(|(surface, _)| surface)
     }
     fn face_count(&self) -> usize {
         self.faces.len()
@@ -80,7 +89,8 @@ impl GeometryKind for ParametricSolid {
         (index < self.faces.len()).then(|| format!("surface {}", index + 1))
     }
     fn includes(&self, face: FaceIndex, point: &Point3<Length>) -> bool {
-        GeometryKind::face(self, face).is_some_and(|surface| surface.is_on_vertex_sheet(point))
+        GeometryKind::surface(self, face)
+            .is_some_and(|surface| surface.face().is_on_vertex_sheet(point))
             && self
                 .inner_sides(point)
                 .enumerate()
@@ -97,8 +107,8 @@ impl GeometryKind for ParametricSolid {
     }
     fn move_by(&mut self, by: &Isometry) {
         self.frame = by.append(&self.frame);
-        for (face, _) in &mut self.faces {
-            face.move_by(by);
+        for (surface, _) in &mut self.faces {
+            surface.move_by(by);
         }
     }
 }
@@ -110,7 +120,7 @@ impl Body for ParametricSolid {
         self.inner_sides(point).all(|inside| inside)
     }
     fn path_length_inside(&self, ray: &Ray) -> Option<Length> {
-        let faces = self.faces.iter().map(|(face, _)| face);
+        let faces = self.faces.iter().map(|(surface, _)| surface.face());
         let hits = face_hits(faces, ray, |face, point| self.includes(face, point));
         self.chord_through(ray.position(), ray.direction(), hits)
     }
@@ -231,8 +241,8 @@ mod test {
         assert!(moved.window().is_none());
         for (index, z) in [0.0, 10.0, 2.0].into_iter().enumerate() {
             let (Some(face), Some(moved_face)) = (
-                solid.face(FaceIndex::new(index)),
-                moved.face(FaceIndex::new(index)),
+                solid.surface(FaceIndex::new(index)).map(OpticSurface::face),
+                moved.surface(FaceIndex::new(index)).map(OpticSurface::face),
             ) else {
                 return Err(OpossumError::Other(format!("there is no face {index}")));
             };

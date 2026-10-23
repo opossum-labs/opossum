@@ -6,7 +6,6 @@ pub mod optic_node_ext;
 pub mod optic_ports;
 pub mod optic_ref;
 pub mod optic_surface;
-pub mod runtime_geometry;
 pub mod surface_config;
 pub mod surface_effect;
 pub mod volumetric;

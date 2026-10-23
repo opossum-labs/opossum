@@ -218,11 +218,10 @@ mod test {
     use crate::{
         J_per_cm2,
         analyzers::{RayTraceConfig, propagation_strategy::MissedSurfaceStrategy},
-        core_optics::{
-            NodeAttrExt, PortType, node_attr::NodePositioning, optic_surface::OpticSurface,
-            runtime_geometry::RuntimeGeometry,
-        },
-        degree, joule,
+        core_optics::{NodeAttrExt, PortType, node_attr::NodePositioning},
+        degree,
+        geometry::SurfaceGeometry,
+        joule,
         light::{Ray, Rays},
         millimeter, nanometer,
         nodes::test_helper::helper::*,
@@ -321,13 +320,13 @@ mod test {
         Ok(())
     }
     /// An ideal lens of 100 mm at a plane through the origin, bounded by the default optic shape.
-    fn lens_at_origin() -> OpmResult<(RuntimeGeometry, ParaxialLens)> {
+    fn lens_at_origin() -> OpmResult<(Geometry, ParaxialLens)> {
         let plane = Geometry::plane(default_optic_shape().outline().cloned());
         let lens = ParaxialLens {
             focal_length: millimeter!(100.0),
             frame: Isometry::identity(),
         };
-        Ok((traced_at(plane, OpticSurface::default())?, lens))
+        Ok((plane, lens))
     }
     /// A ray on the axis passes the lens straight, a ray 1 mm off it heads for the focus.
     #[test]
@@ -337,7 +336,7 @@ mod test {
         let ray1 = Ray::new_collimated(millimeter!(0., 1., 0.), nanometer!(1053.0), joule!(1.0))?;
         let mut rays = Rays::from(vec![ray0.clone(), ray1.clone()]);
         plane.interact(
-            "input_1",
+            SurfaceGeometry::FACE,
             &mut rays,
             &lens,
             ReflectedPart::Ghost,
@@ -369,7 +368,7 @@ mod test {
         };
         let mut rays = Rays::from(vec![with_helpers(5.0)?, with_helpers(20.0)?]);
         plane.interact(
-            "input_1",
+            SurfaceGeometry::FACE,
             &mut rays,
             &lens,
             ReflectedPart::Ghost,

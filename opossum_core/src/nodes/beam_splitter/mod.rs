@@ -398,13 +398,14 @@ impl BeamSplitter {
             )));
         };
         let mut rays = rays.clone();
-        let Some(runtime) = self.node_attr_mut().runtime_mut() else {
+        let face = self.face_of_port(port_name)?;
+        let Some(geometry) = self.node_attr_mut().runtime_geometry_mut() else {
             return Err(OpossumError::OpticPort(format!(
                 "Input optic surface not found for port '{port_name}'"
             )));
         };
-        let reflected = runtime.interact(
-            port_name,
+        let reflected = geometry.interact(
+            face,
             &mut rays,
             splitting_config,
             ReflectedPart::Branch,

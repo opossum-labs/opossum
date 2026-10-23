@@ -1,7 +1,7 @@
 use super::BeamSplitter;
 use crate::{
     analyzers::{AnalyzerType, GhostFocusConfig, ghostfocus::AnalysisGhostFocus},
-    core_optics::{NodeAttrExt, OpticNode, PortType, node_attr::HasNodeAttr},
+    core_optics::{OpticNode, OpticNodeExt, PortType, node_attr::HasNodeAttr},
     error::{OpmResult, OpossumError},
     light::{LightData, LightRays, Rays},
 };
