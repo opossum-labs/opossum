@@ -35,6 +35,7 @@ impl Default for SourcePort {
         let node_attr = NodeAttr::new("source port");
 
         let mut src = Self { node_attr };
+        src.create_surface_properties().unwrap();
         src.set_positioning(NodePositioning::Absolute(Isometry::identity()))
             .unwrap();
         src.update_surfaces().unwrap();

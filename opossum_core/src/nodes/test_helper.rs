@@ -18,7 +18,7 @@ pub mod helper {
         },
         error::{OpmResult, OpossumError},
         geometry::{
-            Face, FaceIndex, Geometry,
+            Face, FaceIndex, Geometry, SurfaceGeometry,
             body::{Body, OPTIC_SHAPE, default_optic_shape},
         },
         joule,
@@ -72,18 +72,20 @@ pub mod helper {
         );
         Ok(())
     }
-    /// Assert that a node reflects completely on `input_1` and `output_1`: the ports and the
-    /// surfaces built from them carry a constant reflectivity of 100 %.
+    /// Assert that a node reflects completely: its surface carries a constant reflectivity of
+    /// 100 %, and so do the surfaces built under `input_1` and `output_1`.
     ///
     /// # Panics
     ///
-    /// Panics if a port or its surface carries another coating.
+    /// Panics if the surface or a surface built from it carries another coating.
     pub fn test_reflects_completely<T: Default + OpticNode>() {
         let node = T::default();
         let full: CoatingType = CoatingConstantR::new(percent!(100.0)).unwrap().into();
-        let ports = node.ports();
-        for (port_type, name) in [(PortType::Input, "input_1"), (PortType::Output, "output_1")] {
-            assert_eq!(ports.coating(&port_type, name), Some(&full), "port {name}");
+        let config = node
+            .surface_config(&node.face_name(SurfaceGeometry::FACE).unwrap())
+            .unwrap();
+        assert_eq!(config.coating(), &full);
+        for name in ["input_1", "output_1"] {
             assert_eq!(
                 node.get_optic_surface(name).map(OpticSurface::coating),
                 Some(&full),

@@ -102,6 +102,7 @@ impl Default for Wedge {
             )
             .unwrap();
         let mut wedge = Self { node_attr };
+        wedge.create_surface_properties().unwrap();
         wedge.update_surfaces().unwrap();
         wedge
     }

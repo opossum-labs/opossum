@@ -5,7 +5,7 @@ use crate::{
     apertures::Outline,
     coatings::CoatingType,
     core_optics::{
-        NodeAttrExt, OpticNode, PortType,
+        NodeAttrExt, OpticNode, PortType, SurfaceConfig,
         optic_surface::OpticSurface,
         runtime_geometry::{RuntimeGeometry, RuntimeSurfaces},
         surface_effect::{Refraction, SurfaceEffect},
@@ -68,24 +68,52 @@ pub trait OpticNodeExt {
     /// This function returns an error if `update_surfaces` fails.
     fn clear_alignment(&mut self) -> OpmResult<()>;
 
-    /// Set a coating for a given port name.
+    /// Return the name of one face of this node's geometry, which names the property holding its
+    /// [`SurfaceConfig`] (see [`GeometryKind::face_name`](crate::geometry::GeometryKind::face_name)).
     ///
     /// # Errors
     ///
-    /// This function returns an error if the port name does not exist.
-    fn set_coating(
-        &mut self,
-        port_type: &PortType,
-        port_name: &str,
-        coating: &CoatingType,
-    ) -> OpmResult<()>;
+    /// This function returns an error if the geometry cannot be derived or has no such face.
+    fn face_name(&self, face: FaceIndex) -> OpmResult<String>;
 
-    /// Set the LIDT for a given port name.
+    /// Return the coating and the LIDT of one surface of this node.
+    ///
+    /// # Arguments
+    ///
+    /// * `face_name` - the name of the face (see [`OpticNodeExt::face_name`]).
     ///
     /// # Errors
     ///
-    /// This function returns an error if the port name does not exist.
-    fn set_lidt(&mut self, port_type: &PortType, port_name: &str, lidt: Fluence) -> OpmResult<()>;
+    /// This function returns an error if the node has no surface property of that name.
+    fn surface_config(&self, face_name: &str) -> OpmResult<SurfaceConfig>;
+
+    /// Create a [`SurfaceConfig`] property with the default coating and LIDT for every face of
+    /// this node's geometry, named after the face.
+    ///
+    /// A node calls this once when it is created, after the properties its geometry is derived
+    /// from. A node without a shape of its own gets none.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the geometry cannot be derived or a property of that name
+    /// exists already.
+    fn create_surface_properties(&mut self) -> OpmResult<()>;
+
+    /// Set the coating of one surface of this node, keeping its LIDT.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the geometry has no such face or the surfaces cannot be
+    /// rebuilt.
+    fn set_coating(&mut self, face: FaceIndex, coating: &CoatingType) -> OpmResult<()>;
+
+    /// Set the LIDT of one surface of this node, keeping its coating.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the geometry has no such face, the LIDT is negative or
+    /// NaN, or the surfaces cannot be rebuilt.
+    fn set_lidt(&mut self, face: FaceIndex, lidt: Fluence) -> OpmResult<()>;
 
     /// Create this node's [`Geometry`](crate::geometry::Geometry) from its current properties (see
     /// [`OpticNode::create_geometry`]) and move it to where the node sits: its position followed by
@@ -102,7 +130,8 @@ pub trait OpticNodeExt {
 
     /// Move this node's [`Geometry`](crate::geometry::Geometry) to where the node sits, keep it as
     /// the node's runtime geometry and install a surface on one of its faces under each of the given
-    /// ports.
+    /// ports, with the coating and the LIDT of that face (see [`OpticNodeExt::surface_config`]).
+    /// A port the node does not have yet is added.
     ///
     /// The node decides which face of its geometry every port sits on; several ports may share a
     /// face. The volume a solid encloses is the node's medium; a single surface leaves the node
@@ -119,32 +148,13 @@ pub trait OpticNodeExt {
     /// # Errors
     ///
     /// This function returns an error if the node has no geometry, if the geometry cannot be
-    /// derived or built, if a port names a face the geometry does not have, or if a surface cannot
-    /// be installed.
+    /// derived or built, if a port names a face the geometry does not have, or if the node has no
+    /// surface property for a face.
     fn install_geometry(
         &mut self,
         inputs: &[(&str, FaceIndex)],
         outputs: &[(&str, FaceIndex)],
     ) -> OpmResult<()>;
-
-    /// Returns a new optic surface on a face of this node's geometry, with the coating and LIDT of
-    /// its port. The port is added if the node does not have it yet.
-    ///
-    /// # Arguments
-    ///
-    /// * `surf_name` - name of the surface, which is the physical name of its port.
-    /// * `face` - the number of the face of the node's geometry this surface is.
-    /// * `port_type` - the physical port type (`Input` or `Output`) of this surface.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the port cannot be added or if its LIDT is invalid.
-    fn surface_of_port(
-        &mut self,
-        surf_name: &str,
-        face: FaceIndex,
-        port_type: &PortType,
-    ) -> OpmResult<OpticSurface>;
 
     /// Lets a surface of this node act on the ray bundles of an analysis (see
     /// [`RuntimeGeometry::propagate`]) and warns if rays were lost there.
@@ -327,22 +337,50 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         self.update_surfaces()
     }
 
-    fn set_coating(
-        &mut self,
-        port_type: &PortType,
-        port_name: &str,
-        coating: &CoatingType,
-    ) -> OpmResult<()> {
-        let mut ports = self.ports();
-        ports.set_coating(port_type, port_name, coating)?;
-        self.node_attr_mut().set_ports(ports);
+    fn face_name(&self, face: FaceIndex) -> OpmResult<String> {
+        self.create_geometry()?
+            .and_then(|geometry| geometry.kind().face_name(face))
+            .ok_or_else(|| {
+                OpossumError::Other(format!("node '{}' has no face {face}", self.name()))
+            })
+    }
+
+    fn surface_config(&self, face_name: &str) -> OpmResult<SurfaceConfig> {
+        match self.node_attr().get_property(face_name) {
+            Ok(Proptype::SurfaceConfig(config)) => Ok(config.clone()),
+            _ => Err(OpossumError::Other(format!(
+                "node '{}' has no surface property '{face_name}'",
+                self.name()
+            ))),
+        }
+    }
+
+    fn create_surface_properties(&mut self) -> OpmResult<()> {
+        let Some(geometry) = self.create_geometry()? else {
+            return Ok(());
+        };
+        let kind = geometry.kind();
+        for name in (0..kind.face_count()).filter_map(|face| kind.face_name(FaceIndex::new(face))) {
+            self.node_attr_mut().create_property(
+                &name,
+                &format!("coating and laser induced damage threshold of the {name}"),
+                SurfaceConfig::default().into(),
+            )?;
+        }
+        Ok(())
+    }
+
+    fn set_coating(&mut self, face: FaceIndex, coating: &CoatingType) -> OpmResult<()> {
+        let name = self.face_name(face)?;
+        let config = SurfaceConfig::new(*coating, self.surface_config(&name)?.lidt())?;
+        self.node_attr_mut().set_property(&name, config.into())?;
         self.update_surfaces()
     }
 
-    fn set_lidt(&mut self, port_type: &PortType, port_name: &str, lidt: Fluence) -> OpmResult<()> {
-        let mut ports = self.ports();
-        ports.set_lidt(port_type, port_name, lidt)?;
-        self.node_attr_mut().set_ports(ports);
+    fn set_lidt(&mut self, face: FaceIndex, lidt: Fluence) -> OpmResult<()> {
+        let name = self.face_name(face)?;
+        let config = SurfaceConfig::new(*self.surface_config(&name)?.coating(), lidt)?;
+        self.node_attr_mut().set_property(&name, config.into())?;
         self.update_surfaces()
     }
 
@@ -365,47 +403,34 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
                 self.name()
             )));
         };
+        let kind = placed.kind();
+        let mut ports = self.node_attr().raw_ports().clone();
         let mut surfaces = RuntimeSurfaces::default();
-        for (ports, port_type, installed) in [
+        for (port_names, port_type, installed) in [
             (inputs, PortType::Input, &mut surfaces.inputs),
             (outputs, PortType::Output, &mut surfaces.outputs),
         ] {
-            for &(name, face) in ports {
+            for &(name, face) in port_names {
+                let Some(face_name) = kind.face_name(face) else {
+                    return Err(OpossumError::Other(format!(
+                        "surface '{name}' sits on face {face}, which does not exist (face count: {})",
+                        kind.face_count()
+                    )));
+                };
+                let config = self.surface_config(&face_name)?;
+                if !ports.ports_raw(&port_type).contains(name) {
+                    ports.add(&port_type, name)?;
+                }
                 installed.insert(
                     name.to_string(),
-                    self.surface_of_port(name, face, &port_type)?,
+                    OpticSurface::new(face, *config.coating(), config.lidt())?,
                 );
             }
         }
+        self.node_attr_mut().set_ports(ports);
         let runtime = RuntimeGeometry::new(placed, surfaces)?;
         self.node_attr_mut().set_runtime(runtime);
         Ok(())
-    }
-
-    fn surface_of_port(
-        &mut self,
-        surf_name: &str,
-        face: FaceIndex,
-        port_type: &PortType,
-    ) -> OpmResult<OpticSurface> {
-        let config = {
-            let mut ports = self.node_attr().raw_ports().clone();
-            if ports.ports_raw(port_type).get(surf_name).is_none() {
-                ports.add(port_type, surf_name)?;
-                self.node_attr_mut().set_ports(ports.clone());
-            }
-            ports
-                .ports_raw(port_type)
-                .get(surf_name)
-                .cloned()
-                .ok_or_else(|| {
-                    OpossumError::Other(format!(
-                        "Port config for surface {port_type}/{surf_name} of node '{}' not found.",
-                        self.name()
-                    ))
-                })?
-        };
-        OpticSurface::new(face, config.coating, *config.lidt.get())
     }
 
     fn pass_through_surface_generic(
@@ -549,14 +574,16 @@ mod test {
     use crate::{
         J_per_cm2,
         analyzers::RayTraceConfig,
+        apertures::OpticShape,
         core_optics::{
             node_attr::{HasNodeAttr, NodePositioning},
             optic_node::LIDT,
         },
         degree,
-        geometry::SurfaceGeometry,
+        geometry::{Extruded, SurfaceGeometry},
         millimeter,
-        nodes::{BeamSplitter, Dummy},
+        nodes::{BeamSplitter, Dummy, Lens},
+        properties::Properties,
     };
     use approx::assert_abs_diff_eq;
 
@@ -629,11 +656,11 @@ mod test {
         Ok(())
     }
 
-    /// Setting a port's coating or LIDT addresses an inverted node's ports by their logical
-    /// names, but the node has to keep storing them physically: otherwise it stays inverted after
-    /// the inversion is reverted, and every lookup of a physical port misses.
+    /// Setting the coating or LIDT of a surface of an inverted node keeps its ports stored
+    /// physically: otherwise it stays inverted after the inversion is reverted, and every lookup of
+    /// a physical port misses.
     #[test]
-    fn port_settings_keep_the_stored_ports_of_an_inverted_node_physical() -> OpmResult<()> {
+    fn surface_settings_keep_the_stored_ports_of_an_inverted_node_physical() -> OpmResult<()> {
         let inverted = || -> OpmResult<Dummy> {
             let mut node = Dummy::default();
             node.set_inverted(true)?;
@@ -641,9 +668,9 @@ mod test {
         };
         let lidt = J_per_cm2!(2.0);
         let mut with_coating = inverted()?;
-        with_coating.set_coating(&PortType::Input, "output_1", &CoatingType::Fresnel)?;
+        with_coating.set_coating(SurfaceGeometry::FACE, &CoatingType::Fresnel)?;
         let mut with_lidt = inverted()?;
-        with_lidt.set_lidt(&PortType::Input, "output_1", lidt)?;
+        with_lidt.set_lidt(SurfaceGeometry::FACE, lidt)?;
         for mut node in [with_coating, with_lidt, inverted()?.with_lidt(lidt)?] {
             assert_eq!(
                 node.node_attr().raw_ports().names(&PortType::Input),
@@ -654,18 +681,65 @@ mod test {
         }
         Ok(())
     }
-    /// Changing the coating or LIDT of a port installs the surfaces anew, and the surface of that
-    /// port carries them.
+    /// Changing the coating or LIDT of a surface installs the surfaces anew, and every port on
+    /// that face carries them.
     #[test]
-    fn a_changed_port_reaches_its_surface() -> OpmResult<()> {
+    fn a_changed_surface_reaches_every_port_on_it() -> OpmResult<()> {
         let mut node = Dummy::default();
-        node.set_coating(&PortType::Input, "input_1", &CoatingType::Fresnel)?;
-        node.set_lidt(&PortType::Input, "input_1", J_per_cm2!(2.0))?;
-        let surface = node
-            .get_optic_surface("input_1")
-            .ok_or_else(|| OpossumError::Other("the dummy lost its input surface".into()))?;
-        assert!(matches!(surface.coating(), CoatingType::Fresnel));
-        assert_eq!(*surface.lidt(), J_per_cm2!(2.0));
+        node.set_coating(SurfaceGeometry::FACE, &CoatingType::Fresnel)?;
+        node.set_lidt(SurfaceGeometry::FACE, J_per_cm2!(2.0))?;
+        for port in ["input_1", "output_1"] {
+            let surface = node
+                .get_optic_surface(port)
+                .ok_or_else(|| OpossumError::Other(format!("the dummy lost its {port} surface")))?;
+            assert!(matches!(surface.coating(), CoatingType::Fresnel));
+            assert_eq!(*surface.lidt(), J_per_cm2!(2.0));
+        }
+        Ok(())
+    }
+    /// The faces of a lens carry their own coatings: the front one reaches the surface under the
+    /// input port, the rear one the surface under the output port.
+    #[test]
+    fn each_face_of_a_lens_carries_its_own_coating() -> OpmResult<()> {
+        let mut lens = Lens::default();
+        lens.set_coating(Extruded::FRONT, &CoatingType::Fresnel)?;
+        let coating = |port: &str| {
+            lens.get_optic_surface(port)
+                .map(|surface| *surface.coating())
+                .ok_or_else(|| OpossumError::Other(format!("the lens has no {port} surface")))
+        };
+        assert!(matches!(coating("input_1")?, CoatingType::Fresnel));
+        assert!(matches!(coating("output_1")?, CoatingType::IdealAR));
+        Ok(())
+    }
+    /// An LIDT given to a whole node reaches every one of its surfaces.
+    #[test]
+    fn a_node_lidt_reaches_every_surface() -> OpmResult<()> {
+        let lens = Lens::default().with_lidt(J_per_cm2!(3.0))?;
+        for port in ["input_1", "output_1"] {
+            let surface = lens
+                .get_optic_surface(port)
+                .ok_or_else(|| OpossumError::Other(format!("the lens has no {port} surface")))?;
+            assert_eq!(*surface.lidt(), J_per_cm2!(3.0));
+        }
+        Ok(())
+    }
+    /// A node without the surface property of a face cannot install its surfaces.
+    #[test]
+    fn a_missing_surface_property_is_an_error() -> OpmResult<()> {
+        let mut node = Dummy::default();
+        let mut shape_only = Properties::default();
+        shape_only.create(OPTIC_SHAPE, "extent", OpticShape::Open.into())?;
+        node.node_attr_mut().set_properties(shape_only);
+        let error = node
+            .update_surfaces()
+            .expect_err("surfaces were installed without a surface property");
+        assert!(
+            error
+                .to_string()
+                .contains("has no surface property 'surface'"),
+            "{error}"
+        );
         Ok(())
     }
     /// A port on a face the geometry does not have is rejected, and the installation before stays.

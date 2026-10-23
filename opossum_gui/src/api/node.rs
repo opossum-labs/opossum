@@ -7,7 +7,7 @@ use opossum_core::{
         CutNodesResponse, DeleteNodeResponse, MoveNodesRequest, MoveNodesResponse, NewNode,
         NewRefNode, NodeInfo, NodePortsResponse, NodePropertiesResponse, PasteNodesResponse,
         PortMappingsResponse, PortNamesResponse, PositioningRequest, RemovePortMapResponse,
-        UpdateConnectionRequest, UpdateNodeRequest, UpdatePortRequest,
+        UpdateConnectionRequest, UpdateNodeRequest,
     },
 };
 use std::collections::{HashMap, HashSet};
@@ -51,23 +51,6 @@ pub async fn get_ports_of_group(group_id: Uuid) -> Result<NodePortsResponse, Str
         .await
 }
 
-pub async fn patch_node_port_config(
-    node_id: Uuid,
-    port_name: String,
-    port_type: PortType,
-    req: UpdatePortRequest,
-) -> Result<(), String> {
-    let port_type_str = match port_type {
-        PortType::Input => "Input",
-        PortType::Output => "Output",
-    };
-    HTTP_API_CLIENT()
-        .patch::<UpdatePortRequest>(
-            &format!("/api/nodes/{node_id}/ports/{port_type_str}/{port_name}"),
-            req,
-        )
-        .await
-}
 /// Send a request to add a node to a node group.
 ///
 /// # Errors

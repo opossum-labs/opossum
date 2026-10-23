@@ -120,6 +120,8 @@ impl Default for EnergyMeter {
             node_attr,
             apodization_warning: false,
         };
+        em.create_surface_properties()
+            .expect("Hardcoded property creation must not fail");
         em.update_surfaces()
             .expect("Updating surfaces on default energy meter must not fail");
         em

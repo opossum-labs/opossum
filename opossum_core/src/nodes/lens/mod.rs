@@ -109,6 +109,7 @@ impl Default for Lens {
             )
             .unwrap();
         let mut lens = Self { node_attr };
+        lens.create_surface_properties().unwrap();
         lens.update_surfaces().unwrap();
         lens
     }

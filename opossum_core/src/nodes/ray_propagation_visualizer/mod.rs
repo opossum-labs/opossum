@@ -78,6 +78,7 @@ impl Default for RayPropagationVisualizer {
             node_attr,
             apodization_warning: false,
         };
+        rpv.create_surface_properties().unwrap();
         rpv.update_surfaces().unwrap();
         rpv
     }

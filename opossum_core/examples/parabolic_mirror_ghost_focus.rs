@@ -1,4 +1,5 @@
 use nalgebra::Vector2;
+use opossum_core::geometry::SurfaceGeometry;
 use opossum_core::{
     apertures::CircleShape,
     coatings::CoatingConstantR,
@@ -23,15 +24,13 @@ fn main() -> OpmResult<()> {
         OpticShape::from(CircleShape::new(millimeter!(38.1))?).into(),
     )?;
     mirror1.set_coating(
-        &PortType::Input,
-        "input_1",
+        SurfaceGeometry::FACE,
         &CoatingConstantR::new(percent!(50.0))?.into(),
     )?;
     let i_m1 = scenery.add_node(mirror1.clone())?;
     let mut mirror2 = ThinMirror::new("mirror 2").with_tilt(degree!(-45., 0.0, 0.0))?;
     mirror2.set_coating(
-        &PortType::Input,
-        "input_1",
+        SurfaceGeometry::FACE,
         &CoatingConstantR::new(percent!(50.0))?.into(),
     )?;
     // Both parabolas are 2 inches in diameter, measured along their parent axes, parallel to the

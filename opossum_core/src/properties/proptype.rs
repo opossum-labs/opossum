@@ -5,7 +5,10 @@ use std::cell::RefCell;
 use crate::{
     analyzers::ghostfocus::GhostFocusHistory,
     apertures::OpticShape,
-    core_optics::hit_map::{HitMap, fluence_estimator::FluenceEstimator},
+    core_optics::{
+        SurfaceConfig,
+        hit_map::{HitMap, fluence_estimator::FluenceEstimator},
+    },
     error::{OpmResult, OpossumError},
     light::{
         Spectrum,
@@ -212,6 +215,8 @@ pub enum Proptype {
     LightDataBuilder(LightDataBuilder),
     /// An optical material property
     Material(AssetRef<Material>),
+    /// The coating and the laser induced damage threshold of one surface of a component
+    SurfaceConfig(SurfaceConfig),
 }
 impl Proptype {
     /// Generate a html representation of a Proptype.
@@ -438,6 +443,11 @@ impl From<i32> for Proptype {
 impl From<Uuid> for Proptype {
     fn from(value: Uuid) -> Self {
         Self::Uuid(value)
+    }
+}
+impl From<SurfaceConfig> for Proptype {
+    fn from(value: SurfaceConfig) -> Self {
+        Self::SurfaceConfig(value)
     }
 }
 impl From<Length> for Proptype {

@@ -98,6 +98,7 @@ impl Default for ReflectiveGrating {
             )
             .unwrap();
         let mut g = Self { node_attr };
+        g.create_surface_properties().unwrap();
         g.update_surfaces().unwrap();
         g
     }

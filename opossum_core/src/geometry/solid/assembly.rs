@@ -215,6 +215,12 @@ impl GeometryKind for Assembly {
             .map(|part| part.geometry.kind().face_count())
             .sum()
     }
+    /// The faces are named in the order they are numbered, across all parts, counting from
+    /// "surface 1".
+    fn face_name(&self, face: FaceIndex) -> Option<String> {
+        self.locate(face)
+            .map(|_| format!("surface {}", usize::from(face) + 1))
+    }
     fn includes(&self, face: FaceIndex, point: &Point3<Length>) -> bool {
         self.locate(face)
             .is_some_and(|(part, own_face)| part.geometry.kind().includes(own_face, point))

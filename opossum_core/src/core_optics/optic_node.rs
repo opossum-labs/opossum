@@ -11,13 +11,13 @@ use uuid::Uuid;
 use crate::{
     analyzers::{Analyzable, AnalyzerKind, propagation_strategy::PropagationStrategy},
     core_optics::{
-        NodeAttrExt, OpticPorts, PortType,
+        NodeAttrExt, OpticNodeExt, OpticPorts,
         node_attr::{HasNodeAttr, NodePositioning},
         runtime_geometry::RuntimeGeometry,
         volumetric::Volumetric,
     },
     error::{OpmResult, OpossumError},
-    geometry::Geometry,
+    geometry::{FaceIndex, Geometry},
     light::LightData,
     nodes::fluence_detector::Fluence,
     reporting::{Dottable, node_report::NodeReportResult},
@@ -270,26 +270,18 @@ pub trait Alignable: OpticNode + Sized {
 
 /// Trait to define a Laser-Induced Damage Threshold (LIDT) for a node.
 pub trait LIDT: OpticNode + Analyzable + Sized {
-    /// Sets an LIDT value for all ports of this node.
+    /// Sets an LIDT value for all surfaces of this node.
     ///
     /// # Errors
     ///
     /// This function returns an error if the given LIDT is negative or NaN,
     /// or if updating runtime surfaces fails.
     fn with_lidt(mut self, lidt: Fluence) -> OpmResult<Self> {
-        let mut ports = self.ports();
-        let in_ports = ports.names(&PortType::Input);
-        let out_ports = ports.names(&PortType::Output);
-
-        for port_name in &in_ports {
-            ports.set_lidt(&PortType::Input, port_name, lidt)?;
+        if let Some(geometry) = self.create_geometry()? {
+            for face in (0..geometry.kind().face_count()).map(FaceIndex::new) {
+                self.set_lidt(face, lidt)?;
+            }
         }
-        for port_name in &out_ports {
-            ports.set_lidt(&PortType::Output, port_name, lidt)?;
-        }
-
-        self.node_attr_mut().set_ports(ports);
-        self.update_surfaces()?; // Required to propagate the port update to runtime surfaces
         Ok(self)
     }
 }

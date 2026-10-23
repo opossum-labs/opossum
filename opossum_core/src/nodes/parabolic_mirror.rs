@@ -112,20 +112,10 @@ impl Default for ParabolicMirror {
             .unwrap();
 
         let mut parabola = Self { node_attr };
-        parabola.update_surfaces().unwrap();
-
+        parabola.create_surface_properties().unwrap();
         parabola
             .set_coating(
-                &PortType::Input,
-                "input_1",
-                &CoatingConstantR::new(percent!(100.0)).unwrap().into(),
-            )
-            .unwrap();
-
-        parabola
-            .set_coating(
-                &PortType::Output,
-                "output_1",
+                SurfaceGeometry::FACE,
                 &CoatingConstantR::new(percent!(100.0)).unwrap().into(),
             )
             .unwrap();

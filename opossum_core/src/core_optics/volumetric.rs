@@ -420,13 +420,13 @@ mod test {
         apertures::{CircleShape, OpticShape, RectangleShape},
         coatings::CoatingConstantR,
         core_optics::{
-            Alignable, PortType,
+            Alignable,
             node_attr::{HasNodeAttr, NodePositioning},
             runtime_geometry::RuntimeSurfaces,
         },
         degree,
         gain::{ConstGain, GainModel, MonochromaticSmallSignalGain, PumpScenario, PumpSource},
-        geometry::{FaceIndex, body::OPTIC_SHAPE},
+        geometry::{Extruded, FaceIndex, body::OPTIC_SHAPE},
         joule,
         light::{
             Ray, Rays, Spectrum,
@@ -913,11 +913,9 @@ mod test {
         max_bounces: usize,
     ) -> OpmResult<Vec<f64>> {
         let mut head = amplifier_head()?;
-        for (port_type, port_name) in [(PortType::Input, "input_1"), (PortType::Output, "output_1")]
-        {
+        for face in [Extruded::FRONT, Extruded::REAR] {
             head.set_coating(
-                &port_type,
-                port_name,
+                face,
                 &CoatingConstantR::new(percent!(GHOST_REFLECTIVITY * 100.0))?.into(),
             )?;
         }

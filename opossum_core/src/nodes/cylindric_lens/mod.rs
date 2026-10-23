@@ -111,6 +111,7 @@ impl Default for CylindricLens {
             )
             .unwrap();
         let mut cyl_lens = Self { node_attr };
+        cyl_lens.create_surface_properties().unwrap();
         cyl_lens.update_surfaces().unwrap();
         cyl_lens
     }

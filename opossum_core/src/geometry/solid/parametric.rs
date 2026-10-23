@@ -74,6 +74,11 @@ impl GeometryKind for ParametricSolid {
     fn face_count(&self) -> usize {
         self.faces.len()
     }
+    /// The faces are named in the order they are numbered, counting from "surface 1".
+    fn face_name(&self, face: FaceIndex) -> Option<String> {
+        let index = usize::from(face);
+        (index < self.faces.len()).then(|| format!("surface {}", index + 1))
+    }
     fn includes(&self, face: FaceIndex, point: &Point3<Length>) -> bool {
         GeometryKind::face(self, face).is_some_and(|surface| surface.is_on_vertex_sheet(point))
             && self

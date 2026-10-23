@@ -60,6 +60,9 @@ impl Default for Dummy {
             .expect("Failed to declare dummy properties");
         let mut dummy = Self { node_attr };
         dummy
+            .create_surface_properties()
+            .expect("Failed to declare dummy surface properties");
+        dummy
             .update_surfaces()
             .expect("Failed to initialize dummy surfaces");
         dummy

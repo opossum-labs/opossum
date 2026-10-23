@@ -327,6 +327,15 @@ pub trait GeometryKind {
     fn face(&self, index: FaceIndex) -> Option<&Face>;
     /// Return the number of faces.
     fn face_count(&self) -> usize;
+    /// Return the name of the face with the given number, such as "front surface".
+    ///
+    /// A node names the property holding the coating and the LIDT of a face after it (see
+    /// [`SurfaceConfig`](crate::core_optics::SurfaceConfig)).
+    ///
+    /// # Returns
+    ///
+    /// The name, or `None` if there is no such face.
+    fn face_name(&self, face: FaceIndex) -> Option<String>;
     /// Return whether a point on the unbounded surface of a face belongs to the component.
     ///
     /// The surface of a face is unbounded: a plane reaches in every direction, a sphere closes on
@@ -444,6 +453,9 @@ impl GeometryKind for SurfaceGeometry {
     }
     fn face_count(&self) -> usize {
         1
+    }
+    fn face_name(&self, face: FaceIndex) -> Option<String> {
+        (face == Self::FACE).then(|| "surface".into())
     }
     fn includes(&self, face: FaceIndex, point: &Point3<Length>) -> bool {
         GeometryKind::face(self, face).is_some_and(|surface| match &self.extent {
@@ -595,6 +607,11 @@ mod test {
         let frame = Isometry::new(millimeter!(1.0, -2.0, 30.0), degree!(10.0, 5.0, 0.0))?;
         for mut geometry in [parametric, assembly] {
             assert_eq!(geometry.kind().face_count(), 1);
+            assert_eq!(
+                geometry.kind().face_name(FaceIndex::new(0)).as_deref(),
+                Some("surface 1")
+            );
+            assert!(geometry.kind().face_name(FaceIndex::new(1)).is_none());
             assert!(geometry.kind().as_body().is_some());
             assert_eq!(
                 frame_of(&moved_copy(&geometry, &frame), FaceIndex::new(0))?,

@@ -98,6 +98,13 @@ impl GeometryKind for Extruded {
     fn face_count(&self) -> usize {
         2
     }
+    fn face_name(&self, face: FaceIndex) -> Option<String> {
+        match face {
+            Self::FRONT => Some("front surface".into()),
+            Self::REAR => Some("rear surface".into()),
+            _ => None,
+        }
+    }
     fn includes(&self, face: FaceIndex, point: &Point3<Length>) -> bool {
         GeometryKind::face(self, face).is_some_and(|surface| self.rim.bounds(surface, point))
     }

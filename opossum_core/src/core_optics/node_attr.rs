@@ -149,7 +149,9 @@ pub struct NodeAttr {
     /// The name of the node.
     #[serde(deserialize_with = "deserialize_name")]
     name: String,
-    #[serde(default, skip_serializing_if = "OpticPorts::is_all_default")]
+    /// The ports are graph logic only: a node creates them with its geometry, so they are never
+    /// written to a file, and a `ports` entry of an older file is ignored.
+    #[serde(skip)]
     ports: OpticPorts,
     #[serde(skip)]
     runtime: Option<RuntimeGeometry>,
@@ -464,7 +466,7 @@ mod test {
     use super::*;
     use crate::{
         apertures::{CircleShape, Outline},
-        core_optics::runtime_geometry::RuntimeSurfaces,
+        core_optics::{PortType, runtime_geometry::RuntimeSurfaces},
         geometry::Geometry,
         millimeter,
     };
@@ -547,6 +549,31 @@ mod test {
         let deserialized: NodeAttr =
             ron::from_str(&serialized_abs).map_err(|e| OpossumError::Other(e.to_string()))?;
         assert_eq!(deserialized.positioning(), &NodePositioning::Absolute(iso));
+        Ok(())
+    }
+    /// Ports are graph logic only: they are never written, and the ports of an older file, which
+    /// may still carry coatings, are ignored when it is read.
+    #[test]
+    fn ports_are_neither_written_nor_read() -> OpmResult<()> {
+        let mut attr = NodeAttr::new("test");
+        let mut ports = OpticPorts::new();
+        ports.add(&PortType::Input, "input_1")?;
+        attr.set_ports(ports);
+        let serialized = ron::to_string(&attr).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert!(!serialized.contains("ports"), "{serialized}");
+        let older = r#"#![enable(unwrap_variant_newtypes)]
+        (
+            node_type: "test",
+            name: "test",
+            ports: (
+                inputs: { "input_1": (coating: ConstantR(reflectivity: 1.0)) },
+                outputs: { "output_1": () },
+            ),
+            uuid: "587ee70f-6f52-4420-89f6-e1618ff4dbdb",
+        )"#;
+        let read: NodeAttr =
+            ron::from_str(older).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert!(read.raw_ports().ports_raw(&PortType::Input).is_empty());
         Ok(())
     }
 

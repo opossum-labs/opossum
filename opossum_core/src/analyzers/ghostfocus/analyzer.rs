@@ -227,8 +227,10 @@ mod test_ghost_focus_analyzer {
     use crate::{
         analyzers::Analyzer,
         coatings::CoatingConstantR,
-        core_optics::{PortType, optic_node::Alignable},
-        degree, joule,
+        core_optics::optic_node::Alignable,
+        degree,
+        geometry::Extruded,
+        joule,
         light::LightResult,
         millimeter,
         nodes::{
@@ -269,13 +271,11 @@ mod test_ghost_focus_analyzer {
         let i_src = scenery.add_node(SourcePort::default())?;
         let mut lens = Lens::default();
         lens.set_coating(
-            &PortType::Input,
-            "input_1",
+            Extruded::FRONT,
             &CoatingConstantR::new(percent!(20.0))?.into(),
         )?;
         lens.set_coating(
-            &PortType::Output,
-            "output_1",
+            Extruded::REAR,
             &CoatingConstantR::new(percent!(20.0))?.into(),
         )?;
         let i_l = scenery.add_node(lens)?;
@@ -322,14 +322,13 @@ mod test_ghost_analysis_nested_groups_inversion {
         core_optics::{NodeAttrExt, OpticNodeExt},
         distributions::{position::Hexapolar, spectral::LaserLines},
         error::OpmResult,
+        geometry::Extruded,
         joule,
         light::lightdata::ray_data_builder::RayDataBuilder,
         millimeter, nanometer,
         nodes::{Dummy, Lens, NodeGroup, SourcePort},
         percent,
-        prelude::{
-            AnalyzerType, CollimatedSrc, OpmDocument, PortType, RayDataSource, RefrIndexConst,
-        },
+        prelude::{AnalyzerType, CollimatedSrc, OpmDocument, RayDataSource, RefrIndexConst},
         radian,
     };
     use uuid::Uuid;
@@ -348,13 +347,11 @@ mod test_ghost_analysis_nested_groups_inversion {
             RefrIndexConst::new(1.4)?,
         )?;
         lens_01.set_coating(
-            &PortType::Input,
-            "input_1",
+            Extruded::FRONT,
             &CoatingConstantR::new(percent!(1.0))?.into(),
         )?;
         lens_01.set_coating(
-            &PortType::Output,
-            "output_1",
+            Extruded::REAR,
             &CoatingConstantR::new(percent!(1.0))?.into(),
         )?;
 
@@ -366,13 +363,11 @@ mod test_ghost_analysis_nested_groups_inversion {
             RefrIndexConst::new(1.4)?,
         )?;
         lens_02.set_coating(
-            &PortType::Input,
-            "input_1",
+            Extruded::FRONT,
             &CoatingConstantR::new(percent!(1.0))?.into(),
         )?;
         lens_02.set_coating(
-            &PortType::Output,
-            "output_1",
+            Extruded::REAR,
             &CoatingConstantR::new(percent!(1.0))?.into(),
         )?;
 
@@ -388,13 +383,11 @@ mod test_ghost_analysis_nested_groups_inversion {
             RefrIndexConst::new(1.4)?,
         )?;
         lens_1.set_coating(
-            &PortType::Input,
-            "input_1",
+            Extruded::FRONT,
             &CoatingConstantR::new(percent!(1.0))?.into(),
         )?;
         lens_1.set_coating(
-            &PortType::Output,
-            "output_1",
+            Extruded::REAR,
             &CoatingConstantR::new(percent!(1.0))?.into(),
         )?;
 
@@ -410,13 +403,11 @@ mod test_ghost_analysis_nested_groups_inversion {
             RefrIndexConst::new(1.4)?,
         )?;
         lens_2.set_coating(
-            &PortType::Input,
-            "input_1",
+            Extruded::FRONT,
             &CoatingConstantR::new(percent!(1.0))?.into(),
         )?;
         lens_2.set_coating(
-            &PortType::Output,
-            "output_1",
+            Extruded::REAR,
             &CoatingConstantR::new(percent!(1.0))?.into(),
         )?;
         let mut group_2 = NodeGroup::new("Group 2");
@@ -431,13 +422,11 @@ mod test_ghost_analysis_nested_groups_inversion {
             RefrIndexConst::new(1.4)?,
         )?;
         lens_3.set_coating(
-            &PortType::Input,
-            "input_1",
+            Extruded::FRONT,
             &CoatingConstantR::new(percent!(1.0))?.into(),
         )?;
         lens_3.set_coating(
-            &PortType::Output,
-            "output_1",
+            Extruded::REAR,
             &CoatingConstantR::new(percent!(1.0))?.into(),
         )?;
         let mut group_3 = NodeGroup::new("Group 3");

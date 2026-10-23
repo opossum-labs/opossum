@@ -81,6 +81,7 @@ impl Default for ParaxialSurface {
             )
             .unwrap();
         let mut ps = Self { node_attr };
+        ps.create_surface_properties().unwrap();
         ps.update_surfaces().unwrap();
         ps
     }

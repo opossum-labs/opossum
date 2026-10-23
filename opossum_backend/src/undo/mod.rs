@@ -28,7 +28,7 @@ mod viewport_commands;
 pub use amplifier_node_commands::PatchAmplifierNodes;
 pub use analyzer_commands::{PatchAnalyzer, PatchAnalyzerName, RepositionAnalyzer};
 pub use group_commands::{GroupConversion, MoveNodes, ReroutedMapping};
-pub use node_commands::{PatchNode, PatchPort, PatchProperty, capture_old_node_request};
+pub use node_commands::{PatchNode, PatchProperty, capture_old_node_request};
 pub use pump_scenario_commands::{PatchAnalyzerPumpScenarios, PatchPumpScenario};
 pub use viewport_commands::SetViewport;
 
@@ -44,8 +44,6 @@ pub enum Command {
     PatchNode(Box<PatchNode>),
     /// See [`PatchProperty`].
     PatchProperty(PatchProperty),
-    /// See [`PatchPort`].
-    PatchPort(PatchPort),
     /// Re-inserts a previously removed analyzer under its original id.
     AddAnalyzer(AnalyzerItemDto),
     /// Removes the analyzer with the given id.
@@ -96,7 +94,6 @@ impl Command {
             Self::RedoGraph(delta) => graph_commands::apply_redo_graph(document, *delta),
             Self::PatchNode(cmd) => node_commands::apply_patch_node(document, *cmd),
             Self::PatchProperty(cmd) => node_commands::apply_patch_property(document, cmd),
-            Self::PatchPort(cmd) => node_commands::apply_patch_port(document, cmd),
             Self::AddAnalyzer(cmd) => Ok(analyzer_commands::apply_add_analyzer(document, cmd)),
             Self::RemoveAnalyzer(cmd) => analyzer_commands::apply_remove_analyzer(document, cmd),
             Self::PatchAnalyzer(cmd) => analyzer_commands::apply_patch_analyzer(document, *cmd),
@@ -141,7 +138,6 @@ impl Command {
         match self {
             Self::PatchNode(_)
             | Self::PatchProperty(_)
-            | Self::PatchPort(_)
             | Self::AddAnalyzer(_)
             | Self::RemoveAnalyzer(_)
             | Self::PatchAnalyzer(_)
@@ -189,16 +185,6 @@ impl Command {
                 panel: Some(NodeEditorPanel::Properties),
                 source_port: None,
             }),
-            Self::PatchPort(PatchPort {
-                uuid,
-                parent_group_id,
-                ..
-            }) => Some(JumpTarget {
-                graph_id: *parent_group_id,
-                node: Some(*uuid),
-                panel: Some(NodeEditorPanel::PortConfig),
-                source_port: None,
-            }),
             Self::AddAnalyzer(cmd) | Self::RemoveAnalyzer(cmd) => {
                 Some(JumpTarget::new_from_graph_and_node_id(root_id, cmd.id))
             }
@@ -244,11 +230,6 @@ impl Command {
             }
             Self::PatchNode(cmd) => node_commands::describe_patch_node(cmd),
             Self::PatchProperty(PatchProperty {
-                uuid,
-                parent_group_id,
-                ..
-            })
-            | Self::PatchPort(PatchPort {
                 uuid,
                 parent_group_id,
                 ..
@@ -427,26 +408,24 @@ mod test {
     #[test]
     fn jump_target_names_the_panel_node_and_tab() {
         use opossum_core::{
-            prelude::PortType,
-            types::api_types::{NodeEditorPanel, UpdatePortRequest},
+            core_optics::SurfaceConfig, prelude::Proptype, types::api_types::NodeEditorPanel,
         };
         let root = Uuid::new_v4();
         let graph = Uuid::new_v4();
         let node = Uuid::new_v4();
 
-        let port = Command::PatchPort(PatchPort {
+        let surface = Command::PatchProperty(PatchProperty {
             uuid: node,
             parent_group_id: graph,
-            port_type: PortType::Input,
-            port_name: "input_1".to_string(),
-            old: UpdatePortRequest::default(),
-            new: UpdatePortRequest::default(),
+            prop_name: "surface".to_string(),
+            old: Proptype::SurfaceConfig(SurfaceConfig::default()),
+            new: Proptype::SurfaceConfig(SurfaceConfig::default()),
         })
         .jump_target(root)
         .unwrap();
-        assert_eq!(port.graph_id, graph);
-        assert_eq!(port.node, Some(node));
-        assert_eq!(port.panel, Some(NodeEditorPanel::PortConfig));
+        assert_eq!(surface.graph_id, graph);
+        assert_eq!(surface.node, Some(node));
+        assert_eq!(surface.panel, Some(NodeEditorPanel::Properties));
 
         let name = Command::PatchNode(Box::new(PatchNode {
             uuid: node,

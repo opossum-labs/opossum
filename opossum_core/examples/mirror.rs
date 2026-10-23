@@ -1,3 +1,4 @@
+use opossum_core::geometry::SurfaceGeometry;
 use opossum_core::{
     apertures::{CircleShape, RectangleShape},
     coatings::CoatingConstantR,
@@ -17,8 +18,7 @@ fn main() -> OpmResult<()> {
     let mut mirror1 = ThinMirror::new("mirror 1").with_tilt(degree!(22.5, 0.0, 0.0))?;
     mirror1.set_property(OPTIC_SHAPE, two_inch.clone().into())?;
     mirror1.set_coating(
-        &PortType::Input,
-        "input_1",
+        SurfaceGeometry::FACE,
         &CoatingConstantR::new(percent!(50.0))?.into(),
     )?;
     let i_m1 = scenery.add_node(mirror1)?;

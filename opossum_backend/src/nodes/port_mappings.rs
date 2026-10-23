@@ -86,8 +86,8 @@ pub async fn post_port_mapping(
                     )?,
                 };
                 let ports = g.ports();
-                let inputs: Vec<String> = ports.ports(&PortType::Input).keys().cloned().collect();
-                let outputs: Vec<String> = ports.ports(&PortType::Output).keys().cloned().collect();
+                let inputs = ports.names(&PortType::Input);
+                let outputs = ports.names(&PortType::Output);
                 Ok::<(Vec<String>, Vec<String>, GraphDelta), OpossumError>((inputs, outputs, delta))
             })??;
 

@@ -65,6 +65,7 @@ impl Default for IdealFilter {
             )
             .unwrap();
         let mut idf = Self { node_attr };
+        idf.create_surface_properties().unwrap();
         idf.update_surfaces().unwrap();
         idf
     }

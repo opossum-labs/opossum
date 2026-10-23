@@ -260,6 +260,7 @@ impl Default for BeamSplitter {
             )
             .unwrap();
         let mut bs = Self { node_attr };
+        bs.create_surface_properties().unwrap();
         bs.update_surfaces().unwrap();
         bs
     }
