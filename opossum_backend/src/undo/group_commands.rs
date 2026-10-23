@@ -7,7 +7,6 @@ use opossum_core::{
     opm_document::OpmDocument,
     prelude::PortType,
     types::api_types::{ConnectInfo, DocumentChange, MoveNodesRequest},
-    utils::LockExt,
 };
 use uuid::Uuid;
 
@@ -199,7 +198,7 @@ pub(super) fn apply_insert_group(
     // Remove the flat members without cascading references: re-forming the group is a relocation, so an
     // external reference to a member must survive and follow it into the re-created group.
     remove_relocated_nodes(document.scenery_mut(), parent_group_id, &member_ids)?;
-    let group_id = group.uuid()?;
+    let group_id = group.uuid();
     document
         .scenery_mut()
         .with_group_node_mut(parent_group_id, |g| g.add_node_ref(group.clone()))??;
@@ -242,7 +241,7 @@ pub(super) fn apply_extract_group(
         rerouted_mappings,
         affected_groups,
     } = cmd;
-    let group_id = group.uuid()?;
+    let group_id = group.uuid();
     // Remove the group node without cascading references: dissolving it is a relocation of its members
     // back out to the parent, so an external reference to a member must survive. This still strips the
     // parent's own port-map entry pointing at the group (see `remove_node_no_cascade`), which the
@@ -250,13 +249,10 @@ pub(super) fn apply_extract_group(
     remove_relocated_nodes(document.scenery_mut(), parent_group_id, &[group_id])?;
     for member_id in &member_ids {
         let member_ref = {
-            let node = group.optical_ref.lock_opm()?;
-            let inner_group = node.as_any().downcast_ref::<NodeGroup>().ok_or_else(|| {
+            let inner_group = group.as_any().downcast_ref::<NodeGroup>().ok_or_else(|| {
                 OpossumError::Other("captured group node is not a NodeGroup".into())
             })?;
-            let result = inner_group.node_recursive(*member_id)?.0;
-            drop(node);
-            result
+            inner_group.node_recursive(*member_id)?.0
         };
         document
             .scenery_mut()

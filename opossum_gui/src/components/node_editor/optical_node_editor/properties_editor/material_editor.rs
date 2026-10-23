@@ -7,7 +7,7 @@ use crate::components::{
     },
 };
 use dioxus::prelude::*;
-use inflector::Inflector;
+
 use opossum_core::{material::Material, refractive_index::RefractiveIndexType};
 use uuid::Uuid;
 
@@ -57,7 +57,7 @@ pub fn MaterialEditor(
     let ref_ind_memo = use_memo(move || material_sig.read().refractive_index().clone());
     rsx! {
         LabeledSelect {
-            id: format!("materialProperty{property_key}").to_camel_case(),
+            id: format!("materialProperty{property_key}").to_lower_camel_case(),
             label: "Material",
             // Built by hand rather than from an enum iterator: `Material` is a struct, and the
             // choices are ways of *obtaining* one, not variants of it.

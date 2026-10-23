@@ -38,7 +38,7 @@ pub fn RefractiveIndexEditor(
     #[props(default = false)]
     readonly: bool,
 ) -> Element {
-    info!("🔄 Render: RefractiveIndexEditor");
+    debug!("🔄 Render: RefractiveIndexEditor");
     // 1. Internal State: This makes the component fully decoupled and snappy.
     let mut internal_state = use_signal(|| value.read().clone());
 

@@ -1,14 +1,11 @@
-use std::{
-    fmt::Display,
-    sync::{Arc, Mutex},
-};
+use std::fmt::Display;
 
 use crate::{
-    core_optics::{NodeAttr, OpticNodeExt},
+    core_optics::{NodeAttr, OpticNodeExt, SurfacePorts, node_attr::NodePositioning},
     error::OpmResult,
-    geometry::{Plane, geo_surface::GeoSurfaceRef},
+    geometry::{Geometry, SurfaceGeometry},
     nodes::NodeRegistration,
-    prelude::{Isometry, OpticNode, PortType},
+    prelude::{Isometry, OpticNode},
 };
 use opm_macros_lib::OpmNode;
 
@@ -38,7 +35,9 @@ impl Default for SourcePort {
         let node_attr = NodeAttr::new("source port");
 
         let mut src = Self { node_attr };
-        src.set_isometry(Isometry::identity()).unwrap();
+        src.create_default_surface_properties().unwrap();
+        src.set_positioning(NodePositioning::Absolute(Isometry::identity()))
+            .unwrap();
         src.update_surfaces().unwrap();
         src
     }
@@ -61,17 +60,15 @@ impl Display for SourcePort {
 }
 
 impl OpticNode for SourcePort {
-    fn update_surfaces(&mut self) -> OpmResult<()> {
-        // A source port only has an output port, so we only need to update the flat single surface for the output port.
-        let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
-        let geosurface = GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(node_iso))));
-        self.update_surface(
-            "output_1",
-            geosurface,
-            Isometry::identity(),
-            &PortType::Output,
-        )?;
-        Ok(())
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
+        Ok(Some(Geometry::plane(None)))
+    }
+    /// A source port only has an output port.
+    fn surface_ports(&self) -> SurfacePorts {
+        SurfacePorts {
+            inputs: &[],
+            outputs: &[("output_1", SurfaceGeometry::FACE)],
+        }
     }
 }
 
@@ -93,8 +90,11 @@ mod test {
         let node = SourcePort::default();
         assert_eq!(node.name(), "source port");
         assert_eq!(node.node_type(), "source port");
-        assert_eq!(node.isometry(), Some(Isometry::identity()));
-        assert_eq!(node.node_attr().inverted(), false);
+        assert_eq!(
+            node.positioning(),
+            &NodePositioning::Absolute(Isometry::identity())
+        );
+        assert!(!node.node_attr().inverted());
         assert_eq!(node.node_color(), "slateblue");
     }
     #[test]

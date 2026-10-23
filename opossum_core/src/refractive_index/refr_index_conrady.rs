@@ -1,17 +1,19 @@
 //! Conrady model
 use std::ops::Range;
 
-use num::pow::Pow;
+use num_traits::Pow;
 use serde::{Deserialize, Serialize};
-use uom::si::f64::Length;
-use uom::si::length::micrometer;
+use uom::si::{f64::Length, length::micrometer};
 
-use crate::error::OpmResult;
-use crate::error::OpossumError;
-use crate::nanometer;
+use crate::{
+    error::{OpmResult, OpossumError},
+    nanometer,
+};
 
-use super::RefractiveIndexType;
-use super::bounded_model::{BoundedFormula, DispersionFormula};
+use super::{
+    RefractiveIndexType,
+    bounded_model::{BoundedFormula, DispersionFormula},
+};
 
 /// Coefficients for the Conrady dispersion formula.
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]

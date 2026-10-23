@@ -1,0 +1,29 @@
+use opossum_core::{
+    core_optics::hit_map::{
+        fluence_estimator::FluenceEstimator,
+        rays_hit_map::{EnergyHitPoint, HitPoint, RaysHitMap},
+    },
+    distributions::position::{Hexapolar, PositionDistribution},
+    prelude::*,
+};
+use opossum_reporter::plotting::{Plottable, PltBackEnd};
+use std::path::Path;
+use uom::si::f64::Ratio;
+
+fn main() -> OpmResult<()> {
+    let distribution = Hexapolar::new(millimeter!(50.0), 5)?;
+    let points = distribution.generate();
+    let weight = joule!(1.0) / Ratio::new::<uom::si::ratio::ratio>(points.len() as f64);
+    let mut hit_map = RaysHitMap::default();
+    for p in points {
+        let hit_point = HitPoint::Energy(EnergyHitPoint::new(p, weight)?);
+        hit_map.add_hit_point(hit_point)?;
+    }
+    let fluence_data = hit_map.calc_fluence_map((100, 100), &FluenceEstimator::KDE, None, None)?;
+    fluence_data.to_plot(
+        Path::new("./opossum_core/playground"),
+        "kde",
+        PltBackEnd::Bitmap,
+    )?;
+    Ok(())
+}

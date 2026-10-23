@@ -1,4 +1,4 @@
-use num::Zero;
+use num_traits::Zero;
 use opossum_core::{analyzers::energy::EnergyConfig, prelude::*};
 use std::path::Path;
 use uom::si::f64::Length;
@@ -29,7 +29,7 @@ fn main() -> OpmResult<()> {
         nanometer!(1.0),
     )?);
     let mut config = EnergyConfig::default();
-    config.map_source(i_s, energy_data_builder.into());
+    config.map_source(i_s, energy_data_builder);
     doc.add_analyzer(AnalyzerType::Energy(config));
     doc.save_to_file(Path::new("./opossum_core/playground/nested_group_dot.opm"))
 }

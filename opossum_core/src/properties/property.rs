@@ -2,11 +2,9 @@ use super::Proptype;
 use crate::{
     error::{OpmResult, OpossumError},
     properties::validator::Validator,
-    reporting::plottable::{Plottable, PltBackEnd},
 };
-use nalgebra::vector;
 use serde::{Deserialize, Serialize};
-use std::{mem, path::Path};
+use std::mem;
 
 /// (optical) Property
 ///
@@ -19,17 +17,30 @@ pub struct Property {
     description: String,
     #[serde(skip)]
     validator: Option<Validator>,
+    #[serde(skip)]
+    read_only: bool,
 }
 impl Property {
-    /// Create a new `Property`.
+    /// Create a new mutable `Property`.
     ///
     /// # Errors
-    ///
-    /// This function will return an error if the given initial value does not pass the validation.
+    /// Returns an error if the initial value fails validation.
     pub fn new(
         prop: Proptype,
         description: String,
         validator: Option<Validator>,
+    ) -> OpmResult<Self> {
+        Self::new_with_access(prop, description, validator, false)
+    }
+    /// Create a new `Property` with an explicit read-only configuration.
+    ///
+    /// # Errors
+    /// Returns an error if the initial value fails validation.
+    pub fn new_with_access(
+        prop: Proptype,
+        description: String,
+        validator: Option<Validator>,
+        read_only: bool,
     ) -> OpmResult<Self> {
         if let Some(validator) = &validator {
             validator.validate(&prop)?;
@@ -38,27 +49,66 @@ impl Property {
             prop,
             description,
             validator,
+            read_only,
         })
     }
-
-    /// Returns a reference to the actual property value (expressed as [`Proptype`] prop of this [`Property`].
+    /// Returns a reference to the underlying [`Proptype`].
     #[must_use]
     pub const fn prop(&self) -> &Proptype {
         &self.prop
     }
-    /// Returns a reference to the description of this [`Property`].
+    /// Returns a reference to the property description.
     #[must_use]
     pub fn description(&self) -> &str {
         self.description.as_ref()
     }
+    /// Returns the [`Validator`] that guards the value of this [`Property`], if any.
+    #[must_use]
+    pub const fn validator(&self) -> Option<&Validator> {
+        self.validator.as_ref()
+    }
+    /// Returns `true` if this property is marked as read-only.
+    #[must_use]
+    pub const fn is_read_only(&self) -> bool {
+        self.read_only
+    }
     /// Sets the value of this [`Property`].
     ///
     /// # Errors
-    ///
-    /// This function will return an error if the property conditions are  not met.
+    /// Returns an error if:
+    /// - The property is read-only.
+    /// - The types do not match.
+    /// - The validator rejects the new value.
     pub fn set_value(&mut self, prop: Proptype) -> OpmResult<()> {
+        if self.read_only {
+            return Err(OpossumError::Properties(
+                "Attempted to mutate a read-only property".into(),
+            ));
+        }
+        self.set_internal_value(prop)
+    }
+    /// Directly sets the scalar value as `f64`.
+    ///
+    /// # Errors
+    /// Returns an error if the property is read-only, not numeric, or fails validation.
+    pub fn set_f64(&mut self, value: f64) -> OpmResult<()> {
+        if self.read_only {
+            return Err(OpossumError::Properties(
+                "Attempted to mutate a read-only property".into(),
+            ));
+        }
+        self.set_internal_f64(value)
+    }
+
+    /// Sets the value regardless of the `read_only` flag.
+    ///
+    /// Intended for internal engine components (e.g. detectors, analyzers).
+    ///
+    /// # Errors
+    /// Returns an error if the types do not match or the validator rejects the value.
+    pub fn set_internal_value(&mut self, prop: Proptype) -> OpmResult<()> {
         if mem::discriminant(&self.prop) != mem::discriminant(&prop) {
-            return Err(OpossumError::Properties("incompatible value types".into()));
+            return Err(OpossumError::Properties("Incompatible value types".into()));
         }
         if let Some(validator) = &self.validator {
             validator.validate(&prop)?;
@@ -67,50 +117,27 @@ impl Property {
         Ok(())
     }
 
-    /// Validates the new proptype if a validator is defined
+    /// Sets the scalar value directly regardless of the `read_only` flag.
     ///
     /// # Errors
+    /// Returns an error if the variant is not numeric or fails validation.
+    pub fn set_internal_f64(&mut self, value: f64) -> OpmResult<()> {
+        let mut updated = self.prop.clone();
+        updated.set_f64(value)?;
+        if let Some(validator) = &self.validator {
+            validator.validate(&updated)?;
+        }
+        self.prop = updated;
+        Ok(())
+    }
+    /// Validate a [`Proptype`]
     ///
-    /// Returns an error if validation fails
+    /// # Errors
+    ///  Returns an error if validation fails.
     pub fn validate_proptype(&self, prop: &Proptype) -> OpmResult<()> {
         self.validator
             .as_ref()
-            .map_or_else(|| Ok(()), |validator| validator.validate(prop))
-    }
-    /// Export this [`Property`] to a file at the given `report_path`.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if the underlying implementation for the concrete
-    /// [`Proptype`] returns an error.
-    pub fn export_data(&self, report_path: &Path, id: &str) -> OpmResult<()> {
-        match &self.prop {
-            Proptype::FluenceData(fluence) => {
-                fluence.to_plot(report_path, id, PltBackEnd::Bitmap)?;
-            }
-            Proptype::Spectrum(spectrum) => {
-                spectrum.to_plot(report_path, id, PltBackEnd::SVG)?;
-            }
-            Proptype::RayPositionHistory(ray_hist) => {
-                ray_hist.to_plot(report_path, id, PltBackEnd::SVG)?;
-            }
-            Proptype::GhostFocusHistory(ghost_hist) => {
-                let mut ghost_hist = ghost_hist.clone();
-                ghost_hist.plot_view_direction = Some(vector![1.0, 0.0, 0.0]);
-                ghost_hist.to_plot(report_path, id, PltBackEnd::SVG)?;
-            }
-            Proptype::WaveFrontData(wavefront_error_map) => {
-                wavefront_error_map.to_plot(report_path, id, PltBackEnd::Bitmap)?;
-            }
-            Proptype::HitMap(hit_map) => {
-                hit_map.to_plot(report_path, id, PltBackEnd::SVG)?;
-            }
-            Proptype::NodeReport(report) => {
-                report.export(report_path)?;
-            }
-            _ => {}
-        }
-        Ok(())
+            .map_or(Ok(()), |validator| validator.validate(prop))
     }
 }
 #[cfg(test)]
@@ -122,6 +149,7 @@ mod test {
             prop: true.into(),
             description: "my description".to_string(),
             validator: None,
+            read_only: false,
         };
         assert_eq!(prop.description, "my description");
     }
@@ -151,6 +179,7 @@ mod test {
             prop: true.into(),
             description: "my description".to_string(),
             validator: None,
+            read_only: false,
         };
         assert_eq!(prop.description(), "my description");
     }
@@ -160,8 +189,36 @@ mod test {
             prop: Proptype::Bool(true),
             description: "".into(),
             validator: None,
+            read_only: false,
         };
         assert!(prop.set_value(Proptype::Bool(false)).is_ok());
-        assert!(prop.set_value(Proptype::F64(3.14)).is_err());
+        assert!(prop.set_value(Proptype::F64(1.23)).is_err());
+    }
+    #[test]
+    fn read_only_property_enforcement() -> OpmResult<()> {
+        let mut prop = Property::new_with_access(
+            Proptype::F64(1.5),
+            "Focal length".into(),
+            Some(Validator::NumericIsPositive),
+            true, // read_only
+        )?;
+
+        assert!(prop.is_read_only());
+
+        // Regular mutation must be rejected
+        assert!(prop.set_value(Proptype::F64(2.0)).is_err());
+        assert!(prop.set_f64(2.5).is_err());
+
+        // Internal engine update must succeed
+        assert!(prop.set_internal_value(Proptype::F64(3.0)).is_ok());
+        assert_eq!(prop.prop().as_f64(), Some(3.0));
+
+        // Internal scalar update must succeed
+        assert!(prop.set_internal_f64(4.0).is_ok());
+        assert_eq!(prop.prop().as_f64(), Some(4.0));
+
+        // Validation is still enforced internally
+        assert!(prop.set_internal_f64(-1.0).is_err());
+        Ok(())
     }
 }

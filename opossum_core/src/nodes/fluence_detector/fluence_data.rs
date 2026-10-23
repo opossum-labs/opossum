@@ -8,16 +8,13 @@ use crate::{
     error::OpmResult,
     joule,
     properties::Proptype,
-    reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     utils::{griddata::linspace, to_f64},
 };
 use nalgebra::{DMatrix, DVector};
-use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
 use uom::si::{
     f64::{Energy, Length},
-    length::{meter, millimeter},
-    radiant_exposure::joule_per_square_centimeter,
+    length::meter,
 };
 
 impl From<FluenceData> for Proptype {
@@ -76,6 +73,18 @@ impl FluenceData {
     #[must_use]
     pub const fn interp_distribution(&self) -> &DMatrix<Fluence> {
         &self.interp_distribution
+    }
+
+    /// Returns the x coordinate range of the fluence map.
+    #[must_use]
+    pub const fn x_range(&self) -> &Range<Length> {
+        &self.x_range
+    }
+
+    /// Returns the y coordinate range of the fluence map.
+    #[must_use]
+    pub const fn y_range(&self) -> &Range<Length> {
+        &self.y_range
     }
     /// Returns the fluence distribution and the corresponding x and y axes in a tuple (x, y, distribution)
     ///
@@ -138,68 +147,13 @@ impl FluenceData {
         energy
     }
 }
-impl Plottable for FluenceData {
-    fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
-        plt_params
-            .set(&PlotArgs::XLabel("x position (mm)".into()))?
-            .set(&PlotArgs::YLabel("y position (mm)".into()))?
-            .set(&PlotArgs::CBarLabel("fluence (J/cm²)".into()))?
-            .set(&PlotArgs::PlotSize((800, 800)))?
-            .set(&PlotArgs::ExpandBounds(false))?
-            .set(&PlotArgs::AxisEqual(true))?
-            .set(&PlotArgs::PlotAutoSize(true))?;
-
-        Ok(())
-    }
-    fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
-        PlotType::ColorMesh(plt_params.clone())
-    }
-    fn get_plot_series(
-        &self,
-        plt_type: &mut PlotType,
-        _legend: bool,
-    ) -> OpmResult<Option<Vec<PlotSeries>>> {
-        let (nrows, ncols) = self.interp_distribution.shape();
-
-        match plt_type {
-            PlotType::ColorMesh(_) => {
-                let plt_data = PlotData::ColorMesh {
-                    x_dat_n: linspace(
-                        self.x_range.start.get::<millimeter>(),
-                        self.x_range.end.get::<millimeter>(),
-                        self.interp_distribution.ncols(),
-                    )?,
-                    y_dat_m: linspace(
-                        self.y_range.start.get::<millimeter>(),
-                        self.y_range.end.get::<millimeter>(),
-                        self.interp_distribution.nrows(),
-                    )?,
-                    z_dat_nxm: DMatrix::from_iterator(
-                        nrows,
-                        ncols,
-                        self.interp_distribution
-                            .iter()
-                            .map(uom::si::f64::RadiantExposure::get::<joule_per_square_centimeter>),
-                    ),
-                };
-                let plt_series = PlotSeries::new(&plt_data, RGBAColor(255, 0, 0, 1.), None);
-                Ok(Some(vec![plt_series]))
-            }
-            _ => Ok(None),
-        }
-    }
-}
 
 #[cfg(test)]
 mod test {
     use super::FluenceData;
     use crate::{
-        J_per_cm2, J_per_m2,
-        core_optics::hit_map::fluence_estimator::FluenceEstimator,
-        error::OpmResult,
-        joule, meter,
-        properties::Proptype,
-        reporting::plottable::{PlotType, Plottable},
+        J_per_cm2, J_per_m2, core_optics::hit_map::fluence_estimator::FluenceEstimator,
+        error::OpmResult, joule, meter, properties::Proptype,
     };
     use assert_matches::assert_matches;
     use nalgebra::{dmatrix, vector};
@@ -297,20 +251,5 @@ mod test {
             FluenceEstimator::Binning,
         );
         assert_eq!(fluence_data.total_energy(), joule!(5.0));
-    }
-    #[test]
-    fn get_plot_type() {
-        let fluence_data = FluenceData::new(
-            dmatrix![
-                J_per_m2!(4.0), J_per_m2!(8.0);
-                J_per_m2!(8.0), J_per_m2!(4.0)],
-            meter!(0.0)..meter!(1.0),
-            meter!(0.0)..meter!(1.0),
-            FluenceEstimator::Binning,
-        );
-        assert_matches!(
-            fluence_data.get_plot_type(&mut Default::default()),
-            PlotType::ColorMesh(_)
-        );
     }
 }

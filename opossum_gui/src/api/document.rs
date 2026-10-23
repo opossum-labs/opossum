@@ -12,9 +12,7 @@ use crate::HTTP_API_CLIENT;
 /// This function will return an error if
 /// - the request fails (e.g. the scenery is not valid)
 pub async fn delete_document() -> Result<String, String> {
-    HTTP_API_CLIENT()
-        .delete::<String, String>("/api/document", String::new())
-        .await
+    HTTP_API_CLIENT().delete::<String>("/api/document").await
 }
 pub async fn get_document_root_uuid() -> Result<Uuid, String> {
     HTTP_API_CLIENT().get("/api/document/root_uuid").await
@@ -36,7 +34,6 @@ pub async fn get_document() -> Result<String, String> {
 /// - the `OPM` file cannot be parsed
 /// - the scenery cannot be constructed from the file data.
 pub async fn put_document(opm_string: String) -> Result<LoadDocumentResponse, String> {
-    // Use regular .put() instead of .put_string() to deserialize the JSON response
     HTTP_API_CLIENT()
         .put_string_receive_json::<LoadDocumentResponse>("/api/document", opm_string)
         .await
@@ -59,7 +56,9 @@ pub async fn undo_document() -> Result<UndoRedoResponse, String> {
 pub async fn redo_document() -> Result<UndoRedoResponse, String> {
     HTTP_API_CLIENT().post("/api/document/redo", ()).await
 }
-
+pub async fn delete_undo_history() -> Result<(), String> {
+    HTTP_API_CLIENT().delete("/api/document/undo").await
+}
 /// Batch-update the GUI positions of several nodes/analyzers in one undo step.
 ///
 /// # Errors

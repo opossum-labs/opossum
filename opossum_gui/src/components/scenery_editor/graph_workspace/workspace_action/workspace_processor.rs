@@ -1011,11 +1011,10 @@ async fn apply_document_changes(
                     analyzer.id,
                     *root_graph_id.read(),
                 );
-                // Restore the user-assigned name when undoing a delete: add_analyzer_node uses the
-                // type label by default, so a second pass is needed when the analyzer had a name.
-                if !analyzer.info.name().is_empty() {
+                // Restore the custom name when undoing a deletion if one was set
+                if let Some(name) = analyzer.info.name() {
                     ws_handler.nodes.set_node_name(
-                        analyzer.info.display_name(),
+                        name.to_string(),
                         analyzer.id,
                         *root_graph_id.read(),
                         false,
@@ -1042,7 +1041,6 @@ async fn apply_document_changes(
                         root_graph_id.into(),
                         graph_id,
                         ws_handler,
-                        false,
                         false,
                         workspace,
                     )
@@ -1105,7 +1103,7 @@ async fn apply_document_changes(
                 .nodes
                 .set_node_active(graph_id, node, is_optical, 0);
             // Held until the node's editor loads and opens the panel, then cleared by it - see
-            // `OpticalNodeEditor`/`PortConfigEditor`.
+            // `OpticalNodeEditor`.
             if let Some(panel) = panel {
                 *PENDING_PANEL_OPEN.write() = Some((node, panel));
             }
@@ -1308,8 +1306,8 @@ async fn refresh_group_ports(ws_handler: WorkSpaceSignalHandlers, group_id: Uuid
     eval_action_run(
         api::get_ports_of_group(group_id).await,
         Some(move |ports_config: NodePortsResponse| {
-            let input_ports = ports_config.inputs.into_keys().collect();
-            let output_ports = ports_config.outputs.into_keys().collect();
+            let input_ports = ports_config.inputs.into_iter().collect();
+            let output_ports = ports_config.outputs.into_iter().collect();
             ws_handler
                 .nodes
                 .update_group_ports(input_ports, output_ports, group_id);
@@ -1336,8 +1334,8 @@ async fn refresh_reference_ports(ws_handler: WorkSpaceSignalHandlers, group_id: 
         eval_action_run(
             api::get_ports_of_group(ref_id).await,
             Some(move |ports_config: NodePortsResponse| {
-                let input_ports = ports_config.inputs.into_keys().collect();
-                let output_ports = ports_config.outputs.into_keys().collect();
+                let input_ports = ports_config.inputs.into_iter().collect();
+                let output_ports = ports_config.outputs.into_iter().collect();
                 ws_handler
                     .nodes
                     .update_group_ports(input_ports, output_ports, ref_id);
@@ -1395,7 +1393,6 @@ async fn process_paste_nodes(
                     root_scenery_id.into(),
                     graph_id,
                     ws_handler,
-                    false,
                     false,
                     workspace,
                 )
@@ -1520,7 +1517,6 @@ async fn process_cut_nodes(
                     graph_id,
                     ws_handler,
                     false,
-                    false,
                     workspace,
                 )
                 .await;
@@ -1530,7 +1526,6 @@ async fn process_cut_nodes(
                             root_scenery_id.into(),
                             group_id,
                             ws_handler,
-                            false,
                             false,
                             workspace,
                         )
@@ -1908,7 +1903,6 @@ async fn process_drop_nodes_into_group(
                 drop_group_id,
                 ws_handler,
                 false,
-                true,
                 workspace,
             )
             .await;
@@ -1925,7 +1919,6 @@ async fn process_drop_nodes_into_group(
                 root_scenery_id.into(),
                 from_group_id,
                 ws_handler,
-                false,
                 false,
                 workspace,
             )
@@ -1950,7 +1943,6 @@ async fn process_drop_nodes_into_group(
                     root_scenery_id.into(),
                     from_group_parent_id,
                     ws_handler,
-                    false,
                     false,
                     workspace,
                 )
@@ -2051,41 +2043,43 @@ async fn process_open_group_tab(
         }),
     );
 
-    process_fill_graph_of_group(
-        root_scenery_id,
-        group_id,
-        ws_handler,
-        false,
-        true,
-        workspace,
-    )
-    .await;
+    process_fill_graph_of_group(root_scenery_id, group_id, ws_handler, false, workspace).await;
 }
 
 async fn process_fill_graph_of_group(
     root_scenery_id: ReadSignal<Uuid>,
     group_id: Uuid,
     ws_handler: WorkSpaceSignalHandlers,
-    needs_autolayout: bool,
     should_center: bool,
     workspace: ReadStore<GraphsWorkspaceState>,
 ) {
-    // Fetch nodes first to evaluate their positions
     let nodes_result = api::get_nodes(group_id).await;
+    let is_root = *root_scenery_id.read() == group_id;
 
-    // Determine dynamically if an autolayout is required for this specific group
-    let mut actual_needs_layout = needs_autolayout;
+    // Track missing positions and count coordinates at (0.0, 0.0)
+    let mut zero_pos_count: usize = 0;
+    let mut missing_pos = false;
+
     if let Ok(ref nodes) = nodes_result {
-        // Check if all nodes are overlapping at the origin (or have no position)
-        let unpositioned = nodes
-            .iter()
-            .all(|n| n.gui_position().is_none() || n.gui_position() == Some((0.0, 0.0)));
-
-        // Apply layout if we have more than one node and they are overlapping
-        if nodes.len() > 1 && unpositioned {
-            actual_needs_layout = true;
+        for n in nodes {
+            match n.gui_position() {
+                None => {
+                    missing_pos = true;
+                    break;
+                }
+                Some((x, y)) => {
+                    if x.abs() < f64::EPSILON && y.abs() < f64::EPSILON {
+                        zero_pos_count += 1;
+                        if zero_pos_count >= 2 {
+                            break;
+                        }
+                    }
+                }
+            }
         }
     }
+
+    let mut actual_needs_layout = missing_pos || zero_pos_count >= 2;
 
     eval_action_run(
         nodes_result,
@@ -2103,32 +2097,58 @@ async fn process_fill_graph_of_group(
         api::get_connections(group_id).await,
         Some(move |connect_infos: Vec<ConnectInfo>| {
             ws_handler.edges.add_group_edges(group_id, connect_infos);
-            // Start layout for sub-groups asynchronously
-            if actual_needs_layout && *root_scenery_id.read() != group_id {
+            // Trigger layout calculation asynchronously for sub-groups
+            if actual_needs_layout && !is_root {
                 dioxus::prelude::spawn(async move {
-                    // Wait until the layout is calculated and applied
                     process_optimize_layout(workspace, ws_handler, group_id).await;
                     if should_center {
                         ws_handler.view.zoom_to_fit(group_id, false);
                     }
+                    // Clear backend undo history recorded by initial autolayout
+                    let _ = api::delete_undo_history().await;
+                    *crate::UNDO_REDO_STATUS.write() = (false, false);
                 });
             }
         }),
     );
 
-    if *root_scenery_id.read() == group_id {
+    if is_root {
         eval_action_run(
             api::get_analyzers().await,
             Some(move |analyzers: Vec<AnalyzerItemDto>| {
+                // If optical nodes alone did not trigger autolayout, also evaluate analyzers
+                if !actual_needs_layout {
+                    for a in &analyzers {
+                        match a.info.gui_position() {
+                            None => {
+                                actual_needs_layout = true;
+                                break;
+                            }
+                            Some(pos) => {
+                                if pos.x.abs() < f64::EPSILON && pos.y.abs() < f64::EPSILON {
+                                    zero_pos_count += 1;
+                                    if zero_pos_count >= 2 {
+                                        actual_needs_layout = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 ws_handler.nodes.add_group_analyzers(group_id, analyzers);
-                // Start layout for the root scenery asynchronously
+
+                // Trigger layout calculation asynchronously for root scenery
                 if actual_needs_layout {
                     dioxus::prelude::spawn(async move {
-                        // Wait until the layout is calculated and applied
                         process_optimize_layout(workspace, ws_handler, group_id).await;
                         if should_center {
                             ws_handler.view.zoom_to_fit(group_id, false);
                         }
+                        // Clear backend undo history recorded by initial autolayout
+                        let _ = api::delete_undo_history().await;
+                        *crate::UNDO_REDO_STATUS.write() = (false, false);
                     });
                 }
             }),
@@ -2156,37 +2176,61 @@ async fn process_load_from_file(
         }
     };
 
-    match api::put_document(opm_string).await {
-        Ok(response) => {
-            process_add_root_scenery_tab(workspace, ws_handler, response.name).await;
-            set_file_path_handler.call(Some(path));
-
-            // Populate the real candidate set from the just-loaded document *before* any node is
-            // constructed below - freshly constructed nodes seed their canvas flag from this cache
-            // synchronously, so it must already hold the loaded document's data by then.
-            eval_action_run(
-                api::get_amplifier_candidates().await,
-                Some(|candidates: Vec<Uuid>| {
-                    *crate::AMPLIFIER_CANDIDATES.write() = candidates.into_iter().collect();
-                }),
-            );
-
-            let scenery_id = *scenery_id_sig.read();
-
-            process_fill_graph_of_group(
-                scenery_id_sig.into(),
-                scenery_id,
-                ws_handler,
-                response.needs_autolayout,
-                true,
-                workspace, // <-- Workspace durchreichen
-            )
-            .await;
-        }
+    // Determine document metadata depending on whether the import succeeded completely
+    // or loaded partially with non-critical node errors.
+    let doc_name = match api::put_document(opm_string).await {
+        Ok(response) => response.name,
         Err(err_str) => {
+            // Log the parsing/validation error encountered during file load
             OPOSSUM_UI_LOGS.write().add_log(&err_str);
+
+            match api::get_document_root_uuid().await {
+                Ok(root_id) if !root_id.is_nil() => {
+                    let fallback_name = path
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("Root Scenery")
+                        .to_string();
+
+                    if let Ok(hierarchy) = api::get_group_hierarchy(root_id).await {
+                        hierarchy
+                            .last()
+                            .map(|(_, n)| n.clone())
+                            .filter(|n| !n.is_empty())
+                            .unwrap_or(fallback_name)
+                    } else {
+                        fallback_name
+                    }
+                }
+                _ => return,
+            }
         }
+    };
+
+    // Initialize root scenery tab and update the document path
+    process_add_root_scenery_tab(workspace, ws_handler, doc_name).await;
+    set_file_path_handler.call(Some(path));
+
+    eval_action_run(
+        api::get_amplifier_candidates().await,
+        Some(|candidates: Vec<Uuid>| {
+            *crate::AMPLIFIER_CANDIDATES.write() = candidates.into_iter().collect();
+        }),
+    );
+
+    let scenery_id = *scenery_id_sig.read();
+    if scenery_id.is_nil() {
+        return;
     }
+
+    process_fill_graph_of_group(
+        scenery_id_sig.into(),
+        scenery_id,
+        ws_handler,
+        true,
+        workspace,
+    )
+    .await;
 }
 
 async fn process_delete_root_scenery(
@@ -2235,7 +2279,7 @@ async fn process_save_root_scenery_to_file(
             // Explicitly annotate 'opm_string: String' to prevent Rust type inference from defaulting to 'str'
             Some(move |opm_string: String| {
                 spawn(async move {
-                    // Call cross-platform helper (writes to disk on Desktop, triggers download/file-picker on WASM)
+                    // Call cross-platform helper (writes to disk on Desktop, triggers download/file-picker on Web)
                     match crate::components::menu_bar::project_helper::save_opm_data(
                         &path,
                         &opm_string,
@@ -2279,7 +2323,6 @@ async fn process_add_root_scenery_tab(
                 id,
                 hierarchy: vec![(id, name.clone())],
             });
-            process_rename_root_scenery(ws_handler, name, id, false).await;
         }
         Err(err_str) => {
             OPOSSUM_UI_LOGS.write().add_log(&err_str);
@@ -2293,32 +2336,47 @@ async fn process_refresh(
 ) {
     match api::get_document_root_uuid().await {
         Ok(id) => {
-            // Save and restore canvas config before adding elements
-            let saved_editor_area = *workspace.editor_area().read();
-            ws_handler.workspace.clear_workspace();
-            ws_handler.workspace.set_root_scenery_id(id);
-            ws_handler.workspace.set_editor_area(saved_editor_area);
+            let tab_exists = workspace.tabs().read().contains_key(&id);
 
-            if let Ok(hierarchy) = api::get_group_hierarchy(id).await {
-                let name = hierarchy
-                    .last()
-                    .map_or_else(|| "Root Scenery".to_string(), |(_, n)| n.clone());
-                ws_handler.workspace.add_new_group_tab(GraphInfo {
-                    name,
-                    id,
-                    hierarchy,
-                });
+            if tab_exists {
+                // 1. Update scenery display name and hierarchy in case it changed on the backend
+                if let Ok(hierarchy) = api::get_group_hierarchy(id).await {
+                    let name = hierarchy
+                        .last()
+                        .map_or_else(|| "Root Scenery".to_string(), |(_, n)| n.clone());
+                    ws_handler.nodes.set_node_name(name, id, id, false);
+                }
+
+                // 2. Clear only graph store elements (nodes, edges, analyzers)
+                // This keeps EditorState (pan & zoom) completely intact and prevents GraphViewEditor from remounting.
+                ws_handler.nodes.clear_graph_store(id);
+            } else {
+                // Fallback: If the root scenery tab does not exist yet, initialize it cleanly
+                let saved_editor_area = *workspace.editor_area().read();
+                ws_handler.workspace.clear_workspace();
+                ws_handler.workspace.set_root_scenery_id(id);
+                ws_handler.workspace.set_editor_area(saved_editor_area);
+
+                if let Ok(hierarchy) = api::get_group_hierarchy(id).await {
+                    let name = hierarchy
+                        .last()
+                        .map_or_else(|| "Root Scenery".to_string(), |(_, n)| n.clone());
+                    ws_handler.workspace.add_new_group_tab(GraphInfo {
+                        name,
+                        id,
+                        hierarchy,
+                    });
+                }
+                process_get_editor_area(workspace, ws_handler).await;
             }
-            process_get_editor_area(workspace, ws_handler).await;
-            process_fill_graph_of_group(
-                root_scenery_id.into(),
-                id,
-                ws_handler,
-                false,
-                true, // should_center
-                workspace,
-            )
-            .await;
+
+            // 3. Refill the graph from backend; never recenter if the tab already existed
+            process_fill_graph_of_group(root_scenery_id.into(), id, ws_handler, false, workspace)
+                .await;
+
+            // 4. Sync document-wide caches (candidates and gain models) with backend state
+            refresh_amplifier_candidates(ws_handler).await;
+            refresh_active_scenario_gain_models(ws_handler).await;
 
             ws_handler.workspace.set_needs_saving(true);
             *crate::UNDO_REDO_STATUS.write() = (false, false);

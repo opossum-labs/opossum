@@ -1,63 +1,94 @@
 #[cfg(test)]
-pub mod test_helper {
+pub mod helper {
     use crate::{
         analyzers::{
-            Analyzable, RayTraceConfig,
+            Analyzable, GhostFocusConfig, RayTraceConfig,
             energy::{AnalysisEnergy, EnergyConfig},
+            ghostfocus::AnalysisGhostFocus,
             raytrace::AnalysisRayTrace,
         },
-        apertures::{ApertureShape, ApertureType, CircleShape, GaussianShape},
-        core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, OpticRef, PortType, Volumetric},
-        distributions::position::Hexapolar,
+        apertures::{CircleShape, OpticShape},
+        coatings::{CoatingConstantR, CoatingType},
+        core_optics::{
+            NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, OpticPorts, OpticRef, PortType,
+            Volumetric, node_attr::NodePositioning, optic_surface::OpticSurface,
+        },
         error::{OpmResult, OpossumError},
-        geometry::body::{Body, CLEAR_APERTURE, default_clear_aperture},
+        geometry::{
+            Face, FaceIndex, Geometry, SurfaceGeometry,
+            body::{Body, OPTIC_SHAPE, default_optic_shape},
+        },
         joule,
-        light::{LightData, LightResult, Ray, Rays, spectrum_helper::create_he_ne_spec},
+        light::{LightData, LightRays, LightResult, Ray, Rays, spectrum_helper::create_he_ne_spec},
         millimeter, nanometer,
-        prelude::Aperture,
+        nodes::{EnergyMeter, NodeGroup, SourcePort, ThinMirror},
+        percent,
         properties::Proptype,
-        utils::{LockExt, geom_transformation::Isometry, test_helper::test_helper::check_logs},
+        utils::geom_transformation::Isometry,
     };
     use approx::assert_abs_diff_eq;
-    use nalgebra::{Point3, Vector3};
-    use std::sync::{Arc, Mutex};
+    use nalgebra::{Point2, Point3, Vector3};
     use uom::si::{energy::joule, f64::Length, length::millimeter};
+    use uuid::Uuid;
+    /// Assert that a node can be inverted and that reverting the inversion restores its ports.
+    ///
+    /// The surfaces of the inverted node are rebuilt in between, as loading a file, positioning and
+    /// alignment do: that must leave the node's stored ports physical.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the node cannot be inverted or its surfaces cannot be built.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node does not report being inverted, if its stored ports change or if
+    /// reverting the inversion does not restore its ports.
     pub fn test_inverted<T: Default + OpticNode>() -> OpmResult<()> {
+        let names = |ports: &OpticPorts| {
+            (
+                ports.names(&PortType::Input),
+                ports.names(&PortType::Output),
+            )
+        };
         let mut node = T::default();
+        let upright = names(&node.ports());
+        let stored = names(node.node_attr().raw_ports());
         node.set_inverted(true)?;
         assert_eq!(node.inverted(), true);
+        node.update_surfaces()?;
+        assert_eq!(
+            names(node.node_attr().raw_ports()),
+            stored,
+            "the stored ports of an inverted node must stay physical"
+        );
+        node.set_inverted(false)?;
+        assert_eq!(
+            names(&node.ports()),
+            upright,
+            "reverting the inversion must restore the ports"
+        );
         Ok(())
     }
-    pub fn test_set_aperture<T: Default + OpticNode>(
-        input_port_name: &str,
-        output_port_name: &str,
-    ) {
-        let mut node = T::default();
-        let aperture = Aperture::default();
-        assert!(
-            node.set_aperture(&PortType::Input, input_port_name, &aperture)
-                .is_ok()
-        );
-        assert!(
-            node.set_aperture(&PortType::Input, output_port_name, &aperture)
-                .is_err()
-        );
-        assert!(
-            node.set_aperture(&PortType::Input, "no port", &aperture)
-                .is_err()
-        );
-        assert!(
-            node.set_aperture(&PortType::Output, input_port_name, &aperture)
-                .is_err()
-        );
-        assert!(
-            node.set_aperture(&PortType::Output, output_port_name, &aperture)
-                .is_ok()
-        );
-        assert!(
-            node.set_aperture(&PortType::Output, "no port", &aperture)
-                .is_err()
-        );
+    /// Assert that a node reflects completely: its surface carries a constant reflectivity of
+    /// 100 %, and so do the surfaces built under `input_1` and `output_1`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the surface or a surface built from it carries another coating.
+    pub fn test_reflects_completely<T: Default + OpticNode>() {
+        let node = T::default();
+        let full: CoatingType = CoatingConstantR::new(percent!(100.0)).unwrap().into();
+        let config = node
+            .surface_config(&node.face_name(SurfaceGeometry::FACE).unwrap())
+            .unwrap();
+        assert_eq!(config.coating(), &full);
+        for name in ["input_1", "output_1"] {
+            assert_eq!(
+                node.get_optic_surface(name).map(OpticSurface::coating),
+                Some(&full),
+                "surface {name}"
+            );
+        }
     }
     pub fn test_analyze_empty<T: Default + AnalysisEnergy>() -> OpmResult<()> {
         let mut node = T::default();
@@ -82,37 +113,358 @@ pub mod test_helper {
         assert!(AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default()).is_err());
         Ok(())
     }
-    pub fn test_analyze_apodization_warning<T: Default + AnalysisRayTrace>() -> OpmResult<()> {
-        testing_logger::setup();
-        let mut node = T::default();
-        node.set_isometry(Isometry::identity())?;
-        let config = CircleShape::new(millimeter!(1.0))?;
-        node.set_aperture(
-            &PortType::Input,
-            "input_1",
-            &Aperture::new(
-                ApertureShape::BinaryCircle(config),
-                ApertureType::Hole,
-                None,
-                None,
-            )?,
-        )?;
-        let mut input = LightResult::default();
-        let rays = Rays::new_uniform_collimated(
-            nanometer!(1054.0),
-            joule!(1.0),
-            &Hexapolar::new(millimeter!(10.0), 3)?,
-        )?;
-        let input_light = LightData::Geometric(rays);
-        input.insert("input_1".into(), input_light.clone());
-        AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default())?;
-        let msg = format!(
-            "Rays have been apodized at input aperture of '{}' ({}). Results might not be accurate.",
+    /// Assert that a ray inside a component's optic shape passes it and one just outside does
+    /// not: a ray trace loses it and warns about the loss, a ghost focus analysis lets it run past
+    /// unchanged.
+    ///
+    /// The node is placed at the origin and bounded by the round default optic shape of 12.5 mm
+    /// ([`default_optic_shape`]), whatever its own default. Both rays travel along z, 12.4 mm and
+    /// 12.6 mm off the axis, just inside and just outside of it. Whether a missed ray is lost or
+    /// runs past is the analyzer's missed surface strategy (`Stop` for a ray trace, `Ignore` for a
+    /// ghost focus analysis).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the node cannot be placed, bounded or analyzed.
+    pub fn test_rays_beyond_optic_shape_are_lost<
+        T: Default + AnalysisRayTrace + AnalysisGhostFocus,
+    >() -> OpmResult<()> {
+        let make = || -> OpmResult<T> {
+            let mut node = placed_at_origin::<T>()?;
+            node.set_property(OPTIC_SHAPE, default_optic_shape().into())?;
+            node.update_surfaces()?;
+            Ok(node)
+        };
+        let (inside, outside) = around_the_default_rim();
+        let rays = || rays_along_z_from(&[inside, outside], nanometer!(1000.0));
+        let mut node = make()?;
+        let warning = format!(
+            "Rays were lost at '{}' ({}): they ran outside its optic shape or fell below the energy threshold. Results might not be accurate.",
             node.node_attr().name(),
             node.node_attr().node_type()
         );
-        check_logs(log::Level::Warn, vec![&msg]);
+        testing_logger::setup();
+        let traced = AnalysisRayTrace::analyze(
+            &mut node,
+            LightResult::from([("input_1".into(), LightData::Geometric(rays()?))]),
+            &RayTraceConfig::default(),
+        )?;
+        testing_logger::validate(|logs| {
+            assert!(
+                logs.iter().any(|log| log.body == warning),
+                "a ray trace warns that it lost the ray outside: {:?}",
+                logs.iter().map(|log| &log.body).collect::<Vec<_>>()
+            );
+        });
+        let Some(LightData::Geometric(traced)) = traced.get("output_1") else {
+            panic!("expected ray data at the output port");
+        };
+        let valid: Vec<bool> = traced.iter().map(Ray::valid).collect();
+        assert_eq!(
+            valid,
+            [true, false],
+            "a ray trace keeps the ray inside, loses the one outside"
+        );
+        let passed = AnalysisGhostFocus::analyze(
+            &mut make()?,
+            LightRays::from([("input_1".into(), vec![rays()?])]),
+            &GhostFocusConfig::default(),
+            &mut Vec::new(),
+            0,
+        )?;
+        let Some(beside) = passed
+            .get("output_1")
+            .and_then(|bundles| bundles.first())
+            .and_then(|bundle| bundle.iter().nth(1))
+        else {
+            panic!("expected the ray outside the optic shape at the output port");
+        };
+        assert!(
+            beside.valid(),
+            "a ghost focus analysis lets the ray outside run past"
+        );
+        assert_eq!(beside.position(), outside);
+        assert_eq!(beside.direction(), Vector3::z());
+        assert_eq!(beside.energy(), joule!(1.0));
         Ok(())
+    }
+    /// Assert that a reflecting component reflects a ray inside its optic shape and loses one
+    /// just outside, in a ray trace and in a ghost focus analysis alike.
+    ///
+    /// Both rays travel along z, 12.4 mm and 12.6 mm off the axis, around the default optic shape
+    /// of 12.5 mm. A ray that misses a mirror or a grating has no reflected counterpart, whatever the
+    /// analyzer's missed surface strategy. At 500 nm the default grating diffracts a ray at normal
+    /// incidence.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the node cannot be placed or analyzed.
+    ///
+    /// # Panics
+    ///
+    /// Panics if an analysis puts out no rays or another set of them.
+    pub fn test_reflections_beyond_optic_shape_are_lost<
+        T: Default + AnalysisRayTrace + AnalysisGhostFocus,
+    >() -> OpmResult<()> {
+        let (inside, outside) = around_the_default_rim();
+        let rays = || rays_along_z_from(&[inside, outside], nanometer!(500.0));
+        let traced = AnalysisRayTrace::analyze(
+            &mut placed_at_origin::<T>()?,
+            LightResult::from([("input_1".into(), LightData::Geometric(rays()?))]),
+            &RayTraceConfig::default(),
+        )?;
+        let Some(LightData::Geometric(traced)) = traced.get("output_1") else {
+            panic!("expected ray data at the output port");
+        };
+        let ghosts = AnalysisGhostFocus::analyze(
+            &mut placed_at_origin::<T>()?,
+            LightRays::from([("input_1".into(), vec![rays()?])]),
+            &GhostFocusConfig::default(),
+            &mut Vec::new(),
+            0,
+        )?;
+        let Some(ghosts) = ghosts.get("output_1").and_then(|bundles| bundles.first()) else {
+            panic!("expected a ray bundle at the output port");
+        };
+        for (analysis, reflected) in [("ray trace", traced), ("ghost focus analysis", ghosts)] {
+            let heights: Vec<f64> = reflected
+                .iter()
+                .filter(|ray| ray.valid())
+                .map(|ray| ray.position().y.get::<millimeter>())
+                .collect();
+            assert_eq!(
+                heights.len(),
+                1,
+                "a {analysis} reflects the ray inside only: {heights:?}"
+            );
+            assert_abs_diff_eq!(heights[0], inside.y.get::<millimeter>(), epsilon = 1e-9);
+        }
+        Ok(())
+    }
+    /// Assert that a detector records only the light within its optic shape but lets every ray
+    /// pass, in a ray trace and in a ghost focus analysis alike.
+    ///
+    /// Two rays travel along z, 5 mm and 20 mm off the axis. Within its default window, a square of
+    /// 25 mm, a detector records the one inside only and warns that the other was not recorded.
+    /// Set open, it records both. Either way both rays leave it valid, with their direction and
+    /// energy.
+    ///
+    /// # Arguments
+    ///
+    /// * `recorded` - reads the light the detector recorded.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the node cannot be placed, opened or analyzed.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the detector holds back a ray, records other rays than expected or does not warn.
+    pub fn test_detector_records_inside_and_passes_all<
+        T: Default + AnalysisRayTrace + AnalysisGhostFocus,
+    >(
+        recorded: impl Fn(&T) -> Option<&LightData>,
+    ) -> OpmResult<()> {
+        let starts = [millimeter!(0.0, 5.0, -10.0), millimeter!(0.0, 20.0, -10.0)];
+        let rays = || rays_along_z_from(&starts, nanometer!(1000.0));
+        let heights = |rays: &Rays| -> Vec<f64> {
+            rays.iter()
+                .filter(|ray| ray.valid())
+                .map(|ray| ray.position().y.get::<millimeter>())
+                .collect()
+        };
+        let assert_passed = |passed: &Rays, analysis: &str| {
+            assert_valid_energies(
+                passed,
+                &[1.0, 1.0],
+                &format!("a {analysis} passes all rays"),
+            );
+            assert!(passed.iter().all(|ray| ray.direction() == Vector3::z()));
+        };
+        for bounded in [false, true] {
+            let mut detector = placed_at_origin::<T>()?;
+            if !bounded {
+                detector.set_property(OPTIC_SHAPE, OpticShape::Open.into())?;
+                detector.update_surfaces()?;
+            }
+            let expected: &[f64] = if bounded { &[5.0] } else { &[5.0, 20.0] };
+            let context = if bounded { "bounded" } else { "unbounded" };
+            let assert_recorded = |recorded: &[f64], analysis: &str| {
+                assert_eq!(
+                    recorded.len(),
+                    expected.len(),
+                    "{context}, {analysis}: recorded {recorded:?}"
+                );
+                for (height, expected) in recorded.iter().zip(expected) {
+                    assert_abs_diff_eq!(height, expected, epsilon = 1e-9);
+                }
+            };
+
+            testing_logger::setup();
+            let output = AnalysisRayTrace::analyze(
+                &mut detector,
+                LightResult::from([("input_1".into(), LightData::Geometric(rays()?))]),
+                &RayTraceConfig::default(),
+            )?;
+            let Some(LightData::Geometric(passed)) = output.get("output_1") else {
+                panic!("expected ray data at the output port");
+            };
+            assert_passed(passed, "ray trace");
+            let Some(LightData::Geometric(traced)) = recorded(&detector) else {
+                panic!("the detector recorded no rays in a ray trace");
+            };
+            assert_recorded(&heights(traced), "ray trace");
+            let hit_points = detector
+                .get_optic_surface("input_1")
+                .and_then(|surface| surface.hit_map().get_first_hitpoints())
+                .map_or(0, |points| points.len());
+            assert_eq!(hit_points, expected.len(), "{context}: hit points");
+            testing_logger::validate(|logs| {
+                let warned = logs
+                    .iter()
+                    .any(|log| log.body.contains("were not recorded"));
+                assert_eq!(warned, bounded, "{context}: warning about unrecorded rays");
+            });
+
+            let output = AnalysisGhostFocus::analyze(
+                &mut detector,
+                LightRays::from([("input_1".into(), vec![rays()?])]),
+                &GhostFocusConfig::default(),
+                &mut Vec::new(),
+                0,
+            )?;
+            let Some(passed) = output.get("output_1").and_then(|bundles| bundles.first()) else {
+                panic!("expected a ray bundle at the output port");
+            };
+            assert_passed(passed, "ghost focus analysis");
+            let Some(LightData::GhostFocus(ghosts)) = recorded(&detector) else {
+                panic!("the detector recorded no rays in a ghost focus analysis");
+            };
+            let ghost_heights: Vec<f64> = ghosts.iter().flat_map(heights).collect();
+            assert_recorded(&ghost_heights, "ghost focus analysis");
+        }
+        Ok(())
+    }
+    /// Build a source, an absolutely placed flat mirror 100 mm in front of it and an energy meter
+    /// 50 mm back on the reflected beam. The mirror's optic shape is then shrunk to a radius of
+    /// 5 mm the way the backend changes a property (see
+    /// [`scenery_with_a_mirror_changed_behind_its_back`]).
+    ///
+    /// # Returns
+    ///
+    /// The scenery, the id of the source and the id of the energy meter.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the scenery cannot be built.
+    pub fn scenery_with_a_mirror_shrunk_behind_its_back() -> OpmResult<(NodeGroup, Uuid, Uuid)> {
+        let shrunk: OpticShape = CircleShape::new(millimeter!(5.0))?.into();
+        scenery_with_a_mirror_changed_behind_its_back(OPTIC_SHAPE, shrunk.into())
+    }
+    /// Build a source, an absolutely placed flat mirror 100 mm in front of it and an energy meter
+    /// 50 mm back on the reflected beam. A property of the mirror is then changed the way the
+    /// backend changes it: written into the node's attributes, without the node rebuilding its
+    /// surfaces.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - the name of the mirror's property to change.
+    /// * `value` - its new value.
+    ///
+    /// # Returns
+    ///
+    /// The scenery, the id of the source and the id of the energy meter.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the scenery cannot be built or the property cannot be set.
+    pub fn scenery_with_a_mirror_changed_behind_its_back(
+        name: &str,
+        value: Proptype,
+    ) -> OpmResult<(NodeGroup, Uuid, Uuid)> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let mut mirror = ThinMirror::default();
+        mirror.set_positioning(NodePositioning::Absolute(Isometry::new_along_z(
+            millimeter!(100.0),
+        )?))?;
+        let mirror = scenery.add_node(mirror)?;
+        let meter = scenery.add_node(EnergyMeter::default())?;
+        scenery.connect_nodes(source, "output_1", mirror, "input_1", millimeter!(100.0))?;
+        scenery.connect_nodes(mirror, "output_1", meter, "input_1", millimeter!(50.0))?;
+        scenery.with_node_attr_mut(mirror, |node_attr| node_attr.set_property(name, value))??;
+        Ok((scenery, source, meter))
+    }
+    /// Return the number of valid rays the energy meter with the given id recorded.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the scenery has no such node.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node is no energy meter or recorded no rays.
+    pub fn rays_recorded_by_meter(scenery: &NodeGroup, meter: Uuid) -> OpmResult<usize> {
+        let node = scenery.node(meter)?;
+        let Some(meter) = node.as_any().downcast_ref::<EnergyMeter>() else {
+            panic!("the node is no energy meter");
+        };
+        match meter.light_data() {
+            Some(LightData::Geometric(rays)) => Ok(rays.nr_of_rays(true)),
+            Some(LightData::GhostFocus(bundles)) => {
+                Ok(bundles.iter().map(|rays| rays.nr_of_rays(true)).sum())
+            }
+            _ => panic!("the energy meter recorded no rays"),
+        }
+    }
+    /// Return the start points of two rays, 12.4 mm and 12.6 mm off the axis: just inside and
+    /// just outside the default optic shape of 12.5 mm, 10 mm in front of a node at the origin.
+    fn around_the_default_rim() -> (Point3<Length>, Point3<Length>) {
+        (millimeter!(0.0, 12.4, -10.0), millimeter!(0.0, 12.6, -10.0))
+    }
+    /// Return a bundle of rays along z, one from each start point, carrying 1 J each.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the wavelength is not positive and finite.
+    pub fn rays_along_z_from(starts: &[Point3<Length>], wavelength: Length) -> OpmResult<Rays> {
+        let rays = starts
+            .iter()
+            .map(|start| Ray::new_collimated(*start, wavelength, joule!(1.0)))
+            .collect::<OpmResult<Vec<_>>>()?;
+        Ok(Rays::from(rays))
+    }
+    /// Return a default node of the given type, placed at the origin.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the node cannot be placed.
+    pub fn placed_at_origin<T: Default + OpticNode>() -> OpmResult<T> {
+        let mut node = T::default();
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+        Ok(node)
+    }
+    /// Assert the energies of the valid rays of a bundle, in order.
+    ///
+    /// # Arguments
+    ///
+    /// * `rays` - the bundle to check.
+    /// * `expected` - the energy of each valid ray, in J.
+    /// * `context` - what the bundle is, for the failure message.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the number of valid rays or one of their energies differs.
+    pub fn assert_valid_energies(rays: &Rays, expected: &[f64], context: &str) {
+        let energies: Vec<f64> = rays
+            .iter()
+            .filter(|ray| ray.valid())
+            .map(|ray| ray.energy().get::<joule>())
+            .collect();
+        assert_eq!(energies.len(), expected.len(), "{context}: {energies:?}");
+        for (energy, expected) in energies.iter().zip(expected) {
+            assert_abs_diff_eq!(energy, expected, epsilon = 1e-12);
+        }
     }
     /// Remove one property entry from a serialized node, key and value.
     ///
@@ -162,7 +514,7 @@ pub mod test_helper {
         format!("{}{}", &serialized[..entry_start], &serialized[entry_end..])
     }
 
-    /// Assert that a file written before the `clear aperture` property existed still loads.
+    /// Assert that a file written before the `optic shape` property existed still loads.
     ///
     /// Such a file simply has no entry for the property. Because `set_node_attr` merges the
     /// properties of the file into those of a freshly constructed default node, the default has to
@@ -174,21 +526,19 @@ pub mod test_helper {
     ///
     /// # Panics
     ///
-    /// Panics if the loaded node does not fall back to [`default_clear_aperture`].
-    pub fn test_clear_aperture_absent_in_file<T: Default + Analyzable + 'static>() -> OpmResult<()>
-    {
-        let deserialized = load_without_property::<T>(CLEAR_APERTURE)?;
-        let clear_aperture = {
-            let node = deserialized.optical_ref.lock_opm()?;
-            let Ok(Proptype::Aperture(shape)) = node.node_attr().get_property(CLEAR_APERTURE)
-            else {
-                panic!("the loaded node has no '{CLEAR_APERTURE}' property holding a shape");
+    /// Panics if the loaded node does not fall back to the optic shape a default node of its
+    /// type has.
+    pub fn test_optic_shape_absent_in_file<T: Default + Analyzable + 'static>() -> OpmResult<()> {
+        let shape_of = |node_attr: &NodeAttr| {
+            let Ok(Proptype::OpticShape(optic_shape)) = node_attr.get_property(OPTIC_SHAPE) else {
+                panic!("the node has no '{OPTIC_SHAPE}' property holding an optic shape");
             };
-            shape.clone()
+            optic_shape.clone()
         };
+        let deserialized = load_without_property::<T>(OPTIC_SHAPE)?;
         assert_eq!(
-            clear_aperture,
-            default_clear_aperture(),
+            shape_of(deserialized.node_attr()),
+            shape_of(T::default().node_attr()),
             "loading a file without the property must fall back to the default"
         );
         Ok(())
@@ -219,7 +569,7 @@ pub mod test_helper {
     fn load_without_property<T: Default + Analyzable + 'static>(
         property_name: &str,
     ) -> OpmResult<OpticRef> {
-        let optic_ref = OpticRef::new(Arc::new(Mutex::new(T::default())));
+        let optic_ref = OpticRef::new(Box::new(T::default()));
         let serialized =
             ron::to_string(&optic_ref).map_err(|e| OpossumError::Other(e.to_string()))?;
         let without_property = remove_property_entry(&serialized, property_name);
@@ -232,10 +582,11 @@ pub mod test_helper {
 
     /// Assert that the body of a volume node matches the geometry its properties describe.
     ///
-    /// The body is not configured separately: it is derived from the very surfaces
-    /// `update_surfaces()` places from the node's curvature and thickness properties. What ties the
-    /// two together is the on-axis path length — it has to come out as exactly the node's center
-    /// thickness, the same distance the entry surface → exit surface pass covers.
+    /// The body is not configured separately: it is derived from the node's geometry, the same
+    /// description of its curvature and thickness properties that `update_surfaces()` installs the
+    /// traced surfaces from. What ties the two together is the on-axis path length — it has to
+    /// come out as exactly the node's center thickness, the same distance the entry surface → exit
+    /// surface pass covers.
     ///
     /// The optical axis starts exactly on the entrance surface, so this also exercises the case of
     /// a ray originating on a bounding surface, which is how a refracted ray enters the volume.
@@ -250,7 +601,7 @@ pub mod test_helper {
     /// through the volume, or if the derived geometry does not match the property.
     pub fn test_volume_body<T: Default + Volumetric>() -> OpmResult<()> {
         let mut node = T::default();
-        node.set_isometry(Isometry::identity())?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let center_thickness = center_thickness_of(&node);
         let on_axis = millimeter!(0.0, 0.0, 0.0);
         assert_abs_diff_eq!(
@@ -258,12 +609,13 @@ pub mod test_helper {
             center_thickness.value,
             epsilon = 1e-12
         );
-        let body = node.volume_body()?;
+        let geometry = placed_geometry(&node)?;
+        let body = body_of(&geometry)?;
         let on_axis_point =
             |z_position: Length| Point3::new(millimeter!(0.0), millimeter!(0.0), z_position);
-        assert!(body.contains(&on_axis_point(center_thickness * 0.5))?);
-        assert!(!body.contains(&on_axis_point(millimeter!(-1.0)))?);
-        assert!(!body.contains(&on_axis_point(center_thickness + millimeter!(1.0)))?);
+        assert!(body.contains(&on_axis_point(center_thickness * 0.5)));
+        assert!(!body.contains(&on_axis_point(millimeter!(-1.0))));
+        assert!(!body.contains(&on_axis_point(center_thickness + millimeter!(1.0))));
         // Inverting a node reverses the direction light travels through it, not the geometry.
         node.set_inverted(true)?;
         assert_abs_diff_eq!(
@@ -293,8 +645,8 @@ pub mod test_helper {
         position: Point3<Length>,
     ) -> OpmResult<Length> {
         let ray = Ray::new_collimated(position, nanometer!(1053.0), joule!(1.0))?;
-        node.volume_body()?
-            .path_length_inside(&ray)?
+        body_of(&placed_geometry(node)?)?
+            .path_length_inside(&ray)
             .ok_or_else(|| {
                 OpossumError::Other(format!(
                     "a ray at {position:?} does not pass through the volume of node '{}'",
@@ -303,11 +655,39 @@ pub mod test_helper {
             })
     }
 
-    /// Assert that the transversal extent of a volume node is its clear aperture, and nothing else.
+    /// Return the geometry of a node, moved to where the node sits.
     ///
-    /// The clear aperture is what a supplier quotes as the size of the component, and a volume node
-    /// starts out with the 25 mm standard. A port [`Aperture`] must not influence it: masking the
-    /// light in front of a component does not make the component smaller.
+    /// The geometry states the faces in their physical order, so an inverted node encloses the
+    /// same volume as an upright one.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the node's geometry cannot be derived or if the node has none.
+    pub fn placed_geometry<T: OpticNode + ?Sized>(node: &T) -> OpmResult<Geometry> {
+        node.placed_geometry()?
+            .ok_or_else(|| OpossumError::Other(format!("node '{}' has no geometry", node.name())))
+    }
+
+    /// Return the volume a geometry encloses.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the geometry is a single surface, which encloses no volume.
+    pub fn body_of(geometry: &Geometry) -> OpmResult<&dyn Body> {
+        geometry
+            .kind()
+            .as_body()
+            .ok_or_else(|| OpossumError::Other("a single surface encloses no volume".into()))
+    }
+
+    /// Assert that the transversal extent of a volume node is its optic shape, and nothing else.
+    ///
+    /// The optic shape is what a supplier quotes as the size of the component, and a volume node
+    /// starts out with a default of its type.
+    ///
+    /// # Arguments
+    ///
+    /// * `default_edge` - how far the default optic shape of the node type reaches along x.
     ///
     /// # Errors
     ///
@@ -316,45 +696,32 @@ pub mod test_helper {
     /// # Panics
     ///
     /// Panics if the node has no `center thickness` property or if its extent does not follow the
-    /// clear aperture.
-    pub fn test_clear_aperture<T: Default + Volumetric>() -> OpmResult<()> {
+    /// optic shape.
+    pub fn test_optic_shape<T: Default + Volumetric>(default_edge: Length) -> OpmResult<()> {
         let mut node = T::default();
-        node.set_isometry(Isometry::identity())?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let mid_thickness = center_thickness_of(&node) * 0.5;
         let point_at = |radius: Length| Point3::new(radius, millimeter!(0.0), mid_thickness);
-        // the default extent is a circle of 12.5 mm radius
-        let body = node.volume_body()?;
-        assert!(body.contains(&point_at(millimeter!(12.4)))?);
-        assert!(!body.contains(&point_at(millimeter!(12.6)))?);
-        // a port aperture masks the light, it does not resize the medium
-        node.set_aperture(
-            &PortType::Input,
-            "input_1",
-            &Aperture::new_circle(millimeter!(1.0), ApertureType::Hole, None)?,
-        )?;
-        assert!(node.volume_body()?.contains(&point_at(millimeter!(12.4)))?);
-        // a wider clear aperture does
+        let geometry = placed_geometry(&node)?;
+        let body = body_of(&geometry)?;
+        assert!(body.contains(&point_at(default_edge - millimeter!(0.1))));
+        assert!(!body.contains(&point_at(default_edge + millimeter!(0.1))));
+        // a wider optic shape widens it
         node.node_attr_mut().set_property(
-            CLEAR_APERTURE,
-            ApertureShape::BinaryCircle(CircleShape::new(millimeter!(25.0))?).into(),
+            OPTIC_SHAPE,
+            OpticShape::from(CircleShape::new(millimeter!(25.0))?).into(),
         )?;
-        let body = node.volume_body()?;
-        assert!(body.contains(&point_at(millimeter!(24.9)))?);
-        assert!(!body.contains(&point_at(millimeter!(25.1)))?);
-        // A shape that does not state where the medium ends leaves the volume undefined and is
-        // rejected right where it is set, before it can reach a file. An open aperture is one of
-        // them: two curved surfaces may happen to close the volume on their own, but nothing
-        // guarantees that they do.
-        for undefined_extent in [
-            ApertureShape::Open,
-            ApertureShape::Gaussian(GaussianShape::new((millimeter!(5.0), millimeter!(5.0)))?),
-        ] {
-            assert!(
-                node.node_attr_mut()
-                    .set_property(CLEAR_APERTURE, undefined_extent.into())
-                    .is_err()
-            );
-        }
+        let geometry = placed_geometry(&node)?;
+        let body = body_of(&geometry)?;
+        assert!(body.contains(&point_at(millimeter!(24.9))));
+        assert!(!body.contains(&point_at(millimeter!(25.1))));
+        // An open optic shape leaves the volume undefined and is rejected where it is set: two
+        // curved surfaces may happen to close the volume on their own, but nothing guarantees it.
+        assert!(
+            node.node_attr_mut()
+                .set_property(OPTIC_SHAPE, OpticShape::Open.into())
+                .is_err()
+        );
         Ok(())
     }
 
@@ -583,6 +950,395 @@ pub mod test_helper {
             .collect::<Vec<_>>()
             .join("_");
         format!("{integer_part}.{grouped}")
+    }
+
+    /// Describe every runtime surface a node has installed, one line of text per surface.
+    ///
+    /// Input surfaces come first, then output surfaces, each sorted by port name. A line states
+    /// the port, the kind of [`GeoSurface`](crate::geometry::GeoSurface), the anchor
+    /// relative to the node (translation in millimeter, then its local x and z axis), the
+    /// surface's own `local_z_at` at (0, 0), (5 mm, 0) and (0, 5 mm) in millimeter - which pins
+    /// radius, sign and orientation of a curved surface - and the index of the first surface
+    /// sharing the same geometric surface. Values are rounded to 1e-6, so the order in which
+    /// isometries are composed cannot show up.
+    ///
+    /// # Arguments
+    ///
+    /// * `node` - the node whose surfaces are described.
+    ///
+    /// # Returns
+    ///
+    /// One line per installed surface.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a surface is no face of the geometry the node installed.
+    #[must_use]
+    pub fn surface_snapshot<T: OpticNode + ?Sized>(node: &T) -> Vec<String> {
+        let installed = node.node_attr().runtime_geometry();
+        describe_faces_under_ports(node, |face| {
+            installed.and_then(|geometry| geometry.face(face).cloned())
+        })
+        .expect("every installed surface is a face of the installed geometry")
+    }
+
+    /// Describe the faces a node's [`Geometry`](crate::geometry::Geometry) has, derived anew from
+    /// its properties, in the format of [`surface_snapshot`] and under the port names the node has
+    /// installed: under each port the face it sits on.
+    ///
+    /// Comparing the two snapshots shows whether the geometry describes exactly the surfaces the
+    /// node installs.
+    ///
+    /// # Arguments
+    ///
+    /// * `node` - the node whose geometry is described.
+    ///
+    /// # Returns
+    ///
+    /// One line per port with an installed surface; no line at all for a node without geometry.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the geometry cannot be derived, or if it has no face an installed
+    /// surface sits on.
+    pub fn geometry_snapshot<T: OpticNode + ?Sized>(node: &T) -> OpmResult<Vec<String>> {
+        let Some(placed) = node.placed_geometry()? else {
+            return Ok(Vec::new());
+        };
+        describe_faces_under_ports(node, |face| placed.face(face).cloned())
+    }
+
+    /// Describe, under every port of a node with an installed surface, the face that surface sits
+    /// on, as [`describe_surfaces`] does.
+    ///
+    /// # Arguments
+    ///
+    /// * `node` - the node whose ports are described.
+    /// * `face_of` - the face with the given number, or `None` if there is none.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no face an installed surface sits on.
+    fn describe_faces_under_ports<T: OpticNode + ?Sized>(
+        node: &T,
+        face_of: impl Fn(FaceIndex) -> Option<Face>,
+    ) -> OpmResult<Vec<String>> {
+        if node.node_attr().runtime_geometry().is_none() {
+            return Ok(Vec::new());
+        }
+        let mut surfaces = Vec::new();
+        for (port_type, name, face) in sorted_surface_ports(node) {
+            let placed = face_of(face).ok_or_else(|| {
+                OpossumError::Other(format!(
+                    "there is no face {face} for the surface at port '{name}'"
+                ))
+            })?;
+            surfaces.push((port_type, name, placed));
+        }
+        Ok(describe_surfaces(node, &surfaces))
+    }
+
+    /// Return the ports of a node with the face each one sits on (see
+    /// [`OpticNode::surface_ports`]): the inputs first, then the outputs, each sorted by name.
+    fn sorted_surface_ports<T: OpticNode + ?Sized>(
+        node: &T,
+    ) -> Vec<(&'static str, &'static str, FaceIndex)> {
+        let ports = node.surface_ports();
+        let mut sorted = Vec::new();
+        for (port_type, list) in [("in", ports.inputs), ("out", ports.outputs)] {
+            let mut list = list.to_vec();
+            list.sort_by_key(|(name, _)| *name);
+            sorted.extend(list.into_iter().map(|(name, face)| (port_type, name, face)));
+        }
+        sorted
+    }
+
+    /// Describe surfaces one line each, as documented at [`surface_snapshot`].
+    ///
+    /// # Arguments
+    ///
+    /// * `node` - the node the surfaces belong to.
+    /// * `surfaces` - port type, port name and placed face of each surface.
+    fn describe_surfaces<T: OpticNode + ?Sized>(
+        node: &T,
+        surfaces: &[(&str, &str, Face)],
+    ) -> Vec<String> {
+        let node_iso = node.effective_node_iso().unwrap_or_else(Isometry::identity);
+        let mut lines = Vec::with_capacity(surfaces.len());
+        for (port_type, port_name, face) in surfaces {
+            let shared = surfaces
+                .iter()
+                .position(|(_, _, other)| other == face)
+                .expect("a surface is shared with itself");
+            // The anchor: where the face sits relative to the node.
+            let anchor = Isometry::new_from_transform(
+                node_iso.get_inv_transform() * face.frame().get_transform(),
+            );
+            let translation = anchor.translation();
+            let geo = face.surface();
+            let sag = [(0.0, 0.0), (5.0, 0.0), (0.0, 5.0)]
+                .map(|(x, y)| {
+                    geo.local_z_at(&Point2::new(millimeter!(x), millimeter!(y)))
+                        .map_or_else(|| "none".to_owned(), |z| rounded(z.get::<millimeter>()))
+                })
+                .join(", ");
+            let name = geo.name();
+            lines.push(format!(
+                "{port_type} {port_name}: {name} t=({}, {}, {}) x={} z={} sag=({sag}) shared={shared}",
+                rounded(translation.x.get::<millimeter>()),
+                rounded(translation.y.get::<millimeter>()),
+                rounded(translation.z.get::<millimeter>()),
+                rounded_vector(&anchor.transform_vector_f64(&Vector3::x())),
+                rounded_vector(&anchor.transform_vector_f64(&Vector3::z())),
+            ));
+        }
+        lines
+    }
+
+    /// Compare labelled snapshots against the ones recorded when the behaviour was last accepted.
+    ///
+    /// Both tables are compared as a whole, so a failure reports every deviating entry at once.
+    ///
+    /// # Arguments
+    ///
+    /// * `actual` - pairs of label and snapshot (see [`surface_snapshot`] or [`body_snapshot`])
+    ///   from the current run, sorted by label.
+    /// * `expected` - the recorded reference, sorted by label.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the tables differ. The panic message contains the current table as a paste-ready
+    /// literal, so an intentional change of behaviour can be re-baselined directly.
+    pub fn assert_snapshots(actual: &[(&str, Vec<String>)], expected: &[(&str, &[&str])]) {
+        let matches = actual.len() == expected.len()
+            && actual.iter().zip(expected).all(
+                |((actual_label, actual_lines), (expected_label, expected_lines))| {
+                    actual_label == expected_label
+                        && actual_lines
+                            .iter()
+                            .map(String::as_str)
+                            .eq(expected_lines.iter().copied())
+                },
+            );
+        let table = actual
+            .iter()
+            .map(|(label, lines)| {
+                let lines = lines
+                    .iter()
+                    .map(|line| format!("\n                    \"{line}\","))
+                    .collect::<String>();
+                format!("            (\n                \"{label}\",\n                &[{lines}\n                ],\n            ),")
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            matches,
+            "snapshots deviate from the recorded reference.\ncurrent values:\n{table}"
+        );
+    }
+
+    /// Describe everything a gain or absorption model reads from a volume body.
+    ///
+    /// One line each for the body's frame (translation in millimeter, local x and z axis) and its
+    /// bounding box, one line per chord of a set of straight and oblique rays through it, and one
+    /// line marking which points of a grid lie inside it (`#`) or not (`.`). Rays and points are
+    /// stated in the node's frame, so the same component gives the same chords wherever it is
+    /// placed. Values are rounded as by [`surface_snapshot`].
+    ///
+    /// # Arguments
+    ///
+    /// * `body` - the body to describe.
+    /// * `node_frame` - the placement of the node the body belongs to.
+    ///
+    /// # Returns
+    ///
+    /// The lines describing the body.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the body cannot answer one of the questions.
+    pub fn body_snapshot(body: &dyn Body, node_frame: &Isometry) -> OpmResult<Vec<String>> {
+        let frame = body.isometry();
+        let translation = frame.translation();
+        let range = |range: std::ops::Range<Length>| {
+            format!(
+                "[{}, {}]",
+                rounded(range.start.get::<millimeter>()),
+                rounded(range.end.get::<millimeter>())
+            )
+        };
+        // A body whose extent cannot be determined is recorded as such rather than aborting.
+        let bounds = body.bounding_box().map_or_else(
+            |error| format!("box: {error}"),
+            |bounds| {
+                format!(
+                    "box x={} y={} z={}",
+                    range(bounds.x_range()),
+                    range(bounds.y_range()),
+                    range(bounds.z_range())
+                )
+            },
+        );
+        let mut lines = vec![
+            format!(
+                "frame t=({}, {}, {}) x={} z={}",
+                rounded(translation.x.get::<millimeter>()),
+                rounded(translation.y.get::<millimeter>()),
+                rounded(translation.z.get::<millimeter>()),
+                rounded_vector(&frame.transform_vector_f64(&Vector3::x())),
+                rounded_vector(&frame.transform_vector_f64(&Vector3::z())),
+            ),
+            bounds,
+        ];
+        for (x, y) in [
+            (0.0, 0.0),
+            (5.0, 0.0),
+            (0.0, 5.0),
+            (-8.0, 3.0),
+            (12.4, 0.0),
+            (12.6, 0.0),
+        ] {
+            for tilt in [0.0_f64, 10.0] {
+                let chord = body
+                    .path_length_inside(&probe_ray(x, y, tilt, node_frame)?)
+                    .map_or_else(|| "none".to_owned(), |l| rounded(l.get::<millimeter>()));
+                lines.push(format!("chord from ({x}, {y}) at {tilt} deg: {chord}"));
+            }
+        }
+        let mut inside = String::new();
+        for x in [-12.6, -12.4, 0.0, 6.0, 12.4, 12.6] {
+            for y in [0.0, 7.0] {
+                for z in [-0.5, 0.5, 2.5, 4.5, 5.5, 9.5, 10.5] {
+                    let point = node_frame.transform_point(&millimeter!(x, y, z));
+                    inside.push(if body.contains(&point) { '#' } else { '.' });
+                }
+            }
+        }
+        lines.push(format!("inside: {inside}"));
+        Ok(lines)
+    }
+
+    /// Describe where rays meet every surface a node has installed.
+    ///
+    /// One line per surface and ray of a fixed set of straight and oblique rays: the hit point
+    /// and the surface normal there, or `miss`, and whether the surface records the hit. Rays,
+    /// points and normals are stated in the node's frame and rounded as by [`surface_snapshot`].
+    /// Unlike that snapshot, nothing here depends on how a surface or its placement is
+    /// represented.
+    ///
+    /// # Arguments
+    ///
+    /// * `node` - the node whose installed surfaces are hit.
+    ///
+    /// # Returns
+    ///
+    /// The lines describing the hits, ordered by port type and port name.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a ray cannot be built.
+    pub fn hit_snapshot<T: OpticNode + ?Sized>(node: &T) -> OpmResult<Vec<String>> {
+        let node_frame = node.effective_node_iso().unwrap_or_else(Isometry::identity);
+        let Some(geometry) = node.node_attr().runtime_geometry() else {
+            return Ok(Vec::new());
+        };
+        let mut lines = Vec::new();
+        for (port_type, name, face) in sorted_surface_ports(node) {
+            for (x, y, tilt) in [
+                (0.0, 0.0, 0.0),
+                (5.0, 0.0, 10.0),
+                (-8.0, 3.0, 0.0),
+                (0.0, 5.0, 10.0),
+                (12.4, 0.0, 0.0),
+                (12.6, 0.0, 0.0),
+            ] {
+                let hit = geometry
+                    .intersect(face, &probe_ray(x, y, tilt, &node_frame)?)
+                    .map_or_else(
+                        || "miss".to_owned(),
+                        |hit| {
+                            let local = node_frame.inverse_transform_point(&hit.point());
+                            let recorded = if hit.recorded() {
+                                "recorded"
+                            } else {
+                                "not recorded"
+                            };
+                            format!(
+                                "({}, {}, {}) n={} {recorded}",
+                                rounded(local.x.get::<millimeter>()),
+                                rounded(local.y.get::<millimeter>()),
+                                rounded(local.z.get::<millimeter>()),
+                                rounded_vector(
+                                    &node_frame.inverse_transform_vector_f64(&hit.normal())
+                                ),
+                            )
+                        },
+                    );
+                lines.push(format!(
+                    "{port_type} {name} from ({x}, {y}) at {tilt} deg: {hit}"
+                ));
+            }
+        }
+        Ok(lines)
+    }
+
+    /// Build a ray that starts 50 mm in front of a node and runs along its axis, tilted towards
+    /// the node's y axis.
+    ///
+    /// # Arguments
+    ///
+    /// * `x`, `y` - where the ray starts across the node's axis, in millimeter.
+    /// * `tilt` - the angle between the ray and the node's axis, in degree.
+    /// * `node_frame` - the placement of the node.
+    ///
+    /// # Returns
+    ///
+    /// The ray, in global coordinates.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the ray cannot be built.
+    fn probe_ray(x: f64, y: f64, tilt: f64, node_frame: &Isometry) -> OpmResult<Ray> {
+        let direction = Vector3::new(0.0, tilt.to_radians().sin(), tilt.to_radians().cos());
+        Ok(Ray::new(
+            Point3::new(millimeter!(x), millimeter!(y), millimeter!(-50.0)),
+            direction,
+            nanometer!(1053.0),
+            joule!(1.0),
+        )?
+        .transformed_ray(node_frame))
+    }
+
+    /// Format a value rounded to six decimal places.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` - the value to format.
+    ///
+    /// # Returns
+    ///
+    /// The rounded value; `-0.000000` is written as `0.000000`.
+    fn rounded(value: f64) -> String {
+        // Adding 0.0 turns a negative zero into a positive one.
+        format!("{:.6}", (value * 1e6).round() / 1e6 + 0.0)
+    }
+
+    /// Format a vector with every component rounded as by [`rounded`].
+    ///
+    /// # Arguments
+    ///
+    /// * `vector` - the vector to format.
+    ///
+    /// # Returns
+    ///
+    /// The components as `(x, y, z)`.
+    fn rounded_vector(vector: &Vector3<f64>) -> String {
+        format!(
+            "({}, {}, {})",
+            rounded(vector.x),
+            rounded(vector.y),
+            rounded(vector.z)
+        )
     }
 
     pub fn test_analyze_geometric_no_isometry<T: Default + AnalysisRayTrace>(

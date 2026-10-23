@@ -1,31 +1,50 @@
-//! Example: Kepler Paraxial Telescope Setup
+//! Kepler Paraxial Telescope Example
 //!
-//! This example demonstrates how to build a simple paraxial optical system
-//! using the opossum_core framework. It creates a Kepler-type telescope
-//! consisting of two lenses, defines a light source, connects components,
-//! and runs a ray trace analysis.
+//! This example builds a simple paraxial optical system and runs a
+//! ray-tracing analysis on it, using a collimated line source.
 //!
-//! Overall structure of the system:
-//! 1. Create a scene (NodeGroup)
-//! 2. Add a light source
-//! 3. Create optical elements (lenses and aperture)
-//! 4. Add elements into the scene
-//! 5. Connect elements using distances
-//! 6. Configure ray tracing
-//! 7. Run analysis and save output
+//! System Overview
+//! 1. One collimated line ray source
+//! 2. Two paraxial lenses ("75 mm lens" and "50 mm lens")
+//! 3. An optic shape of 25 mm radius on both lenses, the size of the lenses
+//! 4. A ray propagation visualizer after the second lens
+//! 5. A ray-tracing analyzer for the source beam
+//! 6. Saving the optical system to a file for later use
+//!
+//! The beam is defined by:
+//! - a collimated line ray distribution
+//! - a beam width of 45 mm
+//! - an energy of 1 joule per ray
+//! - 9 rays in total
+//!
+//! This example demonstrates:
+//! - Building an optical system from paraxial lenses of a given size
+//! - Connecting components with fixed propagation distances
+//! - Attaching a visualizer to inspect ray paths
+//! - Setting up a collimated line ray source for ray tracing
+//! - Configuring a ray-tracing analyzer
+//! - Saving the system as an `.opm` document
+//!
+//! Imports:
+//! - `opossum_core::prelude::*` — optical components, analyzers, unit
+//!   macros, and document types
+//! - `opossum_core::core_optics::NodeAttrExt` — extension trait for setting
+//!   node names and properties
+//! - `opossum_core::{apertures::CircleShape, geometry::body::OPTIC_SHAPE}`
+//!   — the shape and the property name of a lens's optic shape
+//! - `std::{env, path::Path}` — used to find the output directory and save
+//!   the `.opm` file
 use opossum_core::{
-    core_optics::{NodeAttrExt, OpticNodeExt},
-    prelude::*,
+    apertures::CircleShape, core_optics::NodeAttrExt, geometry::body::OPTIC_SHAPE, prelude::*,
 };
 use std::{env, path::Path};
-/// Main entry point of the example.
+/// Entry point of the example.
 ///
 /// This function builds the optical system step by step:
 /// - defines components (source, lenses, visualizer)
 /// - connects them into an optical path
 /// - configures ray tracing
 /// - exports the final system to a file
-
 fn main() -> OpmResult<()> {
     // Create a container for all optical elements in the system.
     // This acts as the "scene" or optical bench.
@@ -36,13 +55,21 @@ fn main() -> OpmResult<()> {
     // Create the first lens with a focal length of 75 mm.
     // This lens is part of the Kepler telescope setup.
     let mut lens1 = ParaxialSurface::new("75 mm lens", millimeter!(75.0))?;
-    let aperture = Aperture::new_circle(millimeter!(25.0), ApertureType::Hole, None)?;
+    // The lens is 50 mm in diameter: its optic shape is a circle of 25 mm radius.
+    lens1.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(25.0))?).into(),
+    )?;
     // Add the first lens into the optical scene.
-    lens1.set_aperture(&PortType::Input, "input_1", &aperture)?;
     let i_pl1 = scenery.add_node(lens1)?;
-    // Create the second lens with a focal length of 50 mm.
+    // Create the second lens with a focal length of 50 mm and the same size as the first one.
     // Together with the first lens, it forms a Kepler telescope system.
-    let i_pl2 = scenery.add_node(ParaxialSurface::new("50 mm lens", millimeter!(50.0))?)?;
+    let mut lens2 = ParaxialSurface::new("50 mm lens", millimeter!(50.0))?;
+    lens2.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(25.0))?).into(),
+    )?;
+    let i_pl2 = scenery.add_node(lens2)?;
     // Add a ray propagation visualizer.
     // This does not affect optics; it only displays ray paths.
     let mut ray_prop_vis = RayPropagationVisualizer::new("after telecope", None)?;

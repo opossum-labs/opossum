@@ -123,13 +123,13 @@ fn setup_dummy_remote(repo_path: &Path) {
 
 /// Helper function to simulate a community update on the remote repository.
 /// Creates a new material ("F2"), publishes it to disk, and commits it on `main`.
-fn simulate_remote_catalog_update(repo_path: &Path) {
+fn simulate_remote_catalog_update(repo_path: &Path) -> OpmResult<()> {
     let repo = gix::open(repo_path).expect("Failed to open remote repo");
     let mut remote_registry =
         AssetRegistry::<Material>::new(repo_path).expect("Failed to open remote asset registry");
 
     // Create new material on the "server"
-    let refr_index = RefrIndexConst::new(1.62).unwrap().into();
+    let refr_index = RefrIndexConst::new(1.62)?.into();
     let mut f2_mat = Material::new_draft(
         "F2",
         Some("Schott".to_string()),
@@ -183,6 +183,7 @@ fn simulate_remote_catalog_update(repo_path: &Path) {
         "Add F2 material to catalog",
     )
     .expect("Failed to update main branch reference");
+    Ok(())
 }
 
 fn main() -> OpmResult<()> {
@@ -204,7 +205,7 @@ fn main() -> OpmResult<()> {
     let temp_registry_dir = TempDir::new().expect("Failed to create temp registry dir");
 
     let sync = RegistrySync::new(temp_registry_dir.path(), &remote_url);
-    sync.init_or_clone()?;
+    sync.ensure_repository_initialized()?;
 
     // Initialize the unified AssetRegistry (builds in-memory index automatically)
     let mut registry = AssetRegistry::<Material>::new(temp_registry_dir.path())?;
@@ -235,7 +236,7 @@ fn main() -> OpmResult<()> {
     // Phase 3: Simulate community adding a material to the remote repository
     // -------------------------------------------------------------------------
     println!("\n[4/8] Simulating community update on the remote server...");
-    simulate_remote_catalog_update(temp_remote_dir.path());
+    simulate_remote_catalog_update(temp_remote_dir.path())?;
     println!("  -> Remote repository has been updated with material 'F2'.");
 
     // -------------------------------------------------------------------------

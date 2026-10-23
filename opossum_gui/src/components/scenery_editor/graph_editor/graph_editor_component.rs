@@ -31,7 +31,7 @@ pub fn GraphEditor(
     root_tab_open_handler: EventHandler<bool>,
     sidebar_drag_handler: EventHandler<f64>,
 ) -> Element {
-    info!("🔄 Render: GraphEditor");
+    debug!("🔄 Render: GraphEditor");
     let workspace = use_store(GraphsWorkspaceState::default);
     use_context_provider(|| ReadStore::from(workspace));
     let root_graph_id = use_memo(move || *workspace.root_scenery_id().read());
@@ -193,7 +193,7 @@ pub fn GraphEditor(
                         let tab_order = workspace.tab_order().read().clone();
                         rsx! {
                             TabList { class: "editor-tab-list",
-                                for (i , id) in tab_order.iter().enumerate() {
+                                for (i, id) in tab_order.iter().enumerate() {
                                     if let Some(graph_state) = workspace.tabs().get(*id) {
                                         TabTrigger {
                                             key: "{id.as_simple().to_string()}",

@@ -30,8 +30,8 @@ mod tests {
     #[test]
     fn test_min_3_entries_vec_f64() {
         let validator = Min3Entries;
-        assert!(validator.validate_vec(&vec![1.0, 2.0, 3.0]).is_ok());
-        assert!(validator.validate_vec(&vec![1.0, 2.0]).is_err());
+        assert!(validator.validate_vec(&[1.0, 2.0, 3.0]).is_ok());
+        assert!(validator.validate_vec(&[1.0, 2.0]).is_err());
     }
 
     #[test]
@@ -39,7 +39,7 @@ mod tests {
         let validator = Min3Entries;
         assert!(
             validator
-                .validate_vec(&vec![
+                .validate_vec(&[
                     Length::new::<meter>(1.0),
                     Length::new::<meter>(2.0),
                     Length::new::<meter>(3.0)
@@ -54,7 +54,7 @@ mod tests {
         let validator = Min3Entries;
         assert!(
             validator
-                .validate_vec(&vec![
+                .validate_vec(&[
                     Angle::new::<radian>(1.0),
                     Angle::new::<radian>(2.0),
                     Angle::new::<radian>(3.0)

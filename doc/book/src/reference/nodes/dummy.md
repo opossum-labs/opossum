@@ -4,7 +4,7 @@
 
 ## Analysis
 
-The incoming light data is simply passed unmodified through the node. However, possible apodization due to input or output port apertures might occur.
+The incoming light data is simply passed unmodified through the node. Given an `optic shape`, the dummy acts as an iris: a ray outside of it misses the dummy (see [Optic shape](../nodes.md#optic-shape)).
 
 ## Ports
 
@@ -16,4 +16,5 @@ The incoming light data is simply passed unmodified through the node. However, p
 
 ## Properties
 
-This node type has no specific properties.
+`optic shape`
+: The opening of the iris, unbounded (`Open`) by default, so that all light passes. Any shape with an edge can be set instead. A ray outside of it follows the analyzer's missed surface strategy: with `Ignore` it passes unchanged, with `Stop` it is lost (see [Optic shape](../nodes.md#optic-shape)).

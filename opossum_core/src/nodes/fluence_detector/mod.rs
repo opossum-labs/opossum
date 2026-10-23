@@ -4,17 +4,23 @@ pub mod fluence_data;
 
 use crate::{
     analyzers::{
-        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
+        AnalyzerKind, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
+        raytrace::AnalysisRayTrace,
     },
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt,
-        hit_map::fluence_estimator::FluenceEstimator,
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, SurfacePorts,
+        hit_map::fluence_estimator::FluenceEstimator, optic_node::APERTURE_LIMIT_NOTE,
+        optic_surface::OpticSurface,
     },
     error::OpmResult,
+    geometry::{
+        Geometry, SurfaceShape,
+        body::{OPTIC_SHAPE, default_square_optic_shape},
+    },
     light::LightData,
     nodes::NodeRegistration,
     properties::{Properties, Proptype},
-    reporting::node_report::NodeReport,
+    reporting::node_report::{NodeReport, NodeReportResult},
 };
 use log::warn;
 use opm_macros_lib::OpmNode;
@@ -41,6 +47,8 @@ inventory::submit! {
 /// ## Properties
 ///   - `name`
 ///   - `fluence estimator`
+///   - `optic shape`: the window the light is recorded within, a 25 mm square by default; light
+///     outside it passes unrecorded
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
@@ -63,11 +71,19 @@ impl Default for FluenceDetector {
                 FluenceEstimator::Voronoi.into(),
             )
             .unwrap();
+        node_attr
+            .create_property(
+                OPTIC_SHAPE,
+                "window the light is recorded within",
+                default_square_optic_shape().into(),
+            )
+            .unwrap();
         let mut fld = Self {
             node_attr,
             apodization_warning: false,
             light_data: None,
         };
+        fld.create_default_surface_properties().unwrap();
         fld.update_surfaces().unwrap();
         fld
     }
@@ -84,18 +100,34 @@ impl FluenceDetector {
     }
 }
 impl OpticNode for FluenceDetector {
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
+        Ok(Some(Geometry::detector(
+            SurfaceShape::Plane,
+            self.cross_section()?,
+        )?))
+    }
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
     }
-    fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.update_flat_single_surfaces()
+    fn surface_ports(&self) -> SurfacePorts {
+        SurfacePorts::SINGLE_SURFACE
     }
-    fn node_report(&self, uuid: &str) -> OpmResult<Option<NodeReport>> {
+    fn node_report(&self, uuid: &str, analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {
+        if analyzer == AnalyzerKind::Energy {
+            return Ok(NodeReportResult::incompatible_warning(format!(
+                "Node '{}' ({}): A fluence map can only be calculated during a ray tracing or ghostfocus analysis.",
+                self.name(),
+                self.node_type()
+            )));
+        }
         let mut props = Properties::default();
-        let hit_maps = self.hit_maps();
-        let Some(hit_map) = hit_maps.get("input_1") else {
+        let Some(hit_map) = self
+            .get_optic_surface("input_1")
+            .map(OpticSurface::hit_map)
+            .filter(|hit_map| !hit_map.is_empty())
+        else {
             warn!("could not get surface hitmap using default");
-            return Ok(None);
+            return Ok(NodeReportResult::None);
         };
 
         let mut consolidated_hit_map = hit_map.clone();
@@ -104,7 +136,7 @@ impl OpticNode for FluenceDetector {
         let Ok(Proptype::FluenceEstimator(estimator)) =
             self.node_attr.get_property("fluence estimator")
         else {
-            return Ok(None);
+            return Ok(NodeReportResult::None);
         };
 
         let fl_data = consolidated_hit_map.calc_fluence_map((95, 83), estimator);
@@ -129,8 +161,7 @@ impl OpticNode for FluenceDetector {
                 props.create(
                     "Warning",
                     "warning during analysis",
-                    "Rays have been apodized at input aperture. Results might not be accurate."
-                        .into(),
+                    APERTURE_LIMIT_NOTE.into(),
                 )?;
             }
         } else {
@@ -146,7 +177,7 @@ impl OpticNode for FluenceDetector {
                 )
                 ?;
         }
-        Ok(Some(NodeReport::new(
+        Ok(NodeReportResult::Report(NodeReport::new(
             self.node_type(),
             self.name(),
             uuid,
@@ -168,14 +199,14 @@ mod test {
         analyzers::energy::EnergyConfig,
         core_optics::PortType,
         light::{LightData, LightResult, spectrum_helper::create_he_ne_spec},
-        nodes::test_helper::test_helper::*,
+        nodes::test_helper::helper::*,
     };
     #[test]
     fn default() {
         let node = FluenceDetector::default();
         assert_eq!(node.name(), "fluence detector");
         assert_eq!(node.node_type(), "fluence detector");
-        assert_eq!(node.inverted(), false);
+        assert!(!node.inverted());
         assert_eq!(node.node_color(), "hotpink");
     }
     #[test]
@@ -226,13 +257,19 @@ mod test {
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
         assert!(output.is_some());
-        let output = output.clone().unwrap();
+        let output = output.unwrap();
         assert_eq!(*output, input_light);
         Ok(())
     }
     #[test]
-    fn analyze_apodization_warning() -> OpmResult<()> {
-        test_analyze_apodization_warning::<FluenceDetector>()
+    fn optic_shape_absent_in_file() -> OpmResult<()> {
+        test_optic_shape_absent_in_file::<FluenceDetector>()
+    }
+    #[test]
+    fn records_inside_and_passes_all() -> OpmResult<()> {
+        test_detector_records_inside_and_passes_all::<FluenceDetector>(|detector| {
+            detector.light_data.as_ref()
+        })
     }
     #[test]
     fn analyze_inverse() -> OpmResult<()> {
@@ -247,7 +284,7 @@ mod test {
         assert_eq!(output.len(), 1);
         let output = output.get("input_1");
         assert!(output.is_some());
-        let output = output.clone().unwrap();
+        let output = output.unwrap();
         assert_eq!(*output, input_light);
         Ok(())
     }

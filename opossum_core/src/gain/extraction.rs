@@ -79,24 +79,23 @@ pub trait Extraction {
     /// body without a grid. A path-independent model — a constant factor — returns `ln(gain)` and
     /// ignores the geometry.
     ///
-    /// `inversion` is `&mut Option<Inversion>` so that saturating models can deplete the inversion
-    /// as the ray passes through; the [`Option`] layer stays because models such as
+    /// The body is mutable so that saturating models can deplete its inversion (see
+    /// [`Body::inversion_mut`]) as the ray passes through; models such as
     /// [`ConstGain`](super::ConstGain) never read an inversion at all.
     ///
     /// # Arguments
     ///
-    /// * `body` - the volume the ray travels through; its isometry converts global ray coordinates
-    ///   into the inversion field's own local frame.
+    /// * `body` - the volume the ray travels through, with the inversion prepared by
+    ///   [`Extraction::build_inversion`]; its isometry converts global ray coordinates into the
+    ///   inversion field's own local frame.
     /// * `ray` - the ray whose chord is being integrated; must be a valid ray (the caller has
     ///   already confirmed it is valid and that its chord through the body is positive).
-    /// * `inversion` - the inversion prepared by [`Extraction::build_inversion`], mutable so
-    ///   that saturating models can write depletion back.
     ///
     /// # Returns
     ///
     /// The dimensionless exponent `∫ g(s) ds` for the full chord. Returns `0.0` for a ray that
     /// contributes nothing — a degenerate direction, no inversion, or no populated cells on the path.
-    fn path_exponent(&self, body: &dyn Body, ray: &Ray, inversion: &mut Option<Inversion>) -> f64;
+    fn path_exponent(&self, body: &mut dyn Body, ray: &Ray) -> f64;
     /// Returns the multiplicative gain factor `exp(∫ g(s) ds)` for the given ray chord.
     ///
     /// This is the result callers normally need: a dimensionless factor by which the ray's energy
@@ -104,16 +103,14 @@ pub trait Extraction {
     ///
     /// # Arguments
     ///
-    /// * `body` - the volume the light passes through.
+    /// * `body` - the volume the light passes through, with its inversion.
     /// * `ray` - the ray whose chord is being integrated.
-    /// * `inversion` - the inversion prepared by [`Extraction::build_inversion`], mutable so
-    ///   that saturating models can write depletion back.
     ///
     /// # Returns
     ///
-    /// `exp(path_exponent(body, ray, inversion))`.
-    fn gain_factor(&self, body: &dyn Body, ray: &Ray, inversion: &mut Option<Inversion>) -> f64 {
-        self.path_exponent(body, ray, inversion).exp()
+    /// `exp(path_exponent(body, ray))`.
+    fn gain_factor(&self, body: &mut dyn Body, ray: &Ray) -> f64 {
+        self.path_exponent(body, ray).exp()
     }
     /// Amplify the spectral energy passing through the medium.
     ///
@@ -123,19 +120,13 @@ pub trait Extraction {
     ///
     /// # Arguments
     ///
-    /// * `body` - the volume the light passes through.
-    /// * `inversion` - the inversion the node was prepared with, or `None` if this model
-    ///   built none.
+    /// * `body` - the volume the light passes through, with the inversion the node was prepared
+    ///   with, if this model built one.
     /// * `spectrum` - the spectral energy arriving at the node, modified in place.
     ///
     /// # Errors
     ///
     /// This function errors if the spectrum cannot be scaled, or if this model cannot be evaluated
     /// without a beam path at all.
-    fn amplify_spectrum(
-        &self,
-        body: &dyn Body,
-        inversion: Option<&Inversion>,
-        spectrum: &mut Spectrum,
-    ) -> OpmResult<()>;
+    fn amplify_spectrum(&self, body: &dyn Body, spectrum: &mut Spectrum) -> OpmResult<()>;
 }

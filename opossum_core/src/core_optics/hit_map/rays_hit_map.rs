@@ -2,16 +2,13 @@
 //!
 //! This module also conatins the routines for genearating a fluence map using different estimator strategies.
 use crate::{
-    J_per_cm2,
-    apertures::Aperture,
-    centimeter,
+    J_per_cm2, centimeter,
     error::{OpmResult, OpossumError},
     kde::Kde,
     meter, micrometer,
     nodes::fluence_detector::{Fluence, fluence_data::FluenceData},
-    reporting::plottable::AxLims,
     utils::{
-        geom_transformation::Isometry,
+        AxLims,
         griddata::{
             VoronoiedData, calc_closed_poly_area, create_voronoi_cells,
             grid_interpolate_3d_triangulated_scatter_data, linspace,
@@ -20,7 +17,6 @@ use crate::{
     },
 };
 use approx::relative_eq;
-use core::f64;
 use itertools::Itertools;
 use libm::modf;
 use log::warn;
@@ -498,69 +494,6 @@ impl RaysHitMap {
         }
     }
 
-    /// Prunes the [`RaysHitMap`] by removing all hit points that are outside the given [`Aperture`].
-    pub fn prune_by_aperture(&mut self, aperture: &Aperture, surface_iso: &Isometry) {
-        // If aperture is None, do nothing
-        if aperture.is_none() {
-            return;
-        }
-
-        match &mut self.hit_points {
-            HitPoints::Energy(vec) => {
-                vec.retain(|hp| {
-                    let local_point_3d = surface_iso.inverse_transform_point(&hp.position);
-                    aperture.apodize(&local_point_3d) > 0.0
-                });
-            }
-            HitPoints::Fluence(vec) => {
-                vec.retain(|hp| {
-                    let local_point_3d = surface_iso.inverse_transform_point(&hp.position);
-                    aperture.apodize(&local_point_3d) > 0.0
-                });
-            }
-        }
-        self.recalculate_limits();
-    }
-
-    fn recalculate_limits(&mut self) {
-        let (xmin, xmax, ymin, ymax) = match &self.hit_points {
-            HitPoints::Energy(vec) => vec.iter().fold(
-                (
-                    meter!(f64::INFINITY),
-                    meter!(f64::NEG_INFINITY),
-                    meter!(f64::INFINITY),
-                    meter!(f64::NEG_INFINITY),
-                ),
-                |arg0, v| {
-                    (
-                        arg0.0.min(v.position.x),
-                        arg0.1.max(v.position.x),
-                        arg0.2.min(v.position.y),
-                        arg0.3.max(v.position.y),
-                    )
-                },
-            ),
-            HitPoints::Fluence(vec) => vec.iter().fold(
-                (
-                    meter!(f64::INFINITY),
-                    meter!(f64::NEG_INFINITY),
-                    meter!(f64::INFINITY),
-                    meter!(f64::NEG_INFINITY),
-                ),
-                |arg0, v| {
-                    (
-                        arg0.0.min(v.position.x),
-                        arg0.1.max(v.position.x),
-                        arg0.2.min(v.position.y),
-                        arg0.3.max(v.position.y),
-                    )
-                },
-            ),
-        };
-        self.x_lims = (xmin, xmax);
-        self.y_lims = (ymin, ymax);
-    }
-
     /// Calculate a fluence map ([`FluenceData`]) of this [`RaysHitMap`] using the "Voronoi" method
     ///
     /// # Attributes
@@ -992,7 +925,6 @@ mod test_hitpoint {
         error::OpmResult,
         joule, meter,
     };
-    use core::f64;
     #[test]
     fn new_fluence_hit_point() {
         assert!(FluenceHitPoint::new(meter!(1.0, 1.0, 1.0), J_per_cm2!(f64::NAN)).is_err());
@@ -1134,7 +1066,6 @@ mod test_rays_hit_map {
         }
         HitPoints::Fluence(pts)
     }
-    use core::f64;
     #[test]
     fn lims() -> OpmResult<()> {
         let hp = HitPoints::Fluence(vec![
@@ -1422,7 +1353,7 @@ mod test_rays_hit_map {
         // Create hitmap with 2 nearly identical points (float inaccuracy) and 1 distinct point
         let mut rhm = RaysHitMap::new(HitPoints::Fluence(vec![
             FluenceHitPoint::new(meter!(1.0, 2.0, 3.0), J_per_cm2!(1.5))?,
-            FluenceHitPoint::new(meter!(1.0, 2.0, 3.0 + core::f64::EPSILON), J_per_cm2!(2.5))?,
+            FluenceHitPoint::new(meter!(1.0, 2.0, 3.0 + f64::EPSILON), J_per_cm2!(2.5))?,
             FluenceHitPoint::new(meter!(5.0, 5.0, 5.0), J_per_cm2!(4.0))?,
         ]));
 

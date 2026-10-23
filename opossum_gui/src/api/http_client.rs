@@ -28,10 +28,6 @@ impl HTTPClient {
         &self.client
     }
     #[must_use]
-    pub fn base_url(&self) -> &str {
-        &self.base_url
-    }
-    #[must_use]
     pub fn url(&self, route: &str) -> String {
         format!("{}{}", self.base_url, route)
     }
@@ -53,39 +49,6 @@ impl HTTPClient {
         }
     }
 
-    /// Send a POST request to the given route using RON data
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if
-    /// - the request fails (e.g. the route is not reachable)
-    /// - the response cannot be serialized into the expected type
-    pub async fn post_ron<
-        B: Serialize + DeserializeOwned + Clone,
-        R: Serialize + DeserializeOwned,
-    >(
-        &self,
-        route: &str,
-        body: B,
-    ) -> Result<R, String> {
-        if let Ok(serialized) = ron::ser::to_string(&body) {
-            let res = self
-                .client()
-                .post(self.url(route))
-                .header("Content-Type", "application/ron")
-                .body(serialized)
-                .send()
-                .await;
-            if let Ok(response) = res {
-                self.process_response_ron::<R>(response).await
-            } else {
-                Err(format!("Error on post request on route: \"{route}\""))
-            }
-        } else {
-            Err("Error serializing body using ron".to_string())
-        }
-    }
-
     /// Send a POST request to the given route with no body.
     ///
     /// # Errors
@@ -101,20 +64,6 @@ impl HTTPClient {
             self.process_response::<R>(response).await
         } else {
             Err(format!("Error on post request on route: \"{route}\""))
-        }
-    }
-
-    /// Send a POST reqeust to the given route with the provided body.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if the request fails or if the response cannot be deserialized into the expected type.
-    pub async fn put_string(&self, route: &str, body: String) -> Result<String, String> {
-        let res = self.client().put(self.url(route)).body(body).send().await;
-        if let Ok(response) = res {
-            self.process_response::<String>(response).await
-        } else {
-            Err(format!("Error on put request on route: \"{route}\""))
         }
     }
     /// Send a PUT request with a raw string body, but expect a JSON response.
@@ -142,26 +91,7 @@ impl HTTPClient {
     /// This function will return an error if
     /// - the request fails (e.g. the route is not reachable)
     /// - the response cannot be deserialized into the expected type
-    pub async fn put<B: Serialize + DeserializeOwned, R: Serialize + DeserializeOwned>(
-        &self,
-        route: &str,
-        body: B,
-    ) -> Result<R, String> {
-        let res = self.client().put(self.url(route)).json(&body).send().await;
-        if let Ok(response) = res {
-            self.process_response::<R>(response).await
-        } else {
-            Err(format!("Error on put request on route: \"{route}\""))
-        }
-    }
-    /// Send a PUT request to the given route with the provided body.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if
-    /// - the request fails (e.g. the route is not reachable)
-    /// - the response cannot be deserialized into the expected type
-    pub async fn put_receive_no_content<B: Serialize + DeserializeOwned>(
+    pub async fn put<B: Serialize + DeserializeOwned>(
         &self,
         route: &str,
         body: B,
@@ -274,17 +204,8 @@ impl HTTPClient {
     ///
     /// - the request fails (e.g. the route is not reachable)
     /// - the response cannot be deserialized into the expected type
-    pub async fn delete<B: Serialize + DeserializeOwned, R: Serialize + DeserializeOwned>(
-        &self,
-        route: &str,
-        body: B,
-    ) -> Result<R, String> {
-        let res = self
-            .client()
-            .delete(self.url(route))
-            .json(&body)
-            .send()
-            .await;
+    pub async fn delete<R: Serialize + DeserializeOwned>(&self, route: &str) -> Result<R, String> {
+        let res = self.client().delete(self.url(route)).send().await;
         if let Ok(response) = res {
             self.process_response::<R>(response).await
         } else {
@@ -372,88 +293,91 @@ impl HTTPClient {
             Err(format!("Error on get request from route: \"{route}\""))
         }
     }
+    /// Helper method to format an error response.
+    ///
+    /// It first tries to deserialize the body into an `ErrorResponse`.
+    /// If that fails (e.g. plain text 413, HTML error page), it falls back
+    /// to formatting the HTTP status code and raw response body.
+    async fn handle_error_response(res: Response) -> String {
+        let status = res.status();
+        let reason = status.canonical_reason().unwrap_or("Unknown Status");
 
+        // Read the body as plain text first so we do not lose it on deserialization failure
+        let body_text = res
+            .text()
+            .await
+            .unwrap_or_else(|_| "<failed to read response body>".to_string());
+
+        // Attempt to parse the structured OPOSSUM ErrorResponse JSON
+        if let Ok(err_res) = serde_json::from_str::<ErrorResponse>(&body_text) {
+            format!(
+                "Error {}: {} - {}",
+                err_res.status, err_res.category, err_res.message
+            )
+        } else {
+            let trimmed_body = body_text.trim();
+            if trimmed_body.is_empty() {
+                format!("HTTP request failed with status {status} ({reason})")
+            } else {
+                format!("HTTP request failed with status {status} ({reason}): {trimmed_body}")
+            }
+        }
+    }
     /// Process the response from the server.
     ///
     /// # Errors
     ///
     /// This function will return an error if
     /// - the response cannot be deserialized into the expected type
+    /// - the server returned a non-success HTTP status code
     pub async fn process_response<R: Serialize + DeserializeOwned>(
         &self,
         res: Response,
     ) -> Result<R, String> {
         if res.status().is_success() {
             if res.content_length().unwrap_or(0) > 0 {
-                (res.json::<R>().await).map_or_else(
-                    |_| Err("Error deserializing response to requested struct!".to_string()),
-                    |res| Ok(res),
-                )
+                res.json::<R>().await.map_err(|e| {
+                    format!("Failed to deserialize response body into requested struct: {e}")
+                })
             } else {
-                // just to receive a value i nothing has been sent back
                 let json_val = json!("");
-                serde_json::from_value(json_val).map_or_else(|_| Err("Error deserializing default string if no content returns!".to_string()), |deserialized| Ok(deserialized))
+                serde_json::from_value(json_val).map_err(|e| {
+                    format!("Failed to deserialize default string when no content returned: {e}")
+                })
             }
         } else {
-            (res.json::<ErrorResponse>().await).map_or_else(
-                |_| Err("Error deserializing response to ErrorResponse struct!".to_string()),
-                |err_res| {
-                    Err(format!(
-                        "Error {}: {} - {}",
-                        err_res.status, err_res.category, err_res.message
-                    ))
-                },
-            )
+            Err(Self::handle_error_response(res).await)
         }
     }
-    /// Process the response of an API call.
-    ///
-    /// This a special version of the more general `process_response` function which handles pure `string` responses.
-    /// This function is used for handling the generation of an `OPM` file string.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the returned data cannot be parsed as text.
+    /// Process the response of an API call expecting raw text.
     ///
     /// # Errors
     ///
-    /// This function will return an error if the response .
+    /// This function will return an error if the request was not successful
+    /// or if reading the response body fails.
     pub async fn process_response_raw(&self, res: Response) -> Result<String, String> {
         if res.status().is_success() {
-            Ok(res.text().await.map_err(|e| e.to_string())?)
+            res.text().await.map_err(|e| e.to_string())
         } else {
-            Err("Error deserializing response to ErrorResponse struct!".to_string())
+            Err(Self::handle_error_response(res).await)
         }
     }
-    /// Process the response from the server assuming RON format
+    /// Process the response from the server assuming RON format.
     ///
     /// # Errors
     ///
     /// This function will return an error if
-    /// - the response cannot be deserialized into the expected type
-    ///
-    /// # Panics
-    ///
-    /// Panics if the returned data cannot be parsed as text (before parsed fon RON into the final data type).
+    /// - the server returned a non-success HTTP status code
+    /// - the response cannot be deserialized from RON into the expected type
     pub async fn process_response_ron<R: Serialize + DeserializeOwned>(
         &self,
         res: Response,
     ) -> Result<R, String> {
         if res.status().is_success() {
             let text = res.text().await.map_err(|e| e.to_string())?;
-            let data: R =
-                ron::from_str(&text).map_err(|e| format!("parsing of data failed: {e}"))?;
-            Ok(data)
+            ron::from_str::<R>(&text).map_err(|e| format!("Failed to parse RON response: {e}"))
         } else {
-            (res.json::<ErrorResponse>().await).map_or_else(
-                |_| Err("Error deserializing response to ErrorResponse struct!".to_string()),
-                |err_res| {
-                    Err(format!(
-                        "Error {}: {} - {}",
-                        err_res.status, err_res.category, err_res.message
-                    ))
-                },
-            )
+            Err(Self::handle_error_response(res).await)
         }
     }
 }

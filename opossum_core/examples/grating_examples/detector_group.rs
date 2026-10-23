@@ -28,20 +28,15 @@ pub fn detector_group() -> OpmResult<NodeGroup> {
         "output_1",
         i_prop_vis_top_view,
         "input_1",
-        millimeter!(0.0),
+        millimeter!(1.0),
     )?;
     cb.connect_nodes(
         i_prop_vis_top_view,
         "output_1",
         i_prop_vis_side_view,
         "input_1",
-        millimeter!(0.0),
+        millimeter!(1.0),
     )?;
-
-    cb.add_node(RayPropagationVisualizer::new(
-        "stale visualizer",
-        Some(Vector3::x()),
-    )?)?;
 
     cb.map_input_port(paraxial_lens, "input_1", "input_1")?;
     cb.map_output_port(i_prop_vis_side_view, "output_1", "output_1")?;

@@ -1,20 +1,26 @@
 #![warn(missing_docs)]
-use log::warn;
 use opm_macros_lib::OpmNode;
 use serde::{Deserialize, Serialize};
 use uom::si::length::nanometer;
 
 use crate::{
     analyzers::{
-        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
+        AnalyzerKind, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
+        raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt},
+    core_optics::{
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, SurfacePorts,
+        optic_node::APERTURE_LIMIT_NOTE,
+    },
     error::OpmResult,
+    geometry::{
+        Geometry, SurfaceShape,
+        body::{OPTIC_SHAPE, default_square_optic_shape},
+    },
     light::{LightData, Rays, Spectrum},
-    nanometer,
     nodes::NodeRegistration,
     properties::{Properties, Proptype},
-    reporting::node_report::NodeReport,
+    reporting::node_report::{NodeReport, NodeReportResult},
 };
 use std::fmt::{Debug, Display};
 
@@ -58,10 +64,12 @@ inventory::submit! {
 /// ## Properties
 ///   - `name`
 ///   - `spectrometer type`
+///   - `optic shape`: the window the light is recorded within, a 25 mm square by default; light
+///     outside it passes unrecorded
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
 /// different dectector nodes can be "stacked" or used somewhere within the optical setup.
-#[derive(OpmNode, Serialize, Deserialize, Clone)]
+#[derive(OpmNode, Clone)]
 #[opm_node("lightseagreen")]
 pub struct Spectrometer {
     light_data: Option<LightData>,
@@ -80,11 +88,19 @@ impl Default for Spectrometer {
                 SpectrometerType::Ideal.into(),
             )
             .unwrap();
+        node_attr
+            .create_property(
+                OPTIC_SHAPE,
+                "window the light is recorded within",
+                default_square_optic_shape().into(),
+            )
+            .unwrap();
         let mut spect = Self {
             light_data: None,
             node_attr,
             apodization_warning: false,
         };
+        spect.create_default_surface_properties().unwrap();
         spect.update_surfaces().unwrap();
         spect
     }
@@ -108,23 +124,19 @@ impl Spectrometer {
         Ok(spect)
     }
     /// Returns the meter type of this [`Spectrometer`].
-    ///
-    /// # Panics
-    /// This function panics if
-    /// - the property "spectrometer type" is not defined or
-    /// - the meter type has the wrong data format
     #[must_use]
     pub fn spectrometer_type(&self) -> SpectrometerType {
-        let meter_type = self
-            .node_attr
+        self.node_attr
             .get_property("spectrometer type")
-            .unwrap()
-            .clone();
-        if let Proptype::SpectrometerType(meter_type) = meter_type {
-            meter_type
-        } else {
-            panic!("wrong data format")
-        }
+            .ok()
+            .and_then(|prop| {
+                if let Proptype::SpectrometerType(meter_type) = prop {
+                    Some(*meter_type)
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_default()
     }
     /// Sets the meter type of this [`Spectrometer`].
     ///
@@ -136,7 +148,6 @@ impl Spectrometer {
             .set_property("spectrometer type", meter_type.into())?;
         Ok(())
     }
-
     /// Returns the spectrum stored in the lightdata of this [`Spectrometer`].
     ///
     /// Returns `None` if no lightdata is available, Some(Spectrum) otherwise.
@@ -153,65 +164,73 @@ impl Spectrometer {
                     for rays in r {
                         all_rays.merge(rays);
                     }
-                    all_rays.to_spectrum(&nanometer!(0.2)).ok()
+                    // Prefer adaptive binning consistent with geometric rays
+                    all_rays.to_auto_spectrum().ok()
                 }
             })
     }
 }
 impl OpticNode for Spectrometer {
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
+        Ok(Some(Geometry::detector(
+            SurfaceShape::Plane,
+            self.cross_section()?,
+        )?))
+    }
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
     }
-    fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.update_flat_single_surfaces()
+
+    fn surface_ports(&self) -> SurfacePorts {
+        SurfacePorts::SINGLE_SURFACE
     }
-    fn node_report(&self, uuid: &str) -> OpmResult<Option<NodeReport>> {
+
+    fn node_report(&self, uuid: &str, _analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {
         let mut props = Properties::default();
         if let Some(spectrum) = self.get_spectrum() {
             props.create("Spectrum", "Output spectrum", spectrum.into())?;
             props.create(
                 "Model",
                 "Spectrometer model",
-                self.node_attr.get_property("spectrometer type")?.clone(),
+                self.spectrometer_type().into(),
             )?;
-            if self.apodization_warning {
-                props.create(
-                    "Warning",
-                    "warning during analysis",
-                    "Rays have been apodized at input aperture. Results might not be accurate."
-                        .into(),
-                )?;
-            }
         }
 
-        Ok(Some(NodeReport::new(
-            self.node_type(),
-            self.name(),
-            uuid,
-            props,
-        )))
+        let mut report = NodeReport::new(self.node_type(), self.name(), uuid, props);
+
+        // Standardized report note instead of a property
+        if self.apodization_warning {
+            report.add_note(crate::reporting::report_note::ReportNote::new(
+                crate::reporting::report_note::ReportLevel::Warning,
+                APERTURE_LIMIT_NOTE,
+            ));
+        }
+
+        Ok(NodeReportResult::Report(report))
     }
+
     fn set_light_data(&mut self, ld: Option<LightData>) {
         self.light_data = ld;
     }
 }
 impl Debug for Spectrometer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.light_data {
-            Some(data) => match data {
-                LightData::Energy(spectrum) => {
-                    let spectrum_range = spectrum.range();
-                    write!(
-                        f,
-                        "Spectrum {:.3} - {:.3} nm (Type: {:?})",
-                        spectrum_range.start.get::<nanometer>(),
-                        spectrum_range.end.get::<nanometer>(),
-                        self.spectrometer_type()
-                    )
-                }
-                _ => write!(f, "no spectrum data to display"),
-            },
-            None => write!(f, "no data"),
+        if self.light_data.is_none() {
+            return write!(f, "no data");
+        }
+
+        // Use get_spectrum to cover Energy, Geometric, and GhostFocus light data
+        if let Some(spectrum) = self.get_spectrum() {
+            let spectrum_range = spectrum.range();
+            write!(
+                f,
+                "Spectrum {:.3} - {:.3} nm (Type: {:?})",
+                spectrum_range.start.get::<nanometer>(),
+                spectrum_range.end.get::<nanometer>(),
+                self.spectrometer_type()
+            )
+        } else {
+            write!(f, "no spectrum data to display")
         }
     }
 }
@@ -231,9 +250,10 @@ mod test {
             LightResult, Rays,
             spectrum_helper::{create_he_ne_spec, create_visible_spec},
         },
-        nodes::{EnergyMeter, test_helper::test_helper::*},
+        nanometer,
+        nodes::test_helper::helper::*,
     };
-    use num::Zero;
+    use num_traits::Zero;
     use uom::si::f64::Length;
 
     #[test]
@@ -261,7 +281,7 @@ mod test {
         assert_eq!(node.spectrometer_type(), SpectrometerType::Ideal);
         assert_eq!(node.name(), "spectrometer");
         assert_eq!(node.node_type(), "spectrometer");
-        assert_eq!(node.inverted(), false);
+        assert!(!node.inverted());
         assert_eq!(node.node_color(), "lightseagreen");
     }
     #[test]
@@ -295,11 +315,11 @@ mod test {
     }
     #[test]
     fn inverted() -> OpmResult<()> {
-        test_inverted::<EnergyMeter>()
+        test_inverted::<Spectrometer>()
     }
     #[test]
     fn analyze_empty() -> OpmResult<()> {
-        test_analyze_empty::<EnergyMeter>()
+        test_analyze_empty::<Spectrometer>()
     }
     #[test]
     fn analyze_wrong() -> OpmResult<()> {
@@ -325,8 +345,14 @@ mod test {
         Ok(())
     }
     #[test]
-    fn analyze_apodazation_warning() -> OpmResult<()> {
-        test_analyze_apodization_warning::<Spectrometer>()
+    fn optic_shape_absent_in_file() -> OpmResult<()> {
+        test_optic_shape_absent_in_file::<Spectrometer>()
+    }
+    #[test]
+    fn records_inside_and_passes_all() -> OpmResult<()> {
+        test_detector_records_inside_and_passes_all::<Spectrometer>(|spectrometer| {
+            spectrometer.light_data.as_ref()
+        })
     }
     #[test]
     fn analyze_inverse() -> OpmResult<()> {
@@ -346,7 +372,8 @@ mod test {
     #[test]
     fn report() -> OpmResult<()> {
         let mut sd = Spectrometer::default();
-        let Some(node_report) = sd.node_report("")? else {
+        let NodeReportResult::Report(node_report) = sd.node_report("", AnalyzerKind::Energy)?
+        else {
             panic!("Node report should not be `None`");
         };
         assert_eq!(node_report.node_type(), "spectrometer");
@@ -359,7 +386,8 @@ mod test {
             joule!(1.0),
             &Hexapolar::new(Length::zero(), 1)?,
         )?));
-        let Some(node_report) = sd.node_report("")? else {
+        let NodeReportResult::Report(node_report) = sd.node_report("", AnalyzerKind::RayTrace)?
+        else {
             panic!("Node report should not be `None`");
         };
         let node_props = node_report.properties();

@@ -1,39 +1,64 @@
 #![warn(missing_docs)]
+//! An ideal detector node measuring total optical energy or power.
+
+use std::fmt::{Debug, Display};
+
+use opm_macros_lib::OpmNode;
+use serde::{Deserialize, Serialize};
+use uom::si::f64::Energy;
+
 use crate::{
     analyzers::{
-        energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus, raytrace::AnalysisRayTrace,
+        AnalyzerKind, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
+        raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt},
+    core_optics::{
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, SurfacePorts, node_attr::HasNodeAttr,
+        optic_node::APERTURE_LIMIT_NOTE,
+    },
     error::OpmResult,
+    geometry::{
+        Geometry, SurfaceShape,
+        body::{OPTIC_SHAPE, default_square_optic_shape},
+    },
     joule,
     light::LightData,
     nodes::NodeRegistration,
     properties::{Properties, Proptype},
-    reporting::node_report::NodeReport,
+    reporting::{
+        node_report::{NodeReport, NodeReportResult},
+        report_note::{ReportLevel, ReportNote},
+    },
 };
-use log::warn;
-use opm_macros_lib::OpmNode;
-use serde::{Deserialize, Serialize};
-use std::fmt::{Debug, Display};
 
 #[non_exhaustive]
 #[derive(Debug, Default, Eq, PartialEq, Clone, Copy, Serialize, Deserialize)]
 /// Type of the [`EnergyMeter`]. This is currently not used.
 pub enum Metertype {
-    /// an ideal energy meter
+    /// An ideal energy meter measuring integrated pulse energy.
     #[default]
     IdealEnergyMeter,
-    /// an ideal power meter (currently not used)
+    /// An ideal power meter measuring continuous-wave power (currently not used).
     IdealPowerMeter,
 }
-impl Display for Metertype {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+
+impl Metertype {
+    /// Returns the string slice representation of this [`Metertype`].
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
         match self {
-            Self::IdealEnergyMeter => write!(f, "ideal energy meter"),
-            Self::IdealPowerMeter => write!(f, "ideal power meter"),
+            Self::IdealEnergyMeter => "ideal energy meter",
+            Self::IdealPowerMeter => "ideal power meter",
         }
     }
 }
+
+impl Display for Metertype {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
 impl From<Metertype> for Proptype {
     fn from(value: Metertype) -> Self {
         Self::Metertype(value)
@@ -43,23 +68,28 @@ impl From<Metertype> for Proptype {
 inventory::submit! {
     NodeRegistration::new::<EnergyMeter>("energy meter", "ideal energy meter")
 }
+
 /// An (ideal) energy / power meter.
 ///
-/// It normally measures the total energy of the incoming light regardless of the wavelength, position, angle, polarization etc...
+/// It measures the total energy of incoming light regardless of wavelength, spatial position,
+/// angle, or polarization.
 ///
 /// ## Optical Ports
 ///   - Inputs
-///     - `in1`
+///     - `input_1`
 ///   - Outputs
-///     - `out1`
+///     - `output_1`
 ///
-/// ## Propertied
+/// ## Properties
 ///   - `name`
 ///   - `inverted`
 ///   - `meter type`
+///   - `optic shape`: the window the light is recorded within, a 25 mm square by default; light
+///     outside it passes unrecorded
 ///
-/// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
-/// different dectector nodes can be "stacked" or used somewhere in between arbitrary optic nodes.
+/// During analysis, the output port forwards an exact replica of the input beam (similar to
+/// a [`Dummy`](crate::nodes::Dummy) node). This allows detector nodes to be stacked or placed
+/// transparently inside an optical setup without disturbing subsequent propagation.
 #[derive(OpmNode, Clone)]
 #[opm_node("whitesmoke")]
 pub struct EnergyMeter {
@@ -77,105 +107,142 @@ impl Default for EnergyMeter {
                 "model type of the meter",
                 Metertype::default().into(),
             )
-            .unwrap();
+            .expect("Hardcoded property creation must not fail");
+        node_attr
+            .create_property(
+                OPTIC_SHAPE,
+                "window the light is recorded within",
+                default_square_optic_shape().into(),
+            )
+            .expect("Hardcoded property creation must not fail");
         let mut em = Self {
             light_data: None,
             node_attr,
             apodization_warning: false,
         };
-        em.update_surfaces().unwrap();
+        em.create_default_surface_properties()
+            .expect("Hardcoded property creation must not fail");
+        em.update_surfaces()
+            .expect("Updating surfaces on default energy meter must not fail");
         em
     }
 }
+
 impl EnergyMeter {
     /// Creates a new [`EnergyMeter`] of the given [`Metertype`].
-    /// # Attributes
-    /// * `name`:           name of the [`EnergyMeter`]
-    /// * `meter_type`:     specific [`Metertype`] of the [`EnergyMeter`]
+    ///
+    /// # Parameters
+    /// * `name`: Name of the [`EnergyMeter`].
+    /// * `meter_type`: Specific [`Metertype`] of the [`EnergyMeter`].
     ///
     /// # Errors
     ///
-    /// This function returns an error if the [`Properties`] `name` or `meter type` can not be set.
+    /// Returns an error if the property `meter type` cannot be set.
     pub fn new(name: &str, meter_type: Metertype) -> OpmResult<Self> {
         let mut energy_meter = Self::default();
         energy_meter.node_attr.set_name(name);
-        energy_meter
-            .node_attr
-            .set_property("meter type", meter_type.into())?;
+        energy_meter.set_meter_type(meter_type)?;
         Ok(energy_meter)
     }
-    /// Returns the meter type of this [`EnergyMeter`].
-    /// # Panics
-    /// This function panics if
-    /// - the property "meter type" does not exist.
-    /// - the data format is wrong.
+
+    /// Returns the configured [`Metertype`] of this [`EnergyMeter`].
     #[must_use]
     pub fn meter_type(&self) -> Metertype {
-        if let Ok(Proptype::Metertype(meter_type)) = self.node_attr.get_property("meter type") {
-            *meter_type
-        } else {
-            panic!("wrong data format")
-        }
+        self.node_attr
+            .get_property("meter type")
+            .ok()
+            .and_then(|prop| match prop {
+                Proptype::Metertype(meter_type) => Some(*meter_type),
+                _ => None,
+            })
+            .unwrap_or_default()
     }
-    /// Sets the meter type of this [`EnergyMeter`].
+
+    /// Sets the [`Metertype`] of this [`EnergyMeter`].
     ///
     /// # Errors
     ///
-    /// This function returns an error if internally the property "meter type" can not be set.
+    /// Returns an error if the property `meter type` cannot be updated.
     pub fn set_meter_type(&mut self, meter_type: Metertype) -> OpmResult<()> {
         self.node_attr
             .set_property("meter type", meter_type.into())?;
         Ok(())
     }
-}
-impl OpticNode for EnergyMeter {
-    fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.update_flat_single_surfaces()
+
+    /// Returns the captured light data from the latest analysis pass, if any.
+    #[must_use]
+    pub const fn light_data(&self) -> Option<&LightData> {
+        self.light_data.as_ref()
     }
-    fn node_report(&self, uuid: &str) -> OpmResult<Option<NodeReport>> {
-        let energy = self
-            .light_data
-            .as_ref()
-            .and_then(|light_data| match light_data {
-                LightData::Energy(s) => Some(joule!(s.total_energy())),
-                LightData::Geometric(r) => Some(r.total_energy()),
-                LightData::Fourier => None,
-                LightData::GhostFocus(r) => {
-                    let mut energy = joule!(0.);
-                    for rays in r {
-                        energy += rays.total_energy();
-                    }
-                    Some(energy)
-                }
-            });
+
+    /// Returns `true` if an apodization warning occurred during light propagation.
+    #[must_use]
+    pub const fn has_apodization_warning(&self) -> bool {
+        self.apodization_warning
+    }
+
+    /// Returns the total energy measured by this [`EnergyMeter`].
+    ///
+    /// Returns `None` if no light data has been captured or for incompatible data representations (e.g. Fourier).
+    #[must_use]
+    pub fn get_energy(&self) -> Option<Energy> {
+        self.light_data.as_ref().and_then(|data| match data {
+            LightData::Energy(s) => Some(joule!(s.total_energy())),
+            LightData::Geometric(r) => Some(r.total_energy()),
+            LightData::GhostFocus(r) => Some(
+                r.iter()
+                    .fold(joule!(0.0), |acc, rays| acc + rays.total_energy()),
+            ),
+            LightData::Fourier => None,
+        })
+    }
+}
+
+impl OpticNode for EnergyMeter {
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
+        Ok(Some(Geometry::detector(
+            SurfaceShape::Plane,
+            self.cross_section()?,
+        )?))
+    }
+    fn surface_ports(&self) -> SurfacePorts {
+        SurfacePorts::SINGLE_SURFACE
+    }
+
+    fn reset_data(&mut self) {
+        self.set_light_data(None);
+        self.apodization_warning = false;
+        self.reset_optic_surfaces();
+        if let Some(body) = self
+            .node_attr_mut()
+            .runtime_geometry_mut()
+            .and_then(|geometry| geometry.kind_mut().as_body_mut())
+        {
+            *body.inversion_mut() = None;
+        }
+    }
+
+    fn node_report(&self, uuid: &str, _analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {
         let mut props = Properties::default();
-        if let Some(e) = energy {
+        if let Some(e) = self.get_energy() {
             props.create("Energy", "Output energy", e.into())?;
         } else {
             props.create("Energy", "Output energy", "no data".into())?;
         }
-        props.create(
-            "Model",
-            "type of meter",
-            self.node_attr.get_property("meter type")?.clone(),
-        )?;
+        props.create("Model", "type of meter", self.meter_type().into())?;
+
+        let mut report = NodeReport::new(self.node_type(), self.name(), uuid, props);
+
         if self.apodization_warning {
-            props.create(
-                "Warning",
-                "warning during analysis",
-                "Rays have been apodized at input aperture. Results might not be accurate.".into(),
-            )?;
+            report.add_note(ReportNote::new(ReportLevel::Warning, APERTURE_LIMIT_NOTE));
         }
-        Ok(Some(NodeReport::new(
-            self.node_type(),
-            self.name(),
-            uuid,
-            props,
-        )))
+        Ok(NodeReportResult::Report(report))
     }
+
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
     }
+
     fn set_light_data(&mut self, new_data: Option<LightData>) {
         self.light_data = new_data;
     }
@@ -184,23 +251,28 @@ impl OpticNode for EnergyMeter {
 impl Debug for EnergyMeter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.light_data {
-            Some(data) => write!(f, "{} (Type: {:?})", data, self.meter_type()),
+            Some(data) => write!(f, "{data} (Type: {:?})", self.meter_type()),
             None => write!(f, "no data"),
         }
     }
 }
+
 impl AnalysisGhostFocus for EnergyMeter {}
 impl AnalysisEnergy for EnergyMeter {}
 impl AnalysisRayTrace for EnergyMeter {}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::{
-        analyzers::energy::EnergyConfig,
-        core_optics::PortType,
-        light::{LightResult, spectrum_helper::create_he_ne_spec},
-        nodes::test_helper::test_helper::*,
+        analyzers::{RayTraceConfig, energy::EnergyConfig},
+        core_optics::{PortType, node_attr::NodePositioning},
+        light::{LightResult, Ray, Rays, spectrum_helper::create_he_ne_spec},
+        millimeter, nanometer,
+        nodes::test_helper::helper::*,
+        utils::geom_transformation::Isometry,
     };
+
     #[test]
     fn default() {
         let node = EnergyMeter::default();
@@ -208,9 +280,10 @@ mod test {
         assert_eq!(node.meter_type(), Metertype::IdealEnergyMeter);
         assert_eq!(node.name(), "energy meter");
         assert_eq!(node.node_type(), "energy meter");
-        assert_eq!(node.inverted(), false);
+        assert!(!node.inverted());
         assert_eq!(node.node_color(), "whitesmoke");
     }
+
     #[test]
     fn new() -> OpmResult<()> {
         let meter = EnergyMeter::new("test", Metertype::IdealPowerMeter)?;
@@ -219,10 +292,12 @@ mod test {
         assert_eq!(meter.name(), "test");
         Ok(())
     }
+
     #[test]
     fn inverted() -> OpmResult<()> {
         test_inverted::<EnergyMeter>()
     }
+
     #[test]
     fn set_meter_type() -> OpmResult<()> {
         let mut meter = EnergyMeter::default();
@@ -230,12 +305,14 @@ mod test {
         assert_eq!(meter.meter_type(), Metertype::IdealPowerMeter);
         Ok(())
     }
+
     #[test]
     fn ports() {
         let meter = EnergyMeter::default();
         assert_eq!(meter.ports().names(&PortType::Input), vec!["input_1"]);
         assert_eq!(meter.ports().names(&PortType::Output), vec!["output_1"]);
     }
+
     #[test]
     fn ports_inverted() -> OpmResult<()> {
         let mut meter = EnergyMeter::default();
@@ -244,24 +321,23 @@ mod test {
         assert_eq!(meter.ports().names(&PortType::Output), vec!["input_1"]);
         Ok(())
     }
-    #[test]
-    fn set_aperture() {
-        test_set_aperture::<EnergyMeter>("input_1", "output_1");
-    }
+
     #[test]
     fn analyze_empty() -> OpmResult<()> {
         test_analyze_empty::<EnergyMeter>()
     }
+
     #[test]
     fn analyze_wrong() -> OpmResult<()> {
         let mut node = EnergyMeter::default();
         let mut input = LightResult::default();
         let input_light = LightData::Energy(create_he_ne_spec(1.0)?);
-        input.insert("output_1".into(), input_light.clone());
+        input.insert("output_1".into(), input_light);
         let output = AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default())?;
         assert!(output.is_empty());
         Ok(())
     }
+
     #[test]
     fn analyze_ok() -> OpmResult<()> {
         let mut meter = EnergyMeter::default();
@@ -270,12 +346,38 @@ mod test {
         input.insert("input_1".into(), input_data.clone());
         let result = AnalysisEnergy::analyze(&mut meter, input, &EnergyConfig::default())?;
         assert_eq!(result.get("output_1"), Some(&input_data));
+        assert_eq!(meter.get_energy(), Some(joule!(1.0)));
         Ok(())
     }
+
     #[test]
-    fn analyze_apodization_warning() -> OpmResult<()> {
-        test_analyze_apodization_warning::<EnergyMeter>()
+    fn analyze_raytrace() -> OpmResult<()> {
+        let mut meter = EnergyMeter::default();
+        meter.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+
+        let ray = Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1064.0), joule!(2.5))?;
+        let rays = Rays::from(ray);
+
+        let mut input = LightResult::default();
+        input.insert("input_1".into(), LightData::Geometric(rays));
+
+        let result = AnalysisRayTrace::analyze(&mut meter, input, &RayTraceConfig::default())?;
+        assert!(result.contains_key("output_1"));
+        assert_eq!(meter.get_energy(), Some(joule!(2.5)));
+        Ok(())
     }
+
+    #[test]
+    fn optic_shape_absent_in_file() -> OpmResult<()> {
+        test_optic_shape_absent_in_file::<EnergyMeter>()
+    }
+    #[test]
+    fn records_inside_and_passes_all() -> OpmResult<()> {
+        test_detector_records_inside_and_passes_all::<EnergyMeter>(|meter| {
+            meter.light_data.as_ref()
+        })
+    }
+
     #[test]
     fn analyze_inverted() -> OpmResult<()> {
         let mut meter = EnergyMeter::default();
@@ -287,6 +389,24 @@ mod test {
         assert_eq!(result.get("input_1"), Some(&input_data));
         Ok(())
     }
+
+    #[test]
+    fn reset_data() -> OpmResult<()> {
+        let mut meter = EnergyMeter::default();
+        meter.set_light_data(Some(LightData::Energy(create_he_ne_spec(1.0)?)));
+        meter.set_apodization_warning(true);
+
+        assert!(meter.light_data().is_some());
+        assert!(meter.has_apodization_warning());
+
+        meter.reset_data();
+
+        assert!(meter.light_data().is_none());
+        assert!(!meter.has_apodization_warning());
+        assert_eq!(meter.get_energy(), None);
+        Ok(())
+    }
+
     #[test]
     fn debug() -> OpmResult<()> {
         let mut meter = EnergyMeter::default();
@@ -298,10 +418,12 @@ mod test {
         assert_eq!(format!("{meter:?}"), "Energy: 1 J (Type: IdealEnergyMeter)");
         Ok(())
     }
+
     #[test]
     fn report() -> OpmResult<()> {
         let mut meter = EnergyMeter::default();
-        let Some(report) = meter.node_report("123")? else {
+        let NodeReportResult::Report(report) = meter.node_report("123", AnalyzerKind::Energy)?
+        else {
             panic!("Report should not be `None`");
         };
         assert_eq!(report.name(), "energy meter");
@@ -318,11 +440,15 @@ mod test {
         } else {
             panic!("could not read Model property");
         }
+
         let mut input = LightResult::default();
         let input_data = LightData::Energy(create_he_ne_spec(1.0)?);
         input.insert("input_1".into(), input_data.clone());
         AnalysisEnergy::analyze(&mut meter, input, &EnergyConfig::default())?;
-        let Some(report) = meter.node_report("123")? else {
+        meter.set_apodization_warning(true);
+
+        let NodeReportResult::Report(report) = meter.node_report("123", AnalyzerKind::RayTrace)?
+        else {
             panic!("Report should not be `None`");
         };
         if let Ok(Proptype::Energy(e)) = report.properties().get("Energy") {
@@ -330,6 +456,8 @@ mod test {
         } else {
             panic!("could not read Energy property");
         }
+        assert_eq!(report.notes().len(), 1);
+        assert_eq!(report.notes()[0].level, ReportLevel::Warning);
         Ok(())
     }
 }

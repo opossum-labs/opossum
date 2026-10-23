@@ -4,7 +4,7 @@ use crate::{
     nanometer, validated_vec, validated_vec_type,
 };
 use opm_macros_lib::EnsureValidated;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use uom::si::f64::Length;
 
 use super::SpectralDistribution;
@@ -12,7 +12,7 @@ use super::SpectralDistribution;
 /// The minimum difference between two wavelengths to be considered distinct (in nanometers).
 pub const MIN_WAVELENGTH_DIFF_NM: f64 = 1e-6;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, EnsureValidated)]
+#[derive(Debug, Clone, PartialEq, EnsureValidated)]
 /// A struct representing a collection of laser lines with their respective wavelengths and relative intensities.
 ///
 /// Note: Laser lines must have unique wavelengths. Wavelengths are considered equal if their difference is less than [`MIN_WAVELENGTH_DIFF_NM`] nm.
@@ -179,7 +179,26 @@ impl Default for LaserLines {
         }
     }
 }
+impl Serialize for LaserLines {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Serialize directly as a flat list of tuples: [(Length, f64), ...]
+        self.lines().serialize(serializer)
+    }
+}
 
+impl<'de> Deserialize<'de> for LaserLines {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // Directly deserialize the list of tuples and validate via constructor
+        let raw_lines = Vec::<(Length, f64)>::deserialize(deserializer)?;
+        Self::new(raw_lines).map_err(serde::de::Error::custom)
+    }
+}
 impl SpectralDistribution for LaserLines {
     /// Generates the laser lines.
     ///
@@ -211,6 +230,8 @@ impl From<LaserLines> for super::SpecDistType {
 
 #[cfg(test)]
 mod laser_lines_tests {
+    use crate::error::OpossumError;
+
     use super::*;
     use uom::si::f64::Length;
 
@@ -352,5 +373,21 @@ mod laser_lines_tests {
 
         let res = laser.set_lines(vec![valid_line(532.0, 0.5), valid_line(532.0, 0.5)]);
         assert!(res.is_err());
+    }
+    #[test]
+    fn test_laser_lines_flat_serde_roundtrip() -> OpmResult<()> {
+        let lines_vec = vec![valid_line(532.0, 0.5), valid_line(1064.0, 0.5)];
+        let laser = LaserLines::new(lines_vec.clone())?;
+
+        // Verify serialization produces a clean list without redundant wrappers
+        let ron_str = ron::to_string(&laser).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert_eq!(ron_str, "[(0.000000532,0.5),(0.000001064,0.5)]");
+
+        // Verify deserialization works and validates the input
+        let restored: LaserLines =
+            ron::from_str(&ron_str).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert_eq!(laser, restored);
+
+        Ok(())
     }
 }

@@ -2,24 +2,30 @@ use opossum_core::core_optics::NodeAttrExt;
 use opossum_core::distributions::spectral::LaserLines;
 use opossum_core::prelude::*;
 use opossum_core::{
-    core_optics::hit_map::fluence_estimator::FluenceEstimator,
+    apertures::RectangleShape, core_optics::hit_map::fluence_estimator::FluenceEstimator,
     distributions::energy::General2DGaussian, distributions::position::SobolDist,
+    geometry::body::OPTIC_SHAPE,
 };
 use std::{f64::consts::PI, path::Path};
 use uom::si::{length::millimeter, radiant_exposure::millijoule_per_square_centimeter};
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
     let i_src = scenery.add_node(SourcePort::default())?;
+    // The detectors take the source of 100 mm × 100 mm: they are 120 mm square.
+    let window: OpticShape = RectangleShape::new(millimeter!(120.0), millimeter!(120.0))?.into();
     let mut fd = FluenceDetector::new("Binning");
     fd.set_property("fluence estimator", FluenceEstimator::Binning.into())?;
+    fd.set_property(OPTIC_SHAPE, window.clone().into())?;
     let i_fl1 = scenery.add_node(fd)?;
 
     let mut fd = FluenceDetector::new("Voronoi");
     fd.set_property("fluence estimator", FluenceEstimator::Voronoi.into())?;
+    fd.set_property(OPTIC_SHAPE, window.clone().into())?;
     let i_fl2 = scenery.add_node(fd)?;
 
     let mut fd = FluenceDetector::new("KDE");
     fd.set_property("fluence estimator", FluenceEstimator::KDE.into())?;
+    fd.set_property(OPTIC_SHAPE, window.into())?;
     let i_fl3 = scenery.add_node(fd)?;
 
     scenery.connect_nodes(i_src, "output_1", i_fl1, "input_1", millimeter!(0.0))?;
@@ -47,16 +53,14 @@ fn main() -> OpmResult<()> {
     let rays = ray_data_source.clone().build()?;
     println!("# of rays {}", rays.nr_of_rays(true),);
     let focal_length = millimeter!(100.0);
-    for p in vec![millimeter!(0.0)] {
-        let beam_size = millimeter!(10.0) * (p - focal_length) / focal_length;
-        let peak = joule!(1.0) / (2. * PI * beam_size * beam_size);
-        println!(
-            "theo. peak fluence @ pos {:2.} mm -> {:8.1} mJ/cm²",
-            p.get::<millimeter>(),
-            peak.get::<millijoule_per_square_centimeter>()
-        );
-    }
-
+    let p = millimeter!(0.0);
+    let beam_size = millimeter!(10.0) * (p - focal_length) / focal_length;
+    let peak = joule!(1.0) / (2. * PI * beam_size * beam_size);
+    println!(
+        "theo. peak fluence @ pos {:2.} mm -> {:8.1} mJ/cm²",
+        p.get::<millimeter>(),
+        peak.get::<millijoule_per_square_centimeter>()
+    );
     let mut config = RayTraceConfig::default();
     config.map_source(i_src, ray_data_source.into());
     doc.add_analyzer(AnalyzerType::RayTrace(config));

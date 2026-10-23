@@ -1,0 +1,21 @@
+{
+    "node_type": "dummy",
+    "name": "dummy1",
+    "ports": (
+        inputs: {
+            "input_1": (
+                coating: IdealAR,
+                lidt: 10000.0,
+            ),
+        },
+        outputs: {
+            "output_1": (
+                coating: IdealAR,
+                lidt: 10000.0,
+            ),
+        },
+    ),
+    "uuid": "a2534789-ec98-4e9b-a1da-315a59d9da43",
+    "props": {},
+    "inverted": false,
+}

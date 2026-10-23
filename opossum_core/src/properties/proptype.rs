@@ -1,11 +1,13 @@
 #![warn(missing_docs)]
 //! Module for handling properties of optical nodes.
-use std::cell::RefCell;
 
 use crate::{
     analyzers::ghostfocus::GhostFocusHistory,
-    apertures::ApertureShape,
-    core_optics::hit_map::{HitMap, fluence_estimator::FluenceEstimator},
+    apertures::OpticShape,
+    core_optics::{
+        SurfaceConfig,
+        hit_map::{HitMap, fluence_estimator::FluenceEstimator},
+    },
     error::{OpmResult, OpossumError},
     light::{
         Spectrum,
@@ -17,49 +19,29 @@ use crate::{
     },
     material::Material,
     nodes::{
-        Metertype, SpectrometerType, SplittingConfigBuilder, WaveFrontMap,
+        Metertype, SpectrometerType, SplittingConfigBuilder, SpotDiagramData, WaveFrontMap,
+        WavefrontDecomposition,
         fluence_detector::{Fluence, fluence_data::FluenceData},
         ideal_filter::FilterTypeBuilder,
         ray_propagation_visualizer::RayPositionHistories,
         reflective_grating::LinearDensity,
     },
     refractive_index::RefractiveIndexType,
-    reporting::{html_report::HtmlNodeReport, node_report::NodeReport},
+    reporting::node_report::NodeReport,
     utils::{
         geom_transformation::Isometry,
         unit_format::{get_exponent_for_base_unit_in_e3_steps, get_prefix_for_base_unit},
     },
 };
 use nalgebra::{Vector2, Vector3};
-use num::Float;
+use num_traits::Float;
 use serde::{Deserialize, Serialize};
-use tinytemplate::TinyTemplate;
 use uom::si::{
     Dimension, Quantity, Unit, Units,
-    energy::joule,
     f64::{Energy, Length, LinearNumberDensity},
-    length::meter,
-    radiant_exposure::joule_per_square_centimeter,
 };
 use uom::{lib::fmt::Debug, si::f64::Angle};
 use uuid::Uuid;
-
-static HTML_PROP_SIMPLE: &str = include_str!("../html/prop_simple.html");
-static HTML_PROP_IMAGE: &str = include_str!("../html/prop_image.html");
-static HTML_PROP_GROUP: &str = include_str!("../html/node_report.html");
-
-thread_local! {
-    static THREAD_TEMPLATES: RefCell<TinyTemplate<'static>> = RefCell::new({
-        let mut tt = TinyTemplate::new();
-        tt.add_template("simple", HTML_PROP_SIMPLE)
-            .expect("Failed to add simple template (thread-local)");
-        tt.add_template("image", HTML_PROP_IMAGE)
-            .expect("Failed to add image template (thread-local)");
-        tt.add_template("group", HTML_PROP_GROUP)
-            .expect("Failed to add group template (thread-local)");
-        tt
-    });
-}
 
 /// Wrapper for registry assets that can hold either the full inline data
 /// or a lightweight UUID reference for serialization.
@@ -157,8 +139,8 @@ pub enum Proptype {
     Metertype(Metertype),
     /// An [`Uuid`] for identifying an optical node.
     Uuid(Uuid),
-    /// A property for storing an optical [`Aperture`](crate::apertures::Aperture).
-    Aperture(ApertureShape),
+    /// The optic shape of a component: an outline on its axis with bores through it.
+    OpticShape(OpticShape),
     /// A property for storing a [`Spectrum`].
     Spectrum(Spectrum),
     /// This property stores the fluence information [`FluenceData`]
@@ -167,6 +149,8 @@ pub enum Proptype {
     FluenceEstimator(FluenceEstimator),
     /// This property stores the wavefront Information [`WaveFrontMap`]
     WaveFrontData(WaveFrontMap),
+    /// Polynomial wavefront basis decomposition
+    WavefrontDecomposition(WavefrontDecomposition),
     /// This property stores the ray position history of all [`Rays`](crate::light::Rays) during propagation through the optic scenery
     RayPositionHistory(RayPositionHistories),
     /// This property stores the ray position history of all [`Rays`](crate::light::Rays), separated by their bounce level,
@@ -196,91 +180,82 @@ pub enum Proptype {
     Isometry(Option<Isometry>),
     /// Three dimensional Vector
     Vec3(Vector3<f64>),
-    /// a hit map (position fo rays hitting a given surface)
+    /// a hit map (position of rays hitting a given surface)
     HitMap(HitMap),
+    /// 2D spot diagram data resolved by wavelength
+    SpotDiagram(SpotDiagramData),
     /// 2-dimenstional vector
     Vec2(Vector2<f64>),
     /// [`LightData`] build configuration
     LightDataBuilder(LightDataBuilder),
     /// An optical material property
     Material(AssetRef<Material>),
+    /// The coating and the laser induced damage threshold of one surface of a component
+    SurfaceConfig(SurfaceConfig),
 }
 impl Proptype {
     /// Generate a html representation of a Proptype.
     ///
     /// # Errors
     ///
-    /// This function will return an error if
-    ///   - underlying html templates could not be compiled
-    ///   - a property value could not be converted to html code.
-    pub fn to_html(
-        &self,
-        id: &str,
-        property_name: &str,
-        report_number: usize,
-    ) -> OpmResult<String> {
-        THREAD_TEMPLATES.with(|template_refcell| {
-            let template_engine = template_refcell.borrow();
-            let string_value = match self {
-                Self::String(value) => template_engine.render("simple", value),
-                Self::I32(value) => template_engine.render("simple", &format!("{value}")),
-                Self::F64(value) => template_engine.render("simple", &format!("{value:.6}")),
-                Self::Bool(value) => template_engine.render("simple", &format!("{value}")),
-                Self::SpectrometerType(value) => {
-                    template_engine.render("simple", &value.to_string())
-                }
-                Self::Metertype(value) => template_engine.render("simple", &value.to_string()),
-                Self::Spectrum(_)
-                | Self::HitMap(_)
-                | Self::RayPositionHistory(_)
-                | Self::GhostFocusHistory(_) => template_engine.render(
-                    "image",
-                    &format!("data_{report_number}/{id}_{property_name}.svg"),
-                ),
-                Self::WaveFrontData(_) | Self::FluenceData(_) => template_engine.render(
-                    "image",
-                    &format!("data_{report_number}/{id}_{property_name}.png"),
-                ),
-                Self::NodeReport(report) => {
-                    let html_node_report = HtmlNodeReport::from_node_report(report, report_number);
-                    template_engine.render("group", &html_node_report)
-                }
-                Self::Fluence(value) => template_engine.render(
-                    "simple",
-                    &format!(
-                        "{}{}",
-                        format_value_with_prefix(value.get::<joule_per_square_centimeter>()),
-                        joule_per_square_centimeter::abbreviation()
-                    ),
-                ),
-                Self::WfLambda(value, wvl) => template_engine.render(
-                    "simple",
-                    &format!(
-                        "{}λ, (λ = {})",
-                        format_value_with_prefix(*value,),
-                        format_quantity(meter, *wvl)
-                    ),
-                ),
-                Self::Length(value) => {
-                    template_engine.render("simple", &format_quantity(meter, *value))
-                }
-                Self::Energy(value) => {
-                    template_engine.render("simple", &format_quantity(joule, *value))
-                }
-                Self::Aperture(shape) => template_engine.render("simple", &shape.to_string()),
-                Self::Material(AssetRef::Inline(mat)) => template_engine
-                    .render("simple", &format!("{} (v{})", mat.name(), mat.version())),
-                Self::Material(AssetRef::Id(mat_id)) => {
-                    template_engine.render("simple", &format!("MaterialRef({mat_id})"))
-                }
-                _ => Err(tinytemplate::error::Error::GenericError {
-                    msg: "proptype not supported".into(),
-                }),
-            };
-            string_value.map_err(|e| OpossumError::Other(format!("Template rendering error: {e}")))
-        })
+    /// Returns the raw scalar value as an `f64` if this variant represents a numeric scalar.
+    /// For dimensional `uom` quantities, the value is returned in its fundamental SI base unit.
+    #[must_use]
+    pub fn as_f64(&self) -> Option<f64> {
+        match self {
+            Self::F64(v) | Self::WfLambda(v, _) => Some(*v),
+            Self::I32(v) => Some(f64::from(*v)),
+            Self::Length(v) | Self::Curvature(v) => Some(v.value),
+            Self::Angle(v) => Some(v.value),
+            Self::Energy(v) => Some(v.value),
+            Self::Fluence(v) => Some(v.value),
+            Self::LinearDensity(v) => Some(v.value),
+            _ => None,
+        }
+    }
+    /// Sets the scalar value directly if this variant represents a numeric scalar.
+    /// Dimensional quantities are updated in their fundamental SI base unit.
+    ///
+    /// # Errors
+    /// Returns an [`OpossumError::Properties`] if the variant does not support scalar numeric assignment.
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn set_f64(&mut self, value: f64) -> OpmResult<()> {
+        match self {
+            Self::F64(v) | Self::WfLambda(v, _) => {
+                *v = value;
+                Ok(())
+            }
+            Self::I32(v) => {
+                *v = value.round() as i32;
+                Ok(())
+            }
+            Self::Length(v) | Self::Curvature(v) => {
+                v.value = value;
+                Ok(())
+            }
+            Self::Angle(v) => {
+                v.value = value;
+                Ok(())
+            }
+            Self::Energy(v) => {
+                v.value = value;
+                Ok(())
+            }
+            Self::Fluence(v) => {
+                v.value = value;
+                Ok(())
+            }
+            Self::LinearDensity(v) => {
+                v.value = value;
+                Ok(())
+            }
+            _ => Err(OpossumError::Properties(
+                "Property variant cannot be set from a scalar f64 value".into(),
+            )),
+        }
     }
 }
+
 impl From<bool> for Proptype {
     fn from(value: bool) -> Self {
         Self::Bool(value)
@@ -309,6 +284,11 @@ impl From<i32> for Proptype {
 impl From<Uuid> for Proptype {
     fn from(value: Uuid) -> Self {
         Self::Uuid(value)
+    }
+}
+impl From<SurfaceConfig> for Proptype {
+    fn from(value: SurfaceConfig) -> Self {
+        Self::SurfaceConfig(value)
     }
 }
 impl From<Length> for Proptype {
@@ -344,6 +324,11 @@ impl From<LinearNumberDensity> for Proptype {
 impl From<FluenceEstimator> for Proptype {
     fn from(val: FluenceEstimator) -> Self {
         Self::FluenceEstimator(val)
+    }
+}
+impl From<SpotDiagramData> for Proptype {
+    fn from(value: SpotDiagramData) -> Self {
+        Self::SpotDiagram(value)
     }
 }
 impl From<Vector2<f64>> for Proptype {
@@ -387,6 +372,13 @@ impl From<Material> for Proptype {
         Self::Material(AssetRef::Inline(value))
     }
 }
+
+impl From<WavefrontDecomposition> for Proptype {
+    fn from(value: WavefrontDecomposition) -> Self {
+        Self::WavefrontDecomposition(value)
+    }
+}
+
 /// Generate a string suffix for an ordinal number
 #[must_use]
 pub fn count_str(i: usize) -> String {
@@ -439,10 +431,14 @@ where
 }
 #[cfg(test)]
 mod test {
+    use std::f64::consts;
+
     use super::*;
-    use crate::{J_per_m2, joule, meter, nanometer, properties::Properties};
     use assert_matches::assert_matches;
-    use uom::si::length::nanometer;
+    use uom::si::{
+        energy::joule,
+        length::{meter, nanometer},
+    };
     #[test]
     fn from_string() {
         assert_matches!(Proptype::from(String::new()), Proptype::String(_));
@@ -491,76 +487,6 @@ mod test {
         );
     }
     #[test]
-    fn to_html() -> OpmResult<()> {
-        assert_eq!(
-            Proptype::String("Test".into()).to_html("id", "property_name", 0)?,
-            "Test".to_string()
-        );
-        assert_eq!(
-            Proptype::I32(-14).to_html("id", "property_name", 0)?,
-            "-14".to_string()
-        );
-        assert_eq!(
-            Proptype::F64(-3.1415926537).to_html("id", "property_name", 0)?,
-            "-3.141593".to_string()
-        );
-        assert_eq!(
-            Proptype::Bool(true).to_html("id", "property_name", 0)?,
-            "true".to_string()
-        );
-        assert_eq!(
-            Proptype::SpectrometerType(SpectrometerType::HR2000).to_html(
-                "id",
-                "property_name",
-                0
-            )?,
-            "Ocean Optics HR2000".to_string()
-        );
-        // An embedded material is named by its header, a referenced one only by its id.
-        assert_eq!(
-            Proptype::from(Material::default()).to_html("id", "property_name", 0)?,
-            "Default Glass (v0)".to_string()
-        );
-        let material_id = Uuid::nil();
-        assert_eq!(
-            Proptype::Material(AssetRef::<Material>::Id(material_id)).to_html(
-                "id",
-                "property_name",
-                0
-            )?,
-            format!("MaterialRef({material_id})")
-        );
-        assert_eq!(
-            Proptype::WaveFrontData(WaveFrontMap::default())
-                .to_html("id", "property_name",0)
-                ?,
-            "<img src=\"data_0/id_property_name.png\" class=\"img-fluid\" style=\"max-height: 500pt;\" alt=\"measurement data\"/>".to_string()
-        );
-        assert_eq!(
-            Proptype::NodeReport(NodeReport::new("test1", "test2", "test3", Properties::default()))
-                .to_html("id", "property_name",0)
-                ?,
-            "<div class=\"accordion-item\">\n  <h5 class=\"accordion-header\">\n    <button class=\"accordion-button collapsed\" type=\"button\" data-bs-toggle=\"collapse\" data-bs-target=\"#test3\">\n      <span class=\"h5 me-2\">test2</span><small class=\"muted\">test1</small>\n    </button>\n  </h5>\n  <div id=\"test3\" class=\"accordion-collapse collapse \">\n    <div class=\"accordion-body\">\n      \n      <table class=\"table table-sm table-bordered\">\n        <tbody>\n          \n        </tbody>\n      </table>\n    </div>\n  </div>\n</div>".to_string()
-        );
-        assert_eq!(
-            Proptype::Fluence(J_per_m2!(1.234567)).to_html("id", "property_name", 0)?,
-            " 123.457 μJ/cm²".to_string()
-        );
-        assert_eq!(
-            Proptype::WfLambda(0.123456, nanometer!(1054.0)).to_html("id", "property_name", 0)?,
-            " 123.456 mλ, (λ =    1.054 μm)".to_string()
-        );
-        assert_eq!(
-            Proptype::Length(meter!(0.12345678)).to_html("id", "property_name", 0)?,
-            " 123.457 mm".to_string()
-        );
-        assert_eq!(
-            Proptype::Energy(joule!(0.12345678)).to_html("id", "property_name", 0)?,
-            " 123.457 mJ".to_string()
-        );
-        Ok(())
-    }
-    #[test]
     fn test_count_str() {
         assert_eq!(count_str(0), "0th");
         assert_eq!(count_str(1), "1st");
@@ -572,5 +498,50 @@ mod test {
         assert_eq!(count_str(22), "22nd");
         assert_eq!(count_str(23), "23rd");
         assert_eq!(count_str(24), "24th");
+    }
+    #[test]
+    fn asset_ref_inline_and_id() {
+        let inline_ref: AssetRef<i32> = AssetRef::from(42);
+        assert_eq!(inline_ref.as_inline(), Some(&42));
+        assert_eq!(*inline_ref.unwrap_inline(), 42);
+
+        let test_uuid = Uuid::new_v4();
+        let id_ref: AssetRef<i32> = AssetRef::Id(test_uuid);
+        assert_eq!(id_ref.as_inline(), None);
+    }
+
+    #[test]
+    #[should_panic(expected = "Expected inline asset, found AssetRef::Id")]
+    fn asset_ref_unwrap_panic() {
+        let id_ref: AssetRef<i32> = AssetRef::Id(Uuid::new_v4());
+        let _ = id_ref.unwrap_inline();
+    }
+    #[test]
+    fn scalar_f64_access_and_mutation() -> OpmResult<()> {
+        use uom::si::length::millimeter;
+
+        // F64 variant
+        let mut prop_f64 = Proptype::F64(consts::PI);
+        assert_eq!(prop_f64.as_f64(), Some(consts::PI));
+        prop_f64.set_f64(consts::E)?;
+        assert_eq!(prop_f64.as_f64(), Some(consts::E));
+
+        // I32 variant
+        let mut prop_i32 = Proptype::I32(10);
+        assert_eq!(prop_i32.as_f64(), Some(10.0));
+        prop_i32.set_f64(25.4)?;
+        assert_eq!(prop_i32, Proptype::I32(25));
+
+        // UOM Length variant (operates strictly on SI base unit meter)
+        let mut prop_len = Proptype::Length(Length::new::<millimeter>(50.0));
+        assert!((prop_len.as_f64().unwrap() - 0.05).abs() < 1e-12);
+        prop_len.set_f64(0.125)?;
+        assert_eq!(prop_len, Proptype::Length(Length::new::<meter>(0.125)));
+
+        // Non-scalar variant must fail
+        let mut prop_bool = Proptype::Bool(true);
+        assert_eq!(prop_bool.as_f64(), None);
+        assert!(prop_bool.set_f64(1.0).is_err());
+        Ok(())
     }
 }

@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     fmt::Display,
 };
 
@@ -10,15 +10,12 @@ use uuid::Uuid;
 
 use crate::{
     analyzers::Analyzable,
-    coatings::CoatingType,
-    core_optics::{
-        NodeAttrExt,
-        optic_ports::{PortConfig, ValidatedLidt},
-    },
+    core_optics::{NodeAttrExt, node_attr::NodePositioning},
     gain::{GainModel, PumpConfig, PumpScenario, PumpSource},
     nodes::ConnectionInfo,
     opm_document::AnalyzerInfo,
-    prelude::{AnalyzerType, Aperture, Isometry, PortMap, PortType, Properties},
+    prelude::{AnalyzerType, Isometry, PortMap, PortType, Properties},
+    properties::validator::Validator,
 };
 
 // ============================================================================
@@ -119,7 +116,7 @@ pub struct NodeInfo {
     pub gui_position: Option<(f64, f64)>,
     /// Global 3D position and rotation
     #[schema(value_type = Option<Object>)]
-    pub isometry: Option<Isometry>,
+    pub positioning: NodePositioning,
     /// Local alignment (decenter and tilt)
     #[schema(value_type = Option<Object>)]
     pub alignment: Option<Isometry>,
@@ -143,7 +140,7 @@ impl NodeInfo {
             input_ports: node.ports().names(&PortType::Input),
             output_ports: node.ports().names(&PortType::Output),
             gui_position: gui_position.unwrap_or_else(|| node.gui_position().map(|p| (p.x, p.y))),
-            isometry: node.isometry(),
+            positioning: *node.positioning(),
             alignment: node.alignment(),
         }
     }
@@ -237,6 +234,15 @@ impl NewRefNode {
         self.referring_node
     }
 }
+/// Request payload to update node positioning.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq)]
+pub enum PositioningRequest {
+    /// Fix node to a static 3D pose.
+    #[schema(value_type = Object)]
+    Absolute(Isometry),
+    /// Set to automatic calculation along the optical axis.
+    Automatic,
+}
 
 /// Request payload for partial updates of a node's properties
 #[derive(Debug, Default, Serialize, Deserialize, ToSchema, Clone)]
@@ -253,8 +259,8 @@ pub struct UpdateNodeRequest {
 
     /// The new base isometry (position and rotation in 3D space)
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[schema(value_type = Option<Object>)]
-    pub isometry: Option<Option<Isometry>>, // Option<Option> allows explicitly setting null!
+    #[schema(value_type = Option<PositioningRequest>)]
+    pub positioning: Option<PositioningRequest>, // Option<Option> allows explicitly setting null!
 
     /// The new alignment isometry (local decenter and tilt)
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -272,6 +278,9 @@ pub struct UpdateNodeRequest {
 pub struct NodePropertiesResponse {
     #[schema(value_type = Object)] // Hides internal Properties structure from Utoipa
     pub properties: Properties,
+    /// The validator of each property that has one, by property name: what values it can take
+    #[schema(value_type = Object)]
+    pub validators: BTreeMap<String, Validator>,
     /// True if the properties belong to a reference node
     pub is_reference: bool,
 }
@@ -393,30 +402,13 @@ pub struct PositionUpdate {
 // PORTS & PORT MAPPINGS
 // ============================================================================
 
-/// Response payload containing port configurations (Aperture, Coating, LIDT)
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, ToSchema)]
+/// Response payload containing the port names of a node
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, ToSchema, Eq)]
 pub struct NodePortsResponse {
     /// The input ports of the node (accounts for node inversion)
-    pub inputs: BTreeMap<String, PortConfig>,
+    pub inputs: BTreeSet<String>,
     /// The output ports of the node (accounts for node inversion)
-    pub outputs: BTreeMap<String, PortConfig>,
-}
-
-/// Request payload for partial updates of a specific port
-#[derive(Debug, Default, Serialize, Deserialize, ToSchema, Clone, PartialEq)]
-pub struct UpdatePortRequest {
-    /// The new aperture of the port
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub aperture: Option<Aperture>,
-
-    /// The new coating of the port
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub coating: Option<CoatingType>,
-
-    /// The new Laser Induced Damage Threshold
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[schema(value_type = Option<f64>)]
-    pub lidt: Option<ValidatedLidt>,
+    pub outputs: BTreeSet<String>,
 }
 
 /// Request payload to expose an internal node's port to a parent group
@@ -741,7 +733,6 @@ pub struct MoveNodesRequest {
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct LoadDocumentResponse {
     pub name: String,
-    pub needs_autolayout: bool,
 }
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema, Eq, PartialEq)]
 pub struct SourcePortDto {
@@ -779,12 +770,11 @@ pub struct ScenarioAmplifierDto {
 // UNDO / REDO
 // ============================================================================
 
-/// Which of the node-editor sidebar's 5 accordion sections (`OpticalNodeEditor`) a document change
+/// Which of the node-editor sidebar's 4 accordion sections (`OpticalNodeEditor`) a document change
 /// belongs to, so undo/redo can auto-select the node and open the panel whose value it just changed.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize, ToSchema)]
 pub enum NodeEditorPanel {
     General,
-    PortConfig,
     Properties,
     Positioning,
     Alignment,

@@ -1,6 +1,6 @@
-use core::f64;
 use opossum_core::coatings::CoatingConstantR;
 use opossum_core::core_optics::OpticNodeExt;
+use opossum_core::geometry::Extruded;
 use opossum_core::{percent, prelude::*};
 use std::path::Path;
 
@@ -20,13 +20,11 @@ fn main() -> OpmResult<()> {
         RefrIndexConst::new(1.4)?,
     )?;
     lens_01.set_coating(
-        &PortType::Input,
-        "input_1",
+        Extruded::FRONT,
         &CoatingConstantR::new(percent!(1.0))?.into(),
     )?;
     lens_01.set_coating(
-        &PortType::Output,
-        "output_1",
+        Extruded::REAR,
         &CoatingConstantR::new(percent!(1.0))?.into(),
     )?;
 
@@ -38,13 +36,11 @@ fn main() -> OpmResult<()> {
         RefrIndexConst::new(1.4)?,
     )?;
     lens_02.set_coating(
-        &PortType::Input,
-        "input_1",
+        Extruded::FRONT,
         &CoatingConstantR::new(percent!(1.0))?.into(),
     )?;
     lens_02.set_coating(
-        &PortType::Output,
-        "output_1",
+        Extruded::REAR,
         &CoatingConstantR::new(percent!(1.0))?.into(),
     )?;
 
@@ -60,13 +56,11 @@ fn main() -> OpmResult<()> {
         RefrIndexConst::new(1.4)?,
     )?;
     lens_1.set_coating(
-        &PortType::Input,
-        "input_1",
+        Extruded::FRONT,
         &CoatingConstantR::new(percent!(1.0))?.into(),
     )?;
     lens_1.set_coating(
-        &PortType::Output,
-        "output_1",
+        Extruded::REAR,
         &CoatingConstantR::new(percent!(1.0))?.into(),
     )?;
 
@@ -82,13 +76,11 @@ fn main() -> OpmResult<()> {
         RefrIndexConst::new(1.4)?,
     )?;
     lens_2.set_coating(
-        &PortType::Input,
-        "input_1",
+        Extruded::FRONT,
         &CoatingConstantR::new(percent!(1.0))?.into(),
     )?;
     lens_2.set_coating(
-        &PortType::Output,
-        "output_1",
+        Extruded::REAR,
         &CoatingConstantR::new(percent!(1.0))?.into(),
     )?;
     let mut group_2 = NodeGroup::new("Group 2");
@@ -103,13 +95,11 @@ fn main() -> OpmResult<()> {
         RefrIndexConst::new(1.4)?,
     )?;
     lens_3.set_coating(
-        &PortType::Input,
-        "input_1",
+        Extruded::FRONT,
         &CoatingConstantR::new(percent!(1.0))?.into(),
     )?;
     lens_3.set_coating(
-        &PortType::Output,
-        "output_1",
+        Extruded::REAR,
         &CoatingConstantR::new(percent!(1.0))?.into(),
     )?;
     let mut group_3 = NodeGroup::new("Group 3");

@@ -7,7 +7,7 @@ use crate::{
 
 use super::PositionDistribution;
 use nalgebra::{Point3, point};
-use num::Zero;
+use num_traits::Zero;
 use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
@@ -125,7 +125,6 @@ impl From<Hexapolar> for super::PosDistType {
 mod test {
     use super::*;
     use crate::millimeter;
-    use std::u8;
     #[test]
     fn new_wrong() {
         assert!(Hexapolar::new(millimeter!(-0.1), 1).is_err());

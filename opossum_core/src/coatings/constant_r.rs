@@ -89,9 +89,7 @@ impl From<CoatingConstantR> for CoatingType {
 mod test {
     use super::*;
     use crate::{joule, light::Ray, nanometer};
-    use core::f64;
     use nalgebra::vector;
-
     #[test]
     fn new() {
         assert!(CoatingConstantR::new(percent!(-0.1)).is_err());

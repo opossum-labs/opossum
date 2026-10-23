@@ -7,15 +7,12 @@ use crate::{
     micrometer,
     prelude::EnergyLaserLines,
     properties::Proptype,
-    reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     utils::{to_f64, try_f64_to_usize},
     validated, validated_type, validated_vec, validated_vec_type,
 };
 use kahan::KahanSummator;
 use log::warn;
-use nalgebra::MatrixXx2;
 use opm_macros_lib::EnsureValidated;
-use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
 use std::{
     f64::consts::PI,
@@ -660,44 +657,6 @@ impl Spectrum {
     }
 }
 
-impl Plottable for Spectrum {
-    fn get_plot_series(
-        &self,
-        plt_type: &mut PlotType,
-        _legend: bool,
-    ) -> OpmResult<Option<Vec<PlotSeries>>> {
-        let data = self.data.clone();
-        let mut spec_mat = MatrixXx2::zeros(data.len());
-        for (i, s) in data.iter().enumerate() {
-            spec_mat[(i, 0)] = s.0 * 1000.0; // micrometer -> nanometer
-            spec_mat[(i, 1)] = s.1;
-        }
-        match plt_type {
-            PlotType::Line2D(_) | PlotType::Scatter2D(_) | PlotType::Histogram2D(_) => {
-                let plt_series = PlotSeries::new(
-                    &PlotData::Dim2 { xy_data: spec_mat },
-                    RGBAColor(255, 0, 0, 1.),
-                    None,
-                );
-                Ok(Some(vec![plt_series]))
-            }
-            _ => Ok(None),
-        }
-    }
-    fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
-        plt_params
-            .set(&PlotArgs::XLabel("wavelength in nm".into()))?
-            .set(&PlotArgs::YLabel("spectrum in arb. units".into()))?
-            .set(&PlotArgs::PlotSize((1200, 800)))?
-            .set(&PlotArgs::AxisEqual(false))?;
-
-        Ok(())
-    }
-    fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
-        PlotType::Histogram2D(plt_params.clone())
-    }
-}
-
 impl<'a> IntoIterator for &'a Spectrum {
     type IntoIter = std::slice::Iter<'a, (f64, f64)>;
     type Item = &'a (f64, f64);
@@ -810,7 +769,7 @@ mod test {
         light::spectrum_helper::{
             create_he_ne_spec, create_nd_glass_spec, create_nir_spec, create_visible_spec,
         },
-        utils::test_helper::test_helper::check_logs,
+        utils::test_helper::helper::check_logs,
     };
     use approx::{AbsDiffEq, assert_abs_diff_eq, assert_relative_eq};
     use tempfile::NamedTempFile;
@@ -859,7 +818,7 @@ mod test {
         assert!(
             lambdas
                 .into_iter()
-                .zip(vec![500.0E-3, 501.0E-3, 502.0E-3, 503.0E-3, 504.0E-3, 505.0E-3].iter())
+                .zip([500.0E-3, 501.0E-3, 502.0E-3, 503.0E-3, 504.0E-3, 505.0E-3].iter())
                 .all(|x| x.0.abs_diff_eq(x.1, f64::EPSILON))
         );
         let datas = s.data_vec();
@@ -867,7 +826,7 @@ mod test {
             datas
                 .into_iter()
                 .zip(
-                    vec![
+                    [
                         5.0E-01, 4.981E-01, 4.982E-01, 4.984E-01, 4.996E-01, 5.010E-01
                     ]
                     .iter()
@@ -1081,14 +1040,14 @@ mod test {
     #[test]
     fn set_single_peak() -> OpmResult<()> {
         let mut s = prep()?;
-        assert_eq!(s.add_single_peak(micrometer!(2.0), 1.0).is_ok(), true);
+        assert!(s.add_single_peak(micrometer!(2.0), 1.0).is_ok());
         assert_eq!(s.data[2].1, 2.0);
         Ok(())
     }
     #[test]
     fn set_single_peak_interpolated() -> OpmResult<()> {
         let mut s = prep()?;
-        assert_eq!(s.add_single_peak(micrometer!(2.25), 1.0).is_ok(), true);
+        assert!(s.add_single_peak(micrometer!(2.25), 1.0).is_ok());
         assert_eq!(s.data[2].1, 1.0);
         assert_eq!(s.data[3].1, 1.0);
         Ok(())
@@ -1113,7 +1072,7 @@ mod test {
     #[test]
     fn set_single_peak_lower_bound() -> OpmResult<()> {
         let mut s = prep()?;
-        assert_eq!(s.add_single_peak(micrometer!(1.0), 1.0).is_ok(), true);
+        assert!(s.add_single_peak(micrometer!(1.0), 1.0).is_ok());
         assert_eq!(s.data[0].1, 2.0);
         Ok(())
     }

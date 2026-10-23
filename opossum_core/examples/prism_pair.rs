@@ -1,5 +1,9 @@
 use opossum_core::{
-    core_optics::NodeAttrExt, prelude::*, refractive_index::RefrIndexConst,
+    apertures::{CircleShape, RectangleShape},
+    core_optics::{NodeAttrExt, node_attr::NodePositioning},
+    geometry::body::OPTIC_SHAPE,
+    prelude::*,
+    refractive_index::RefrIndexConst,
     utils::geom_transformation::Isometry,
 };
 use std::path::Path;
@@ -7,28 +11,41 @@ use std::path::Path;
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Prism Pair test");
     let src = scenery.add_node(SourcePort::new("collimated ray source"))?;
-    let prism1 = Wedge::new(
+    // The beam meets the prisms up to 31 mm off their centers, so they are 64 mm in diameter and
+    // still 1.5 mm thick at their thin edge. The outermost ray misses Prism2.
+    let prism_size: OpticShape = CircleShape::new(millimeter!(32.0))?.into();
+    let mut prism1 = Wedge::new(
         "Prism1",
         millimeter!(20.0),
         degree!(30.0),
-        &RefrIndexConst::new(1.5068)?,
+        RefrIndexConst::new(1.5068)?,
     )?;
+    prism1.set_property(OPTIC_SHAPE, prism_size.clone().into())?;
     let p1 = scenery.add_node(prism1)?;
 
     let mut prism2 = Wedge::new(
         "Prism2",
         millimeter!(20.0),
         degree!(-30.0),
-        &RefrIndexConst::new(1.5068)?,
+        RefrIndexConst::new(1.5068)?,
     )?;
-    let iso = Isometry::new(millimeter!(0.0, 20.0, 110.0), degree!(30.0, 0.0, 0.0))?;
-    prism2.set_isometry(iso)?;
+    prism2.set_property(OPTIC_SHAPE, prism_size.into())?;
+    prism2.set_positioning(NodePositioning::Absolute(Isometry::new(
+        millimeter!(0.0, 20.0, 110.0),
+        degree!(30.0, 0.0, 0.0),
+    )?))?;
     let p2 = scenery.add_node(prism2)?;
 
     let mut rpv = RayPropagationVisualizer::default();
     rpv.set_property("ray transparency", 1.0.into())?;
     let det = scenery.add_node(rpv)?;
-    let sd = scenery.add_node(SpotDiagram::default())?;
+    // The spot diagram takes the line of 50 mm: it is 60 mm square.
+    let mut spot_diagram = SpotDiagram::default();
+    spot_diagram.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(RectangleShape::new(millimeter!(60.0), millimeter!(60.0))?).into(),
+    )?;
+    let sd = scenery.add_node(spot_diagram)?;
 
     scenery.connect_nodes(src, "output_1", p1, "input_1", millimeter!(10.0))?;
     scenery.connect_nodes(p1, "output_1", p2, "input_1", millimeter!(100.0))?;

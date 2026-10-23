@@ -11,11 +11,8 @@ use crate::{
 };
 use approx::relative_eq;
 use nalgebra::{Isometry3, MatrixXx2, MatrixXx3, Point3, Rotation3, Translation3, Vector3, vector};
-use num::Zero;
-use serde::{
-    Deserialize, Serialize,
-    de::{self, MapAccess, Visitor},
-};
+use num_traits::Zero;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use strum::EnumIter;
 use uom::si::{
     angle::radian,
@@ -23,12 +20,31 @@ use uom::si::{
     length::meter,
 };
 
-/// Struct to store the isometric transofmeation matrix and its inverse
-#[derive(Debug, Clone, Default, Serialize, PartialEq, Copy)]
+/// Struct to store the isometric transformation matrix and its inverse.
+#[derive(Debug, Clone, Default, PartialEq, Copy)]
 pub struct Isometry {
     transform: Isometry3<f64>,
-    #[serde(skip_serializing)]
     inverse: Isometry3<f64>,
+}
+
+impl Serialize for Isometry {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Serialize directly through TransformHelper without an outer `transform` field
+        transform_serde::serialize(&self.transform, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Isometry {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // Deserialize through TransformHelper, accepting both flat and legacy structures
+        transform_serde::deserialize(deserializer)
+    }
 }
 impl Isometry {
     /// Creates a new [`Isometry`] which stores the rotation and translation as a transform matrix and its inverse.
@@ -483,6 +499,197 @@ impl Isometry {
             .map(|p| self.inverse_transform_vector_f64(p))
             .collect::<Vec<Vector3<f64>>>()
     }
+    /// Compares the optical axis of `self` (the expected axis) with that of `other` (the actual axis).
+    ///
+    /// Each axis is the isometry's origin together with its local +z direction. The comparison
+    /// ignores roll (rotation about the axis), which does not affect where the axis runs.
+    ///
+    /// # Arguments
+    ///
+    /// * `other` - the actual axis to compare against this expected one.
+    /// * `angle_tolerance` - largest angular deviation still counted as a match.
+    /// * `position_tolerance` - largest positional deviation (axial or lateral) still counted as a match.
+    ///
+    /// # Returns
+    ///
+    /// `None` if both deviations are within the tolerances, otherwise the [`AxisMismatch`].
+    #[must_use]
+    pub fn axis_mismatch(
+        &self,
+        other: &Self,
+        angle_tolerance: Angle,
+        position_tolerance: Length,
+    ) -> Option<AxisMismatch> {
+        let expected_dir = self.transform_vector_f64(&Vector3::z());
+        let actual_dir = other.transform_vector_f64(&Vector3::z());
+        let angle = radian!(expected_dir.angle(&actual_dir));
+        let expected_o = self.translation();
+        let actual_o = other.translation();
+        let delta = Vector3::new(
+            (actual_o.x - expected_o.x).get::<meter>(),
+            (actual_o.y - expected_o.y).get::<meter>(),
+            (actual_o.z - expected_o.z).get::<meter>(),
+        );
+        let axial = delta.dot(&expected_dir);
+        let lateral = (delta - axial * expected_dir).norm();
+        if angle <= angle_tolerance
+            && meter!(axial).abs() <= position_tolerance
+            && meter!(lateral) <= position_tolerance
+        {
+            None
+        } else {
+            Some(AxisMismatch {
+                angle,
+                axial: meter!(axial),
+                lateral: meter!(lateral),
+            })
+        }
+    }
+}
+
+/// The mismatch of an optical axis (origin and local +z direction) from an expected one.
+///
+/// Produced by [`Isometry::axis_mismatch`]; all three components are zero for coinciding axes.
+#[derive(Debug, Clone, Copy)]
+pub struct AxisMismatch {
+    /// Angle between the two axis directions.
+    pub angle: Angle,
+    /// Signed offset of the actual origin from the expected one along the expected axis direction
+    /// (positive when the actual origin lies further along the axis).
+    pub axial: Length,
+    /// Distance of the actual origin from the expected axis line (the sideways miss).
+    pub lateral: Length,
+}
+
+mod transform_serde {
+    use nalgebra::{Isometry3, Translation3, UnitQuaternion};
+    use serde::de::{self, Deserializer, MapAccess, SeqAccess, Visitor};
+    use serde::{Deserialize, Serialize, Serializer};
+
+    /// Helper struct to conditionally serialize rotation and translation.
+    #[derive(Serialize, Default, Debug, PartialEq)]
+    pub(super) struct TransformHelper {
+        #[serde(
+            default = "UnitQuaternion::identity",
+            skip_serializing_if = "is_identity_rotation"
+        )]
+        pub rotation: UnitQuaternion<f64>,
+        #[serde(
+            default = "Translation3::identity",
+            skip_serializing_if = "is_identity_translation"
+        )]
+        pub translation: Translation3<f64>,
+    }
+
+    /// Check whether rotation equals identity.
+    fn is_identity_rotation(rot: &UnitQuaternion<f64>) -> bool {
+        *rot == UnitQuaternion::identity()
+    }
+
+    /// Check whether translation equals identity (0, 0, 0).
+    fn is_identity_translation(trans: &Translation3<f64>) -> bool {
+        *trans == Translation3::identity()
+    }
+
+    /// Serializes `Isometry3` directly into the flat helper representation.
+    pub fn serialize<S>(transform: &Isometry3<f64>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let helper = TransformHelper {
+            rotation: transform.rotation,
+            translation: transform.translation,
+        };
+        helper.serialize(serializer)
+    }
+
+    /// Deserializes `Isometry3` from flat representation.
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<super::Isometry, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let helper = TransformHelper::deserialize(deserializer)?;
+        let transform = Isometry3::from_parts(helper.translation, helper.rotation);
+        Ok(super::Isometry {
+            transform,
+            inverse: transform.inverse(),
+        })
+    }
+
+    impl<'de> Deserialize<'de> for TransformHelper {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            struct TransformHelperVisitor;
+
+            impl<'de> Visitor<'de> for TransformHelperVisitor {
+                type Value = TransformHelper;
+
+                fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    formatter.write_str("a transform struct or ()")
+                }
+
+                // Support empty identity isometry represented as unit `()`
+                fn visit_unit<E>(self) -> Result<Self::Value, E>
+                where
+                    E: de::Error,
+                {
+                    Ok(TransformHelper::default())
+                }
+
+                fn visit_none<E>(self) -> Result<Self::Value, E>
+                where
+                    E: de::Error,
+                {
+                    Ok(TransformHelper::default())
+                }
+
+                fn visit_seq<A>(self, _seq: A) -> Result<Self::Value, A::Error>
+                where
+                    A: SeqAccess<'de>,
+                {
+                    Ok(TransformHelper::default())
+                }
+
+                // Support flat map with optional rotation and translation fields
+                fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+                where
+                    A: MapAccess<'de>,
+                {
+                    let mut rotation = None;
+                    let mut translation = None;
+
+                    while let Some(key) = map.next_key::<String>()? {
+                        match key.as_str() {
+                            "rotation" => {
+                                if rotation.is_some() {
+                                    return Err(de::Error::duplicate_field("rotation"));
+                                }
+                                rotation = Some(map.next_value()?);
+                            }
+                            "translation" => {
+                                if translation.is_some() {
+                                    return Err(de::Error::duplicate_field("translation"));
+                                }
+                                translation = Some(map.next_value()?);
+                            }
+                            _ => {
+                                let _ = map.next_value::<de::IgnoredAny>()?;
+                            }
+                        }
+                    }
+
+                    Ok(TransformHelper {
+                        rotation: rotation.unwrap_or_else(UnitQuaternion::identity),
+                        translation: translation.unwrap_or_else(Translation3::identity),
+                    })
+                }
+            }
+
+            deserializer.deserialize_any(TransformHelperVisitor)
+        }
+    }
 }
 
 /// Define the translation and rotation axes for the [`Isometry`]
@@ -566,87 +773,6 @@ impl Display for Isometry {
 impl From<Option<Isometry>> for Proptype {
     fn from(value: Option<Isometry>) -> Self {
         Self::Isometry(value)
-    }
-}
-/// Custom deserializer for [`Isometry`]
-///
-/// This is necessary since only the `transform` field need to be serialized and deserialized while the
-/// `inverse` field is automatically calculated during deserialization.
-impl<'de> Deserialize<'de> for Isometry {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        enum Field {
-            Transform,
-        }
-        const FIELDS: &[&str] = &["transform"];
-
-        impl<'de> Deserialize<'de> for Field {
-            fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-            where
-                D: serde::Deserializer<'de>,
-            {
-                struct FieldVisitor;
-
-                impl Visitor<'_> for FieldVisitor {
-                    type Value = Field;
-
-                    fn expecting(
-                        &self,
-                        formatter: &mut std::fmt::Formatter<'_>,
-                    ) -> std::fmt::Result {
-                        formatter.write_str("`transform`")
-                    }
-                    fn visit_str<E>(self, value: &str) -> std::result::Result<Field, E>
-                    where
-                        E: de::Error,
-                    {
-                        match value {
-                            "transform" => Ok(Field::Transform),
-                            _ => Err(de::Error::unknown_field(value, FIELDS)),
-                        }
-                    }
-                }
-                deserializer.deserialize_identifier(FieldVisitor)
-            }
-        }
-
-        struct OpticRefVisitor;
-
-        impl<'de> Visitor<'de> for OpticRefVisitor {
-            type Value = Isometry;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                formatter.write_str("a struct OpticRef")
-            }
-
-            fn visit_map<A>(self, mut map: A) -> std::result::Result<Isometry, A::Error>
-            where
-                A: MapAccess<'de>,
-            {
-                // let mut node_type = None;
-                let mut transform = None;
-                while let Some(key) = map.next_key()? {
-                    match key {
-                        Field::Transform => {
-                            if transform.is_some() {
-                                return Err(de::Error::duplicate_field("attributes"));
-                            }
-                            transform = Some(map.next_value::<Isometry3<f64>>()?);
-                        }
-                    }
-                }
-
-                let transform = transform.ok_or_else(|| de::Error::missing_field("transform"))?;
-                let iso = Isometry {
-                    transform,
-                    inverse: transform.inverse(),
-                };
-                Ok(iso)
-            }
-        }
-        deserializer.deserialize_struct("OpticRef", FIELDS, OpticRefVisitor)
     }
 }
 /// This function defines the coordinate axes on a plane.
@@ -822,10 +948,8 @@ pub fn project_pos_to_plane_with_base_vectors(
 
 #[cfg(test)]
 mod test {
-    use core::f64;
-
     use super::*;
-    use crate::millimeter;
+    use crate::{millimeter, nanometer, radian};
     use approx::{assert_abs_diff_eq, assert_relative_eq};
     use assert_matches::assert_matches;
     #[test]
@@ -849,6 +973,64 @@ mod test {
             assert!(Isometry::new(millimeter!(0., 0., 0.), degree!(0., *val, 0.)).is_err());
             assert!(Isometry::new(millimeter!(0., 0., 0.), degree!(0., 0., *val)).is_err());
         }
+    }
+    #[test]
+    fn axis_mismatch_identical_axes_is_none() -> OpmResult<()> {
+        let iso = Isometry::new(millimeter!(1., 2., 3.), degree!(10., 20., 30.))?;
+        assert!(
+            iso.axis_mismatch(&iso, radian!(1.0e-9), nanometer!(1.0))
+                .is_none()
+        );
+        Ok(())
+    }
+    #[test]
+    fn axis_mismatch_within_tolerance_is_none() -> OpmResult<()> {
+        let expected = Isometry::identity();
+        // 0.5 nm along the axis, below the 1 nm tolerance.
+        let actual = Isometry::new(nanometer!(0., 0., 0.5), degree!(0., 0., 0.))?;
+        assert!(
+            expected
+                .axis_mismatch(&actual, radian!(1.0e-9), nanometer!(1.0))
+                .is_none()
+        );
+        Ok(())
+    }
+    #[test]
+    fn axis_mismatch_pure_axial_offset() -> OpmResult<()> {
+        let expected = Isometry::identity();
+        let actual = Isometry::new(millimeter!(0., 0., 5.), degree!(0., 0., 0.))?;
+        let mismatch = expected
+            .axis_mismatch(&actual, radian!(1.0e-9), nanometer!(1.0))
+            .expect("axes differ");
+        // `.value` is the raw SI value: meters for lengths, radians for angles.
+        assert_abs_diff_eq!(mismatch.axial.value, 0.005, epsilon = 1e-12);
+        assert_abs_diff_eq!(mismatch.lateral.value, 0.0, epsilon = 1e-12);
+        assert_abs_diff_eq!(mismatch.angle.value, 0.0, epsilon = 1e-12);
+        Ok(())
+    }
+    #[test]
+    fn axis_mismatch_pure_lateral_offset() -> OpmResult<()> {
+        let expected = Isometry::identity();
+        let actual = Isometry::new(millimeter!(4., 0., 0.), degree!(0., 0., 0.))?;
+        let mismatch = expected
+            .axis_mismatch(&actual, radian!(1.0e-9), nanometer!(1.0))
+            .expect("axes differ");
+        assert_abs_diff_eq!(mismatch.axial.value, 0.0, epsilon = 1e-12);
+        assert_abs_diff_eq!(mismatch.lateral.value, 0.004, epsilon = 1e-12);
+        assert_abs_diff_eq!(mismatch.angle.value, 0.0, epsilon = 1e-12);
+        Ok(())
+    }
+    #[test]
+    fn axis_mismatch_pure_angular_offset() -> OpmResult<()> {
+        let expected = Isometry::identity();
+        let actual = Isometry::new(millimeter!(0., 0., 0.), degree!(0., 30., 0.))?;
+        let mismatch = expected
+            .axis_mismatch(&actual, radian!(1.0e-9), nanometer!(1.0))
+            .expect("axes differ");
+        assert_abs_diff_eq!(mismatch.angle.value, 30_f64.to_radians(), epsilon = 1e-9);
+        assert_abs_diff_eq!(mismatch.axial.value, 0.0, epsilon = 1e-12);
+        assert_abs_diff_eq!(mismatch.lateral.value, 0.0, epsilon = 1e-12);
+        Ok(())
     }
     #[test]
     fn new_along_z() -> OpmResult<()> {
@@ -1235,5 +1417,103 @@ mod test {
     #[test]
     fn from() {
         assert_matches!(Some(Isometry::identity()).into(), Proptype::Isometry(_));
+    }
+    #[test]
+    fn test_isometry_partial_serialization_roundtrip() -> OpmResult<()> {
+        // 1. Rotation only (like a tilted mirror)
+        let rot_only = Isometry::new_rotation(degree!(45.0, 0.0, 0.0))?;
+        let ron_rot = ron::to_string(&rot_only).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert!(
+            !ron_rot.contains("transform:"),
+            "Outer `transform:` must be absent"
+        );
+        assert!(ron_rot.contains("rotation:"));
+        assert!(
+            !ron_rot.contains("translation:"),
+            "Identity translation should be omitted"
+        );
+        let restored_rot: Isometry =
+            ron::from_str(&ron_rot).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert_eq!(rot_only, restored_rot);
+
+        // 2. Translation only
+        let trans_only = Isometry::new_translation(meter!(1.0, 2.0, 3.0))?;
+        let ron_trans =
+            ron::to_string(&trans_only).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert!(
+            !ron_trans.contains("transform:"),
+            "Outer `transform:` must be absent"
+        );
+        assert!(
+            !ron_trans.contains("rotation:"),
+            "Identity rotation should be omitted"
+        );
+        assert!(ron_trans.contains("translation:"));
+        let restored_trans: Isometry =
+            ron::from_str(&ron_trans).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert_eq!(trans_only, restored_trans);
+
+        // 3. Complete identity -> serialized directly as empty tuple "()"
+        let identity = Isometry::identity();
+        let ron_id = ron::to_string(&identity).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert_eq!(
+            ron_id, "()",
+            "Identity isometry should serialize to empty tuple ()"
+        );
+        let restored_id: Isometry =
+            ron::from_str(&ron_id).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert_eq!(identity, restored_id);
+
+        // 4. Backward compatibility: Legacy RON string with explicit outer transform field
+        let legacy_ron = r#"(
+            transform: (
+                rotation: (0.0, 0.0, 0.0, 1.0),
+                translation: (0.0, 0.0, 0.0),
+            )
+        )"#;
+        let restored_legacy: Isometry =
+            ron::from_str(legacy_ron).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert_eq!(restored_legacy, Isometry::identity());
+
+        // 5. Backward compatibility: Legacy RON string with empty transform block
+        let legacy_empty = "(transform: ())";
+        let restored_empty: Isometry =
+            ron::from_str(legacy_empty).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert_eq!(restored_empty, Isometry::identity());
+
+        Ok(())
+    }
+    #[test]
+    fn test_isometry_flat_serialization() -> OpmResult<()> {
+        // 1. Flat format with rotation only
+        let rot_only = Isometry::new_rotation(degree!(45.0, 0.0, 0.0))?;
+        let ron_rot = ron::to_string(&rot_only).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert!(!ron_rot.contains("transform:"));
+        assert!(ron_rot.contains("rotation:"));
+        assert!(!ron_rot.contains("translation:"));
+        let restored_rot: Isometry =
+            ron::from_str(&ron_rot).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert_eq!(rot_only, restored_rot);
+
+        // 2. Flat format with translation only
+        let trans_only = Isometry::new_translation(meter!(1.0, 2.0, 3.0))?;
+        let ron_trans =
+            ron::to_string(&trans_only).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert!(!ron_trans.contains("transform:"));
+        assert!(!ron_trans.contains("rotation:"));
+        assert!(ron_trans.contains("translation:"));
+        let restored_trans: Isometry =
+            ron::from_str(&ron_trans).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert_eq!(trans_only, restored_trans);
+
+        // 3. Identity format serialized as empty tuple ()
+        let identity = Isometry::identity();
+        let ron_id = ron::to_string(&identity).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert_eq!(ron_id, "()");
+        let restored_id: Isometry =
+            ron::from_str(&ron_id).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert_eq!(identity, restored_id);
+
+        Ok(())
     }
 }

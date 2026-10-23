@@ -1,7 +1,7 @@
 use dioxus::{document::eval, prelude::*};
 use dioxus_free_icons::{
     Icon,
-    icons::fa_solid_icons::{FaAngleRight, FaBars, FaWindowMaximize},
+    icons::fa_solid_icons::{FaAngleRight, FaArrowUpRightFromSquare, FaBars, FaWindowMaximize},
 };
 use opossum_core::prelude::*;
 use std::path::PathBuf;
@@ -18,11 +18,14 @@ use crate::{
     },
 };
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(feature = "desktop")]
 use crate::components::menu_bar::controls::controls_menu::ControlsMenu;
 
 #[allow(clippy::volatile_composites)]
 const FAVICON: Asset = asset!("/assets/favicon.ico");
+
+/// URL pointing to the online mdBook documentation of OPOSSUM
+const HANDBOOK_URL: &str = "https://opossum-labs.github.io/opossum/";
 
 #[derive(Debug, Clone)]
 pub enum AppCommand {
@@ -42,6 +45,7 @@ pub enum AppCommand {
     Simulate,
     Settings,
     OpenMaterialCatalog,
+    OpenCatalogSynchronizer,
 }
 
 #[component]
@@ -119,9 +123,9 @@ pub fn MenuBar(
                                 short_cut_action: ShortCutAction::Settings,
                                 on_click: move |_| on_menu_action.call(AppCommand::Settings),
                             }
-                            // Render divider and Quit item only for non-wasm32 targets
+                            // Render divider and Quit item only for desktop target
                             {
-                                if cfg!(not(target_arch = "wasm32")) {
+                                if cfg!(feature = "desktop") {
                                     rsx! {
                                         li {
                                             hr { class: "dropdown-divider" }
@@ -271,7 +275,22 @@ pub fn MenuBar(
                                 }
                             }
                             li {
-                                a { class: "dropdown-item", role: "button", "Coating catalog" }
+                                a {
+                                    class: "dropdown-item text-muted disabled",
+                                    role: "button",
+                                    "Coating catalog"
+                                }
+                            }
+                            li {
+                                hr { class: "dropdown-divider" }
+                            }
+                            li {
+                                a {
+                                    class: "dropdown-item",
+                                    role: "button",
+                                    onclick: move |_| on_menu_action.call(AppCommand::OpenCatalogSynchronizer),
+                                    "Synchronize catalogs..."
+                                }
                             }
                         }
                     }
@@ -286,6 +305,27 @@ pub fn MenuBar(
                             "Help"
                         }
                         ul { class: "dropdown-menu",
+                            li {
+                                a {
+                                    class: "dropdown-item d-flex justify-content-between align-items-center",
+                                    role: "button",
+                                    onclick: move |_| {
+                                        // Open the online documentation in the default browser
+                                        if let Err(err) = webbrowser::open(HANDBOOK_URL) {
+                                            eprintln!("Failed to open handbook URL: {err}");
+                                        }
+                                    },
+                                    "Handbook"
+                                    Icon {
+                                        height: 12,
+                                        icon: FaArrowUpRightFromSquare,
+                                        class: "text-muted ms-2",
+                                    }
+                                }
+                            }
+                            li {
+                                hr { class: "dropdown-divider" }
+                            }
                             li {
                                 a {
                                     class: "dropdown-item",
@@ -307,7 +347,7 @@ pub fn MenuBar(
                 let simulate_shortcut = SHORTCUTS
                     .get(&ShortCutAction::Simulate)
                     .map_or(String::new(), |s| format!(" ({s})"));
-                #[cfg(not(target_arch = "wasm32"))]
+                #[cfg(feature = "desktop")]
                 rsx! {
                     div { class: "d-flex align-items-center",
                         button {
@@ -381,7 +421,7 @@ fn MenuListItemShortCut(
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(feature = "desktop")]
 #[component]
 fn ExpandOnClick(mut maximize_symbol: Signal<Result<VNode, RenderError>>) -> Element {
     use dioxus::desktop::use_window;
@@ -423,7 +463,7 @@ fn ExpandOnClick(mut maximize_symbol: Signal<Result<VNode, RenderError>>) -> Ele
     }
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(not(feature = "desktop"))]
 #[component]
 fn ExpandOnClick(mut maximize_symbol: Signal<Result<VNode, RenderError>>) -> Element {
     rsx! {}

@@ -112,7 +112,7 @@ Almost every editing action in the GUI can be undone and redone:
 - The history holds the last 100 steps and is cleared when a file is loaded or a new document is created. Undo and redo count as modifications, so the document is marked as unsaved afterwards.
 - The reflective grating's Littrow alignment aids (reference wavelength, incident/diffracted mode) are entry helpers, not stored with the model, so they are not undoable — only the resulting alignment is.
 - The RayTrace analyzer's spectral-distribution laser-line list and the Energy analyzer's laser-line list work the same way: the wavelength/intensity (or wavelength/energy) fields for the line currently being entered are not sent to the backend until "Add laser line" is pressed, so only adding or deleting a line is undoable, not the individual field edits leading up to it.
-- The stacked-aperture editor (in a port's aperture configuration) follows the same pattern: the shape/type fields for the aperture currently being composed are not sent to the backend until "Add Aperture to Stack" or "Update Aperture in Stack" is pressed. Each add, update, or delete of one aperture in the stack is its own undo step, but the field edits leading up to it are not individually undoable.
+- The bore list of an `optic shape` follows the same pattern: the shape, offset and rotation fields of the bore currently being drafted are not sent to the backend until "Add bore" or "Update bore" is pressed. Each add, update, or delete of a bore is its own undo step, but the field edits leading up to it are not individually undoable. Choosing another kind of edge starts a fresh edge without bores; one undo brings back the previous edge with its bores.
 
 # Groups
 

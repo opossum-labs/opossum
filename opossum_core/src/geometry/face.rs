@@ -1,0 +1,287 @@
+#![warn(missing_docs)]
+//! One optical surface of a component: its shape and the frame of its vertex.
+//!
+//! A [`Face`] is a [`SurfaceShape`] at a frame. Stated relative to the component it belongs to, it
+//! can be compared and stored; moved to where the component sits (see [`Face::move_by`]), it is what
+//! rays are intersected with. The math of the shape is done in the vertex frame (see
+//! [`GeoSurface`]); the face turns rays and points into that frame and back.
+
+use std::fmt::{self, Display, Formatter};
+
+use nalgebra::{Point2, Point3, Vector3};
+use serde::{Deserialize, Serialize};
+use uom::si::f64::Length;
+
+use crate::{
+    error::{OpmResult, OpossumError},
+    geometry::{GeoSurface, SurfaceShape},
+    light::Ray,
+    nanometer, radian,
+    utils::geom_transformation::Isometry,
+};
+
+/// The number of a face in its geometry: its position among the faces the geometry has (see
+/// [`GeometryKind`](crate::geometry::GeometryKind)).
+///
+/// An extruded solid has its front face as 0 and its rear face as 1, a surface has the one face 0.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FaceIndex(usize);
+
+impl FaceIndex {
+    /// Create the number of the face at the given position in its geometry.
+    #[must_use]
+    pub const fn new(position: usize) -> Self {
+        Self(position)
+    }
+}
+
+impl From<FaceIndex> for usize {
+    fn from(index: FaceIndex) -> Self {
+        index.0
+    }
+}
+
+impl Display for FaceIndex {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+/// One optical surface of a component: its [`SurfaceShape`] and the frame of its vertex.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Face {
+    shape: SurfaceShape,
+    frame: Isometry,
+}
+
+impl Face {
+    /// Create a new [`Face`].
+    ///
+    /// # Arguments
+    ///
+    /// * `shape` - the shape of the surface.
+    /// * `frame` - position and orientation of the vertex, in the frame this face is stated in.
+    #[must_use]
+    pub const fn new(shape: SurfaceShape, frame: Isometry) -> Self {
+        Self { shape, frame }
+    }
+    /// Returns the shape of this [`Face`].
+    #[must_use]
+    pub const fn shape(&self) -> &SurfaceShape {
+        &self.shape
+    }
+    /// Returns the frame of the vertex of this [`Face`].
+    #[must_use]
+    pub const fn frame(&self) -> &Isometry {
+        &self.frame
+    }
+    /// Returns the surface of this [`Face`], to be asked in the vertex frame.
+    #[must_use]
+    pub fn surface(&self) -> &dyn GeoSurface {
+        self.shape.as_geo_surface()
+    }
+    /// Move this face by an isometry: its vertex frame becomes `by` followed by its own frame.
+    ///
+    /// # Arguments
+    ///
+    /// * `by` - the frame this face is stated in, given in the frame it is moved to.
+    pub fn move_by(&mut self, by: &Isometry) {
+        self.frame = by.append(&self.frame);
+    }
+    /// Calculate the intersection point of a [`Ray`] with the unbounded surface of this face and
+    /// the normal there.
+    ///
+    /// # Arguments
+    ///
+    /// * `ray` - the ray, in the frame this face is stated in.
+    ///
+    /// # Returns
+    ///
+    /// The intersection point and the normalized surface normal there, pointing against the ray
+    /// direction, both in the frame this face is stated in; or `None` if the ray misses the
+    /// surface.
+    #[must_use]
+    pub fn intersect(&self, ray: &Ray) -> Option<(Point3<Length>, Vector3<f64>)> {
+        let local_ray = ray.inverse_transformed_ray(&self.frame);
+        self.surface()
+            .calc_intersect_and_normal(&local_ray)
+            .map(|(point, normal)| {
+                (
+                    self.frame.transform_point(&point),
+                    self.frame.transform_vector_f64(&normal),
+                )
+            })
+    }
+    /// Return whether a point lies behind the surface of this face (see [`GeoSurface::is_behind`]).
+    ///
+    /// # Arguments
+    ///
+    /// * `point` - the point, in the frame this face is stated in.
+    #[must_use]
+    pub fn is_behind(&self, point: &Point3<Length>) -> bool {
+        self.surface()
+            .is_behind(&self.frame.inverse_transform_point(point))
+    }
+    /// Return whether a point of the surface of this face lies on the sheet through its vertex.
+    ///
+    /// A [`Sphere`](crate::geometry::Sphere) or [`Cylinder`](crate::geometry::Cylinder) closes on
+    /// itself, so a ray can meet it on its far side, behind the equator, which is not part of a
+    /// component built from it. [`GeoSurface::local_z_at`] always answers for the sheet through
+    /// the vertex, so a point lies on that sheet if its own local z agrees. A single-sheeted
+    /// surface always does.
+    ///
+    /// # Arguments
+    ///
+    /// * `point` - a point on the surface, in the frame this face is stated in.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the point lies on the sheet through the vertex, up to floating-point noise.
+    #[must_use]
+    pub fn is_on_vertex_sheet(&self, point: &Point3<Length>) -> bool {
+        let local_point = self.frame.inverse_transform_point(point);
+        self.surface()
+            .local_z_at(&Point2::new(local_point.x, local_point.y))
+            .is_some_and(|sheet_z| (local_point.z - sheet_z).abs() <= nanometer!(1.0))
+    }
+    /// Check that this face reaches as far out as the outline that bounds it.
+    ///
+    /// The vertex is taken to sit on the axis of the outline, as it does for every face the
+    /// presets build.
+    ///
+    /// # Arguments
+    ///
+    /// * `transversal_reach` - how far the outline reaches from its axis.
+    /// * `name` - how to name this face in the error, e.g. `"front face"`.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the face ends before the outline does.
+    pub(crate) fn check_reach(&self, transversal_reach: Length, name: &str) -> OpmResult<()> {
+        if self.surface().reaches(transversal_reach) {
+            return Ok(());
+        }
+        Err(OpossumError::Other(format!(
+            "the {name} does not reach the edge of its optic shape, {:.3} mm from the axis: its \
+             radius of curvature is smaller",
+            transversal_reach.get::<uom::si::length::millimeter>()
+        )))
+    }
+    /// Whether this face is the same surface at the same place as another face.
+    ///
+    /// Both faces have to have the same shape, and their vertices have to sit at the same point with
+    /// their axes pointing the same way. How far a face is turned about its axis matters only for a
+    /// shape that is not symmetric about it, a cylinder. Deviations as small as floating-point noise
+    /// are tolerated.
+    ///
+    /// # Arguments
+    ///
+    /// * `other` - the face to compare with, stated in the same frame as this one.
+    ///
+    /// # Returns
+    ///
+    /// `true` if both faces describe the same surface.
+    #[must_use]
+    pub fn coincides_with(&self, other: &Self) -> bool {
+        // Tolerances that only absorb floating-point noise, as for the axes of two node inputs.
+        let angle_tolerance = radian!(1.0e-9);
+        let length_tolerance = nanometer!(1.0);
+        // With both axes aligned, the local y axes have to run along the same line; half a turn
+        // reverses them and still maps a cylinder onto itself.
+        let same_roll = || {
+            self.frame
+                .transform_vector_f64(&Vector3::y())
+                .cross(&other.frame.transform_vector_f64(&Vector3::y()))
+                .norm()
+                <= angle_tolerance.value
+        };
+        self.shape.matches(&other.shape, length_tolerance)
+            && self
+                .frame
+                .axis_mismatch(&other.frame, angle_tolerance, length_tolerance)
+                .is_none()
+            && (!self.shape.depends_on_roll() || same_roll())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::{
+        degree,
+        geometry::{Cylinder, Parabola, Sphere},
+        millimeter,
+    };
+    use approx::assert_abs_diff_eq;
+
+    /// A face moved to a node sits at the node followed by its own frame, and meets a ray there:
+    /// a ray along the moved axis hits the vertex.
+    #[test]
+    fn a_moved_face_sits_at_the_node_followed_by_its_frame() -> OpmResult<()> {
+        let node_frame = Isometry::new(millimeter!(1.0, 2.0, 3.0), degree!(10.0, 0.0, 5.0))?;
+        let face = Face::new(
+            SurfaceShape::Cylinder(Cylinder::new(millimeter!(50.0))?),
+            Isometry::new_along_z(millimeter!(2.0))?,
+        );
+        let mut moved = face.clone();
+        moved.move_by(&node_frame);
+        assert_eq!(*moved.frame(), node_frame.append(face.frame()));
+        let ray = Ray::new(
+            node_frame.transform_point(&millimeter!(0.0, 0.0, -10.0)),
+            node_frame.transform_vector_f64(&Vector3::z()),
+            nanometer!(1053.0),
+            crate::joule!(1.0),
+        )?;
+        let (point, _) = moved
+            .intersect(&ray)
+            .ok_or_else(|| OpossumError::Other("the ray missed the face".into()))?;
+        let vertex = moved.frame().transform_point(&Point3::origin());
+        assert_abs_diff_eq!(
+            (point - vertex).map(|c| c.value).norm(),
+            0.0,
+            epsilon = 1e-15
+        );
+        Ok(())
+    }
+    #[test]
+    fn a_face_coincides_only_with_the_same_surface_at_the_same_place() -> OpmResult<()> {
+        let sphere = |radius: f64, vertex: Isometry| -> OpmResult<Face> {
+            Ok(Face::new(
+                SurfaceShape::Sphere(Sphere::new(millimeter!(radius))?),
+                vertex,
+            ))
+        };
+        let at = |z: f64| Isometry::new_along_z(millimeter!(z));
+        let face = sphere(50.0, at(5.0)?)?;
+        // the same surface moved there from another frame, or differing by rounding noise only
+        let mut shifted = sphere(50.0, at(2.0)?)?;
+        shifted.move_by(&at(3.0)?);
+        assert!(face.coincides_with(&shifted));
+        assert!(face.coincides_with(&sphere(50.0 + 1.0e-10, at(5.0)?)?));
+        // another radius, another place, the axis flipped, another shape
+        for other in [
+            sphere(50.001, at(5.0)?)?,
+            sphere(50.0, at(5.001)?)?,
+            sphere(
+                50.0,
+                Isometry::new(millimeter!(0.0, 0.0, 5.0), degree!(180.0, 0.0, 0.0))?,
+            )?,
+            Face::new(
+                SurfaceShape::Cylinder(Cylinder::new(millimeter!(50.0))?),
+                at(5.0)?,
+            ),
+        ] {
+            assert!(!face.coincides_with(&other), "{other:?}");
+        }
+        // a parabola is compared by its focal length
+        let parabola = |focal_length: f64| -> OpmResult<Face> {
+            Ok(Face::new(
+                SurfaceShape::Parabola(Parabola::new(millimeter!(focal_length))?),
+                Isometry::identity(),
+            ))
+        };
+        assert!(parabola(100.0)?.coincides_with(&parabola(100.0)?));
+        assert!(!parabola(100.0)?.coincides_with(&parabola(101.0)?));
+        Ok(())
+    }
+}

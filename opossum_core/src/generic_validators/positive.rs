@@ -55,7 +55,7 @@ mod tests {
     #[test]
     fn test_is_positive_f64() {
         let validator = AllPositive;
-        assert!(validator.validate(&3.14).is_ok());
+        assert!(validator.validate(&1.23).is_ok());
         assert!(validator.validate(&-2.7).is_err());
         assert!(validator.validate(&0.0).is_ok());
     }
@@ -138,7 +138,7 @@ mod tests {
     #[test]
     fn test_x_positive_f64() {
         let validator = XPositive;
-        assert!(validator.validate(&3.14).is_ok());
+        assert!(validator.validate(&1.23).is_ok());
         assert!(validator.validate(&-2.7).is_err());
         assert!(validator.validate(&0.0).is_ok());
     }
@@ -177,7 +177,7 @@ mod tests {
     #[test]
     fn test_y_positive_f64() {
         let validator = YPositive;
-        assert!(validator.validate(&3.14).is_ok());
+        assert!(validator.validate(&1.23).is_ok());
         assert!(validator.validate(&-2.7).is_err());
         assert!(validator.validate(&0.0).is_ok());
     }

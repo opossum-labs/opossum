@@ -26,7 +26,7 @@ use opossum_core::{
     gain::{ConstGain, GainModel},
     prelude::*,
 };
-use std::path::Path;
+use std::{env, path::Path};
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Amplifier chain demo");
@@ -99,8 +99,11 @@ fn main() -> OpmResult<()> {
         .expect("the analyzer just added must be there")
         .set_pump_scenarios(scenario_ids);
 
+    // Read the output directory from the environment, fallback to playground
+    let out_dir = env::var("OPOSSUM_EXAMPLES_OUT_DIR")
+        .unwrap_or_else(|_| "./opossum_core/playground".to_string());
+    let out_path = Path::new(&out_dir).join("amplifier_const_gain_chain.opm");
+
     // 1 J in, so the meter reads the chain's overall gain directly: 20 J at full power, 5 J at half.
-    document.save_to_file(Path::new(
-        "./opossum_core/playground/amplifier_const_gain_chain.opm",
-    ))
+    document.save_to_file(&out_path)
 }

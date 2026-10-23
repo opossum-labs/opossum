@@ -24,6 +24,17 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use utoipa::ToSchema;
 
+/// Lightweight discriminant representing the kind of analyzer without configuration payload.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum AnalyzerKind {
+    /// Simple energy flow analysis.
+    Energy,
+    /// Sequential ray tracing analysis.
+    RayTrace,
+    /// Ghost focus analysis with back reflections.
+    GhostFocus,
+}
+
 /// Type of analysis to be performed.
 ///
 /// While the individual analyzers are implemented as traits, this enum is necessary for serialization / desrialization.
@@ -98,6 +109,15 @@ impl AnalyzerType {
             Self::GhostFocus(config) => config.set_active_pump_scenario(pump_scenario),
         }
     }
+    /// Returns the corresponding [`AnalyzerKind`] for this analyzer configuration.
+    #[must_use]
+    pub const fn kind(&self) -> AnalyzerKind {
+        match self {
+            Self::Energy(_) => AnalyzerKind::Energy,
+            Self::RayTrace(_) => AnalyzerKind::RayTrace,
+            Self::GhostFocus(_) => AnalyzerKind::GhostFocus,
+        }
+    }
 }
 impl Display for AnalyzerType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -108,6 +128,20 @@ impl Display for AnalyzerType {
         };
         write!(f, "{msg}")
     }
+}
+/// Marker trait for all Analyzers
+pub trait Analyzer {
+    /// Analyze a [`NodeGroup`].
+    ///
+    /// # Errors
+    /// This function returns an error if the concrete implementation of the [`Analyzer`] returns an error.
+    fn analyze(&self, scenery: &mut NodeGroup) -> OpmResult<()>;
+    /// Generate an analysis report for this [`NodeGroup`].
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the concrete implementation of the [`Analyzer`] returns an error..
+    fn report(&self, scenery: &NodeGroup) -> OpmResult<AnalysisReport>;
 }
 #[cfg(test)]
 mod test {
@@ -135,19 +169,4 @@ mod test {
             "Energy(EnergyConfig { source_map: {}, active_pump_scenario: ActiveScenario(None) })"
         );
     }
-}
-
-/// Marker trait for all Analyzers
-pub trait Analyzer {
-    /// Analyze a [`NodeGroup`].
-    ///
-    /// # Errors
-    /// This function returns an error if the concrete implementation of the [`Analyzer`] returns an error.
-    fn analyze(&self, scenery: &mut NodeGroup) -> OpmResult<()>;
-    /// Generate an analysis report for this [`NodeGroup`].
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the concrete implementation of the [`Analyzer`] returns an error..
-    fn report(&self, scenery: &NodeGroup) -> OpmResult<AnalysisReport>;
 }

@@ -26,20 +26,10 @@ use crate::{
 
 /// Name of the property that carries the [`Material`] of a node with a volume.
 ///
-/// Same purpose as [`CLEAR_APERTURE`](crate::geometry::body::CLEAR_APERTURE) for the transversal
+/// Same purpose as [`OPTIC_SHAPE`](crate::geometry::body::OPTIC_SHAPE) for the transversal
 /// extent: the node declarations and every reader refer to the property by this constant rather
 /// than by a literal.
 pub const MATERIAL: &str = "Material";
-
-/// Name the [`MATERIAL`] property had before it carried a whole [`Material`].
-///
-/// Up to and including OPOSSUM 0.7.2 the same slot held a bare
-/// [`RefractiveIndexType`] under this name. The constant is kept so that `.opm` files written by
-/// an older OPOSSUM can be migrated on load (see `migrate_legacy_properties` in
-/// [`properties`](crate::properties)) — without that,
-/// [`Properties::update`](crate::properties::Properties::update) would silently drop the old key
-/// and the node would fall back to its default material.
-pub const LEGACY_REFRACTIVE_INDEX: &str = "refractive index";
 
 /// Represents a complete material embedded in an OPOSSUM scenery or stored in the registry.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -284,7 +274,7 @@ impl From<&RefrIndexAir> for Material {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use uom::si::length::{millimeter, nanometer};
+    use crate::{millimeter, nanometer};
 
     #[test]
     fn test_custom_material_creation() -> OpmResult<()> {
@@ -294,7 +284,7 @@ mod tests {
         assert_eq!(material.name(), "Test Glass");
         assert_eq!(material.version(), 0);
 
-        let wvl = Length::new::<nanometer>(550.0);
+        let wvl = nanometer!(550.0);
         let n = material.get_refractive_index(wvl)?;
         assert!((n - 1.5).abs() < 1e-12);
 
@@ -310,7 +300,7 @@ mod tests {
         let air = Material::material_air();
         assert_eq!(air.name(), "air");
 
-        let wvl = Length::new::<nanometer>(589.3);
+        let wvl = nanometer!(589.3);
         assert!((vacuum.refractive_index(wvl)? - 1.0).abs() < 1e-12);
 
         Ok(())
@@ -322,20 +312,28 @@ mod tests {
         let original =
             Material::new_for_test(Uuid::new_v4(), 3, "Catalog Material", const_refr.into());
 
+        // Verifies version getter returns the actual non-zero version (kills `version -> 0`)
+        assert_eq!(original.version(), 3);
+
         let draft = original.new_draft_from();
         assert_eq!(draft.id(), original.id());
         assert_eq!(draft.version(), 0);
+        assert_eq!(draft.name(), original.name());
 
         let adhoc = original.clone_as_adhoc();
         assert_ne!(adhoc.id(), original.id());
         assert_eq!(adhoc.version(), 0);
+        // Distinguishes from Material::default() (kills `clone_as_adhoc -> Default::default()`)
+        assert_eq!(adhoc.name(), "Catalog Material");
+        assert_eq!(adhoc.optical, original.optical);
+        assert_ne!(adhoc.name(), Material::default().name());
     }
 
     #[test]
     fn test_default_transmission() -> OpmResult<()> {
         let material = Material::default();
-        let wvl = Length::new::<nanometer>(550.0);
-        let path = Length::new::<millimeter>(10.0);
+        let wvl = nanometer!(550.0);
+        let path = millimeter!(10.0);
 
         let t = material.transmission(wvl, path)?;
         assert_eq!(t, 1.0);
@@ -417,9 +415,11 @@ mod tests {
     #[test]
     fn test_material_serde_roundtrip() {
         // Test with optional thermal and mechanical blocks present
-        let mut material = Material::default();
-        material.thermal = Some(ThermalProperties::default());
-        material.mechanical = Some(MechanicalProperties::default());
+        let material = Material {
+            thermal: Some(ThermalProperties::default()),
+            mechanical: Some(MechanicalProperties::default()),
+            ..Default::default()
+        };
 
         let ron = ron::to_string(&material).expect("serialization failed");
         let deserialized: Material = ron::from_str(&ron).expect("deserialization failed");

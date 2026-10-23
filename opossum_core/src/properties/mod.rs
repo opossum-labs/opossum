@@ -1,4 +1,4 @@
-//! Module for handling node properties
+//! Module for handling node properties.
 pub mod property;
 pub mod proptype;
 pub mod validator;
@@ -7,63 +7,17 @@ use log::warn;
 pub use property::Property;
 pub use proptype::Proptype;
 
-use crate::error::{OpmResult, OpossumError};
-use crate::material::{LEGACY_REFRACTIVE_INDEX, MATERIAL, Material};
-use crate::properties::validator::Validator;
+use crate::{
+    error::{OpmResult, OpossumError},
+    properties::validator::Validator,
+};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use std::fmt::Debug;
 
-use crate::reporting::html_report::HtmlProperty;
-
-/// Carry properties of older `.opm` files over to the name they have today.
+/// A general set of optical properties.
 ///
-/// A node created from an `.opm` file is built as a default node first and then updated with the
-/// deserialized properties. Since [`Properties::update`] silently ignores keys the default node
-/// does not know, a renamed property would leave the node on its default value — a data loss
-/// without any error message. This function closes that gap and is the one place where such
-/// renames are recorded.
-///
-/// # Arguments
-///
-/// * `props` - the freshly deserialized properties, modified in place.
-fn migrate_legacy_properties(props: &mut IndexMap<String, Property>) {
-    // `refractive index` (a bare index model) became `material` (a whole `Material` carrying it).
-    if let Some(legacy) = props.shift_remove(LEGACY_REFRACTIVE_INDEX)
-        && !props.contains_key(MATERIAL)
-        && let Proptype::RefractiveIndex(index) = legacy.prop()
-        && let Ok(material) =
-            Property::new(Material::from(index.clone()).into(), String::new(), None)
-    {
-        props.insert(MATERIAL.to_string(), material);
-    }
-}
-
-/// A general set of (optical) properties.
-///
-/// The property system is used for storing node specific parameters (such as focal length, splitting ratio, filter curve, etc ...).
-/// Properties have to be created once before they can be set and used.
-///
-/// Properties keep the order in which they were created, because that is the order a node author
-/// chose and the order every listing shows them in (property editor, report, `.opm` file). Sorting
-/// them by name instead would tear apart what belongs together — a lens would list its front and
-/// rear curvature with unrelated properties in between.
-///
-/// ## Example
-/// ```rust
-/// # use opossum_core::properties::Properties;
-/// # use opossum_core::error::OpmResult;
-/// # fn main() -> OpmResult<()> {
-/// let mut props = Properties::default();
-///
-/// // We create a new property and set its value
-/// props.create("my float", "my floating point value", 3.14.into())?;
-/// props.set("my float", 2.71.into())?;
-///
-/// # Ok(())
-/// # }
-/// ```
+/// Properties keep the order in which they were created.
 #[derive(Default, Serialize, Debug, Clone, PartialEq)]
 #[serde(transparent)]
 pub struct Properties {
@@ -71,80 +25,292 @@ pub struct Properties {
 }
 
 impl Properties {
-    /// Create a new property with the given name.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an [`OpossumError`] if a property with the same name was already created before.
-    pub fn create(&mut self, name: &str, description: &str, value: Proptype) -> OpmResult<()> {
+    /// Helper to insert a property ensuring unique keys.
+    fn insert_property(
+        &mut self,
+        name: &str,
+        description: &str,
+        value: Proptype,
+        validator: Option<Validator>,
+        read_only: bool,
+    ) -> OpmResult<()> {
         if self.props.contains_key(name) {
             return Err(OpossumError::Properties(format!(
-                "property {name} already created",
+                "Property '{name}' already created"
             )));
         }
-        let new_property = Property::new(value, description.into(), None)?;
-        self.props.insert(name.into(), new_property);
+        let property = Property::new_with_access(value, description.into(), validator, read_only)?;
+        self.props.insert(name.into(), property);
         Ok(())
     }
-    /// Create a new property with the given name and a given value validator
-    ///
-    /// This function is similar to the `create` function but allows to set a validator. The given value
-    /// is already checked against the validator before the actual creation.
+
+    /// Create a new mutable property with the given name.
     ///
     /// # Errors
+    /// Returns an [`OpossumError`] if a property with the same name already exists.
+    pub fn create(&mut self, name: &str, description: &str, value: Proptype) -> OpmResult<()> {
+        self.insert_property(name, description, value, None, false)
+    }
+
+    /// Create a new mutable property equipped with a validator.
     ///
-    /// This function will return an [`OpossumError`] if
-    /// - a property with the same name was already created before.
-    /// - if the validation of the initial given value fails
+    /// # Errors
+    /// Returns an [`OpossumError`] if the property already exists or validation of the initial value fails.
     pub fn create_with_validator(
         &mut self,
         name: &str,
         description: &str,
-        // validator: Box<dyn Validator>,
         validator: Validator,
         value: Proptype,
     ) -> OpmResult<()> {
-        if self.props.contains_key(name) {
-            return Err(OpossumError::Properties(format!(
-                "property {name} already created",
-            )));
-        }
-        let new_property = Property::new(value, description.into(), Some(validator))?;
-        self.props.insert(name.into(), new_property);
-        Ok(())
+        self.insert_property(name, description, value, Some(validator), false)
     }
-    /// Returns the number of properties that have been set
+
+    /// Create a new read-only property with the given name.
+    ///
+    /// # Errors
+    /// Returns an [`OpossumError`] if a property with the same name already exists.
+    pub fn create_read_only(
+        &mut self,
+        name: &str,
+        description: &str,
+        value: Proptype,
+    ) -> OpmResult<()> {
+        self.insert_property(name, description, value, None, true)
+    }
+
+    /// Create a new read-only property equipped with a validator.
+    ///
+    /// # Errors
+    /// Returns an [`OpossumError`] if the property already exists or initial validation fails.
+    pub fn create_read_only_with_validator(
+        &mut self,
+        name: &str,
+        description: &str,
+        validator: Validator,
+        value: Proptype,
+    ) -> OpmResult<()> {
+        self.insert_property(name, description, value, Some(validator), true)
+    }
+
+    /// Returns the number of registered properties.
     #[must_use]
     pub fn nr_of_props(&self) -> usize {
         self.props.len()
     }
-    /// Set the value of the property with the given name.
+
+    /// Checks whether a property exists and is marked as read-only.
     ///
     /// # Errors
+    /// Returns an error if the property does not exist.
+    pub fn is_read_only(&self, name: &str) -> OpmResult<bool> {
+        self.props
+            .get(name)
+            .map(Property::is_read_only)
+            .ok_or_else(|| OpossumError::Properties(format!("Property '{name}' does not exist")))
+    }
+
+    /// Checks whether a property at the specified index is marked as read-only.
     ///
-    /// This function will return an [`OpossumError`] if
-    ///   - the property with the given name does not exist (i.e. has not been created before).
-    ///   - property conditions defined during creation are not met.
+    /// # Errors
+    /// Returns an error if the index is out of bounds.
+    pub fn is_read_only_by_index(&self, index: usize) -> OpmResult<bool> {
+        self.props
+            .get_index(index)
+            .map(|(_, p)| p.is_read_only())
+            .ok_or_else(|| {
+                OpossumError::Properties(format!("Property index {index} is out of bounds"))
+            })
+    }
+
+    /// Set the value of an existing property by name.
+    ///
+    /// # Errors
+    /// Returns an error if the property does not exist, is read-only, or fails validation.
     pub fn set(&mut self, name: &str, value: Proptype) -> OpmResult<()> {
         let property = self
             .props
-            .get_mut(name) // Get mutable reference
-            .ok_or_else(|| OpossumError::Properties(format!("property {name} does not exist")))?;
+            .get_mut(name)
+            .ok_or_else(|| OpossumError::Properties(format!("Property '{name}' does not exist")))?;
         property.set_value(value).map_err(|e| {
-            OpossumError::Properties(format!("Error setting property `{name}`: {e}"))
+            OpossumError::Properties(format!("Error setting property '{name}': {e}"))
         })?;
         Ok(())
     }
-    /// Update [`Properties`] through another [`Properties`] input.
+
+    /// Sets the value of a property bypassing the `read_only` restriction.
     ///
-    /// This functions sets all [`Properties`] from `new_properties` that have already been created in `Self`. Properties not existent
-    /// in `Self` are silently ignored.
-    pub fn update(&mut self, new_properties: Self) {
-        for new_prop in new_properties.props {
-            let _ = self.set(&new_prop.0, (*new_prop.1.prop()).clone());
+    /// Used by simulation routines to write calculated results into read-only output properties.
+    ///
+    /// # Errors
+    /// Returns an error if the property does not exist, types are incompatible, or validation fails.
+    pub fn set_internal(&mut self, name: &str, value: Proptype) -> OpmResult<()> {
+        let property = self
+            .props
+            .get_mut(name)
+            .ok_or_else(|| OpossumError::Properties(format!("Property '{name}' does not exist")))?;
+        property.set_internal_value(value).map_err(|e| {
+            OpossumError::Properties(format!("Error setting internal property '{name}': {e}"))
+        })?;
+        Ok(())
+    }
+
+    /// Update [`Properties`] from another [`Properties`] instance.
+    ///
+    /// Properties existing in both sets are updated. Read-only target properties and non-existent keys
+    /// are skipped silently.
+    pub fn update(&mut self, new_properties: &Self) {
+        for (name, prop) in &new_properties.props {
+            let _ = self.set(name, prop.prop().clone());
         }
     }
-    /// Returns the iter of this [`Properties`], mapped to return an `id_string` for the reports and the actual property in a tuple.
+
+    /// Look up the numeric index of a property by name.
+    ///
+    /// Allows optimization routines to cache parameter indices prior to entering hot execution loops.
+    #[must_use]
+    pub fn index_of(&self, name: &str) -> Option<usize> {
+        self.props.get_index_of(name)
+    }
+
+    /// Returns a reference to the property value at the given index.
+    ///
+    /// # Errors
+    /// Returns an error if the index is out of bounds.
+    pub fn get_by_index(&self, index: usize) -> OpmResult<&Proptype> {
+        self.props
+            .get_index(index)
+            .map(|(_, p)| p.prop())
+            .ok_or_else(|| {
+                OpossumError::Properties(format!("Property index {index} is out of bounds"))
+            })
+    }
+
+    /// Returns a reference to the full [`Property`] at the given index.
+    ///
+    /// # Errors
+    /// Returns an error if the index is out of bounds.
+    pub fn get_property_by_index(&self, index: usize) -> OpmResult<&Property> {
+        self.props.get_index(index).map(|(_, p)| p).ok_or_else(|| {
+            OpossumError::Properties(format!("Property index {index} is out of bounds"))
+        })
+    }
+
+    /// Sets the property value at the specified index.
+    ///
+    /// # Errors
+    /// Returns an error if the index is out of bounds, the property is read-only, or validation fails.
+    pub fn set_by_index(&mut self, index: usize, value: Proptype) -> OpmResult<()> {
+        let (name, property) = self.props.get_index_mut(index).ok_or_else(|| {
+            OpossumError::Properties(format!("Property index {index} is out of bounds"))
+        })?;
+        property.set_value(value).map_err(|e| {
+            OpossumError::Properties(format!(
+                "Error setting property at index {index} ('{name}'): {e}"
+            ))
+        })
+    }
+
+    /// Sets the property value at the specified index bypassing the `read_only` flag.
+    ///
+    /// # Errors
+    /// Returns an error if the index is out of bounds, types are mismatched, or validation fails.
+    pub fn set_internal_by_index(&mut self, index: usize, value: Proptype) -> OpmResult<()> {
+        let (name, property) = self.props.get_index_mut(index).ok_or_else(|| {
+            OpossumError::Properties(format!("Property index {index} is out of bounds"))
+        })?;
+        property.set_internal_value(value).map_err(|e| {
+            OpossumError::Properties(format!(
+                "Error setting internal property at index {index} ('{name}'): {e}"
+            ))
+        })
+    }
+
+    /// Read a numeric scalar as `f64` by property name.
+    ///
+    /// # Errors
+    /// Returns an error if the property does not exist or is not numeric.
+    pub fn get_f64(&self, name: &str) -> OpmResult<f64> {
+        let prop = self.get(name)?;
+        prop.as_f64().ok_or_else(|| {
+            OpossumError::Properties(format!("Property '{name}' is not a numeric scalar"))
+        })
+    }
+
+    /// Set a numeric scalar as `f64` by property name.
+    ///
+    /// # Errors
+    /// Returns an error if the property does not exist, is read-only, or fails validation.
+    pub fn set_f64(&mut self, name: &str, value: f64) -> OpmResult<()> {
+        let property = self
+            .props
+            .get_mut(name)
+            .ok_or_else(|| OpossumError::Properties(format!("Property '{name}' does not exist")))?;
+        property.set_f64(value).map_err(|e| {
+            OpossumError::Properties(format!("Error setting scalar value on '{name}': {e}"))
+        })
+    }
+
+    /// Set a numeric scalar as `f64` by property name bypassing the `read_only` flag.
+    ///
+    /// # Errors
+    /// Returns an error if the property does not exist, is not numeric, or fails validation.
+    pub fn set_internal_f64(&mut self, name: &str, value: f64) -> OpmResult<()> {
+        let property = self
+            .props
+            .get_mut(name)
+            .ok_or_else(|| OpossumError::Properties(format!("Property '{name}' does not exist")))?;
+        property.set_internal_f64(value).map_err(|e| {
+            OpossumError::Properties(format!(
+                "Error setting internal scalar value on '{name}': {e}"
+            ))
+        })
+    }
+
+    /// Read a numeric scalar as `f64` directly by index without string lookup.
+    ///
+    /// # Errors
+    /// Returns an error if the index is out of bounds or the property is not numeric.
+    pub fn get_f64_by_index(&self, index: usize) -> OpmResult<f64> {
+        let (_, property) = self.props.get_index(index).ok_or_else(|| {
+            OpossumError::Properties(format!("Property index {index} is out of bounds"))
+        })?;
+        property.prop().as_f64().ok_or_else(|| {
+            OpossumError::Properties(format!("Property at index {index} is not a numeric scalar"))
+        })
+    }
+
+    /// Set a numeric scalar as `f64` directly by index without string lookup.
+    ///
+    /// # Errors
+    /// Returns an error if the index is out of bounds, the property is read-only, or validation fails.
+    pub fn set_f64_by_index(&mut self, index: usize, value: f64) -> OpmResult<()> {
+        let (name, property) = self.props.get_index_mut(index).ok_or_else(|| {
+            OpossumError::Properties(format!("Property index {index} is out of bounds"))
+        })?;
+        property.set_f64(value).map_err(|e| {
+            OpossumError::Properties(format!(
+                "Error setting scalar value at index {index} ('{name}'): {e}"
+            ))
+        })
+    }
+
+    /// Set a numeric scalar as `f64` directly by index bypassing the `read_only` flag.
+    ///
+    /// # Errors
+    /// Returns an error if the index is out of bounds, not numeric, or validation fails.
+    pub fn set_internal_f64_by_index(&mut self, index: usize, value: f64) -> OpmResult<()> {
+        let (name, property) = self.props.get_index_mut(index).ok_or_else(|| {
+            OpossumError::Properties(format!("Property index {index} is out of bounds"))
+        })?;
+        property.set_internal_f64(value).map_err(|e| {
+            OpossumError::Properties(format!(
+                "Error setting internal scalar value at index {index} ('{name}'): {e}"
+            ))
+        })
+    }
+
+    /// Returns an iterator yielding `(report_id, &Property)` tuples.
     pub fn props_with_report_id_iter(
         &self,
         node_report_id_str: &str,
@@ -153,83 +319,65 @@ impl Properties {
             .iter()
             .map(move |(s, p)| (format!("{node_report_id_str}_{s}"), p))
     }
-    /// Returns the iter of this [`Properties`], in the order the properties were created.
+
+    /// Returns an iterator over the properties in insertion order.
     #[must_use]
     pub fn iter(&self) -> indexmap::map::Iter<'_, String, Property> {
         self.props.iter()
     }
+
+    /// Returns `true` if no properties are registered.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.props.is_empty()
     }
-    /// Return `true`if a property with the given name exists.
+
+    /// Returns `true` if a property with the given name exists.
     #[must_use]
     pub fn contains(&self, key: &str) -> bool {
         self.props.contains_key(key)
     }
+
     /// Return the value of the given property.
     ///
     /// # Errors
-    ///
-    /// This function will return an error if the property with the given name does not exist.
+    /// Returns an error if the property with the given name does not exist.
     pub fn get(&self, name: &str) -> OpmResult<&Proptype> {
         self.props.get(name).map_or_else(
             || {
                 Err(OpossumError::Properties(format!(
-                    "property {name} does not exist"
+                    "Property '{name}' does not exist"
                 )))
             },
             |prop| Ok(prop.prop()),
         )
     }
+
     /// Return the value of a boolean property.
     ///
-    /// This is convenience function for easier access.
-    ///
     /// # Errors
-    ///
-    /// This function will return an error if the property with the given name does not exist.
+    /// Returns an error if the property does not exist or is not a boolean variant.
     pub fn get_bool(&self, name: &str) -> OpmResult<bool> {
         self.props.get(name).map_or_else(
             || {
                 Err(OpossumError::Properties(format!(
-                    "property {name} does not exist"
+                    "Property '{name}' does not exist"
                 )))
             },
             |property| {
                 if let Proptype::Bool(value) = property.prop() {
                     Ok(*value)
                 } else {
-                    Err(OpossumError::Other("not a bool property".into()))
+                    Err(OpossumError::Properties(format!(
+                        "Property '{name}' is not a boolean property"
+                    )))
                 }
             },
         )
     }
-    #[must_use]
-    pub fn html_props(&self, id: &str, report_number: usize) -> Vec<HtmlProperty> {
-        let mut html_props: Vec<HtmlProperty> = Vec::new();
-        for prop in &self.props {
-            if let Ok(html_prop_value) = prop.1.prop().to_html(id, prop.0, report_number) {
-                let html_prop = HtmlProperty {
-                    name: prop.0.to_owned(),
-                    description: prop.1.description().into(),
-                    prop_value: html_prop_value,
-                };
-                html_props.push(html_prop);
-            } else {
-                warn!(
-                    "property {} could not be converted to html. Skipping",
-                    prop.0.to_owned()
-                );
-            }
-        }
-        html_props
-    }
 }
 
-/// Fault tolerant deserializer.
-///
-/// If a property cannot be read mark it as "Invalid".
+/// Fault-tolerant deserializer that preserves property creation order.
 impl<'de> Deserialize<'de> for Properties {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -242,8 +390,8 @@ impl<'de> Deserialize<'de> for Properties {
             Invalid(serde::de::IgnoredAny),
         }
 
-        let raw_props = BTreeMap::<String, PropertyEntry>::deserialize(deserializer)?;
-        let mut props = IndexMap::new();
+        let raw_props = IndexMap::<String, PropertyEntry>::deserialize(deserializer)?;
+        let mut props = IndexMap::with_capacity(raw_props.len());
         for (key, entry) in raw_props {
             match entry {
                 PropertyEntry::Valid(prop) => {
@@ -254,14 +402,13 @@ impl<'de> Deserialize<'de> for Properties {
                 }
             }
         }
-        migrate_legacy_properties(&mut props);
         Ok(Self { props })
     }
 }
 
 impl<'a> IntoIterator for &'a Properties {
     type IntoIter = indexmap::map::Iter<'a, String, Property>;
-    type Item = (&'a std::string::String, &'a Property);
+    type Item = (&'a String, &'a Property);
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }
@@ -269,13 +416,7 @@ impl<'a> IntoIterator for &'a Properties {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{
-        properties::proptype::AssetRef,
-        refractive_index::{RefrIndexConst, RefractiveIndexType},
-        utils::test_helper::test_helper::check_logs,
-    };
     use assert_matches::assert_matches;
-    use log::Level;
     #[test]
     fn properties_create() {
         let mut props = Properties::default();
@@ -303,16 +444,16 @@ mod test {
         props.create("my other bool", "my description", false.into())?;
         assert!(props.get_bool("wrong").is_err());
         assert!(props.get_bool("no bool").is_err());
-        assert_eq!(props.get_bool("my bool")?, true);
-        assert_eq!(props.get_bool("my other bool")?, false);
+        assert!(props.get_bool("my bool")?);
+        assert!(!props.get_bool("my other bool")?);
         Ok(())
     }
     #[test]
     fn is_empty() -> OpmResult<()> {
         let mut props = Properties::default();
-        assert_eq!(props.is_empty(), true);
+        assert!(props.is_empty());
         props.create("my prop", "my description", 1.into())?;
-        assert_eq!(props.is_empty(), false);
+        assert!(!props.is_empty());
         Ok(())
     }
     #[test]
@@ -333,53 +474,6 @@ mod test {
         );
         Ok(())
     }
-    /// Read the refractive index model out of a migrated `material` property.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the property is missing or does not hold an embedded [`Material`].
-    fn migrated_index_model(props: &Properties) -> OpmResult<RefractiveIndexType> {
-        let Proptype::Material(AssetRef::Inline(material)) = props.get(MATERIAL)? else {
-            panic!("expected an embedded material property")
-        };
-        Ok(material.optical.refractive_index.clone())
-    }
-    #[test]
-    fn deserialize_migrates_legacy_refractive_index() -> OpmResult<()> {
-        let props: Properties = ron::from_str(
-            r#"{"refractive index": RefractiveIndex(Const((refractive_index: 2.0)))}"#,
-        )
-        .map_err(|e| OpossumError::Other(e.to_string()))?;
-        assert!(!props.contains(LEGACY_REFRACTIVE_INDEX));
-        assert_eq!(
-            migrated_index_model(&props)?,
-            RefractiveIndexType::Const(RefrIndexConst::new(2.0)?)
-        );
-        Ok(())
-    }
-    #[test]
-    fn deserialize_keeps_an_existing_material() -> OpmResult<()> {
-        // Should both names ever show up side by side, the already migrated value wins. The
-        // material entry is generated rather than spelled out, so it cannot drift apart from the
-        // serialized shape of `Material` (which carries a whole asset header).
-        let material = ron::to_string(&Proptype::from(Material::from(RefractiveIndexType::Const(
-            RefrIndexConst::new(3.0)?,
-        ))))
-        .map_err(|e| OpossumError::Other(e.to_string()))?;
-        let props: Properties = ron::from_str(&format!(
-            r#"{{
-                "refractive index": RefractiveIndex(Const((refractive_index: 2.0))),
-                "{MATERIAL}": {material},
-            }}"#
-        ))
-        .map_err(|e| OpossumError::Other(e.to_string()))?;
-        assert!(!props.contains(LEGACY_REFRACTIVE_INDEX));
-        assert_eq!(
-            migrated_index_model(&props)?,
-            RefractiveIndexType::Const(RefrIndexConst::new(3.0)?)
-        );
-        Ok(())
-    }
     #[test]
     fn deserialize_leaves_other_properties_untouched() -> OpmResult<()> {
         let props: Properties = ron::from_str(r#"{"my float": F64(3.14)}"#)
@@ -389,20 +483,150 @@ mod test {
         Ok(())
     }
     #[test]
-    fn html_props() -> OpmResult<()> {
+    fn properties_create_with_validator() {
         let mut props = Properties::default();
-        props.create("my prop", "my description", 1.into())?;
-        testing_logger::setup();
-        let html_props = props.html_props("test123", 0);
-        let html_props = html_props
-            .first()
-            .ok_or_else(|| OpossumError::Other("no properties found".to_string()))?;
-        check_logs(Level::Warn, vec![]);
-        assert_eq!(html_props.name, "my prop");
-        assert_eq!(html_props.description, "my description");
-        assert_eq!(html_props.prop_value, "1");
-        let html_props = props.html_props("test123", 0);
-        assert_eq!(html_props.len(), 1);
+        let res = props.create_with_validator(
+            "focal_length",
+            "Focal length in meters",
+            Validator::NumericIsPositive,
+            (-5.0).into(),
+        );
+        assert!(res.is_err());
+
+        let res_ok = props.create_with_validator(
+            "focal_length",
+            "Focal length in meters",
+            Validator::NumericIsPositive,
+            5.0.into(),
+        );
+        assert!(res_ok.is_ok());
+    }
+
+    #[test]
+    fn properties_set_validation() -> OpmResult<()> {
+        let mut props = Properties::default();
+        props.create_with_validator(
+            "radius",
+            "Curvature radius",
+            Validator::NumericIsPositive,
+            10.0.into(),
+        )?;
+
+        assert!(props.set("radius", 15.0.into()).is_ok());
+        assert!(props.set("radius", (-2.0).into()).is_err());
+        assert!(props.set("unknown", 1.0.into()).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn properties_update() -> OpmResult<()> {
+        let mut target = Properties::default();
+        target.create("prop1", "first", 10.into())?;
+        target.create("prop2", "second", 20.into())?;
+
+        let mut source = Properties::default();
+        source.create("prop2", "second new", 99.into())?;
+        source.create("prop3", "unrelated", 100.into())?;
+
+        target.update(&source);
+
+        assert_eq!(target.get("prop1")?, &Proptype::I32(10));
+        assert_eq!(target.get("prop2")?, &Proptype::I32(99));
+        assert!(!target.contains("prop3"));
+        Ok(())
+    }
+
+    #[test]
+    fn deserialization_preserves_insertion_order() -> OpmResult<()> {
+        let ron_data = r#"
+        {
+            "z_param": F64(1.0),
+            "a_param": F64(2.0),
+            "m_param": F64(3.0)
+        }
+        "#;
+        let props: Properties =
+            ron::from_str(ron_data).map_err(|e| OpossumError::Other(e.to_string()))?;
+
+        let keys: Vec<&str> = props.iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(keys, vec!["z_param", "a_param", "m_param"]);
+        Ok(())
+    }
+    #[test]
+    fn read_only_properties_workflow() -> OpmResult<()> {
+        let mut props = Properties::default();
+        props.create("focal_length", "Variable focal length", 50.0.into())?;
+        props.create_read_only("spot_radius", "Calculated spot radius", 0.002.into())?;
+
+        assert!(!props.is_read_only("focal_length")?);
+        assert!(props.is_read_only("spot_radius")?);
+
+        // Optimizer modifies parameter: OK
+        assert!(props.set("focal_length", 52.5.into()).is_ok());
+
+        // Optimizer mistakenly modifies read-only detector output: Err
+        assert!(props.set("spot_radius", 0.001.into()).is_err());
+
+        // Simulation engine writes output: OK
+        assert!(props.set_internal("spot_radius", 0.0018.into()).is_ok());
+        assert_eq!(props.get_f64("spot_radius")?, 0.0018);
+        Ok(())
+    }
+
+    #[test]
+    fn index_based_optimizer_loop() -> OpmResult<()> {
+        use uom::si::f64::Length;
+        use uom::si::length::meter;
+
+        let mut props = Properties::default();
+        props.create(
+            "thickness",
+            "Center thickness",
+            Length::new::<meter>(0.01).into(),
+        )?;
+        props.create_read_only("rms_wavefront", "RMS wavefront error", 0.0001.into())?;
+
+        // Cache indices prior to hot loop
+        let idx_thickness = props.index_of("thickness").expect("Property must exist");
+        let idx_rms = props
+            .index_of("rms_wavefront")
+            .expect("Property must exist");
+
+        assert!(!props.is_read_only_by_index(idx_thickness)?);
+        assert!(props.is_read_only_by_index(idx_rms)?);
+
+        // Simulated optimizer iterations without string lookups
+        for step in 1..=5 {
+            let trial_thickness = 0.010 + (step as f64) * 0.001;
+            props.set_f64_by_index(idx_thickness, trial_thickness)?;
+
+            // Internal simulation engine calculates response
+            let simulated_rms = 0.0001 / (step as f64);
+            props.set_internal_f64_by_index(idx_rms, simulated_rms)?;
+
+            // Merit function evaluates response
+            let merit_val = props.get_f64_by_index(idx_rms)?;
+            assert!((merit_val - simulated_rms).abs() < 1e-12);
+        }
+
+        assert!((props.get_f64_by_index(idx_thickness)? - 0.015).abs() < 1e-12);
+        Ok(())
+    }
+
+    #[test]
+    fn deserialization_maintains_insertion_order() -> OpmResult<()> {
+        let ron_data = r#"
+        {
+            "front_curvature": F64(100.0),
+            "thickness": F64(5.0),
+            "rear_curvature": F64(-100.0)
+        }
+        "#;
+        let props: Properties =
+            ron::from_str(ron_data).map_err(|e| OpossumError::Other(e.to_string()))?;
+
+        let keys: Vec<&str> = props.iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(keys, vec!["front_curvature", "thickness", "rear_curvature"]);
         Ok(())
     }
 }

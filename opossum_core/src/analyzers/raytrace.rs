@@ -5,7 +5,9 @@ use std::collections::HashMap;
 use super::{Analyzer, AnalyzerType};
 use crate::{
     analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
-    core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, node_attr::HasNodeAttr},
+    core_optics::{
+        NodeAttrExt, OpticNode, OpticNodeExt, node_attr::HasNodeAttr, optic_surface::OpticSurface,
+    },
     error::{OpmResult, OpossumError},
     gain::{ActiveScenario, PumpConfig, PumpScenario},
     light::{LightResult, Rays, lightdata::ray_data_builder::RayDataBuilder},
@@ -13,6 +15,7 @@ use crate::{
     nodes::NodeGroup,
     picojoule,
     reporting::analysis_report::AnalysisReport,
+    utils::geom_transformation::Isometry,
 };
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
@@ -188,13 +191,16 @@ impl RayTraceConfig {
     /// Copies the source map and scalar settings from `self` but drops the `active_pump_scenario`
     /// (to avoid cloning a potentially large [`PumpScenario`]) and sets `positioning_run = true`
     /// so that gain models know no medium has been prepared yet.
+    ///
+    /// A missed surface always stops the ray, whatever `self` says: the optical axis has to pass
+    /// every component it is connected through, and positioning stops where it does not.
     #[must_use]
     pub fn for_positioning(&self) -> Self {
         Self {
             min_energy_per_ray: self.min_energy_per_ray,
             max_number_of_bounces: self.max_number_of_bounces,
             max_number_of_refractions: self.max_number_of_refractions,
-            missed_surface_strategy: self.missed_surface_strategy,
+            missed_surface_strategy: MissedSurfaceStrategy::Stop,
             source_map: self.source_map.clone(),
             active_pump_scenario: ActiveScenario::default(),
             ambient_material: self.ambient_material().clone(),
@@ -216,7 +222,17 @@ impl PropagationStrategy for RayTraceConfig {
     fn is_positioning_run(&self) -> bool {
         self.positioning_run
     }
-    fn on_after_apodization(&self, rays: &mut Rays) -> OpmResult<()> {
+    fn on_surface_interaction(
+        &self,
+        _surf: &mut OpticSurface,
+        rays: &mut Rays,
+        _reflected_rays: Rays,
+        _backward: bool,
+    ) -> OpmResult<()> {
+        // The optical axis is placed by geometry alone; its energy does not decide where it runs.
+        if self.positioning_run {
+            return Ok(());
+        }
         rays.invalidate_by_threshold_energy(self.min_energy_per_ray())?;
         Ok(())
     }
@@ -240,6 +256,7 @@ impl Analyzer for RayTracingAnalyzer {
         } else {
             format!(" '{}'", scenery.node_attr().name())
         };
+        scenery.rebuild_surfaces()?;
         info!("Calculate node positions of scenery{scenery_name}.");
         AnalysisRayTrace::calc_node_positions(
             scenery,
@@ -253,7 +270,7 @@ impl Analyzer for RayTracingAnalyzer {
         Ok(())
     }
     fn report(&self, scenery: &NodeGroup) -> OpmResult<AnalysisReport> {
-        let mut report = scenery.toplevel_report()?;
+        let mut report = scenery.toplevel_report(super::AnalyzerKind::RayTrace)?;
         report.set_analysis_type("Ray Tracing Analysis");
         Ok(report)
     }
@@ -270,7 +287,7 @@ pub trait AnalysisRayTrace: OpticNode {
         incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
-        self.unified_analyze_single_surface_node(incoming_data, config, "input_1", None)
+        self.unified_analyze_single_surface_node(incoming_data, config, "input_1")
     }
     /// Calculate the position of this [`OpticNode`] element.
     ///
@@ -295,6 +312,26 @@ pub trait AnalysisRayTrace: OpticNode {
             self.analyze(incoming_data, config)
         }
     }
+    /// Return the local frame from which the optical axis enters the given input port.
+    ///
+    /// During the positioning run the node's isometry is derived from the observed world frame `W`
+    /// of the entering axis ray as `F = W ∘ L⁻¹`, where `L` is this frame. An ordinary node's axis
+    /// enters along local +z through the local origin, so `L` is the identity and `F = W`. A node
+    /// whose inputs do not share that convention overrides this — see
+    /// [`BeamSplitter`](crate::nodes::BeamSplitter), whose second input arrives mirrored on the
+    /// splitting plane.
+    ///
+    /// # Arguments
+    ///
+    /// * `port_name` - the input port the axis enters.
+    ///
+    /// # Returns
+    ///
+    /// The local entrance frame; the identity for every ordinary node.
+    fn axis_entrance_frame(&self, port_name: &str) -> Isometry {
+        let _ = port_name;
+        Isometry::identity()
+    }
 }
 
 #[cfg(test)]
@@ -302,8 +339,16 @@ mod test {
     use super::*;
     use crate::{
         joule, millimeter,
-        nodes::{Dummy, ParaxialSurface, SourcePort, round_collimated_ray_builder},
-        utils::test_helper::test_helper::check_logs,
+        nodes::{
+            Dummy, ParaxialSurface, SourcePort, round_collimated_ray_builder,
+            test_helper::helper::{
+                rays_recorded_by_meter, scenery_with_a_mirror_changed_behind_its_back,
+                scenery_with_a_mirror_shrunk_behind_its_back,
+            },
+        },
+        properties::Proptype,
+        reporting::node_report::NodeReportResult,
+        utils::test_helper::helper::check_logs,
     };
     #[test]
     fn config_default() {
@@ -311,6 +356,55 @@ mod test {
         assert_eq!(rt_conf.max_number_of_bounces(), 1000);
         assert_eq!(rt_conf.max_number_of_refractions(), 1000);
         assert_eq!(rt_conf.min_energy_per_ray(), picojoule!(1.0));
+    }
+    /// A property can change without its node rebuilding its surfaces: the backend writes it into
+    /// the node's attributes directly. A ray trace rebuilds them first, so it traces a component
+    /// as its properties state it now: an absolutely placed mirror shrunk to a radius of 5 mm no
+    /// longer reflects the rays 8 mm off its axis, only the one on it.
+    #[test]
+    fn a_ray_trace_sees_a_component_as_its_properties_state_it_now() -> OpmResult<()> {
+        let (mut scenery, source, meter) = scenery_with_a_mirror_shrunk_behind_its_back()?;
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(8.0), joule!(1.0), 1)?,
+        );
+        RayTracingAnalyzer::new(config).analyze(&mut scenery)?;
+        assert_eq!(rays_recorded_by_meter(&scenery, meter)?, 1);
+        Ok(())
+    }
+    /// A change that leaves a component without a valid shape stops the ray trace instead of
+    /// tracing the shape the component had before: a mirror curved to R = 10 mm ends before its
+    /// optic shape of 12.5 mm.
+    #[test]
+    fn a_ray_trace_stops_at_a_component_changed_into_no_valid_shape() -> OpmResult<()> {
+        let (mut scenery, source, _) = scenery_with_a_mirror_changed_behind_its_back(
+            "curvature",
+            Proptype::Curvature(millimeter!(-10.0)),
+        )?;
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(8.0), joule!(1.0), 1)?,
+        );
+        let error = RayTracingAnalyzer::new(config)
+            .analyze(&mut scenery)
+            .expect_err("the mirror ends before its optic shape");
+        assert!(error.to_string().contains("does not reach"), "{error}");
+        Ok(())
+    }
+    /// The optical axis has to pass every component, so positioning stops a ray that misses one
+    /// even when the ray trace itself lets missed rays run on.
+    #[test]
+    fn positioning_always_stops_a_ray_that_misses_a_surface() {
+        let mut rt_conf = RayTraceConfig::default();
+        rt_conf.set_missed_surface_strategy(MissedSurfaceStrategy::Ignore);
+        let positioning = rt_conf.for_positioning();
+        assert_eq!(
+            positioning.missed_surface_strategy(),
+            &MissedSurfaceStrategy::Stop
+        );
+        assert!(positioning.is_positioning_run());
     }
     #[test]
     fn config_set_min_energy() {
@@ -408,7 +502,6 @@ mod test {
             analyzers::{Analyzer, raytrace::RayTracingAnalyzer},
             nodes::{ParaxialSurface, RayPropagationVisualizer},
             properties::Proptype,
-            utils::lock_ext::LockExt,
         };
         // Source -> Lens -> Visualizer
         let mut group = NodeGroup::default();
@@ -425,10 +518,13 @@ mod test {
         let analyzer = RayTracingAnalyzer::new(config);
         assert!(analyzer.analyze(&mut group).is_ok());
         let node_ref = group.graph().node(i_det)?;
-        let det_node = node_ref.optical_ref.lock_opm()?;
-        let report = det_node
-            .node_report("test_uuid")?
-            .ok_or_else(|| OpossumError::Other("got empty report".into()))?;
+        let NodeReportResult::Report(report) =
+            node_ref.node_report("test_uuid", crate::analyzers::AnalyzerKind::RayTrace)?
+        else {
+            return Err(OpossumError::Analysis(
+                "Should be NodeReportResult::Report".to_string(),
+            ));
+        };
         let prop = report.properties().get("Ray plot")?;
         if let Proptype::RayPositionHistory(hist) = prop {
             assert!(
@@ -458,13 +554,13 @@ mod test {
         let uuid = Uuid::new_v4();
         let source = RayDataSource::Collimated(CollimatedSrc::default());
 
-        assert_eq!(config.map_source(uuid, source.clone().into()), false);
+        assert!(!config.map_source(uuid, source.clone().into()));
         assert_eq!(config.get_source(&uuid), Some(&source.clone().into()));
 
         // Let's use PointSrc for the second one to be sure it's different
         let source2 = RayDataSource::PointSrc(PointSrc::default());
 
-        assert_eq!(config.map_source(uuid, source2.clone().into()), true);
+        assert!(config.map_source(uuid, source2.clone().into()));
         assert_eq!(config.get_source(&uuid), Some(&source2.clone().into()));
     }
 

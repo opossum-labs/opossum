@@ -97,12 +97,12 @@ pub fn use_zoom() -> impl FnMut(WheelEvent) {
         let generation = *debounce_gen.peek() + 1;
         debounce_gen.set(generation);
         spawn(async move {
-            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(feature = "desktop")]
             {
                 // Native platform (Desktop): use tokio
                 tokio::time::sleep(std::time::Duration::from_millis(120)).await;
             }
-            #[cfg(target_arch = "wasm32")]
+            #[cfg(not(feature = "desktop"))]
             {
                 // Web platform (WASM): use gloo_timers
                 gloo_timers::future::sleep(std::time::Duration::from_millis(120)).await;
@@ -213,9 +213,18 @@ pub fn use_drag(mut current_mouse_pos: Signal<Point2D<f64>>) -> impl FnMut(Mouse
         let mouse_pos = Point2D::new(event.client_coordinates().x, event.client_coordinates().y);
         current_mouse_pos.set(mouse_pos);
 
-        if *drag_status.read() == DragStatus::NodeInit || *drag_status.read() == DragStatus::None {
+        let current_status = drag_status.read().clone();
+
+        // If no drag gesture was initiated, ignore mouse movement
+        if current_status == DragStatus::None {
             return;
         }
+
+        // Transition from NodeInit to Nodes on the first mouse movement
+        if current_status == DragStatus::NodeInit {
+            workspace_processor.send(GraphsWorkspaceAction::SetDragStatus(DragStatus::Nodes));
+        }
+
         let mouse_to_graph_shift =
             Point2D::new(mouse_pos.x - current_shift.x, mouse_pos.y - current_shift.y);
 

@@ -139,22 +139,12 @@ impl Extraction for ConstGain {
         // Reading no inversion, this model must not pay for a grid either.
         Ok(None)
     }
-    fn path_exponent(
-        &self,
-        _body: &dyn Body,
-        _ray: &Ray,
-        _inversion: &mut Option<Inversion>,
-    ) -> f64 {
+    fn path_exponent(&self, _body: &mut dyn Body, _ray: &Ray) -> f64 {
         // The gain is a fixed factor regardless of path length or position, so the exponent for
         // the whole chord is ln(gain), giving factor = exp(ln(gain)) = gain.
         self.gain().ln()
     }
-    fn amplify_spectrum(
-        &self,
-        _body: &dyn Body,
-        _inversion: Option<&Inversion>,
-        spectrum: &mut Spectrum,
-    ) -> OpmResult<()> {
+    fn amplify_spectrum(&self, _body: &dyn Body, spectrum: &mut Spectrum) -> OpmResult<()> {
         // Needing no beam path, this model is just as evaluable in an energy flow as in a ray
         // trace - leaving it out would silently report an amplifier chain as passive.
         spectrum.scale_vertical(&self.gain())

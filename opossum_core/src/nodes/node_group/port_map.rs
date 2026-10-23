@@ -272,19 +272,19 @@ mod tests {
     #[test]
     fn remove() -> OpmResult<()> {
         let mut port_map = PortMap::default();
-        assert_eq!(port_map.remove(Uuid::new_v4(), "internal1"), false);
+        assert!(!port_map.remove(Uuid::new_v4(), "internal1"));
         let uuid = Uuid::new_v4();
         port_map.add("external1", uuid, "internal1")?;
-        assert_eq!(port_map.remove(Uuid::nil(), "internal1"), false);
-        assert_eq!(port_map.remove(uuid, "internal2"), false);
-        assert_eq!(port_map.remove(uuid, "internal1"), true);
+        assert!(!port_map.remove(Uuid::nil(), "internal1"));
+        assert!(!port_map.remove(uuid, "internal2"));
+        assert!(port_map.remove(uuid, "internal1"));
         assert!(port_map.0.is_empty());
         Ok(())
     }
     #[test]
     fn remove_all_from_uuid() -> OpmResult<()> {
         let mut port_map = PortMap::default();
-        assert_eq!(port_map.remove_all_from_uuid(Uuid::new_v4()), false);
+        assert!(!port_map.remove_all_from_uuid(Uuid::new_v4()));
         let uuid1 = Uuid::new_v4();
         port_map.add("external1", uuid1, "internal1")?;
         port_map.add("external2", uuid1, "internal2")?;
@@ -292,10 +292,10 @@ mod tests {
         port_map.add("external3", uuid2, "internal1")?;
         port_map.add("external4", uuid2, "internal2")?;
         port_map.add("external5", uuid2, "internal3")?;
-        assert_eq!(port_map.remove_all_from_uuid(Uuid::nil()), false);
-        assert_eq!(port_map.remove_all_from_uuid(uuid1), true);
+        assert!(!port_map.remove_all_from_uuid(Uuid::nil()));
+        assert!(port_map.remove_all_from_uuid(uuid1));
         assert_eq!(port_map.0.len(), 3);
-        assert_eq!(port_map.remove_all_from_uuid(uuid2), true);
+        assert!(port_map.remove_all_from_uuid(uuid2));
         assert!(port_map.0.is_empty());
         Ok(())
     }

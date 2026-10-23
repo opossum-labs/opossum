@@ -25,36 +25,31 @@
 //! ```
 mod circle;
 mod gaussian;
+mod optic_shape;
 mod polygon;
 mod rectangle;
 mod stack;
 
 use crate::{
     degree,
-    error::{OpmResult, OpossumError},
-    generic_validators::Validate,
+    error::OpmResult,
     meter,
     prelude::Isometry,
-    properties::Proptype,
-    reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     types::validated_type_definitions::{ValidatedAngle1D, ValidatedCenter2D},
-    utils::{default_from_name::DefaultFromName, math_distribution_functions::ellipse},
+    utils::default_from_name::DefaultFromName,
 };
 use core::f64;
-use nalgebra::{Matrix2xX, MatrixXx2, Point2, Point3};
-use num::Zero;
+use nalgebra::{Point2, Point3};
+use num_traits::Zero;
 use opm_macros_lib::EnsureValidated;
-use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
-use strum::{EnumIter, IntoEnumIterator};
-use uom::si::{
-    f64::{Angle, Length},
-    length::millimeter,
-};
+use strum::EnumIter;
+use uom::si::f64::{Angle, Length};
 
 pub use circle::CircleShape;
 pub use gaussian::GaussianShape;
+pub use optic_shape::{Bore, OpticShape, Outline, OutlineShape};
 pub use polygon::PolygonShape;
 pub use rectangle::RectangleShape;
 pub use stack::StackShape;
@@ -207,6 +202,7 @@ impl Aperture {
     pub const fn is_geometric_bound(&self) -> bool {
         matches!(self.a_type, ApertureType::Hole) && self.shape.is_binary()
     }
+
     /// Set the shape of this [`Aperture`].
     pub fn set_shape(&mut self, shape: ApertureShape) {
         self.shape = shape;
@@ -329,26 +325,6 @@ impl Aperture {
     }
 }
 
-/// Validator accepting only those [`Aperture`]s that delimit a region.
-///
-/// See [`Aperture::is_geometric_bound`] for what that rules out and why.
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GeometricBound;
-
-impl Validate<Aperture> for GeometricBound {
-    fn validate(&self, value: &Aperture) -> OpmResult<()> {
-        if value.is_geometric_bound() {
-            Ok(())
-        } else {
-            Err(OpossumError::Other(format!(
-                "a {} aperture of shape '{}' does not delimit a region",
-                value.aperture_type(),
-                value.shape()
-            )))
-        }
-    }
-}
-
 /// Different aperture types
 #[derive(
     Default, Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema, EnumIter, EnsureValidated,
@@ -386,11 +362,6 @@ impl Display for ApertureShape {
 }
 
 impl ApertureShape {
-    #[must_use]
-    /// Check if the aperture is [`ApertureShape::Open`]
-    pub const fn is_none(&self) -> bool {
-        matches!(self, Self::Open)
-    }
     /// Check whether this shape has a hard edge, i.e. transmits either fully or not at all.
     ///
     /// # Returns
@@ -404,25 +375,10 @@ impl ApertureShape {
             Self::BinaryCircle(_) | Self::BinaryRectangle(_) | Self::BinaryPolygon(_)
         )
     }
-    /// Return one instance of every shape that does **not** delimit a region.
-    ///
-    /// These are the shapes that cannot state where a medium ends, so anything describing an
-    /// outline rather than a transmission mask has to refuse them — the clear aperture of a volume
-    /// node ([`CLEAR_APERTURE`](crate::geometry::body::CLEAR_APERTURE)) above all, whose property is
-    /// guarded by [`Validator::ApertureDelimitsRegion`](crate::properties::validator::Validator).
-    /// A user interface offering a choice of shapes asks here rather than keeping a list of its own,
-    /// which would silently go stale as soon as a variant is added.
-    ///
-    /// The list is derived from [`Self::is_binary`] rather than spelled out, so the two cannot
-    /// disagree. The returned values are the [`Default`] of each variant: only *which* variant each
-    /// one is carries meaning here, never its contents.
-    ///
-    /// # Returns
-    ///
-    /// One instance of [`Self::Open`], [`Self::Gaussian`] and [`Self::Stack`].
     #[must_use]
-    pub fn non_delimiting() -> Vec<Self> {
-        Self::iter().filter(|shape| !shape.is_binary()).collect()
+    /// Check if the aperture is [`ApertureShape::Open`]
+    pub const fn is_none(&self) -> bool {
+        matches!(self, Self::Open)
     }
     /// Calculate the transmission factor of a given point on the [`Aperture`]. The value is in the range (0.0..=1.0)
     /// 0.0 is fully opaque, 1.0 fully transparent.
@@ -442,137 +398,12 @@ impl ApertureShape {
         }
     }
 }
-impl From<ApertureShape> for Proptype {
-    fn from(value: ApertureShape) -> Self {
-        Self::Aperture(value)
-    }
-}
 
 /// Trait for the calculation of the transmission factor for each shape.
 pub trait Shape {
     /// Calculate the transmission factor (always treated as aperture type `hole`).
     fn transmission_factor(&self, point: &Point3<Length>) -> f64;
 }
-
-impl Plottable for Aperture {
-    fn get_plot_series(
-        &self,
-        plt_type: &mut PlotType,
-        legend: bool,
-    ) -> OpmResult<Option<Vec<PlotSeries>>> {
-        let iso = self.isometry();
-        let plt_series_opt = match plt_type {
-            PlotType::Line2D(_) | PlotType::Scatter2D(_) => match &self.shape {
-                ApertureShape::Open => None,
-                ApertureShape::BinaryCircle(conf) => Some(stack::plot_circle(*conf, iso)?),
-                ApertureShape::BinaryRectangle(conf) => {
-                    let mut points = [
-                        Point2::new(conf.width() / 2., conf.height() / 2.),
-                        Point2::new(-conf.width() / 2., conf.height() / 2.),
-                        Point2::new(-conf.width() / 2., -conf.height() / 2.),
-                        Point2::new(conf.width() / 2., -conf.height() / 2.),
-                    ];
-                    for p in &mut points {
-                        // Transform the point only if an isometry is present
-                        if let Some(iso) = iso {
-                            let transformed_p =
-                                iso.transform_point(&Point3::new(p.x, p.y, meter!(0.0)));
-                            p.x = transformed_p.x;
-                            p.y = transformed_p.y;
-                        }
-                    }
-                    let plt_data_points = points
-                        .iter()
-                        .flat_map(|p| vec![p.x.get::<millimeter>(), p.y.get::<millimeter>()])
-                        .collect::<Vec<f64>>();
-                    let plt_dat = PlotData::Dim2 {
-                        xy_data: Matrix2xX::<f64>::from_vec(plt_data_points).transpose(),
-                    };
-
-                    let series_label = if legend {
-                        Some("Aperture".to_owned())
-                    } else {
-                        None
-                    };
-                    Some(vec![PlotSeries::new(
-                        &plt_dat,
-                        RGBAColor(0, 0, 0, 1.),
-                        series_label,
-                    )])
-                }
-                ApertureShape::BinaryPolygon(conf) => {
-                    let mut xy_data = MatrixXx2::from_element(conf.points().len(), 0.);
-                    for (row, p) in conf.points().iter().enumerate() {
-                        xy_data[(row, 0)] = p.x.get::<millimeter>();
-                        xy_data[(row, 1)] = p.y.get::<millimeter>();
-                    }
-                    Some(vec![PlotSeries::new(
-                        &PlotData::Dim2 { xy_data },
-                        RGBAColor(0, 0, 0, 1.),
-                        Some("Aperture".to_owned()),
-                    )])
-                }
-                ApertureShape::Gaussian(conf) => {
-                    // Extract translation values if isometry exists, otherwise default to 0.0
-                    let (trans_x, trans_y) = iso.map_or((0.0, 0.0), |iso| {
-                        (
-                            iso.translation().x.get::<millimeter>(),
-                            iso.translation().y.get::<millimeter>(),
-                        )
-                    });
-
-                    let circle_points = ellipse(
-                        (trans_x, trans_y),
-                        (
-                            conf.sigma().0.get::<millimeter>() * 2.,
-                            conf.sigma().1.get::<millimeter>() * 2.,
-                        ),
-                        100,
-                    )?;
-                    let xy_data = Matrix2xX::from_vec(
-                        circle_points
-                            .iter()
-                            .flat_map(|p| vec![p.x, p.y])
-                            .collect::<Vec<f64>>(),
-                    )
-                    .transpose();
-                    Some(vec![PlotSeries::new(
-                        &PlotData::Dim2 { xy_data },
-                        RGBAColor(0, 0, 0, 1.),
-                        Some("Gaussian Aperture 2-sigma".to_owned()),
-                    )])
-                }
-                ApertureShape::Stack(conf) => {
-                    let mut aperture_series_vec =
-                        Vec::<PlotSeries>::with_capacity(conf.apertures().len());
-                    for aperture in conf.apertures() {
-                        if let Some(plt_series_vec) = aperture.get_plot_series(plt_type, legend)? {
-                            aperture_series_vec.extend(plt_series_vec);
-                        }
-                    }
-                    Some(aperture_series_vec)
-                }
-            },
-            _ => None,
-        };
-
-        Ok(plt_series_opt)
-    }
-
-    fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
-        plt_params
-            .set(&PlotArgs::XLabel("position in mm".into()))?
-            .set(&PlotArgs::YLabel("position in mm".into()))?
-            .set(&PlotArgs::AxisEqual(true))?
-            .set(&PlotArgs::PlotSize((800, 800)))?;
-        Ok(())
-    }
-
-    fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
-        PlotType::Line2D(plt_params.clone())
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -580,36 +411,6 @@ mod test {
     #[test]
     fn default() {
         assert!(matches!(ApertureShape::default(), ApertureShape::Open));
-    }
-    /// Every shape is either able to delimit a region or listed as unable to — a new variant must
-    /// end up on exactly one of the two sides, never silently on neither.
-    #[test]
-    fn non_delimiting_covers_every_non_binary_shape() {
-        let non_delimiting = ApertureShape::non_delimiting();
-        assert!(
-            !non_delimiting.iter().any(ApertureShape::is_binary),
-            "a shape that delimits a region must not be listed as one that does not"
-        );
-        assert_eq!(
-            non_delimiting.len()
-                + ApertureShape::iter()
-                    .filter(ApertureShape::is_binary)
-                    .count(),
-            ApertureShape::iter().count(),
-            "every shape has to be classified"
-        );
-        for shape in [
-            ApertureShape::Open,
-            ApertureShape::Gaussian(GaussianShape::default()),
-            ApertureShape::Stack(StackShape::default()),
-        ] {
-            assert!(
-                non_delimiting
-                    .iter()
-                    .any(|s| std::mem::discriminant(s) == std::mem::discriminant(&shape)),
-                "{shape} has no edge to bound a medium with and must be listed"
-            );
-        }
     }
     #[test]
     fn test_new_circle() {

@@ -169,15 +169,16 @@ impl Extraction for MonochromaticSmallSignalGain {
             }
         }))
     }
-    fn path_exponent(&self, body: &dyn Body, ray: &Ray, inversion: &mut Option<Inversion>) -> f64 {
-        match inversion.as_ref() {
+    fn path_exponent(&self, body: &mut dyn Body, ray: &Ray) -> f64 {
+        let body: &dyn Body = body;
+        match body.inversion() {
             None => 0.0,
             // A uniform inversion needs no grid: the local gain is the same everywhere, so the
             // exponent is the coefficient times β times the exact chord the ray travels through the
             // body. This is what makes the const pump both cheaper and more accurate than voxelising
             // a uniform medium would be.
             Some(Inversion::Uniform(beta)) => match body.path_length_inside(ray) {
-                Ok(Some(chord)) if chord.value > 0.0 => {
+                Some(chord) if chord.value > 0.0 => {
                     (self.peak_gain_coefficient() * chord).value * *beta
                 }
                 _ => 0.0,
@@ -209,7 +210,7 @@ impl Extraction for MonochromaticSmallSignalGain {
                 //     surface cuts through the voxel, but the clipped segment already lies
                 //     inside the body → the midpoint check below catches it.
                 let t_body_exit = match body.path_length_inside(ray) {
-                    Ok(Some(chord)) if chord.value > 0.0 => chord.value,
+                    Some(chord) if chord.value > 0.0 => chord.value,
                     _ => return 0.0,
                 };
 
@@ -251,7 +252,7 @@ impl Extraction for MonochromaticSmallSignalGain {
                         let t_mid = f64::midpoint(t_lo, t_hi);
                         let displacement = local_dir.map(|v| Length::new::<meter>(v * t_mid));
                         let world_mid = iso.transform_point(&(local_origin + displacement));
-                        if body.contains(&world_mid).unwrap_or(false) {
+                        if body.contains(&world_mid) {
                             field.population(cell)
                         } else {
                             None
@@ -269,12 +270,7 @@ impl Extraction for MonochromaticSmallSignalGain {
             }
         }
     }
-    fn amplify_spectrum(
-        &self,
-        _body: &dyn Body,
-        _inversion: Option<&Inversion>,
-        _spectrum: &mut Spectrum,
-    ) -> OpmResult<()> {
+    fn amplify_spectrum(&self, _body: &dyn Body, _spectrum: &mut Spectrum) -> OpmResult<()> {
         Err(OpossumError::Analysis(
             "a small signal gain is integrated along the path a beam takes through the medium - \
              an energy flow analysis knows no path. Analyze it as a ray trace, or use a constant \
@@ -288,23 +284,21 @@ impl Extraction for MonochromaticSmallSignalGain {
 mod test {
     use super::*;
     use crate::{
-        apertures::{Aperture, ApertureType},
+        apertures::{CircleShape, Outline},
         degree,
         gain::{
             AnalyticPump, GainModel, LambertBeerProfile, LongitudinalProfile, PumpDirection,
             PumpSource, TransversalProfile,
             inversion_field::{CellIndex, cells},
         },
-        geometry::{Plane, Sphere, body::SurfaceBoundedBody, geo_surface::GeoSurfaceRef},
+        geometry::{Extruded, Face, Sphere, SurfaceShape},
         joule,
         light::Ray,
         millimeter, nanometer, reciprocal_centimeter,
-        types::validated_type_definitions::ValidatedCrossSection,
         utils::{geom_transformation::Isometry, super_gaussian::SuperGaussianShape},
     };
     use approx::assert_relative_eq;
     use nalgebra::{Point2, Vector3};
-    use std::sync::{Arc, Mutex};
     use uom::si::f64::{Length, ReciprocalLength};
 
     /// The thickness of the disk every physics test below amplifies through.
@@ -314,22 +308,16 @@ mod test {
     ///
     /// Plane faces on purpose: the chord of an on-axis ray is then exactly the thickness, so every
     /// expected value below can be worked out from `exp(g₀·L)` by hand.
-    fn disk(thickness: Length, radius: Length) -> OpmResult<SurfaceBoundedBody> {
-        Ok(SurfaceBoundedBody::new(
-            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(Isometry::identity())))),
-            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(Isometry::new_along_z(
-                thickness,
-            )?)))),
-            ValidatedCrossSection::try_new(Aperture::new_circle(
-                radius,
-                ApertureType::Hole,
-                None,
-            )?)?,
+    fn disk(thickness: Length, radius: Length) -> OpmResult<Extruded> {
+        Extruded::new(
             Isometry::identity(),
-        ))
+            Face::new(SurfaceShape::Plane, Isometry::identity()),
+            Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
+            Outline::new(CircleShape::new(radius)?, Vec::new())?,
+        )
     }
     /// The disk every physics test below is performed on: 10 mm thick, 5 mm in radius.
-    fn test_disk() -> OpmResult<SurfaceBoundedBody> {
+    fn test_disk() -> OpmResult<Extruded> {
         disk(millimeter!(THICKNESS), millimeter!(5.0))
     }
     /// A ray entering the medium at the given transversal offset, travelling along the axis.
@@ -360,21 +348,21 @@ mod test {
     /// Compute the gain factor a ray picks up traversing the body via the production path_exponent.
     ///
     /// This calls production code rather than reimplementing the integration, so the tests actually
-    /// exercise what runs in the analysis. Keeping `inversion` mutable lets `the_inversion_is_frozen`
-    /// verify that [`MonochromaticSmallSignalGain`] does not write back into it.
+    /// exercise what runs in the analysis. The body, with its inversion, stays mutable so that
+    /// `the_inversion_is_frozen` can verify that [`MonochromaticSmallSignalGain`] does not write
+    /// back into it.
     fn traverse_factor(
-        body: &dyn Body,
+        body: &mut dyn Body,
         model: &MonochromaticSmallSignalGain,
-        inversion: &mut Option<Inversion>,
         ray: &Ray,
     ) -> OpmResult<f64> {
-        let Some(chord) = body.path_length_inside(ray)? else {
+        let Some(chord) = body.path_length_inside(ray) else {
             return Ok(1.0);
         };
         if chord.value <= 0.0 {
             return Ok(1.0);
         }
-        let factor = Extraction::gain_factor(model, body, ray, inversion);
+        let factor = Extraction::gain_factor(model, body, ray);
         if factor.is_finite() {
             Ok(factor)
         } else {
@@ -383,15 +371,22 @@ mod test {
             )))
         }
     }
+    /// A copy of the body holding the given inversion.
+    fn with_inversion(body: &Extruded, inversion: Inversion) -> Extruded {
+        let mut body = body.clone();
+        *body.inversion_mut() = Some(inversion);
+        body
+    }
     /// The factor a ray picks up crossing the given body in the given operating point.
     fn factor_through(
-        body: &dyn Body,
+        body: &mut dyn Body,
         model: &MonochromaticSmallSignalGain,
         config: &PumpConfig,
         ray: &Ray,
     ) -> OpmResult<f64> {
-        let mut inversion = model.build_inversion(body, config)?;
-        traverse_factor(body, model, &mut inversion, ray)
+        let inversion = model.build_inversion(body, config)?;
+        *body.inversion_mut() = inversion;
+        traverse_factor(body, model, ray)
     }
     /// The factor a ray picks up crossing the standard [`test_disk`].
     fn factor_through_disk(
@@ -399,7 +394,7 @@ mod test {
         config: &PumpConfig,
         ray: &Ray,
     ) -> OpmResult<f64> {
-        factor_through(&test_disk()?, model, config, ray)
+        factor_through(&mut test_disk()?, model, config, ray)
     }
 
     #[test]
@@ -518,7 +513,7 @@ mod test {
             nanometer!(1054.0),
             joule!(1.0),
         )?;
-        let factor = factor_through(&body, &model, &const_pump(), &oblique)?;
+        let factor = factor_through(&mut body.clone(), &model, &const_pump(), &oblique)?;
         assert_relative_eq!(
             factor,
             f64::exp((g_0 * millimeter!(THICKNESS) * f64::sqrt(2.0)).value),
@@ -615,20 +610,21 @@ mod test {
         // What makes this the *small signal* stage: extracting energy does not draw the medium
         // down, so a second pass sees exactly what the first one saw. A shaped pump is used so there
         // is a real field that could, in principle, be written back into.
-        let body = test_disk()?;
+        let mut body = test_disk()?;
         let model = MonochromaticSmallSignalGain::new(reciprocal_centimeter!(0.5))?;
         let config = analytic(
             TransversalProfile::Flat,
             LongitudinalProfile::Flat,
             (8, 8, 8),
         )?;
-        let mut inversion = model.build_inversion(&body, &config)?;
-        let untouched = inversion.clone();
+        let inversion = model.build_inversion(&body, &config)?;
+        *body.inversion_mut() = inversion;
+        let untouched = body.inversion().cloned();
         let ray = ray_at(0.0, 0.0)?;
-        let first = traverse_factor(&body, &model, &mut inversion, &ray)?;
-        let second = traverse_factor(&body, &model, &mut inversion, &ray)?;
+        let first = traverse_factor(&mut body, &model, &ray)?;
+        let second = traverse_factor(&mut body, &model, &ray)?;
         // The model must not write back into the inversion — both passes see identical state.
-        assert_eq!(inversion, untouched);
+        assert_eq!(body.inversion().cloned(), untouched);
         assert_relative_eq!(first, second);
         Ok(())
     }
@@ -735,10 +731,14 @@ mod test {
             joule!(1.0),
         )?;
         let model = MonochromaticSmallSignalGain::new(peak)?;
-        let factor = traverse_factor(&body, &model, &mut Some(Inversion::Field(inversion)), &ray)?;
+        let factor = traverse_factor(
+            &mut with_inversion(&body, Inversion::Field(inversion)),
+            &model,
+            &ray,
+        )?;
 
         let chord = body
-            .path_length_inside(&ray)?
+            .path_length_inside(&ray)
             .expect("the ray must cross the disk");
 
         let expected = f64::exp(((g_a + g_b) * 0.5 * chord).value);
@@ -776,7 +776,7 @@ mod test {
             joule!(1.0),
         )?;
         let chord = body
-            .path_length_inside(&ray)?
+            .path_length_inside(&ray)
             .expect("the ray must cross the disk");
 
         // -- forward: g_a in cell (0,*,*), g_b in cell (1,*,*) --
@@ -784,8 +784,11 @@ mod test {
             Ok(if cell.0 == 0 { g_a } else { g_b })
         })?;
         let model = MonochromaticSmallSignalGain::new(peak)?;
-        let factor_fwd =
-            traverse_factor(&body, &model, &mut Some(Inversion::Field(inv_fwd)), &ray)?;
+        let factor_fwd = traverse_factor(
+            &mut with_inversion(&body, Inversion::Field(inv_fwd)),
+            &model,
+            &ray,
+        )?;
         let expected_fwd = f64::exp((g_a * chord / 3.0 + g_b * chord * 2.0 / 3.0).value);
         assert_relative_eq!(factor_fwd, expected_fwd, max_relative = 1e-12);
 
@@ -793,8 +796,11 @@ mod test {
         let inv_swp = field_with(&body, dims, peak, |cell| {
             Ok(if cell.0 == 0 { g_b } else { g_a })
         })?;
-        let factor_swp =
-            traverse_factor(&body, &model, &mut Some(Inversion::Field(inv_swp)), &ray)?;
+        let factor_swp = traverse_factor(
+            &mut with_inversion(&body, Inversion::Field(inv_swp)),
+            &model,
+            &ray,
+        )?;
         let expected_swp = f64::exp((g_b * chord / 3.0 + g_a * chord * 2.0 / 3.0).value);
         assert_relative_eq!(factor_swp, expected_swp, max_relative = 1e-12);
 
@@ -821,7 +827,7 @@ mod test {
             joule!(1.0),
         )?;
         let chord = body
-            .path_length_inside(&ray)?
+            .path_length_inside(&ray)
             .expect("the ray must cross the disk");
         let exact = f64::exp((g_a * chord / 3.0 + g_b * chord * 2.0 / 3.0).value);
 
@@ -829,7 +835,11 @@ mod test {
         let inv = field_with(&body, dims, peak, |cell| {
             Ok(if cell.0 == 0 { g_a } else { g_b })
         })?;
-        let factor = traverse_factor(&body, &model, &mut Some(Inversion::Field(inv)), &ray)?;
+        let factor = traverse_factor(
+            &mut with_inversion(&body, Inversion::Field(inv)),
+            &model,
+            &ray,
+        )?;
         assert_relative_eq!(factor, exact, max_relative = 1e-12);
         Ok(())
     }
@@ -874,7 +884,7 @@ mod test {
                 )?),
                 (4, 4, cells_z),
             )?;
-            let factor = factor_through(&body, &model, &config, &oblique)?;
+            let factor = factor_through(&mut body.clone(), &model, &config, &oblique)?;
             Ok((factor - exact).abs() / exact)
         };
         let (coarse, fine) = (error(8)?, error(64)?);
@@ -914,21 +924,18 @@ mod test {
         // strictly less than R so the sphere does not degenerate at the aperture edge
         // (at x = R the sphere would reach z = 0 = entrance, giving zero thickness).
         let aperture_mm = 18.0_f64;
-        let entrance = GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(Isometry::identity()))));
-        let exit = GeoSurfaceRef(Arc::new(Mutex::new(Sphere::new_at_position(
-            millimeter!(-radius_mm), // stored radius −R → center at vertex_z − R = 0
-            millimeter!(0.0, 0.0, radius_mm), // vertex at z = R
-        )?)));
-        let body = SurfaceBoundedBody::new(
+        let entrance = Face::new(SurfaceShape::Plane, Isometry::identity());
+        let exit = Face::new(
+            // stored radius −R → center at vertex_z − R = 0
+            SurfaceShape::Sphere(Sphere::new(millimeter!(-radius_mm))?),
+            Isometry::new_along_z(millimeter!(radius_mm))?, // vertex at z = R
+        );
+        let body = Extruded::new(
+            Isometry::identity(),
             entrance,
             exit,
-            ValidatedCrossSection::try_new(Aperture::new_circle(
-                millimeter!(aperture_mm),
-                ApertureType::Hole,
-                None,
-            )?)?,
-            Isometry::identity(),
-        );
+            Outline::new(CircleShape::new(millimeter!(aperture_mm))?, Vec::new())?,
+        )?;
 
         // At x = R·√3/2 the chord equals R/2 exactly: √(R² − 3R²/4) = R/2.
         let x_ray_mm = radius_mm * f64::sqrt(3.0) / 2.0;
@@ -937,15 +944,18 @@ mod test {
 
         // Exact exponent via the Uniform path (uses path_length_inside directly).
         let chord = body
-            .path_length_inside(&ray)?
+            .path_length_inside(&ray)
             .expect("off-axis ray must cross the plano-spherical body");
         let exact_exponent = (peak * chord).value;
 
         // Voxel exponent via the Field path with a single cell (β = 1 everywhere).
         // One cell makes the boundary error maximal: ds spans the full bounding box.
         let inv = field_with(&body, (1, 1, 1), peak, |_| Ok(peak))?;
-        let voxel_exponent =
-            Extraction::path_exponent(&model, &body, &ray, &mut Some(Inversion::Field(inv)));
+        let voxel_exponent = Extraction::path_exponent(
+            &model,
+            &mut with_inversion(&body, Inversion::Field(inv)),
+            &ray,
+        );
 
         assert_relative_eq!(voxel_exponent, exact_exponent, max_relative = 1e-10);
         Ok(())
@@ -974,23 +984,21 @@ mod test {
         // strictly less than R so the sphere does not degenerate at the aperture edge
         // (at x = R the entrance would reach z = R = exit, giving zero thickness).
         let aperture_mm = 18.0_f64;
-        let entrance = GeoSurfaceRef(Arc::new(Mutex::new(Sphere::new_at_position(
-            millimeter!(radius_mm),     // stored radius +R → center at vertex_z + R = R
-            millimeter!(0.0, 0.0, 0.0), // vertex at z = 0
-        )?)));
-        let exit = GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(
+        let entrance = Face::new(
+            // stored radius +R → center at vertex_z + R = R
+            SurfaceShape::Sphere(Sphere::new(millimeter!(radius_mm))?),
+            Isometry::identity(), // vertex at z = 0
+        );
+        let exit = Face::new(
+            SurfaceShape::Plane,
             Isometry::new_along_z(millimeter!(radius_mm))?, // flat exit at z = R
-        ))));
-        let body = SurfaceBoundedBody::new(
+        );
+        let body = Extruded::new(
+            Isometry::identity(),
             entrance,
             exit,
-            ValidatedCrossSection::try_new(Aperture::new_circle(
-                millimeter!(aperture_mm),
-                ApertureType::Hole,
-                None,
-            )?)?,
-            Isometry::identity(),
-        );
+            Outline::new(CircleShape::new(millimeter!(aperture_mm))?, Vec::new())?,
+        )?;
 
         // At x = R·√3/2 the entrance is at z = R/2, giving chord R − R/2 = R/2 exactly.
         let x_ray_mm = radius_mm * f64::sqrt(3.0) / 2.0;
@@ -999,15 +1007,18 @@ mod test {
 
         // Exact exponent via the Uniform path (uses path_length_inside directly).
         let chord = body
-            .path_length_inside(&ray)?
+            .path_length_inside(&ray)
             .expect("off-axis ray must cross the plano-spherical body");
         let exact_exponent = (peak * chord).value;
 
         // Voxel exponent via the Field path with a single cell (β = 1 everywhere).
         // One cell makes the boundary error maximal: ds spans the full bounding box.
         let inv = field_with(&body, (1, 1, 1), peak, |_| Ok(peak))?;
-        let voxel_exponent =
-            Extraction::path_exponent(&model, &body, &ray, &mut Some(Inversion::Field(inv)));
+        let voxel_exponent = Extraction::path_exponent(
+            &model,
+            &mut with_inversion(&body, Inversion::Field(inv)),
+            &ray,
+        );
 
         assert_relative_eq!(voxel_exponent, exact_exponent, max_relative = 1e-10);
         Ok(())

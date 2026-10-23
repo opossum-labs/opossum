@@ -3,20 +3,20 @@
 
 use crate::{
     analyzers::energy::AnalysisEnergy,
-    core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType, Volumetric},
+    core_optics::{NodeAttr, OpticNode, OpticNodeExt, SurfacePorts, Volumetric},
     error::{OpmResult, OpossumError},
-    geometry::{Plane, Sphere, geo_surface::GeoSurfaceRef},
+    geometry::{
+        Geometry,
+        body::{OPTIC_SHAPE, default_optic_shape},
+    },
     material::{MATERIAL, Material},
-    meter, millimeter,
-    nodes::{NodeRegistration, create_volume_properties},
+    millimeter,
+    nodes::NodeRegistration,
     properties::{Proptype, validator::Validator},
-    radian,
     refractive_index::RefrIndexConst,
-    utils::geom_transformation::Isometry,
 };
 use log::warn;
 use opm_macros_lib::OpmNode;
-use std::sync::{Arc, Mutex};
 use uom::si::f64::Length;
 
 mod analysis_ghostfocus;
@@ -48,7 +48,7 @@ inventory::submit! {
 ///   - `rear curvature`
 ///   - `center thickness`
 ///   - `material`
-///   - `clear aperture`
+///   - `optic shape`
 pub struct Lens {
     node_attr: NodeAttr,
 }
@@ -100,8 +100,16 @@ impl Default for Lens {
                 .into(),
             )
             .unwrap();
-        create_volume_properties(&mut node_attr).unwrap();
+        node_attr
+            .create_property_with_validator(
+                OPTIC_SHAPE,
+                "transversal extent of the component",
+                Validator::OpticShapeIsBounded,
+                default_optic_shape().into(),
+            )
+            .unwrap();
         let mut lens = Self { node_attr };
+        lens.create_default_surface_properties().unwrap();
         lens.update_surfaces().unwrap();
         lens
     }
@@ -109,13 +117,24 @@ impl Default for Lens {
 impl Lens {
     /// Creates a new [`Lens`].
     ///
-    /// This function creates a lens with spherical front and back surfaces, a given center thickness and refractive index.
-    /// The radii of curvature must not be zero. The given refractive index must not be < 1.0. A radius of curvature of +/- infinity
-    /// corresponds to a flat surface.
+    /// This function creates a lens with spherical front and back surfaces, a given center
+    /// thickness and material, bounded by the default optic shape ([`default_optic_shape`]). The
+    /// radii of curvature must not be zero. A radius of curvature of +/- infinity corresponds to a
+    /// flat surface. Another optic shape is set afterwards via the [`OPTIC_SHAPE`] property.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - the name of the lens.
+    /// * `front_curvature` - radius of curvature of the front face; infinite for a flat face.
+    /// * `rear_curvature` - radius of curvature of the rear face; infinite for a flat face.
+    /// * `center_thickness` - distance between the two vertices.
+    /// * `material` - the material of the lens.
     ///
     /// # Errors
     ///
-    /// This function returns an error if the given parameters are not correct.
+    /// This function returns an error if the given parameters are not correct, including a face
+    /// curved too tightly to reach the edge of the default optic shape. A lens curved that tightly
+    /// is built from [`Lens::default`]: set its optic shape first, then its curvatures.
     pub fn new(
         name: &str,
         front_curvature: Length,
@@ -136,167 +155,43 @@ impl Lens {
         lens.update_surfaces()?;
         Ok(lens)
     }
-
-    // /// create a default aperture: defined by
-    // ///  - intersection of two spheres
-    // ///  - intersection of sphere and plane
-    // ///  - the minimum radius of the spheres if there is no intersection
-    // fn get_minimum_logical_aperture_radius(
-    //     front_curvature: Length,
-    //     rear_curvature: Length,
-    //     center_thickness: Length,
-    // ) -> Option<Length> {
-    //     // case 1: bi-convex
-    //     if front_curvature.is_sign_positive()
-    //         && front_curvature.is_finite()
-    //         && rear_curvature.is_sign_negative()
-    //         && rear_curvature.is_finite()
-    //     {
-    //         //get intersecting radius by calculating the area of a triangle that is defined the two radii and the distance between the sphere centers
-    //         let sphere_dist = rear_curvature.abs() + front_curvature.abs() - center_thickness;
-    //         let semiperimeter = 0.5 * (sphere_dist + rear_curvature.abs() + front_curvature.abs());
-    //         //herons formula
-    //         let triangle_area = (semiperimeter
-    //             * (semiperimeter - sphere_dist)
-    //             * (semiperimeter - rear_curvature.abs())
-    //             * (semiperimeter - front_curvature.abs()))
-    //         .sqrt();
-    //         //setting equal two are defined by base height x base length / 2 and rearrange
-    //         Some(triangle_area / sphere_dist * 2.)
-    //     }
-    //     // case 2a: plano-convex with back plane
-    //     else if front_curvature.is_sign_positive()
-    //         && front_curvature.is_finite()
-    //         && rear_curvature.is_infinite()
-    //     {
-    //         Some(
-    //             (front_curvature * front_curvature
-    //                 - (front_curvature.abs() - center_thickness)
-    //                     * (front_curvature.abs() - center_thickness))
-    //                 .sqrt(),
-    //         )
-    //     }
-    //     // case 2b: plano-convex with front plane
-    //     else if rear_curvature.is_sign_negative()
-    //         && rear_curvature.is_finite()
-    //         && front_curvature.is_infinite()
-    //     {
-    //         Some(
-    //             (rear_curvature * rear_curvature
-    //                 - (rear_curvature.abs() - center_thickness)
-    //                     * (rear_curvature.abs() - center_thickness))
-    //                 .sqrt(),
-    //         )
-    //     }
-    //     // case 3: positive meniscus lens
-    //     else if front_curvature.is_sign_positive()
-    //         && rear_curvature.is_sign_positive()
-    //         && front_curvature >= rear_curvature
-    //         && front_curvature.is_finite()
-    //         || front_curvature.is_sign_negative()
-    //             && rear_curvature.is_sign_negative()
-    //             && front_curvature <= rear_curvature
-    //             && rear_curvature.is_finite()
-    //     {
-    //         let g = front_curvature.abs() - (rear_curvature.abs() - center_thickness);
-    //         let semiperimeter = 0.5 * (g + rear_curvature.abs() + front_curvature.abs());
-    //         let triangle_area = (semiperimeter
-    //             * (semiperimeter - g)
-    //             * (semiperimeter - rear_curvature.abs())
-    //             * (semiperimeter - front_curvature.abs()))
-    //         .sqrt();
-    //         Some(
-    //             2. * triangle_area
-    //                 / (front_curvature.abs() + center_thickness - rear_curvature.abs()),
-    //         )
-    //     }
-    //     //case 4: flat flat. no defined aperture. set to infinity
-    //     else if front_curvature.is_infinite() && rear_curvature.is_infinite() {
-    //         None
-    //     }
-    //     // case 5: negative meniscus lens or bi-concave or plano-concave
-    //     // get the minimum of both radii
-    //     else if front_curvature.abs() < rear_curvature.abs() {
-    //         Some(front_curvature.abs())
-    //     } else {
-    //         Some(rear_curvature.abs())
-    //     }
-    // }
 }
 
 impl Volumetric for Lens {}
 impl OpticNode for Lens {
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
+        let (
+            Ok(Proptype::Curvature(front_curvature)),
+            Ok(Proptype::Curvature(rear_curvature)),
+            Ok(Proptype::Length(center_thickness)),
+        ) = (
+            self.node_attr.get_property("front curvature"),
+            self.node_attr.get_property("rear curvature"),
+            self.node_attr.get_property("center thickness"),
+        )
+        else {
+            return Err(OpossumError::Analysis(
+                "cannot read the curvatures and the center thickness of the lens".into(),
+            ));
+        };
+        let cross_section = self.cross_section()?.ok_or_else(|| {
+            OpossumError::Analysis(format!(
+                "the {OPTIC_SHAPE} of node '{}' is open, so its medium is unbounded",
+                self.node_attr.name()
+            ))
+        })?;
+        Ok(Some(Geometry::singlet(
+            *front_curvature,
+            *rear_curvature,
+            *center_thickness,
+            cross_section,
+        )?))
+    }
     fn as_volume(&self) -> Option<&dyn Volumetric> {
         Some(self)
     }
-    fn update_surfaces(&mut self) -> OpmResult<()> {
-        let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
-        let Ok(Proptype::Curvature(front_curvature)) =
-            self.node_attr.get_property("front curvature")
-        else {
-            return Err(OpossumError::Analysis("cannot read front curvature".into()));
-        };
-        let (front_geosurface, anchor_point_iso_front) = if front_curvature.is_infinite() {
-            (
-                GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(node_iso)))),
-                Isometry::identity(),
-            )
-        } else {
-            let anchor_point_iso_front =
-                Isometry::new(meter!(0., 0., front_curvature.value), radian!(0., 0., 0.))?;
-            (
-                GeoSurfaceRef(Arc::new(Mutex::new(Sphere::new(
-                    *front_curvature,
-                    node_iso.append(&anchor_point_iso_front),
-                )?))),
-                anchor_point_iso_front,
-            )
-        };
-        self.update_surface(
-            "input_1",
-            front_geosurface,
-            anchor_point_iso_front,
-            &PortType::Input,
-        )?;
-        let Ok(Proptype::Curvature(rear_curvature)) = self.node_attr.get_property("rear curvature")
-        else {
-            return Err(OpossumError::Analysis("cannot read rear curvature".into()));
-        };
-        let Ok(Proptype::Length(center_thickness)) =
-            self.node_attr.get_property("center thickness")
-        else {
-            return Err(OpossumError::Analysis(
-                "cannot read center thickness".into(),
-            ));
-        };
-        let (rear_geosurface, anchor_point_iso_rear) = if rear_curvature.is_infinite() {
-            let anchor_point_iso_rear =
-                Isometry::new(meter!(0., 0., center_thickness.value), radian!(0., 0., 0.))?;
-            (
-                GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(
-                    node_iso.append(&anchor_point_iso_rear),
-                )))),
-                anchor_point_iso_rear,
-            )
-        } else {
-            let anchor_point_iso_rear = Isometry::new(
-                meter!(0., 0., (*rear_curvature + *center_thickness).value),
-                radian!(0., 0., 0.),
-            )?;
-            (
-                GeoSurfaceRef(Arc::new(Mutex::new(Sphere::new(
-                    *rear_curvature,
-                    node_iso.append(&anchor_point_iso_rear),
-                )?))),
-                anchor_point_iso_rear,
-            )
-        };
-        self.update_surface(
-            "output_1",
-            rear_geosurface,
-            anchor_point_iso_rear,
-            &PortType::Output,
-        )
+    fn surface_ports(&self) -> SurfacePorts {
+        SurfacePorts::THROUGH_SOLID
     }
 }
 impl AnalysisEnergy for Lens {}
@@ -317,26 +212,26 @@ mod test {
             energy::{AnalysisEnergy, EnergyConfig},
             raytrace::AnalysisRayTrace,
         },
-        apertures::ApertureShape,
-        core_optics::NodeAttrExt,
+        apertures::OpticShape,
+        core_optics::{NodeAttrExt, node_attr::NodePositioning},
         distributions::position::Hexapolar,
         joule,
         light::{LightData, LightResult, Rays},
         millimeter, nanometer,
-        nodes::test_helper::test_helper::*,
+        nodes::test_helper::helper::*,
         properties::{Proptype, proptype::AssetRef},
+        utils::geom_transformation::Isometry,
     };
     use approx::assert_relative_eq;
-    use core::f64;
     use nalgebra::Vector3;
-    use num::Zero;
+    use num_traits::Zero;
 
     #[test]
     fn default() -> OpmResult<()> {
         let node = Lens::default();
         assert_eq!(node.name(), "lens");
         assert_eq!(node.node_type(), "lens");
-        assert_eq!(node.inverted(), false);
+        assert!(!node.inverted());
         assert_eq!(node.node_color(), "aqua");
         let Ok(Proptype::Curvature(roc)) = node.node_attr.get_property("front curvature") else {
             panic!()
@@ -432,6 +327,11 @@ mod test {
         assert!(
             lens.node_attr
                 .set_property("center thickness", Proptype::Length(millimeter!(0.0)))
+                .is_err()
+        );
+        assert!(
+            lens.node_attr
+                .set_property("center thickness", Proptype::Length(millimeter!(0.0001)))
                 .is_ok()
         );
         assert!(
@@ -462,21 +362,21 @@ mod test {
         let ct = millimeter!(11.0);
         let ref_index = RefrIndexConst::new(1.5)?;
 
-        assert!(Lens::new("test", roc, roc, millimeter!(-0.1), &ref_index).is_err());
-        assert!(Lens::new("test", roc, roc, millimeter!(f64::NAN), &ref_index).is_err());
-        assert!(Lens::new("test", roc, roc, millimeter!(f64::INFINITY), &ref_index).is_err());
+        assert!(Lens::new("test", roc, roc, millimeter!(-0.1), ref_index).is_err());
+        assert!(Lens::new("test", roc, roc, millimeter!(f64::NAN), ref_index).is_err());
+        assert!(Lens::new("test", roc, roc, millimeter!(f64::INFINITY), ref_index).is_err());
 
-        assert!(Lens::new("test", roc, Length::zero(), ct, &ref_index).is_err());
-        assert!(Lens::new("test", roc, millimeter!(f64::NAN), ct, &ref_index).is_err());
-        assert!(Lens::new("test", roc, millimeter!(f64::INFINITY), ct, &ref_index).is_ok());
-        assert!(Lens::new("test", roc, millimeter!(f64::NEG_INFINITY), ct, &ref_index).is_ok());
+        assert!(Lens::new("test", roc, Length::zero(), ct, ref_index).is_err());
+        assert!(Lens::new("test", roc, millimeter!(f64::NAN), ct, ref_index).is_err());
+        assert!(Lens::new("test", roc, millimeter!(f64::INFINITY), ct, ref_index).is_ok());
+        assert!(Lens::new("test", roc, millimeter!(f64::NEG_INFINITY), ct, ref_index).is_ok());
 
-        assert!(Lens::new("test", Length::zero(), roc, ct, &ref_index).is_err());
-        assert!(Lens::new("test", millimeter!(f64::NAN), roc, ct, &ref_index).is_err());
-        assert!(Lens::new("test", millimeter!(f64::INFINITY), roc, ct, &ref_index).is_ok());
-        assert!(Lens::new("test", millimeter!(f64::NEG_INFINITY), roc, ct, &ref_index).is_ok());
+        assert!(Lens::new("test", Length::zero(), roc, ct, ref_index).is_err());
+        assert!(Lens::new("test", millimeter!(f64::NAN), roc, ct, ref_index).is_err());
+        assert!(Lens::new("test", millimeter!(f64::INFINITY), roc, ct, ref_index).is_ok());
+        assert!(Lens::new("test", millimeter!(f64::NEG_INFINITY), roc, ct, ref_index).is_ok());
         let ref_index = RefrIndexConst::new(2.0)?;
-        let node = Lens::new("test", roc, roc, ct, &ref_index)?;
+        let node = Lens::new("test", roc, roc, ct, ref_index)?;
         assert_eq!(node.name(), "test");
         let Ok(Proptype::Curvature(roc)) = node.node_attr.get_property("front curvature") else {
             panic!()
@@ -496,6 +396,48 @@ mod test {
             panic!()
         };
         assert_eq!((*material).get_refractive_index(Length::zero())?, 2.0);
+        Ok(())
+    }
+    #[test]
+    fn rays_beyond_optic_shape_are_lost() -> OpmResult<()> {
+        test_rays_beyond_optic_shape_are_lost::<Lens>()
+    }
+    /// A lens whose curvature is tighter than its optic shape describes no shape: a sphere of
+    /// 10 mm radius ends before the default rim of 12.5 mm. The lens refuses it.
+    #[test]
+    fn a_curvature_tighter_than_the_optic_shape_is_rejected() -> OpmResult<()> {
+        let flat = millimeter!(f64::INFINITY);
+        let index = RefrIndexConst::new(1.5)?;
+        assert!(
+            Lens::new(
+                "lens",
+                millimeter!(10.0),
+                flat,
+                millimeter!(5.0),
+                index.clone()
+            )
+            .is_err()
+        );
+        assert!(Lens::new("lens", flat, millimeter!(-10.0), millimeter!(5.0), index).is_err());
+        Ok(())
+    }
+    /// A lens smaller than the default optic shape is built with its own, set before its
+    /// curvatures: a concentric meniscus of 10 mm and 9 mm radius fits an optic shape of 9 mm,
+    /// its rear face a full hemisphere.
+    #[test]
+    fn a_small_lens_is_built_with_its_own_optic_shape() -> OpmResult<()> {
+        use crate::apertures::CircleShape;
+        let optic_shape: OpticShape = CircleShape::new(millimeter!(9.0))?.into();
+        let mut lens = Lens::default();
+        lens.set_property(OPTIC_SHAPE, optic_shape.clone().into())?;
+        lens.set_property("front curvature", Proptype::Curvature(millimeter!(10.0)))?;
+        lens.set_property("rear curvature", Proptype::Curvature(millimeter!(9.0)))?;
+        lens.set_property("center thickness", millimeter!(1.0).into())?;
+        lens.update_surfaces()?;
+        assert_eq!(
+            lens.node_attr.get_property(OPTIC_SHAPE)?,
+            &Proptype::OpticShape(optic_shape)
+        );
         Ok(())
     }
     #[test]
@@ -527,9 +469,11 @@ mod test {
             millimeter!(f64::INFINITY),
             millimeter!(f64::NEG_INFINITY),
             millimeter!(10.0),
-            &RefrIndexConst::new(2.0)?,
+            RefrIndexConst::new(2.0)?,
         )?;
-        node.set_isometry(Isometry::new_along_z(millimeter!(10.0))?)?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::new_along_z(
+            millimeter!(10.0),
+        )?))?;
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.0),
             joule!(1.0),
@@ -545,7 +489,7 @@ mod test {
                 assert_eq!(ray.path_length(), millimeter!(30.0));
             }
         } else {
-            assert!(false);
+            panic!();
         }
         Ok(())
     }
@@ -557,9 +501,9 @@ mod test {
             millimeter!(100.0),
             millimeter!(-100.0),
             millimeter!(10.0),
-            &RefrIndexConst::new(1.0)?,
+            RefrIndexConst::new(1.0)?,
         )?;
-        node.set_isometry(Isometry::identity())?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let rays = Rays::new_uniform_collimated(
             nanometer!(1000.0),
             joule!(1.0),
@@ -574,7 +518,7 @@ mod test {
                 assert_eq!(ray.direction(), Vector3::z());
             }
         } else {
-            assert!(false);
+            panic!();
         }
         Ok(())
     }
@@ -592,7 +536,7 @@ mod test {
             millimeter!(10.0),
             RefrIndexConst::new(1.5)?,
         )?;
-        node.set_isometry(Isometry::identity())?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         test_volume_propagation_regression(
             &mut node,
             &[
@@ -625,12 +569,12 @@ mod test {
         test_volume_body::<Lens>()
     }
     #[test]
-    fn clear_aperture() -> OpmResult<()> {
-        test_clear_aperture::<Lens>()
+    fn optic_shape() -> OpmResult<()> {
+        test_optic_shape::<Lens>(millimeter!(12.5))
     }
     #[test]
-    fn clear_aperture_absent_in_file() -> OpmResult<()> {
-        test_clear_aperture_absent_in_file::<Lens>()
+    fn optic_shape_absent_in_file() -> OpmResult<()> {
+        test_optic_shape_absent_in_file::<Lens>()
     }
     /// The body of a biconvex lens is thinner towards its rim by the sag of both surfaces.
     #[test]
@@ -646,7 +590,7 @@ mod test {
             center_thickness,
             RefrIndexConst::new(1.5)?,
         )?;
-        node.set_isometry(Isometry::identity())?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let path_length = path_length_through(&node, ray_position)?;
         // Both surfaces recede by the same sag, so the volume is two sags thinner at that height.
         let sag = curvature - (curvature * curvature - ray_height * ray_height).sqrt();
@@ -658,426 +602,47 @@ mod test {
         Ok(())
     }
     #[test]
-    fn get_minimum_logical_aperture_radius_bi_convex() -> OpmResult<()> {
-        let node = Lens::new(
-            "test",
+    fn analyze_lens_matching_ambient_medium() -> OpmResult<()> {
+        let n_match = 1.5;
+        let mat = Material::new_draft(
+            "matching_material",
+            None,
+            None,
+            RefrIndexConst::new(n_match)?.into(),
+        );
+
+        let mut node = Lens::new(
+            "test_lens",
             millimeter!(100.0),
             millimeter!(-100.0),
             millimeter!(10.0),
-            &RefrIndexConst::new(1.0)?,
+            mat.clone(),
         )?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
 
-        assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Input, "input_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 0.031224989991992);
-        }
-        assert!(
-            node.ports()
-                .aperture(&PortType::Output, "output_1")
-                .is_some()
-        );
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 0.031224989991992);
-        }
-        Ok(())
-    }
-    #[test]
-    fn get_minimum_logical_aperture_radius_plano_convex() -> OpmResult<()> {
-        let node = Lens::new(
-            "test",
-            millimeter!(f64::INFINITY),
-            millimeter!(-100.0),
-            millimeter!(10.0),
-            &RefrIndexConst::new(1.0)?,
+        let mut config = RayTraceConfig::default();
+        config.set_ambient_material(mat);
+
+        // Create rays propagating in the ambient medium
+        let mut rays = Rays::new_uniform_collimated(
+            nanometer!(1000.0),
+            joule!(1.0),
+            &Hexapolar::new(millimeter!(10.0), 3)?,
         )?;
+        rays.set_refractive_index(config.ambient_material().refractive_index_type())?;
 
-        assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Input, "input_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 0.04358898943540674);
-        }
-        assert!(
-            node.ports()
-                .aperture(&PortType::Output, "output_1")
-                .is_some()
-        );
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 0.04358898943540674);
-        }
+        let mut incoming_data = LightResult::default();
+        incoming_data.insert("input_1".into(), LightData::Geometric(rays));
 
-        let node = Lens::new(
-            "test",
-            millimeter!(100.),
-            millimeter!(f64::INFINITY),
-            millimeter!(10.0),
-            &RefrIndexConst::new(1.0)?,
-        )?;
-
-        assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Input, "input_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 0.04358898943540674);
-        }
-        assert!(
-            node.ports()
-                .aperture(&PortType::Output, "output_1")
-                .is_some()
-        );
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 0.04358898943540674);
-        }
-        Ok(())
-    }
-    #[test]
-    fn get_minimum_logical_aperture_radius_bi_concave() -> OpmResult<()> {
-        let node = Lens::new(
-            "test",
-            millimeter!(-100.0),
-            millimeter!(100.0),
-            millimeter!(10.0),
-            &RefrIndexConst::new(1.0)?,
-        )?;
-
-        assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Input, "input_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 100e-3);
-        }
-        assert!(
-            node.ports()
-                .aperture(&PortType::Output, "output_1")
-                .is_some()
-        );
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 100e-3);
-        }
-
-        let node = Lens::new(
-            "test",
-            millimeter!(-200.0),
-            millimeter!(100.0),
-            millimeter!(10.0),
-            &RefrIndexConst::new(1.0)?,
-        )?;
-
-        assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Input, "input_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 100e-3);
-        }
-        assert!(
-            node.ports()
-                .aperture(&PortType::Output, "output_1")
-                .is_some()
-        );
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 100e-3);
-        }
-
-        let node = Lens::new(
-            "test",
-            millimeter!(-100.0),
-            millimeter!(200.0),
-            millimeter!(10.0),
-            &RefrIndexConst::new(1.0)?,
-        )?;
-
-        assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Input, "input_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 100e-3);
-        }
-        assert!(
-            node.ports()
-                .aperture(&PortType::Output, "output_1")
-                .is_some()
-        );
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 100e-3);
-        }
-        Ok(())
-    }
-    #[test]
-    fn get_minimum_logical_aperture_radius_plano_concave() -> OpmResult<()> {
-        let node = Lens::new(
-            "test",
-            millimeter!(f64::INFINITY),
-            millimeter!(100.0),
-            millimeter!(10.0),
-            &RefrIndexConst::new(1.0)?,
-        )?;
-
-        assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Input, "input_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 100e-3);
-        }
-        assert!(
-            node.ports()
-                .aperture(&PortType::Output, "output_1")
-                .is_some()
-        );
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 100e-3);
-        }
-
-        let node = Lens::new(
-            "test",
-            millimeter!(-100.0),
-            millimeter!(f64::INFINITY),
-            millimeter!(10.0),
-            &RefrIndexConst::new(1.0)?,
-        )?;
-
-        assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Input, "input_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 100e-3);
-        }
-        assert!(
-            node.ports()
-                .aperture(&PortType::Output, "output_1")
-                .is_some()
-        );
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 100e-3);
-        }
-        Ok(())
-    }
-    #[test]
-    fn get_minimum_logical_aperture_radius_pos_meniscus() -> OpmResult<()> {
-        let node = Lens::new(
-            "test",
-            millimeter!(-105.0),
-            millimeter!(-100.0),
-            millimeter!(10.0),
-            &RefrIndexConst::new(1.0)?,
-        )?;
-
-        assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Input, "input_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 0.09637888196533964);
-        }
-        assert!(
-            node.ports()
-                .aperture(&PortType::Output, "output_1")
-                .is_some()
-        );
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 0.09637888196533964);
-        }
-
-        let node = Lens::new(
-            "test",
-            millimeter!(105.0),
-            millimeter!(100.0),
-            millimeter!(10.0),
-            &RefrIndexConst::new(1.0)?,
-        )?;
-
-        assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Input, "input_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 0.09637888196533964);
-        }
-        assert!(
-            node.ports()
-                .aperture(&PortType::Output, "output_1")
-                .is_some()
-        );
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 0.09637888196533964);
-        }
-
-        let node = Lens::new(
-            "test",
-            millimeter!(-100.0),
-            millimeter!(-100.0),
-            millimeter!(10.0),
-            &RefrIndexConst::new(1.0)?,
-        )?;
-
-        assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Input, "input_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 0.09987492177719105);
-        }
-        assert!(
-            node.ports()
-                .aperture(&PortType::Output, "output_1")
-                .is_some()
-        );
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 0.09987492177719105);
-        }
-
-        let node = Lens::new(
-            "test",
-            millimeter!(100.0),
-            millimeter!(100.0),
-            millimeter!(10.0),
-            &RefrIndexConst::new(1.0)?,
-        )?;
-
-        assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Input, "input_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 0.09987492177719105);
-        }
-        assert!(
-            node.ports()
-                .aperture(&PortType::Output, "output_1")
-                .is_some()
-        );
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 0.09987492177719105);
-        }
-        Ok(())
-    }
-    #[test]
-    fn get_minimum_logical_aperture_radius_neg_meniscus() -> OpmResult<()> {
-        let node = Lens::new(
-            "test",
-            millimeter!(-100.0),
-            millimeter!(-105.0),
-            millimeter!(10.0),
-            &RefrIndexConst::new(1.0)?,
-        )?;
-
-        assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Input, "input_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 100e-3);
-        }
-        assert!(
-            node.ports()
-                .aperture(&PortType::Output, "output_1")
-                .is_some()
-        );
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 100e-3);
-        }
-
-        let node = Lens::new(
-            "test",
-            millimeter!(100.0),
-            millimeter!(105.0),
-            millimeter!(10.0),
-            &RefrIndexConst::new(1.0)?,
-        )?;
-
-        assert!(node.ports().aperture(&PortType::Input, "input_1").is_some());
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Input, "input_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 100e-3);
-        }
-        assert!(
-            node.ports()
-                .aperture(&PortType::Output, "output_1")
-                .is_some()
-        );
-        if let Some(ApertureShape::BinaryCircle(c)) = node
-            .ports()
-            .aperture(&PortType::Output, "output_1")
-            .map(|a| a.shape())
-        {
-            assert_relative_eq!(c.radius().value, 100e-3);
+        let output = AnalysisRayTrace::analyze(&mut node, incoming_data, &config)?;
+        if let Some(LightData::Geometric(output_rays)) = output.get("output_1") {
+            for ray in output_rays {
+                // Direction must remain undisturbed along the optical axis
+                approx::assert_relative_eq!(ray.direction(), Vector3::z(), epsilon = 1e-12);
+                approx::assert_relative_eq!(ray.refractive_index(), n_match, epsilon = 1e-12);
+            }
+        } else {
+            panic!("Expected LightData::Geometric at output_1");
         }
         Ok(())
     }

@@ -6,7 +6,7 @@ use actix_web::{Responder, get, web::Html};
 /// Return a static page with a welcome message.
 #[utoipa::path(get, path = "/")]
 #[get("/")]
-async fn welcome() -> impl Responder {
+pub async fn welcome() -> impl Responder {
     Html::new("<!DOCTYPE html>
 <html lang=\"en\">
 <head>

@@ -392,10 +392,10 @@ mod tests {
     #[test]
     fn test_is_in_range_angle() -> OpmResult<()> {
         let validator =
-            AllInRange::new(Angle::new::<radian>(0.0), Angle::new::<radian>(3.14), true)?;
+            AllInRange::new(Angle::new::<radian>(0.0), Angle::new::<radian>(1.23), true)?;
 
         assert!(validator.validate(&Angle::new::<radian>(0.0)).is_ok());
-        assert!(validator.validate(&Angle::new::<radian>(3.14)).is_ok());
+        assert!(validator.validate(&Angle::new::<radian>(1.23)).is_ok());
         assert!(validator.validate(&Angle::new::<radian>(-1.0)).is_err());
         Ok(())
     }

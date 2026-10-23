@@ -56,7 +56,7 @@ With this setting, the components are placed as follows:
 
 ### Anchor point
 
-We have just discussed how a component is placed at a certain position. This description is actually a bit unprecise since an optical component is not a point-like object but has a finite size. Hence we clarify here that each optical component has an *anchor point* which is normally the center of the incoming surface. This is described in the [reference](../reference/reference.md) section for each particular node type. In the above mentioned `Alignment` setting the component is turned around this point. Furthermore, a component can be shifted (e.g. for modeling a shifted lens) along all axes.
+We have just discussed how a component is placed at a certain position. This description is actually a bit unprecise since an optical component is not a point-like object but has a finite size. Hence we clarify here that each optical component has an *anchor point* which is normally the center of the incoming surface. This is described in the [reference](../reference/reference.md) section for each particular node type. In the above mentioned `Alignment` setting the component is turned around this point. Furthermore, a component can be shifted (e.g. for modeling a shifted lens) along all axes. How a component's surfaces are built around its anchor point is described in [Component geometry](./background/component_geometry.md).
 
 ### Absolute Placement
 
@@ -95,11 +95,16 @@ Issues often arise when combining parallel beam paths of unequal lengths, such a
 **The Conflict:**
 OPOSSUM must decide where to place the Beam Combiner in 3D space. The logic is as follows:
 
-1. **First Pass:** OPOSSUM traces the first arm and places the Beam Combiner at 100 mm.
-2. **Second Pass:** OPOSSUM traces the second arm. Since the Combiner is already placed, it cannot be moved.
-3. **Validation:** The software checks if the second arm's geometry is consistent with the existing placement. Since 200 mm $\neq$ 100 mm, the validation fails.
+1. **Placement:** The Beam Combiner is placed from the beam reaching its **first input** (`input_1`) — deterministically, independently of the order in which the two arms happen to be traced. Here that puts it at the end of the 100 mm Arm 1.
+2. **Consistency check:** The axis reaching the **second input** (`input_2`) is then checked against that placement. Since Arm 2 is 200 mm long, its beam does not meet the Combiner where Arm 1 placed it.
 
-**Result:** OPOSSUM retains the position from the first path and issues a **warning**. You must manually verify warnings in split-path setups.
+**Result:** OPOSSUM keeps the placement from `input_1` and issues a **warning**. The warning does more than flag the problem: it reports how far the second beam is off (in direction, in distance along the axis, and as a sideways miss), the connection length that would remove the along-axis error, and the exact position and direction the second arm would need at its predecessor to be consistent. Use it to correct the offending connection distance or alignment; you must verify warnings in split-path setups.
+
+### Two Sources on One Combiner
+
+A beam combiner can also be fed by two independent sources rather than by two arms of one split beam. Every source is placed at the global origin by default, so two sources both start at `(0, 0, 0)` — which is almost never what a real two-arm setup looks like, and the combiner's consistency check (above) will warn.
+
+To resolve this, give the **second** source an absolute position: in the `Node Editor`, set its `Position` property to `absolute` (see [Absolute Placement](#absolute-placement)). You do not have to work out the pose by hand — the combiner's warning prints the exact start point and direction the `input_2` beam needs; enter those as the second source's absolute position and orientation. The first source stays at the origin as the anchor of the system.
 
 ### Misaligned Absolute Components
 
@@ -116,7 +121,9 @@ Care must be taken when mixing absolute positioning with the optical axis logic.
 The reference ray (optical axis) travels straight from the source. Because the lens is physically located outside this path, the ray misses the lens entirely.
 
 * The optical axis is "lost" at this point.
-* Any downstream components (e.g., the `Energy meter`) cannot be placed and will be excluded from the simulation.
+* The downstream components (e.g., the `Energy meter`) cannot be placed, so OPOSSUM stops the alignment with an error naming the lens. A component at the end of a path, without successors, is only warned about.
+
+The same happens if the axis reaches a component but passes it outside its `optic shape`, e.g. a lens decentered by more than its radius or a double pass whose return path walks off. Enlarge the optic shape (see [Optic shape](../reference/nodes.md#optic-shape)) or correct the position. If the axis misses the window of a detector, OPOSSUM only warns that the measurement may fail.
 
 ### Multi-pass and Reference Nodes
 

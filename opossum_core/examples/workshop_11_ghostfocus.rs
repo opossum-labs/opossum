@@ -11,16 +11,6 @@
 //! 5. Serialization of the complete optical system for later visualization
 //!    and analysis
 //!
-//! Principles and Objectives
-//! Ghost reflections are unintended optical paths produced by partial
-//! reflections at optical surfaces such as lenses or windows. These
-//! secondary beams can propagate through the optical system, creating
-//! stray light, image artifacts, or localized intensity hotspots.
-//!
-//! This example demonstrates how to build an optical system suitable for
-//! GhostFocus analysis by assigning optical properties to each
-//! component and defining a physical laser source.
-//!
 //! The simulated beam is defined by:
 //! - a hexagonally sampled collimated beam,
 //! - a two-dimensional Gaussian energy distribution
@@ -51,6 +41,7 @@
 use opossum_core::coatings::CoatingConstantR;
 use opossum_core::core_optics::OpticNodeExt;
 use opossum_core::core_optics::node_attr::HasNodeAttr;
+use opossum_core::geometry::{Extruded, SurfaceGeometry};
 use opossum_core::{
     J_per_cm2, coatings::CoatingType, distributions::energy::General2DGaussian,
     distributions::position::HexagonalTiling, distributions::spectral::LaserLines,
@@ -72,7 +63,7 @@ fn main() -> OpmResult<()> {
     // GhostFocus analyzer configuration.
     let mut src = SourcePort::new("collimated ray source");
     // Assign the laser-induced damage threshold (LIDT) of the source output.
-    src.set_lidt(&PortType::Output, "output_1", J_per_cm2!(2.0))?;
+    src.set_lidt(SurfaceGeometry::FACE, J_per_cm2!(2.0))?;
     // Add the source to the optical system.
     let i_src = scenery.add_node(src)?;
     // First steering mirror redirecting the beam by 45°.
@@ -83,18 +74,16 @@ fn main() -> OpmResult<()> {
     let mut lens = Lens::default();
     lens.node_attr_mut().set_name("Lens 1");
     lens.set_coating(
-        &PortType::Input,
-        "input_1",
+        Extruded::FRONT,
         &CoatingConstantR::new(percent!(5.0))?.into(),
     )?;
     lens.set_coating(
-        &PortType::Output,
-        "output_1",
+        Extruded::REAR,
         &CoatingConstantR::new(percent!(5.0))?.into(),
     )?;
     // Assign LIDT values for both optical surfaces.
-    lens.set_lidt(&PortType::Input, "input_1", J_per_cm2!(2.0))?;
-    lens.set_lidt(&PortType::Output, "output_1", J_per_cm2!(2.0))?;
+    lens.set_lidt(Extruded::FRONT, J_per_cm2!(2.0))?;
+    lens.set_lidt(Extruded::REAR, J_per_cm2!(2.0))?;
     let i_l = scenery.add_node(lens)?;
 
     // Second steering mirror redirecting the beam toward the second lens
@@ -108,19 +97,17 @@ fn main() -> OpmResult<()> {
     let mut lens2 = Lens::default();
     lens2.node_attr_mut().set_name("Lens 2");
     lens2.set_coating(
-        &PortType::Input,
-        "input_1",
+        Extruded::FRONT,
         &CoatingConstantR::new(percent!(20.0))?.into(),
     )?;
     lens2.set_coating(
-        &PortType::Output,
-        "output_1",
+        Extruded::REAR,
         &CoatingConstantR::new(percent!(20.0))?.into(),
     )?;
-    lens2.set_coating(&PortType::Input, "input_1", &CoatingType::Fresnel)?;
-    lens2.set_coating(&PortType::Output, "output_1", &CoatingType::Fresnel)?;
-    lens2.set_lidt(&PortType::Input, "input_1", J_per_cm2!(2.0))?;
-    lens2.set_lidt(&PortType::Output, "output_1", J_per_cm2!(2.0))?;
+    lens2.set_coating(Extruded::FRONT, &CoatingType::Fresnel)?;
+    lens2.set_coating(Extruded::REAR, &CoatingType::Fresnel)?;
+    lens2.set_lidt(Extruded::FRONT, J_per_cm2!(2.0))?;
+    lens2.set_lidt(Extruded::REAR, J_per_cm2!(2.0))?;
     let i_l2 = scenery.add_node(lens2)?;
 
     // Final mirror directing the beam to the system output.

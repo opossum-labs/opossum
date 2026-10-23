@@ -203,11 +203,11 @@ pub fn LabeledFileInput(
                             }
                             if let Some(handle) = dialog.pick_file().await {
                                 // Extract full file path on desktop targets
-                                #[cfg(not(target_arch = "wasm32"))]
+                                #[cfg(feature = "desktop")]
                                 let selected_path = handle.path().to_string_lossy().to_string();
 
                                 // Extract file name on web targets due to browser sandbox restrictions
-                                #[cfg(target_arch = "wasm32")]
+                                #[cfg(not(feature = "desktop"))]
                                 let selected_path = handle.file_name();
 
                                 // Escape special characters for JS string injection
@@ -305,11 +305,11 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
 /// Renders a list of input components arranged in two-column grid rows.
 #[component]
 pub fn RowedInputs(inputs: Vec<InputData>) -> Element {
-    info!("🔄 Render: RowedInputs");
+    debug!("🔄 Render: RowedInputs");
 
     rsx! {
         // Standard slice chunks yield sub-slices without any intermediate heap allocation
-        for (row_idx , chunk) in inputs.chunks(2).enumerate() {
+        for (row_idx, chunk) in inputs.chunks(2).enumerate() {
             div {
                 // Key ensures fast and stable Virtual DOM reconciliation
                 key: "input_row_{row_idx}",
@@ -644,12 +644,17 @@ pub fn LabeledSelect(
     #[props(default = false)]
     readonly: bool,
 ) -> Element {
-    info!("🔄 Render: LabeledSelect");
+    debug!("🔄 Render: LabeledSelect");
 
+    // `bg-dark` is set explicitly so the select keeps a dark field even outside an
+    // `.accordion-body` (e.g. the analyzer sidebar, whose sub-editors are loose children of
+    // `#accordionAnalyzerConfig`). Inside an accordion the more specific `.accordion-body ...
+    // .form-select` rule in `mdb_accordion.css` still wins, so node-config dropdowns are
+    // unchanged; without this the select would fall back to MDB's white `.form-select` default.
     let select_class = if readonly {
-        "form-select text-light disabled-select"
+        "form-select bg-dark text-light disabled-select"
     } else {
-        "form-select text-light"
+        "form-select bg-dark text-light"
     };
 
     rsx! {
@@ -664,7 +669,7 @@ pub fn LabeledSelect(
                     onchange.call(e);
                 },
                 // Use key for fast VDOM list reconciliation and avoid .clone()
-                for (is_selected , option) in &options {
+                for (is_selected, option) in &options {
                     option {
                         key: "{option}",
                         selected: *is_selected,

@@ -56,7 +56,7 @@ pub fn OpticalPropertiesEditor(
     #[props(default = false)]
     readonly: bool,
 ) -> Element {
-    info!("🔄 Render: OpticalPropertiesEditor");
+    debug!("🔄 Render: OpticalPropertiesEditor");
 
     // 1. Memoized signals for both sub-models
     let ref_ind_memo = use_memo(move || optical.read().refractive_index.clone());

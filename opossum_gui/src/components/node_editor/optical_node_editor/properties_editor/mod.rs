@@ -1,6 +1,5 @@
 mod angle_editor;
 mod bool_editor;
-mod clear_aperture_editor;
 mod curvature_editor;
 mod f64_editor;
 mod filter_type_editor;
@@ -11,8 +10,10 @@ mod length_editor;
 mod length_option_editor;
 mod linear_density_editor;
 mod material_property_editor;
+mod optic_shape_editor;
 mod splitter_type_editor;
 mod string_editor;
+mod surface_config_editor;
 mod vec2_editor;
 mod vec3_editor;
 
@@ -20,27 +21,31 @@ use crate::components::node_editor::{
     accordion::{AccordionItem, content_id_for_panel},
     node_config_editor::{NodeChangeAction, NodeChangeEvent},
     optical_node_editor::properties_editor::{
-        angle_editor::AngleEditor, bool_editor::BoolEditor,
-        clear_aperture_editor::ClearApertureEditor, curvature_editor::CurvatureEditor,
+        angle_editor::AngleEditor, bool_editor::BoolEditor, curvature_editor::CurvatureEditor,
         f64_editor::F64Editor, filter_type_editor::FilterTypeEditor,
         fluence_estimator_editor::FluenceEstimatorEditor, i32_editor::I32Editor,
         isometry_option_editor::IsometryOptionEditor, length_editor::LengthEditor,
         length_option_editor::LengthOptionEditor, linear_density_editor::LinearDensityEditor,
-        material_property_editor::MaterialPropertyEditor, splitter_type_editor::SplitterTypeEditor,
-        string_editor::StringEditor, vec2_editor::Vec2Editor, vec3_editor::Vec3Editor,
+        material_property_editor::MaterialPropertyEditor, optic_shape_editor::OpticShapeEditor,
+        splitter_type_editor::SplitterTypeEditor, string_editor::StringEditor,
+        surface_config_editor::SurfaceConfigEditor,
+        vec2_editor::Vec2Editor, vec3_editor::Vec3Editor,
     },
 };
 use dioxus::prelude::*;
 use opossum_core::{
     prelude::{Properties, Property, Proptype},
+    properties::validator::Validator,
     types::api_types::{NodeEditorPanel, NodeInfo},
 };
+use std::collections::BTreeMap;
 use uuid::Uuid;
 
 #[component]
 pub fn PropertiesEditor(
     node_id: ReadSignal<Uuid>,
     node_properties: ReadSignal<Properties>,
+    node_validators: ReadSignal<BTreeMap<String, Validator>>,
     node_info_sig: ReadSignal<NodeInfo>,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
@@ -48,9 +53,15 @@ pub fn PropertiesEditor(
     let editor_inputs = if node_info_sig.read().uuid == *node_id.read() {
         let mut editor_inputs = Vec::<Result<VNode, RenderError>>::new();
         for (property_key, property) in node_properties.read().iter() {
-            if let Some(editor) =
-                get_editor(node_id, property, property_key.clone(), on_change, readonly)
-            {
+            let validator = node_validators.read().get(property_key).cloned();
+            if let Some(editor) = get_editor(
+                node_id,
+                property,
+                validator,
+                property_key.clone(),
+                on_change,
+                readonly,
+            ) {
                 editor_inputs.push(editor);
             }
         }
@@ -73,6 +84,7 @@ pub fn PropertiesEditor(
 fn get_editor(
     node_id: ReadSignal<Uuid>,
     property: &Property,
+    validator: Option<Validator>,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
@@ -88,7 +100,14 @@ fn get_editor(
     {
         return Some(editor);
     }
-    get_geometric_editor(node_id, property, property_key, on_change, readonly)
+    get_geometric_editor(
+        node_id,
+        property,
+        validator,
+        property_key,
+        on_change,
+        readonly,
+    )
 }
 
 fn get_primitive_editor(
@@ -212,6 +231,15 @@ fn get_optical_editor(
             }
         }),
         Proptype::LightDataBuilder(_light_data_builder) => Some(rsx! { "no longer available" }),
+        Proptype::SurfaceConfig(surface_config) => Some(rsx! {
+            SurfaceConfigEditor {
+                node_id,
+                surface_config,
+                property_key,
+                on_change,
+                readonly,
+            }
+        }),
         _ => None,
     }
 }
@@ -219,6 +247,7 @@ fn get_optical_editor(
 fn get_geometric_editor(
     node_id: ReadSignal<Uuid>,
     property: &Property,
+    validator: Option<Validator>,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
@@ -269,12 +298,12 @@ fn get_geometric_editor(
                 readonly,
             }
         }),
-        // The clear aperture is the transversal extent of a volume node's medium, i.e. a geometric
-        // size - unlike a port aperture, which masks the light passing a surface.
-        Proptype::Aperture(aperture) => Some(rsx! {
-            ClearApertureEditor {
+        // The optic shape is the transversal extent of a component: rays outside it miss it.
+        Proptype::OpticShape(optic_shape) => Some(rsx! {
+            OpticShapeEditor {
                 node_id,
-                aperture,
+                optic_shape,
+                validator,
                 property_key,
                 on_change,
                 readonly,

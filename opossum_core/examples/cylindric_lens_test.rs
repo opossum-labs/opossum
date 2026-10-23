@@ -1,27 +1,43 @@
 use nalgebra::Vector3;
 use opossum_core::{
-    analyzers::energy::EnergyConfig, nodes::round_collimated_ray_builder, prelude::*,
+    analyzers::energy::EnergyConfig,
+    apertures::{CircleShape, RectangleShape},
+    core_optics::NodeAttrExt,
+    geometry::body::OPTIC_SHAPE,
+    nodes::round_collimated_ray_builder,
+    prelude::*,
 };
 use std::path::Path;
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::default();
     let src = scenery.add_node(SourcePort::new("round collimated ray source"))?;
-    let lens = CylindricLens::new(
+    let mut lens = CylindricLens::new(
         "Lens 1",
         millimeter!(100.0),
         millimeter!(f64::INFINITY),
         millimeter!(5.0),
-        &RefrIndexConst::new(1.5068)?,
-    )?
-    .with_tilt(degree!(0.0, 0.0, 45.0))?;
+        RefrIndexConst::new(1.5068)?,
+    )?;
+    // A 2-inch lens, large enough for the beam of 20 mm radius.
+    lens.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(25.4))?).into(),
+    )?;
+    let lens = lens.with_tilt(degree!(0.0, 0.0, 45.0))?;
     let l1 = scenery.add_node(lens)?;
     let det = scenery.add_node(RayPropagationVisualizer::new(
         "Ray_positions",
         Some(Vector3::y()),
     )?)?;
-    let det2 = scenery.add_node(SpotDiagram::default())?;
-    let det3 = scenery.add_node(EnergyMeter::default())?;
+    // The beam reaches the detectors up to 16 mm off their center: they are 40 mm square.
+    let window: OpticShape = RectangleShape::new(millimeter!(40.0), millimeter!(40.0))?.into();
+    let mut spot_diagram = SpotDiagram::default();
+    spot_diagram.set_property(OPTIC_SHAPE, window.clone().into())?;
+    let det2 = scenery.add_node(spot_diagram)?;
+    let mut energy_meter = EnergyMeter::default();
+    energy_meter.set_property(OPTIC_SHAPE, window.into())?;
+    let det3 = scenery.add_node(energy_meter)?;
     scenery.connect_nodes(src, "output_1", l1, "input_1", millimeter!(50.0))?;
     scenery.connect_nodes(l1, "output_1", det, "input_1", millimeter!(100.0))?;
     scenery.connect_nodes(det, "output_1", det2, "input_1", millimeter!(0.0))?;
@@ -31,7 +47,7 @@ fn main() -> OpmResult<()> {
 
     let mut config = RayTraceConfig::default();
     let ray_data_builder = round_collimated_ray_builder(millimeter!(20.0), joule!(1.0), 10)?;
-    config.map_source(src, ray_data_builder.into());
+    config.map_source(src, ray_data_builder);
 
     doc.add_analyzer(AnalyzerType::RayTrace(config));
 

@@ -8,7 +8,7 @@ fn main() -> OpmResult<()> {
         "Wedge",
         millimeter!(10.0),
         degree!(0.0),
-        &RefrIndexConst::new(1.5068)?,
+        RefrIndexConst::new(1.5068)?,
     )?
     .with_tilt(degree!(15.0, 0.0, 0.0))?;
     let l1 = scenery.add_node(lens1)?;
@@ -17,7 +17,7 @@ fn main() -> OpmResult<()> {
         millimeter!(205.55),
         millimeter!(-205.55),
         millimeter!(2.79),
-        &RefrIndexConst::new(1.5068)?,
+        RefrIndexConst::new(1.5068)?,
     )?
     .with_tilt(degree!(15.0, 0.0, 0.0))?;
     let l2 = scenery.add_node(lens2)?;

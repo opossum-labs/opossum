@@ -6,8 +6,7 @@ use opossum_core::{
     nodes::{ConnectionInfo, NodeGroup},
     opm_document::OpmDocument,
     prelude::{PortType, Proptype},
-    types::api_types::{ConnectInfo, NodeInfo},
-    utils::LockExt,
+    types::api_types::NodeInfo,
 };
 use std::collections::HashSet;
 use uuid::Uuid;
@@ -45,12 +44,9 @@ pub fn collect_node_refs_and_pos(
         .iter()
         .filter_map(|node| {
             scenery.node_recursive(*node).ok().map(|(r, _)| {
-                if let Ok(opt_ref) = r.optical_ref.lock_opm() {
-                    // Safely handle cases where a node might not have a GUI position assigned yet
-                    if let Some(pos) = opt_ref.gui_position() {
-                        corner.x = corner.x.min(pos.x);
-                        corner.y = corner.y.min(pos.y);
-                    }
+                if let Some(pos) = r.gui_position() {
+                    corner.x = corner.x.min(pos.x);
+                    corner.y = corner.y.min(pos.y);
                 }
                 r
             })
@@ -111,7 +107,7 @@ pub fn resolve_reference_chain(
     uuid: Uuid,
 ) -> Result<(OpticRef, bool), BackEndErrorResponse> {
     let optic_ref = document.scenery().node_recursive(uuid)?.0;
-    let node_attr = optic_ref.optical_ref.lock_opm()?.node_attr().clone();
+    let node_attr = optic_ref.node_attr().clone();
     if node_attr.node_type() == "reference" {
         let Ok(Proptype::Uuid(ref_uuid)) = node_attr.properties().get("reference id") else {
             return Err(BackEndErrorResponse::new(
@@ -125,30 +121,6 @@ pub fn resolve_reference_chain(
     } else {
         Ok((optic_ref, false))
     }
-}
-
-/// Captures every connection touching `node_id` within `parent_group_id`'s graph, as `ConnectInfo`s.
-/// Used to snapshot a node's wiring before it's deleted, so `Command::AddNode`/`RemoveNode`'s
-/// `connections` field can restore it on undo - must be called before the node is actually removed from
-/// the graph, since deleting a node silently drops its incident edges.
-///
-/// # Errors
-///
-/// This function will return an error if `parent_group_id` doesn't resolve to a group.
-pub fn capture_node_connections(
-    scenery: &NodeGroup,
-    parent_group_id: Uuid,
-    node_id: Uuid,
-) -> OpmResult<Vec<ConnectInfo>> {
-    let connections = scenery.with_group_node(parent_group_id, NodeGroup::connections)?;
-    Ok(connections
-        .iter()
-        .filter(|c| c.src_id == node_id || c.target_id == node_id)
-        .map(|c| {
-            let is_reference = is_reference_target(scenery, c.target_id);
-            ConnectInfo::from_connection_info(c, is_reference)
-        })
-        .collect())
 }
 
 /// Maps `node_id`'s internal port `internal_name` to `external_name` on `g`'s external port map,
@@ -167,9 +139,10 @@ pub fn map_port(
     external_name: &str,
 ) -> OpmResult<()> {
     match port_type {
-        PortType::Input => g.map_input_port(node_id, internal_name, external_name),
-        PortType::Output => g.map_output_port(node_id, internal_name, external_name),
-    }
+        PortType::Input => g.map_input_port(node_id, internal_name, external_name)?,
+        PortType::Output => g.map_output_port(node_id, internal_name, external_name)?,
+    };
+    Ok(())
 }
 
 /// Returns `uuid`'s parent group id, or `uuid` itself if it names the scenery root - which has no
@@ -293,10 +266,7 @@ pub fn validate_relocated_references(
         let Ok((optic_ref, _)) = scenery.node_recursive(*id) else {
             continue;
         };
-        let Ok(node) = optic_ref.optical_ref.lock_opm() else {
-            continue;
-        };
-        if let Some(group) = node.as_any().downcast_ref::<NodeGroup>() {
+        if let Some(group) = optic_ref.as_any().downcast_ref::<NodeGroup>() {
             relocating_ids.extend(group.collect_all_contained_node_ids_recursive()?);
         }
     }
@@ -340,13 +310,15 @@ pub fn create_new_group_node_info(
     new_group_id: Uuid,
     pos: Point2<f64>,
 ) -> OpmResult<NodeInfo> {
-    let document = data.document.lock();
-    let scenery = document.scenery();
-    let (new_group_ref, _) = scenery.node_recursive(new_group_id)?;
-    let mut new_group_node = new_group_ref.optical_ref.lock_opm()?;
-    new_group_node.node_attr_mut().set_gui_position(Some(pos));
+    let mut document = data.document.lock();
+    document
+        .scenery_mut()
+        .with_node_attr_mut(new_group_id, |attr| {
+            attr.set_gui_position(Some(pos));
+        })?;
+    let (new_group_ref, _) = document.scenery().node_recursive(new_group_id)?;
     Ok(NodeInfo::from_analyzable(
-        &*new_group_node,
+        &*new_group_ref,
         Some(Some((pos.x, pos.y))),
     ))
 }
@@ -412,24 +384,20 @@ fn collect_nodes_recursive<T>(
             .nodes()
             .iter()
             .map(|node_ref| {
-                let node = node_ref.optical_ref.lock_opm()?;
-                let node_attr = node.node_attr();
-                // Extract everything needed further down while the lock is held, then release it -
-                // the recursion below needs to lock nodes again. Whether the child is a group is
+                let node_attr = node_ref.node_attr();
+                // Extract everything needed further down - whether the child is a group is
                 // read here too: asking `with_group_node` afterwards would re-walk the whole
                 // document from the root for every single child.
-                let selected = (
+                (
                     node_attr.uuid(),
                     node_attr.node_type() == GROUP_NODE_TYPE,
                     select(node_attr),
-                );
-                drop(node);
-                Ok(selected)
+                )
             })
-            .collect::<Result<Vec<(Uuid, bool, Option<T>)>, OpossumError>>()
+            .collect::<Vec<(Uuid, bool, Option<T>)>>()
     });
 
-    let Ok(Ok(children)) = children else {
+    let Ok(children) = children else {
         return;
     };
     for (child_uuid, is_group, selected) in children {

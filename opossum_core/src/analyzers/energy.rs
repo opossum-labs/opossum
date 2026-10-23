@@ -116,7 +116,7 @@ impl Analyzer for EnergyAnalyzer {
         Ok(())
     }
     fn report(&self, scenery: &NodeGroup) -> OpmResult<AnalysisReport> {
-        let mut report = scenery.toplevel_report()?;
+        let mut report = scenery.toplevel_report(super::AnalyzerKind::Energy)?;
         report.set_analysis_type("Energy Analysis");
         Ok(report)
     }
@@ -161,25 +161,6 @@ pub trait AnalysisEnergy: OpticNode {
         if let Some(volume) = self.as_volume() {
             volume.propagate_energy_inside_medium(&mut data, config)?;
         }
-        let apodized = if let Some(surf) = self.get_optic_surface(out_port)
-            && !surf.aperture().is_none()
-        {
-            true
-        } else if let Some(surf) = self.get_optic_surface(in_port)
-            && !surf.aperture().is_none()
-        {
-            true
-        } else {
-            false
-        };
-        if apodized {
-            self.set_apodization_warning(true);
-            log::warn!(
-                "Rays have been apodized at input aperture of '{}' ({}). Results might not be accurate.",
-                self.node_attr().name(),
-                self.node_type()
-            );
-        }
         self.set_light_data(Some(data.clone()));
         Ok(LightResult::from([(out_port.clone(), data)]))
     }
@@ -196,7 +177,7 @@ mod test {
         nanometer,
         nodes::{EnergyMeter, NodeGroup, SourcePort},
     };
-    use num::Zero;
+    use num_traits::Zero;
     use uom::si::f64::Length;
 
     fn create_scene() -> OpmResult<(NodeGroup, EnergyConfig)> {
@@ -209,7 +190,7 @@ mod test {
         let i_em = scenery.add_node(EnergyMeter::default())?;
         scenery.connect_nodes(i_src, "output_1", i_em, "input_1", Length::zero())?;
         let mut config = EnergyConfig::default();
-        config.map_source(i_src, energy_data_builder.into());
+        config.map_source(i_src, energy_data_builder);
         Ok((scenery, config))
     }
 
@@ -245,14 +226,14 @@ mod test {
             nanometer!(1.0),
         )?);
 
-        assert_eq!(config.map_source(uuid, builder.clone()), false);
+        assert!(!config.map_source(uuid, builder.clone()));
         assert_eq!(config.get_source(&uuid), Some(&builder));
 
         let builder2 = EnergyDataBuilder::LaserLines(EnergyLaserLines::new(
             vec![(nanometer!(532.0), joule!(2.0))],
             nanometer!(1.0),
         )?);
-        assert_eq!(config.map_source(uuid, builder2.clone()), true);
+        assert!(config.map_source(uuid, builder2.clone()));
         assert_eq!(config.get_source(&uuid), Some(&builder2));
         Ok(())
     }

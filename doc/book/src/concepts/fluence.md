@@ -12,7 +12,6 @@ A straightforward approach is to divide the detector into a fixed grid and accum
 
 This creates a trade-off between spatial resolution and statistical stability. To address this, OPOSSUM provides multiple reconstruction methods that interpret the same ray data in different ways.
 
-
 ## Binning
 
 The binning method divides the detector into a regular grid of square cells. Each ray contributes its energy to the cell where it lands, and fluence is computed as energy divided by cell area.
@@ -20,7 +19,6 @@ The binning method divides the detector into a regular grid of square cells. Eac
 This method behaves like a pixelated representation of the detector. It is simple and computationally efficient, and it guarantees energy conservation within each cell.
 
 However, the result strongly depends on grid resolution. A coarse grid smooths out details and can hide peak fluence regions, while a fine grid requires a high number of rays to avoid noise. As a result, binning is often used for fast but lower-resolution analysis.
-
 
 ## Voronoi
 
@@ -31,7 +29,6 @@ Each ray is treated as the center of a region that represents its local area of 
 This approach removes the dependence on a fixed grid and naturally adapts to variations in ray density. In dense regions, cells become small; in sparse regions, they become larger.
 
 The result is more geometrically consistent than binning and better preserves local variations in the fluence distribution.
-
 
 ## KDE (Kernel Density Estimation)
 

@@ -718,7 +718,7 @@ mod test {
         assert_relative_eq!(meterp13.y.value, meterp23.y.value);
         assert_relative_eq!(meterp13.z.value, meterp23.z.value);
 
-        let meterp14 = vec![
+        let meterp14 = [
             Length::new::<meter>(1.),
             Length::new::<meter>(2.),
             Length::new::<meter>(3.),
@@ -730,7 +730,7 @@ mod test {
         assert_relative_eq!(meterp14[2].value, meterp24[2].value);
         assert_relative_eq!(meterp14[3].value, meterp24[3].value);
 
-        let meterp15 = vec![
+        let meterp15 = [
             Length::new::<meter>(1.),
             Length::new::<meter>(2.),
             Length::new::<meter>(3.),

@@ -32,11 +32,11 @@ impl IndexableAsset for Material {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use opossum_core::refractive_index::RefrIndexConst;
+    use opossum_core::{error::OpmResult, refractive_index::RefrIndexConst};
 
     #[test]
-    fn test_core_material_registry_integration() {
-        let const_refr = RefrIndexConst::new(1.5).unwrap().into();
+    fn test_core_material_registry_integration() -> OpmResult<()> {
+        let const_refr = RefrIndexConst::new(1.5)?.into();
 
         let material = Material::new_draft(
             "N-BK7",
@@ -47,5 +47,6 @@ mod tests {
         assert_eq!(material.version(), 0);
         assert_eq!(material.name(), "N-BK7");
         assert_eq!(Material::relative_subfolder(), "materials");
+        Ok(())
     }
 }

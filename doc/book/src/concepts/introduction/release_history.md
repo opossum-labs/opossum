@@ -3,17 +3,19 @@
 
 ## Overview Table
 
-| Version | Date       | Key Highlights                                                                 |
-|---------|------------|--------------------------------------------------------------------------------|
-| 0.7.2   | 2026-07    | Full support for node groups in GUI, Improved source definitions               |
-| 0.7.1   | 2026-03-16 | Bug fix release                                                                |
-| 0.7.0   | 2026-02-18 | Graphical user interface, first version for wider audience                     |
-| 0.6.0   | 2024-12-18 | Coatings support, gratings, ghost focus analysis, major refactoring, bug fixes |
-| 0.5.0   | 2024-07-26 | Global coordinate system, 3D node alignment, SDF primitives, ambient medium    |
-| 0.4.0   | 2024-04-04 | Real lens ray tracing, wavefront analysis, fluence detector, dispersion models |
-| 0.3.0   | 2023       | Apertures, JSON/PDF report generation, basic ray tracing                       |
-| 0.2.0   | 2023       | Maintenance: bug fixes, unit tests, documentation                              |
-| 0.1.0   | 2023       | First technical preview: few optical nodes and a basic energy analyzer         |
+| Version | Date       | Key Highlights                                                                                              |
+|---------|------------|-------------------------------------------------------------------------------------------------------------|
+| 0.8.0   | 2026-09-10 | New asset system for materials/coatings/components, Material Editor & Catalog GUI, node-material assignment |
+| 0.7.3   | 2026-08-14 | Critical bug fix for connected groups discarded on file load, WASM OPM file saving                          |
+| 0.7.2   | 2026-07    | Full support for node groups in GUI, Improved source definitions                                            |
+| 0.7.1   | 2026-03-16 | Bug fix release                                                                                             |
+| 0.7.0   | 2026-02-18 | Graphical user interface, first version for wider audience                                                  |
+| 0.6.0   | 2024-12-18 | Coatings support, gratings, ghost focus analysis, major refactoring, bug fixes                              |
+| 0.5.0   | 2024-07-26 | Global coordinate system, 3D node alignment, SDF primitives, ambient medium                                 |
+| 0.4.0   | 2024-04-04 | Real lens ray tracing, wavefront analysis, fluence detector, dispersion models                              |
+| 0.3.0   | 2023       | Apertures, JSON/PDF report generation, basic ray tracing                                                    |
+| 0.2.0   | 2023       | Maintenance: bug fixes, unit tests, documentation                                                           |
+| 0.1.0   | 2023       | First technical preview: few optical nodes and a basic energy analyzer                                      |
 
 ---
 

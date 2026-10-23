@@ -1,4 +1,6 @@
+#[cfg(feature = "desktop")]
 use directories::{ProjectDirs, UserDirs};
+
 use opm_macros_lib::EnsureValidated;
 use opossum_core::{
     error::{OpmResult, OpossumError},
@@ -34,12 +36,18 @@ pub struct AppConfig {
 
 impl Default for AppConfig {
     fn default() -> Self {
+        #[cfg(feature = "desktop")]
         let report_base_dir = UserDirs::new()
             .and_then(|user_dirs| user_dirs.document_dir().map(|p| p.join("opossum_reports")));
+        #[cfg(not(feature = "desktop"))]
+        let report_base_dir = None;
 
         // Default catalog directory in the local config directory: <project dir>/catalogs
+        #[cfg(feature = "desktop")]
         let catalog_base_dir = ProjectDirs::from("org", "Opossumlabs", "Opossum")
             .map(|project_dirs| project_dirs.data_local_dir().join("catalogs"));
+        #[cfg(not(feature = "desktop"))]
+        let catalog_base_dir = None;
 
         Self {
             report_dir: report_base_dir,
@@ -166,7 +174,11 @@ impl AppConfig {
     }
 
     fn config_file() -> Option<PathBuf> {
-        ProjectDirs::from("org", "Opossumlabs", "Opossum")
-            .map(|project_dirs| project_dirs.config_local_dir().join("config.ron"))
+        #[cfg(feature = "desktop")]
+        let pd = ProjectDirs::from("org", "Opossumlabs", "Opossum")
+            .map(|project_dirs| project_dirs.config_local_dir().join("config.ron"));
+        #[cfg(not(feature = "desktop"))]
+        let pd = None;
+        pd
     }
 }

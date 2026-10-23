@@ -13,7 +13,7 @@ fn main() -> OpmResult<()> {
             millimeter!(50.0),
             millimeter!(f64::INFINITY),
             millimeter!(10.0),
-            &RefrIndexConst::new(1.5)?,
+            RefrIndexConst::new(1.5)?,
         )?
         .with_tilt(degree!(0.0, 10.0, 0.0))?,
     )?;

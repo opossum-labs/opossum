@@ -50,14 +50,14 @@ The project is broken down into several key components:
    cargo build
    ```
 
-4. Build the backend:
+4. Build the backend:(leave this terminal open — the GUI needs it running):
 
    ```bash
    cd opossum_backend
    cargo run
    ```
 
-5. Build and start the GUI:
+5. Build and start the GUI:Open a **new terminal** (keep the backend from step 4 running in the first one). 
 
    First we have to install `dioxus-cli`.
 

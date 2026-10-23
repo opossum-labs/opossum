@@ -189,6 +189,12 @@ impl<Lens> Store<GraphStore, Lens> {
     }
     fn set_node_active(&mut self, id: Uuid, z_index: usize, is_optical: bool) {
         self.set_z_level_to_top(id, z_index);
+
+        // Avoid re-allocating and re-notifying selection signals if this node is already the sole active node
+        let current_selected = self.node_selection().read().all_nodes.read().clone();
+        if current_selected.len() == 1 && current_selected.contains_key(&id) {
+            return;
+        }
         self.clear_selected_nodes();
         self.node_selection()
             .write()
@@ -292,15 +298,11 @@ impl<Lens> Store<GraphStore, Lens> {
             }
         }
     }
-    fn set_z_level_to_top(&mut self, node_id: Uuid, z_level: usize) {
+    fn set_z_level_to_top(&mut self, node_id: Uuid, _z_level: usize) {
         let number_of_nodes = self.nodes().len();
-        for (id, mut elem) in self.nodes().iter() {
-            let z_index = elem.read().z_index();
-            if z_index > z_level && id != node_id {
-                elem.write().set_z_index(z_index - 1);
-            } else if id == node_id {
-                elem.write().set_z_index(number_of_nodes);
-            }
+        if let Some(mut elem) = self.nodes().get(node_id) {
+            // Nur diese EINE Node mutieren, alle anderen in Ruhe lassen
+            elem.write().set_z_index(number_of_nodes + 1);
         }
     }
     /// Adds a new reference node to the graph store.
@@ -416,12 +418,27 @@ impl GraphStore {
         if self.nodes.is_empty() {
             return Rect::new(Point2D::zero(), Size2D::zero());
         }
-        // Use the first node to initialize the bounding box
-        let mut rect = self.nodes.iter().next().unwrap().1.get_bounding_box();
+        let mut node_boxes =
+            self.nodes.values().map(|node| {
+                let node_id = node.id();
+                let has_mapped_input = !self.mapped_ports.is_empty()
+                    && node.input_ports().iter().any(|port_name| {
+                        self.mapped_ports.contains_port_of_node(node_id, port_name)
+                    });
+                let has_mapped_output = !self.mapped_ports.is_empty()
+                    && node.output_ports().iter().any(|port_name| {
+                        self.mapped_ports.contains_port_of_node(node_id, port_name)
+                    });
 
-        // Iterate over the rest of the nodes to expand the bounding box
-        for node in self.nodes.values().skip(1) {
-            rect = rect.union(&node.get_bounding_box());
+                node.get_bounding_box_with_mapped_ports(has_mapped_input, has_mapped_output)
+            });
+
+        // Initialize with the first node's bounding box
+        let mut rect = node_boxes.next().unwrap();
+
+        // Iterate over the rest of the nodes to expand the combined bounding box
+        for node_rect in node_boxes {
+            rect = rect.union(&node_rect);
         }
         rect
     }

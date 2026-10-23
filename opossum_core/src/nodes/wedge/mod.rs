@@ -1,22 +1,21 @@
-use std::sync::{Arc, Mutex};
-
 #[cfg(test)]
 use crate::refractive_index::RefractiveIndex;
 use crate::{
     analyzers::energy::AnalysisEnergy,
-    core_optics::{NodeAttr, OpticNode, OpticNodeExt, PortType, Volumetric},
+    core_optics::{NodeAttr, OpticNode, OpticNodeExt, SurfacePorts, Volumetric},
     degree,
     error::{OpmResult, OpossumError},
-    geometry::{Plane, geo_surface::GeoSurfaceRef},
+    geometry::{
+        Geometry,
+        body::{OPTIC_SHAPE, default_optic_shape},
+    },
     material::{MATERIAL, Material},
     millimeter,
-    nodes::{NodeRegistration, create_volume_properties},
+    nodes::NodeRegistration,
     properties::{Proptype, validator::Validator},
     refractive_index::RefrIndexConst,
-    utils::geom_transformation::Isometry,
 };
-use nalgebra::Point3;
-use num::Zero;
+use num_traits::Zero;
 use opm_macros_lib::OpmNode;
 use uom::si::f64::{Angle, Length};
 
@@ -44,7 +43,7 @@ inventory::submit! {
 ///   - `center thickness`
 ///   - `material`
 ///   - `wedge`
-///   - `clear aperture`
+///   - `optic shape`
 pub struct Wedge {
     node_attr: NodeAttr,
 }
@@ -91,15 +90,19 @@ impl Default for Wedge {
                         Validator::NumericIsFinite,
                     ],
                 },
-                // and_validator(vec![
-                //     angle_in_range(degree!(-90.0), degree!(90.0), true),
-                //     numeric_is_finite(),
-                // ]),
                 Angle::zero().into(),
             )
             .unwrap();
-        create_volume_properties(&mut node_attr).unwrap();
+        node_attr
+            .create_property_with_validator(
+                OPTIC_SHAPE,
+                "transversal extent of the component",
+                Validator::OpticShapeIsBounded,
+                default_optic_shape().into(),
+            )
+            .unwrap();
         let mut wedge = Self { node_attr };
+        wedge.create_default_surface_properties().unwrap();
         wedge.update_surfaces().unwrap();
         wedge
     }
@@ -135,52 +138,32 @@ impl Wedge {
 
 impl Volumetric for Wedge {}
 impl OpticNode for Wedge {
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
+        let (Ok(Proptype::Length(center_thickness)), Ok(Proptype::Angle(wedge_angle))) = (
+            self.node_attr.get_property("center thickness"),
+            self.node_attr.get_property("wedge"),
+        ) else {
+            return Err(OpossumError::Analysis(
+                "cannot read the center thickness and the wedge angle".into(),
+            ));
+        };
+        let cross_section = self.cross_section()?.ok_or_else(|| {
+            OpossumError::Analysis(format!(
+                "the {OPTIC_SHAPE} of node '{}' is open, so its medium is unbounded",
+                self.node_attr.name()
+            ))
+        })?;
+        Ok(Some(Geometry::wedge(
+            *center_thickness,
+            *wedge_angle,
+            cross_section,
+        )?))
+    }
     fn as_volume(&self) -> Option<&dyn Volumetric> {
         Some(self)
     }
-    fn update_surfaces(&mut self) -> OpmResult<()> {
-        let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
-
-        let front_geosurface = GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(node_iso))));
-
-        self.update_surface(
-            "input_1",
-            front_geosurface,
-            Isometry::identity(),
-            &PortType::Input,
-        )?;
-
-        let Ok(Proptype::Length(center_thickness)) =
-            self.node_attr.get_property("center thickness")
-        else {
-            return Err(OpossumError::Analysis(
-                "cannot read center thickness".into(),
-            ));
-        };
-
-        let angle = if let Ok(Proptype::Angle(wedge)) = self.node_attr.get_property("wedge") {
-            *wedge
-        } else {
-            return Err(OpossumError::Analysis("cannot read wedge angle".into()));
-        };
-
-        let thickness_iso = Isometry::new_along_z(*center_thickness)?;
-        let wedge_iso = Isometry::new(
-            Point3::origin(),
-            Point3::new(angle, Angle::zero(), Angle::zero()),
-        )?;
-        let anchor_point_iso = thickness_iso.append(&wedge_iso);
-        let rear_geosurface = GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(
-            node_iso.append(&anchor_point_iso),
-        ))));
-
-        self.update_surface(
-            "output_1",
-            rear_geosurface,
-            anchor_point_iso,
-            &PortType::Output,
-        )?;
-        Ok(())
+    fn surface_ports(&self) -> SurfacePorts {
+        SurfacePorts::THROUGH_SOLID
     }
 }
 impl AnalysisEnergy for Wedge {}
@@ -194,13 +177,14 @@ mod test {
             energy::{AnalysisEnergy, EnergyConfig},
             raytrace::AnalysisRayTrace,
         },
-        core_optics::{NodeAttrExt, PortType},
+        core_optics::{NodeAttrExt, PortType, node_attr::NodePositioning},
         degree, joule,
         light::{LightData, LightResult, Ray, Rays, spectrum_helper::create_he_ne_spec},
         nanometer,
-        nodes::test_helper::test_helper::*,
+        nodes::test_helper::helper::*,
         properties::{Proptype, proptype::AssetRef},
         refractive_index::RefractiveIndexType,
+        utils::geom_transformation::Isometry,
     };
     use approx::assert_abs_diff_eq;
     use nalgebra::Vector3;
@@ -211,26 +195,26 @@ mod test {
         assert_eq!(node.name(), "wedge");
         assert_eq!(node.node_type(), "wedge");
         assert_eq!(node.node_color(), "aquamarine");
-        assert_eq!(node.inverted(), false);
+        assert!(!node.inverted());
         if let Ok(Proptype::Length(p)) = node.properties().get("center thickness") {
             assert_eq!(p, &millimeter!(10.0));
         } else {
-            assert!(false, "could not read center thickness.");
+            panic!("could not read center thickness.");
         }
         if let Ok(Proptype::Angle(p)) = node.properties().get("wedge") {
             assert_eq!(p, &degree!(0.0));
         } else {
-            assert!(false, "could not read angle.");
+            panic!("could not read angle.");
         }
         if let Ok(Proptype::Material(AssetRef::Inline(p))) = node.properties().get(MATERIAL) {
             if let RefractiveIndexType::Const(val) = &p.optical.refractive_index {
                 let idx = val.get_refractive_index(nanometer!(1000.0))?;
                 assert_eq!(idx, 1.5);
             } else {
-                assert!(false, "could not read refractive index constant.");
+                panic!("could not read refractive index constant.");
             }
         } else {
-            assert!(false, "could not read material.");
+            panic!("could not read material.");
         }
         Ok(())
     }
@@ -241,7 +225,7 @@ mod test {
                 "test",
                 millimeter!(-0.1),
                 degree!(0.0),
-                &RefrIndexConst::new(1.5)?
+                RefrIndexConst::new(1.5)?
             )
             .is_err()
         );
@@ -250,7 +234,7 @@ mod test {
                 "test",
                 millimeter!(f64::NEG_INFINITY),
                 degree!(0.0),
-                &RefrIndexConst::new(1.5)?
+                RefrIndexConst::new(1.5)?
             )
             .is_err()
         );
@@ -259,7 +243,7 @@ mod test {
                 "test",
                 millimeter!(f64::INFINITY),
                 degree!(0.0),
-                &RefrIndexConst::new(1.5)?
+                RefrIndexConst::new(1.5)?
             )
             .is_err()
         );
@@ -268,7 +252,7 @@ mod test {
                 "test",
                 millimeter!(f64::NAN),
                 degree!(0.0),
-                &RefrIndexConst::new(1.5)?
+                RefrIndexConst::new(1.5)?
             )
             .is_err()
         );
@@ -276,92 +260,92 @@ mod test {
         assert!(
             Wedge::new(
                 "test",
-                millimeter!(0.0),
+                millimeter!(1.0),
                 degree!(f64::NEG_INFINITY),
-                &RefrIndexConst::new(1.0)?
+                RefrIndexConst::new(1.0)?
             )
             .is_err()
         );
         assert!(
             Wedge::new(
                 "test",
-                millimeter!(0.0),
+                millimeter!(1.0),
                 degree!(f64::INFINITY),
-                &RefrIndexConst::new(1.0)?
+                RefrIndexConst::new(1.0)?
             )
             .is_err()
         );
         assert!(
             Wedge::new(
                 "test",
-                millimeter!(0.0),
+                millimeter!(1.0),
                 degree!(f64::NAN),
-                &RefrIndexConst::new(1.0)?
+                RefrIndexConst::new(1.0)?
             )
             .is_err()
         );
         assert!(
             Wedge::new(
                 "test",
-                millimeter!(0.0),
+                millimeter!(1.0),
                 degree!(90.01),
-                &RefrIndexConst::new(1.0)?
+                RefrIndexConst::new(1.0)?
             )
             .is_err()
         );
         assert!(
             Wedge::new(
                 "test",
-                millimeter!(0.0),
+                millimeter!(1.0),
                 degree!(-90.01),
-                &RefrIndexConst::new(1.0)?
+                RefrIndexConst::new(1.0)?
             )
             .is_err()
         );
         assert!(
             Wedge::new(
                 "test",
-                millimeter!(0.0),
+                millimeter!(1.0),
                 degree!(89.99),
-                &RefrIndexConst::new(1.0)?
+                RefrIndexConst::new(1.0)?
             )
             .is_ok()
         );
         assert!(
             Wedge::new(
                 "test",
-                millimeter!(0.0),
+                millimeter!(1.0),
                 degree!(-89.99),
-                &RefrIndexConst::new(1.0)?
+                RefrIndexConst::new(1.0)?
             )
             .is_ok()
         );
         let n = Wedge::new(
             "test",
-            millimeter!(0.0),
+            millimeter!(1.0),
             degree!(10.0),
-            &RefrIndexConst::new(1.0)?,
+            RefrIndexConst::new(1.0)?,
         )?;
         assert_eq!(n.name(), "test");
         if let Ok(Proptype::Length(p)) = n.properties().get("center thickness") {
-            assert_eq!(p, &millimeter!(0.0));
+            assert_eq!(p, &millimeter!(1.0));
         } else {
-            assert!(false, "could not read center thickness.");
+            panic!("could not read center thickness.");
         }
         if let Ok(Proptype::Angle(p)) = n.properties().get("wedge") {
             assert_eq!(p, &degree!(10.0));
         } else {
-            assert!(false, "could not read angle.");
+            panic!("could not read angle.");
         }
         if let Ok(Proptype::Material(AssetRef::Inline(p))) = n.properties().get(MATERIAL) {
             if let RefractiveIndexType::Const(val) = &p.optical.refractive_index {
                 let idx = val.get_refractive_index(nanometer!(1000.0))?;
                 assert_eq!(idx, 1.0);
             } else {
-                assert!(false, "could not read refractive index constant.");
+                panic!("could not read refractive index constant.");
             }
         } else {
-            assert!(false, "could not read material.");
+            panic!("could not read material.");
         }
         Ok(())
     }
@@ -372,12 +356,38 @@ mod test {
         assert_eq!(node.ports().names(&PortType::Output), vec!["output_1"]);
     }
     #[test]
-    fn set_aperture() {
-        test_set_aperture::<Wedge>("input_1", "output_1");
-    }
-    #[test]
     fn inverted() -> OpmResult<()> {
         test_inverted::<Wedge>()
+    }
+    #[test]
+    fn rays_beyond_optic_shape_are_lost() -> OpmResult<()> {
+        test_rays_beyond_optic_shape_are_lost::<Wedge>()
+    }
+    /// A ray entering the wedge inside its optic shape but heading outwards leaves through the
+    /// barrel instead of the exit face, and a ray trace (`Stop`) loses it.
+    #[test]
+    fn a_ray_leaving_through_the_barrel_is_lost_in_a_ray_trace() -> OpmResult<()> {
+        let mut wedge = Wedge::default();
+        wedge.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+        // Tilted by 10° it enters at 12.3 mm; refracted to about 6.6° it reaches about 13.5 mm at
+        // the exit face 10 mm further on, outside the optic shape of 12.5 mm.
+        let tilt = 10.0_f64.to_radians();
+        let ray = Ray::new(
+            millimeter!(0.0, 12.3 - tilt.tan(), -1.0),
+            Vector3::new(0.0, tilt.sin(), tilt.cos()),
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?;
+        let traced = AnalysisRayTrace::analyze(
+            &mut wedge,
+            LightResult::from([("input_1".into(), LightData::Geometric(Rays::from(ray)))]),
+            &RayTraceConfig::default(),
+        )?;
+        let Some(LightData::Geometric(rays)) = traced.get("output_1") else {
+            panic!("expected ray data at the output port");
+        };
+        assert_eq!(rays.nr_of_rays(true), 0);
+        Ok(())
     }
     #[test]
     fn analyze_empty() -> OpmResult<()> {
@@ -404,7 +414,7 @@ mod test {
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
         assert!(output.is_some());
-        let output = output.clone().unwrap();
+        let output = output.unwrap();
         assert_eq!(*output, input_light);
         Ok(())
     }
@@ -415,10 +425,10 @@ mod test {
     #[test]
     fn analyze_geometric_ok() -> OpmResult<()> {
         let mut node = Wedge::default();
-        node.set_isometry(Isometry::new(
+        node.set_positioning(NodePositioning::Absolute(Isometry::new(
             millimeter!(0.0, 0.0, 10.0),
             degree!(0.0, 0.0, 0.0),
-        )?)?;
+        )?))?;
         let mut input = LightResult::default();
         let rays = Rays::from(Ray::origin_along_z(nanometer!(1000.0), joule!(1.0))?);
         let input_light = LightData::Geometric(rays);
@@ -431,7 +441,7 @@ mod test {
             let dir = Vector3::new(0.0_f64, 0.0, 1.0);
             assert_eq!(ray.direction(), dir);
         } else {
-            assert!(false, "could not get LightData");
+            panic!("could not get LightData");
         }
         Ok(())
     }
@@ -448,7 +458,7 @@ mod test {
             degree!(5.0),
             RefrIndexConst::new(1.5)?,
         )?;
-        node.set_isometry(Isometry::identity())?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         test_volume_propagation_regression(
             &mut node,
             &[
@@ -490,12 +500,12 @@ mod test {
         test_volume_body::<Wedge>()
     }
     #[test]
-    fn clear_aperture() -> OpmResult<()> {
-        test_clear_aperture::<Wedge>()
+    fn optic_shape() -> OpmResult<()> {
+        test_optic_shape::<Wedge>(millimeter!(12.5))
     }
     #[test]
-    fn clear_aperture_absent_in_file() -> OpmResult<()> {
-        test_clear_aperture_absent_in_file::<Wedge>()
+    fn optic_shape_absent_in_file() -> OpmResult<()> {
+        test_optic_shape_absent_in_file::<Wedge>()
     }
     /// The wedge tilts its rear surface around the axis, so the volume thickens on one side of it
     /// by as much as it thins on the other.
@@ -508,7 +518,7 @@ mod test {
             degree!(5.0),
             RefrIndexConst::new(1.5)?,
         )?;
-        node.set_isometry(Isometry::identity())?;
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let above = path_length_through(&node, millimeter!(0.0, 5.0, 0.0))?;
         let below = path_length_through(&node, millimeter!(0.0, -5.0, 0.0))?;
         assert!(

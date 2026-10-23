@@ -33,7 +33,7 @@ use opossum_core::{
     reciprocal_centimeter,
     utils::super_gaussian::SuperGaussianShape,
 };
-use std::path::Path;
+use std::{env, path::Path};
 
 fn main() -> OpmResult<()> {
     let mut scenery = NodeGroup::new("Small-signal gain: pump profile imprinted on fluence");
@@ -118,7 +118,9 @@ fn main() -> OpmResult<()> {
         .expect("the analyzer just added must be there")
         .set_pump_scenarios(scenario_ids);
 
-    document.save_to_file(Path::new(
-        "./opossum_core/playground/amplifier_gaussian_pump_fluence.opm",
-    ))
+    // Read the output directory from the environment, fallback to playground
+    let out_dir = env::var("OPOSSUM_EXAMPLES_OUT_DIR")
+        .unwrap_or_else(|_| "./opossum_core/playground".to_string());
+    let out_path = Path::new(&out_dir).join("amplifier_gaussian_pump_fluence.opm");
+    document.save_to_file(&out_path)
 }

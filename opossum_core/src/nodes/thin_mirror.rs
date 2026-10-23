@@ -2,25 +2,30 @@
 //! Infinitely thin mirror with spherical or flat surface
 use crate::{
     analyzers::{
-        GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
-        propagation_strategy::MissedSurfaceStrategy, raytrace::AnalysisRayTrace,
+        GhostFocusConfig, RayTraceConfig,
+        energy::AnalysisEnergy,
+        ghostfocus::AnalysisGhostFocus,
+        propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
+        raytrace::AnalysisRayTrace,
     },
     coatings::CoatingConstantR,
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, node_attr::HasNodeAttr,
+        NodeAttr, OpticNode, OpticNodeExt, PortType, SurfacePorts, node_attr::HasNodeAttr,
+        surface_effect::Refraction,
     },
     error::{OpmResult, OpossumError},
-    geometry::{Plane, Sphere, geo_surface::GeoSurfaceRef},
-    light::{LightData, LightResult, Rays, light_result::LightRays},
-    meter, millimeter,
+    geometry::{
+        Geometry, SurfaceGeometry, SurfaceShape,
+        body::{OPTIC_SHAPE, default_optic_shape},
+    },
+    light::{LightData, LightResult, Rays, light_result::LightRays, rays::ReflectedPart},
+    millimeter,
     nodes::NodeRegistration,
     percent,
     properties::{Proptype, validator::Validator},
-    radian,
     utils::geom_transformation::Isometry,
 };
 use opm_macros_lib::OpmNode;
-use std::sync::{Arc, Mutex};
 use uom::si::f64::Length;
 
 inventory::submit! {
@@ -45,6 +50,7 @@ inventory::submit! {
 ///   - `name`
 ///   - `inverted`
 ///   - `curvature`
+///   - `optic shape`: the extent of the mirror; a ray beyond it misses the mirror
 pub struct ThinMirror {
     node_attr: NodeAttr,
 }
@@ -64,24 +70,22 @@ impl Default for ThinMirror {
                 Proptype::Curvature(millimeter!(f64::INFINITY)),
             )
             .unwrap();
+        node_attr
+            .create_property_with_validator(
+                OPTIC_SHAPE,
+                "transversal extent of the component",
+                Validator::OpticShapeIsBounded,
+                default_optic_shape().into(),
+            )
+            .unwrap();
 
         let mut m = Self { node_attr };
-        m.update_surfaces().unwrap();
-        m.ports_mut()
-            .set_coating(
-                &PortType::Input,
-                "input_1",
-                &CoatingConstantR::new(percent!(100.0)).unwrap().into(),
-            )
-            .unwrap();
-
-        m.ports_mut()
-            .set_coating(
-                &PortType::Output,
-                "output_1",
-                &CoatingConstantR::new(percent!(100.0)).unwrap().into(),
-            )
-            .unwrap();
+        m.create_default_surface_properties().unwrap();
+        m.set_coating(
+            SurfaceGeometry::FACE,
+            &CoatingConstantR::new(percent!(100.0)).unwrap().into(),
+        )
+        .unwrap();
         m
     }
 }
@@ -112,35 +116,19 @@ impl ThinMirror {
     }
 }
 impl OpticNode for ThinMirror {
-    fn update_surfaces(&mut self) -> OpmResult<()> {
-        let node_iso = self.effective_node_iso().unwrap_or_else(Isometry::identity);
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         let Ok(Proptype::Curvature(curvature)) = self.node_attr.get_property("curvature") else {
             return Err(OpossumError::Analysis("cannot read curvature".into()));
         };
-        let (geosurface, anchor_point_iso) = if curvature.is_infinite() {
-            (
-                GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(node_iso)))),
-                Isometry::identity(),
-            )
-        } else {
-            let anchor_point_iso_front =
-                Isometry::new(meter!(0., 0., curvature.value), radian!(0., 0., 0.))?;
-            (
-                GeoSurfaceRef(Arc::new(Mutex::new(Sphere::new(
-                    *curvature,
-                    node_iso.append(&anchor_point_iso_front),
-                )?))),
-                anchor_point_iso_front,
-            )
-        };
-        self.update_surface(
-            "input_1",
-            geosurface.clone(),
-            anchor_point_iso,
-            &PortType::Input,
-        )?;
-        self.update_surface("output_1", geosurface, anchor_point_iso, &PortType::Output)?;
-        Ok(())
+        Ok(Some(Geometry::surface(
+            Isometry::identity(),
+            SurfaceShape::spherical(*curvature)?,
+            Isometry::identity(),
+            self.cross_section()?,
+        )?))
+    }
+    fn surface_ports(&self) -> SurfacePorts {
+        SurfacePorts::SINGLE_SURFACE
     }
 }
 impl AnalysisGhostFocus for ThinMirror {
@@ -196,25 +184,20 @@ impl AnalysisRayTrace for ThinMirror {
             return Ok(LightResult::default());
         };
         if let LightData::Geometric(mut rays) = data.clone() {
-            let reflected = if let Some(surf) = self.get_optic_surface_mut(in_port) {
-                let refraction_intended = false;
-                let mut reflected_rays = rays.refract_on_surface(
-                    surf,
-                    None,
-                    refraction_intended,
-                    config.missed_surface_strategy(),
+            let face = self.face_of_port(in_port)?;
+            let reflected = if let Some(geometry) = self.node_attr_mut().runtime_geometry_mut() {
+                let mut reflected_rays = geometry.interact_with_rays(
+                    face,
+                    &mut rays,
+                    &Refraction(None),
+                    ReflectedPart::Main,
+                    *config.missed_surface_strategy(),
                 )?;
-                match self.ports().aperture(&PortType::Input, in_port) {
-                    Some(aperture) => {
-                        reflected_rays.apodize(aperture, &self.effective_surface_iso(in_port)?)?;
-                        reflected_rays
-                            .invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-                        reflected_rays
-                    }
-                    _ => {
-                        return Err(OpossumError::OpticPort("input aperture not found".into()));
-                    }
+                // The optical axis is placed by geometry alone; its energy does not decide where it runs.
+                if !config.is_positioning_run() {
+                    reflected_rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
                 }
+                reflected_rays
             } else {
                 return Err(OpossumError::Analysis("no surface found. Aborting".into()));
             };
@@ -242,27 +225,31 @@ mod test {
     use super::*;
     use crate::{
         analyzers::{RayTraceConfig, energy::EnergyConfig},
-        core_optics::PortType,
-        degree, joule,
-        light::spectrum_helper::create_he_ne_spec,
-        light::{Ray, Rays},
+        apertures::{Bore, CircleShape, OpticShape, Outline},
+        core_optics::{Alignable, NodeAttrExt, PortType, node_attr::NodePositioning},
+        degree,
+        geometry::body::OPTIC_SHAPE,
+        joule,
+        light::{Ray, Rays, spectrum_helper::create_he_ne_spec},
         nanometer,
-        nodes::test_helper::test_helper::*,
+        nodes::test_helper::helper::*,
         utils::geom_transformation::Isometry,
     };
-    use nalgebra::vector;
-    use num::Zero;
+    use approx::assert_abs_diff_eq;
+    use nalgebra::{Point2, vector};
+    use num_traits::Zero;
+    use uom::si::f64::Angle;
     #[test]
     fn default() {
         let node = ThinMirror::default();
         assert_eq!(node.name(), "mirror");
         assert_eq!(node.node_type(), "mirror");
         assert_eq!(node.node_color(), "aliceblue");
-        assert_eq!(node.inverted(), false);
+        assert!(!node.inverted());
         if let Ok(Proptype::Curvature(r)) = node.properties().get("curvature") {
             assert_eq!(r, &millimeter!(f64::INFINITY));
         } else {
-            assert!(false, "property curvature was not a length.");
+            panic!("property curvature was not a length.");
         }
     }
     #[test]
@@ -273,7 +260,7 @@ mod test {
         if let Ok(Proptype::Curvature(r)) = m.properties().get("curvature") {
             assert_eq!(r, &millimeter!(f64::INFINITY));
         } else {
-            assert!(false, "property curvature was not a length.");
+            panic!("property curvature was not a length.");
         }
     }
     #[test]
@@ -283,8 +270,8 @@ mod test {
         assert_eq!(node.ports().names(&PortType::Output), vec!["output_1"]);
     }
     #[test]
-    fn set_aperture() {
-        test_set_aperture::<ThinMirror>("input_1", "output_1");
+    fn reflects_completely() {
+        test_reflects_completely::<ThinMirror>();
     }
     #[test]
     fn inverted() -> OpmResult<()> {
@@ -317,8 +304,117 @@ mod test {
         if let Ok(Proptype::Curvature(r)) = m.properties().get("curvature") {
             assert_eq!(r, &millimeter!(100.0));
         } else {
-            assert!(false, "property curvature was not a length.");
+            panic!("property curvature was not a length.");
         }
+        Ok(())
+    }
+    #[test]
+    fn a_curvature_tighter_than_the_optic_shape_is_rejected() {
+        let error = ThinMirror::default()
+            .with_curvature(millimeter!(-10.0))
+            .expect_err("a sphere of 10 mm radius ends before the optic shape of 12.5 mm");
+        assert!(error.to_string().contains("does not reach"), "{error}");
+        // A hemisphere just reaches it.
+        assert!(
+            ThinMirror::default()
+                .with_curvature(millimeter!(-12.5))
+                .is_ok()
+        );
+    }
+    #[test]
+    fn optic_shape_absent_in_file() -> OpmResult<()> {
+        test_optic_shape_absent_in_file::<ThinMirror>()
+    }
+    #[test]
+    fn reflections_beyond_optic_shape_are_lost() -> OpmResult<()> {
+        test_reflections_beyond_optic_shape_are_lost::<ThinMirror>()
+    }
+    /// A round mirror of 25 mm turned by 45° about x keeps its full diameter along x, but presents
+    /// only 25 mm · cos 45° ≈ 17.7 mm along y to a beam along z: its optic shape is measured on
+    /// the mirror, in the frame of the node.
+    #[test]
+    fn a_45_degree_mirror_measures_its_optic_shape_in_the_node_frame() -> OpmResult<()> {
+        let mut mirror = ThinMirror::default().with_tilt(degree!(45.0, 0.0, 0.0))?;
+        mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+        for ((x, y), hits) in [
+            ((12.4, 0.0), true),
+            ((12.6, 0.0), false),
+            ((0.0, 8.8), true),
+            ((0.0, 8.9), false),
+            ((0.0, -8.8), true),
+            ((0.0, -8.9), false),
+        ] {
+            let ray =
+                Ray::new_collimated(millimeter!(x, y, -10.0), nanometer!(1000.0), joule!(1.0))?;
+            let input =
+                LightResult::from([("input_1".into(), LightData::Geometric(Rays::from(ray)))]);
+            let output = AnalysisRayTrace::analyze(&mut mirror, input, &RayTraceConfig::default())?;
+            let Some(LightData::Geometric(reflected)) = output.get("output_1") else {
+                panic!("expected ray data at the output port");
+            };
+            assert_eq!(
+                reflected.nr_of_rays(true) == 1,
+                hits,
+                "ray at ({x}, {y}) mm"
+            );
+        }
+        Ok(())
+    }
+    /// A mirror with a central hole of 2 mm in a 12.5 mm disk: its optic shape is a ring. A ray
+    /// through the hole misses the mirror, one on the ring is reflected.
+    #[test]
+    fn a_ray_through_the_central_hole_of_a_mirror_misses_it() -> OpmResult<()> {
+        let hole = Bore::new(
+            CircleShape::new(millimeter!(2.0))?,
+            Point2::origin(),
+            Angle::zero(),
+        );
+        let ring = Outline::new(CircleShape::new(millimeter!(12.5))?, vec![hole])?;
+        let mut mirror = ThinMirror::default();
+        mirror.set_property(OPTIC_SHAPE, OpticShape::from(ring).into())?;
+        mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+        let rays = rays_along_z_from(
+            &[millimeter!(0.0, 1.0, -10.0), millimeter!(0.0, 8.0, -10.0)],
+            nanometer!(1000.0),
+        )?;
+        let output = AnalysisRayTrace::analyze(
+            &mut mirror,
+            LightResult::from([("input_1".into(), LightData::Geometric(rays))]),
+            &RayTraceConfig::default(),
+        )?;
+        let Some(LightData::Geometric(reflected)) = output.get("output_1") else {
+            panic!("expected ray data at the output port");
+        };
+        let heights: Vec<f64> = reflected
+            .iter()
+            .filter(|ray| ray.valid())
+            .map(|ray| ray.position().y.get::<uom::si::length::millimeter>())
+            .collect();
+        assert_eq!(
+            heights.len(),
+            1,
+            "only the ray on the ring is reflected: {heights:?}"
+        );
+        assert_abs_diff_eq!(heights[0], 8.0, epsilon = 1e-9);
+        Ok(())
+    }
+    /// An energy analysis traces no rays, so the optic shape does not cut its light, however
+    /// small the mirror is.
+    #[test]
+    fn energy_analysis_ignores_the_optic_shape() -> OpmResult<()> {
+        let mut mirror = ThinMirror::default();
+        mirror.set_property(
+            OPTIC_SHAPE,
+            OpticShape::from(CircleShape::new(millimeter!(0.1))?).into(),
+        )?;
+        mirror.update_surfaces()?;
+        let input_light = LightData::Energy(create_he_ne_spec(1.0)?);
+        let output = AnalysisEnergy::analyze(
+            &mut mirror,
+            LightResult::from([("input_1".into(), input_light.clone())]),
+            &EnergyConfig::default(),
+        )?;
+        assert_eq!(output.get("output_1"), Some(&input_light));
         Ok(())
     }
     #[test]
@@ -356,17 +452,12 @@ mod test {
         test_analyze_wrong_data_type::<ThinMirror>("input_1")
     }
     #[test]
-    fn analyze_geometric_no_isometery() {
-        test_analyze_geometric_no_isometry::<ThinMirror>("input_1");
-    }
-    #[test]
     fn analyze_geometric_ok() -> OpmResult<()> {
         let mut node = ThinMirror::default();
-
-        node.set_isometry(Isometry::new(
+        node.set_positioning(NodePositioning::Absolute(Isometry::new(
             millimeter!(0.0, 0.0, 10.0),
             degree!(0.0, 0.0, 0.0),
-        )?)?;
+        )?))?;
         let mut input = LightResult::default();
         let rays = Rays::from(Ray::origin_along_z(nanometer!(1000.0), joule!(1.0))?);
         let input_light = LightData::Geometric(rays);
@@ -382,7 +473,7 @@ mod test {
             let dir = vector![0.0, 0.0, -1.0];
             assert_eq!(ray.direction(), dir);
         } else {
-            assert!(false, "could not get LightData");
+            panic!("could not get LightData");
         }
         Ok(())
     }

@@ -1,12 +1,13 @@
 use dioxus::html::geometry::euclid::default::Point2D;
 use opossum_core::{
+    core_optics::node_attr::NodePositioning,
     prelude::*,
     types::api_types::{
         AddPortMappingRequest, ConnectInfo, ConvertToGroupRequest, ConvertToGroupResponse,
         CutNodesResponse, DeleteNodeResponse, MoveNodesRequest, MoveNodesResponse, NewNode,
         NewRefNode, NodeInfo, NodePortsResponse, NodePropertiesResponse, PasteNodesResponse,
-        PortMappingsResponse, PortNamesResponse, RemovePortMapResponse, UpdateConnectionRequest,
-        UpdateNodeRequest, UpdatePortRequest,
+        PortMappingsResponse, PortNamesResponse, PositioningRequest, RemovePortMapResponse,
+        UpdateConnectionRequest, UpdateNodeRequest,
     },
 };
 use std::collections::{HashMap, HashSet};
@@ -50,23 +51,6 @@ pub async fn get_ports_of_group(group_id: Uuid) -> Result<NodePortsResponse, Str
         .await
 }
 
-pub async fn patch_node_port_config(
-    node_id: Uuid,
-    port_name: String,
-    port_type: PortType,
-    req: UpdatePortRequest,
-) -> Result<(), String> {
-    let port_type_str = match port_type {
-        PortType::Input => "Input",
-        PortType::Output => "Output",
-    };
-    HTTP_API_CLIENT()
-        .patch::<UpdatePortRequest>(
-            &format!("/api/nodes/{node_id}/ports/{port_type_str}/{port_name}"),
-            req,
-        )
-        .await
-}
 /// Send a request to add a node to a node group.
 ///
 /// # Errors
@@ -358,9 +342,16 @@ pub async fn update_node_property(
 /// - The HTTP request fails to reach the server (e.g., network issues).
 /// - The server responds with an error status code (e.g., 4xx or 5xx).
 /// - Serialization of the [`Isometry`] payload fails before sending.
-pub async fn update_node_isometry(node_id: Uuid, iso: Option<Isometry>) -> Result<(), String> {
+pub async fn update_node_isometry(
+    node_id: Uuid,
+    positioning: NodePositioning,
+) -> Result<(), String> {
+    let positioning_req = match positioning {
+        NodePositioning::Absolute(pos) => PositioningRequest::Absolute(pos),
+        NodePositioning::Automatic(_) => PositioningRequest::Automatic,
+    };
     let update_node_request = UpdateNodeRequest {
-        isometry: Some(iso),
+        positioning: Some(positioning_req),
         ..Default::default()
     };
     HTTP_API_CLIENT()
@@ -436,7 +427,7 @@ pub async fn get_amplifier_candidates() -> Result<Vec<Uuid>, String> {
 /// This function will return an error if the request fails or the `node_id` was not found.
 pub async fn put_node_is_amplifier(node_id: Uuid, is_amplifier: bool) -> Result<(), String> {
     HTTP_API_CLIENT()
-        .put_receive_no_content(&format!("/api/nodes/{node_id}/is_amplifier"), is_amplifier)
+        .put(&format!("/api/nodes/{node_id}/is_amplifier"), is_amplifier)
         .await
 }
 
@@ -450,9 +441,8 @@ pub async fn remove_port_map(
         PortType::Output => "Output",
     };
     HTTP_API_CLIENT()
-        .delete::<(), RemovePortMapResponse>(
-            &format!("/api/nodes/{group_id}/port_mappings?external_port_name={group_port_name}&port_type={port_type_str}"),
-            (),
+        .delete::<RemovePortMapResponse>(
+            &format!("/api/nodes/{group_id}/port_mappings?external_port_name={group_port_name}&port_type={port_type_str}")
         )
         .await
 }

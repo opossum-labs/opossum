@@ -1,6 +1,6 @@
 # Summary
 
-- [Start](./concepts/compass.md)
+- [Start](./compass.md)
 - [Concepts](./concepts/concepts.md)
   - [Introduction](./concepts/intro.md)
   - [Modeling optical systems](./concepts/optical_graph.md)
@@ -9,11 +9,13 @@
   - [Position distributions](./concepts/position_distributions.md)
   - [Energy distributions](./concepts/energy_distributions.md)
   - [Fluence calculcations](./concepts/fluence.md)
+  - [Material Catalogue](./concepts/material_catalogue.md)
   - [Project background](./concepts/background.md)
     - [Goals](./concepts/background/goals.md)
     - [Software architecture](./concepts/background/architecture.md)
     - [OpticScenery](./concepts/background/opticscenery.md)
     - [OpticNode](./concepts/background/opticnode.md)
+    - [Component geometry](./concepts/background/component_geometry.md)
     - [OpticAnalyzer](./concepts/background/opticanalyzer.md)
     - [Existing software](./concepts/background/existing_software.md)
     - [Project plan](./concepts/background/plan.md)

@@ -47,7 +47,7 @@ mod test {
     }
     #[test]
     fn analyze_energy_ok() -> OpmResult<()> {
-        let light_builder = EnergyDataBuilder::Raw(create_he_ne_spec(1.0)?.into());
+        let light_builder = EnergyDataBuilder::Raw(create_he_ne_spec(1.0)?);
         let mut node = SourcePort::default();
         let mut config = EnergyConfig::default();
         config.map_source(node.node_attr().uuid(), light_builder.clone());
@@ -55,7 +55,7 @@ mod test {
         assert_eq!(output.len(), 1);
         let output = output.get("output_1");
         assert!(output.is_some());
-        let LightData::Energy(spectrum) = output.clone().unwrap() else {
+        let LightData::Energy(spectrum) = output.unwrap() else {
             panic!("wrong type for output")
         };
         assert_eq!(*spectrum, light_builder.build()?);

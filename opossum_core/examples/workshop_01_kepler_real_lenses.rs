@@ -1,21 +1,48 @@
-//! Example: Kepler Telescope with Spherical Lenses
+//! Kepler Telescope with Spherical Lenses Example
 //!
-//! This example demonstrates how to build a realistic Kepler telescope
-//! using spherical lenses and a wavelength-dependent refractive index model.
+//! This example builds a Kepler telescope using spherical lenses and a
+//! wavelength-dependent refractive index model, then runs a ray-tracing
+//! analysis on it.
 //!
-//! Overall structure of the system:
-//! 1. Create a scene (NodeGroup)
-//! 2. Add a light source
-//! 3. Define refractive index material model
-//! 4. Create optical elements (lenses and aperture)
-//! 5. Add elements into the scene
-//! 6. Connect elements using distances
-//! 7. Configure ray tracing
-//! 8. Run analysis and save output
+//! System Overview
+//! 1. One collimated line ray source
+//! 2. A wavelength-dependent refractive index material ("HZF52")
+//! 3. Two spherical lenses ("75 mm lens" and "50 mm lens") using that
+//!    material
+//! 4. An optic shape of 25 mm radius on both lenses, the size of the lenses
+//! 5. A ray propagation visualizer after the second lens
+//! 6. A ray-tracing analyzer for the source beam
+//! 7. Saving the optical system to a file for later use
+//!
+//! The beam is defined by:
+//! - a collimated line ray distribution
+//! - a beam width of 45 mm
+//! - an energy of 1 joule per ray
+//! - 9 rays in total
+//!
+//! This example demonstrates:
+//! - Defining a wavelength-dependent refractive index material and using it
+//!   to build spherical lenses
+//! - Building an optical system from spherical lenses of a given size
+//! - Connecting components with fixed propagation distances
+//! - Attaching a visualizer to inspect ray paths
+//! - Setting up a collimated line ray source for ray tracing
+//! - Configuring a ray-tracing analyzer
+//! - Saving the system as an `.opm` document
+//!
+//! Imports:
+//! - `opossum_core::prelude::*` — optical components, analyzers, unit
+//!   macros, and document types
+//! - `opossum_core::core_optics::NodeAttrExt` — extension trait for setting
+//!   node names and properties
+//! - `opossum_core::apertures::CircleShape` — the outline of a lens's optic
+//!   shape
+//! - `opossum_core::material::Material` — refractive index material type
+//! - `std::{env, path::Path}` — used to find the output directory and save
+//!   the `.opm` file
 use opossum_core::{
-    core_optics::{NodeAttrExt, OpticNodeExt},
-    material::Material,
-    prelude::*,
+    apertures::CircleShape, core_optics::NodeAttrExt, geometry::body::OPTIC_SHAPE,
+    material::Material, prelude::*,
 };
 use std::{env, path::Path};
 
@@ -39,7 +66,8 @@ fn main() -> OpmResult<()> {
     )?;
     let mut material_hzf52: Material = refr_index_hzf52.into();
     material_hzf52.header.name = "HZF52".to_string();
-    // Create the first spherical lens with real optical parameters.
+    // Create the first spherical lens with real optical parameters. It is 50 mm in diameter: its
+    // optic shape is a circle of 25 mm radius.
     let mut lens1 = Lens::new(
         "75 mm lens",
         millimeter!(122.25),
@@ -47,19 +75,23 @@ fn main() -> OpmResult<()> {
         millimeter!(10.0),
         material_hzf52.clone(),
     )?;
-    // Define a circular aperture.
-    let aperture = Aperture::new_circle(millimeter!(25.0), ApertureType::Hole, None)?;
-    // Attach aperture to the first lens input.
-    lens1.set_aperture(&PortType::Input, "input_1", &aperture)?;
+    lens1.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(25.0))?).into(),
+    )?;
     // Add first lens to the optical scene.
     let i_pl1 = scenery.add_node(lens1)?;
-    // Create the second spherical lens of the telescope.
-    let lens2 = Lens::new(
+    // Create the second spherical lens of the telescope, of the same size as the first one.
+    let mut lens2 = Lens::new(
         "50 mm lens",
         millimeter!(100.0),
         millimeter!(-100.0),
         millimeter!(10.0),
         material_hzf52,
+    )?;
+    lens2.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(millimeter!(25.0))?).into(),
     )?;
     // Add second lens to the scene.
     let i_pl2 = scenery.add_node(lens2)?;

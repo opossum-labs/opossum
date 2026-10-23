@@ -235,7 +235,6 @@ mod test {
     use super::*;
     use crate::{distributions::spectral::SpecDistType, nanometer};
     use approx::assert_abs_diff_eq;
-    use core::f64;
     use uom::si::{f64::Length, length::nanometer};
 
     #[test]

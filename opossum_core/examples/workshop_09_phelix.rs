@@ -14,41 +14,32 @@
 //! 5. Long focal-length relay optics
 //! 6. Double-pass amplifier section implemented using `NodeReference`
 //! 7. Ray propagation visualizer for inspecting ray trajectories
+//!
 //! Distances between connected components are specified in millimeters.
-//!
-//! Principles and Objectives
-//! This example demonstrates:
-//! - Construction of large optical systems using hierarchical `NodeGroup` structures
-//! - Beam transport using paraxial optical elements
-//! - Beam steering using tilted mirrors
-//! - Reuse of existing optical nodes using `NodeReference`
-//! - Reverse propagation through existing optical elements using inverted references
-//! - Multi-pass amplifier construction without duplicating optical geometry
-//! - Ray-tracing analysis for imaging and collimation studies
-//!
-//! The amplifier section is implemented as a reusable optical subgraph.
-//! An inverted `NodeReference` is used to propagate rays backward through the
-//! same amplifier chain after reflection from a steering mirror.
 //!
 //! Import `opossum_core` modules:
 //! - `prelude::*` provides optical system infrastructure, analyzers,
 //!   unit macros, and optical components
 //! - Distribution modules define spatial, spectral, and energy ray distributions
+//! - `apertures` shapes and `OPTIC_SHAPE` give the components their size
 //! - `properties::Proptype` provides typed visualization properties
 //!
 //! External crates:
 //! - `nalgebra::Point2` used for 2D source grid definition
 //! - `nalgebra::Vector3` used for visualization direction vectors
 //! - `uom` used for strongly typed physical units
-//! - `num::Zero` used for zero-valued unit initialization
+//! - `num_traits::Zero` used for zero-valued unit initialization
 
 use nalgebra::Point2;
 use nalgebra::Vector3;
-use num::Zero;
+use num_traits::Zero;
 use opossum_core::core_optics::NodeAttrExt;
+use opossum_core::material::Material;
 use opossum_core::prelude::*;
 use opossum_core::{
+    apertures::{CircleShape, PolygonShape},
     distributions::{energy::UniformDist, position::Grid, spectral::LaserLines},
+    geometry::body::OPTIC_SHAPE,
     properties::Proptype,
 };
 use std::env;
@@ -70,43 +61,84 @@ fn main() -> OpmResult<()> {
     // Add source node used for diagnostic ray injection
     let i_src = scenery.add_node(SourcePort::new("incoming rays DM"))?;
 
+    // Constant refractive-index material
+    let laser_disk_material: Material = RefrIndexConst::new(1.5)?.into();
+
+    // Radii of the optic shapes. The transport optics meet the beam up to 74 mm off their
+    // centers. MM1 and the final lens carry it at up to 125 mm. The return path passes the exit lens,
+    // MM3 and MM2 up to 227 mm off their centers.
+    let transport_optics = millimeter!(100.0);
+    let amplifier_optics = millimeter!(150.0);
+    let large_optics = millimeter!(250.0);
+
     // Initial transport section
     // Paraxial transport optics
-    let i_l_pa_4_input = scenery.add_node(ParaxialSurface::new("T4 Input", millimeter!(931.0))?)?;
-    let i_l_pa_4_exit = scenery.add_node(ParaxialSurface::new("T4 Exit", millimeter!(931.0))?)?;
+    let i_l_pa_4_input = scenery.add_node(with_optic_shape(
+        ParaxialSurface::new("T4 Input", millimeter!(931.0))?,
+        transport_optics,
+    )?)?;
+    let i_l_pa_4_exit = scenery.add_node(with_optic_shape(
+        ParaxialSurface::new("T4 Exit", millimeter!(931.0))?,
+        transport_optics,
+    )?)?;
     // Mirror for changing beam direction
-    let i_m_pa_45 =
-        scenery.add_node(ThinMirror::new("bridge_input").with_tilt(degree!(45.0, 0.0, 0.0))?)?;
+    let i_m_pa_45 = scenery.add_node(with_optic_shape(
+        ThinMirror::new("bridge_input").with_tilt(degree!(45.0, 0.0, 0.0))?,
+        transport_optics,
+    )?)?;
     // Additional steering mirror
-    let i_m_bridge =
-        scenery.add_node(ThinMirror::new("bridge_input").with_tilt(degree!(0.0, 45.0, 0.0))?)?;
+    let i_m_bridge = scenery.add_node(with_optic_shape(
+        ThinMirror::new("bridge_input").with_tilt(degree!(0.0, 45.0, 0.0))?,
+        transport_optics,
+    )?)?;
 
     // Long-distance transport optics
-    let i_br_input =
-        scenery.add_node(ParaxialSurface::new("bridge_input", millimeter!(2250.0))?)?;
-    let i_br_exit = scenery.add_node(ParaxialSurface::new("bridge_exit", millimeter!(2250.0))?)?;
+    let i_br_input = scenery.add_node(with_optic_shape(
+        ParaxialSurface::new("bridge_input", millimeter!(2250.0))?,
+        transport_optics,
+    )?)?;
+    let i_br_exit = scenery.add_node(with_optic_shape(
+        ParaxialSurface::new("bridge_exit", millimeter!(2250.0))?,
+        transport_optics,
+    )?)?;
     // Periscope section
     // Upper periscope mirror
-    let i_per_oben =
-        scenery.add_node(ThinMirror::new("periscope_upper").with_tilt(degree!(0.0, 45.0, 0.0))?)?;
+    let i_per_oben = scenery.add_node(with_optic_shape(
+        ThinMirror::new("periscope_upper").with_tilt(degree!(0.0, 45.0, 0.0))?,
+        transport_optics,
+    )?)?;
     // Lower periscope mirror
-    let i_per_unten = scenery
-        .add_node(ThinMirror::new("periscope_lower").with_tilt(degree!(-45.0, 0.0, 0.0))?)?;
+    let i_per_unten = scenery.add_node(with_optic_shape(
+        ThinMirror::new("periscope_lower").with_tilt(degree!(-45.0, 0.0, 0.0))?,
+        transport_optics,
+    )?)?;
 
     // Main transport optics
     // First relay optic
     let lens1 = ParaxialSurface::new("Input lens", millimeter!(1890.0))?;
-    let i_l1 = scenery.add_node(lens1)?;
+    let i_l1 = scenery.add_node(with_optic_shape(lens1, transport_optics)?)?;
     // Mirrors for changing beam direction
-    let i_m1 = scenery.add_node(ThinMirror::new("mirror 1").with_tilt(degree!(0.0, 45.0, 0.0))?)?;
-    let i_m2 = scenery.add_node(ThinMirror::new("mirror 2").with_tilt(degree!(0.0, 45.0, 0.0))?)?;
+    let i_m1 = scenery.add_node(with_optic_shape(
+        ThinMirror::new("mirror 1").with_tilt(degree!(0.0, 45.0, 0.0))?,
+        transport_optics,
+    )?)?;
+    let i_m2 = scenery.add_node(with_optic_shape(
+        ThinMirror::new("mirror 2").with_tilt(degree!(0.0, 45.0, 0.0))?,
+        transport_optics,
+    )?)?;
     // Long focal-length relay optic
     let lens2 = ParaxialSurface::new("Exit lens", millimeter!(7590.0))?;
-    let i_l2 = scenery.add_node(lens2)?;
+    let i_l2 = scenery.add_node(with_optic_shape(lens2, large_optics)?)?;
 
     // Steering mirrors before the amplifier section
-    let i_mm3 = scenery.add_node(ThinMirror::new("MM3").with_tilt(degree!(0.0, 45.0, 0.0))?)?;
-    let i_mm2 = scenery.add_node(ThinMirror::new("MM2").with_tilt(degree!(0.0, 45.0, 0.0))?)?;
+    let i_mm3 = scenery.add_node(with_optic_shape(
+        ThinMirror::new("MM3").with_tilt(degree!(0.0, 45.0, 0.0))?,
+        large_optics,
+    )?)?;
+    let i_mm2 = scenery.add_node(with_optic_shape(
+        ThinMirror::new("MM2").with_tilt(degree!(0.0, 45.0, 0.0))?,
+        large_optics,
+    )?)?;
 
     // Reverse-propagation references
     // Create reverse-propagation reference for MM2
@@ -128,12 +160,12 @@ fn main() -> OpmResult<()> {
     let mut amps = NodeGroup::new("Amps");
 
     // Add amplifier stages
-    let i_amp1 = amps.add_node(amp("Amp 1")?)?;
-    let i_amp2 = amps.add_node(amp("Amp 2")?)?;
-    let i_amp3 = amps.add_node(amp("Amp 3")?)?;
-    let i_amp4 = amps.add_node(amp("Amp 4")?)?;
-    let i_amp5 = amps.add_node(amp("Amp 5")?)?;
-    let i_amp6 = amps.add_node(amp("Amp 6")?)?;
+    let i_amp1 = amps.add_node(amp("Amp 1", laser_disk_material.clone())?)?;
+    let i_amp2 = amps.add_node(amp("Amp 2", laser_disk_material.clone())?)?;
+    let i_amp3 = amps.add_node(amp("Amp 3", laser_disk_material.clone())?)?;
+    let i_amp4 = amps.add_node(amp("Amp 4", laser_disk_material.clone())?)?;
+    let i_amp5 = amps.add_node(amp("Amp 5", laser_disk_material.clone())?)?;
+    let i_amp6 = amps.add_node(amp("Amp 6", laser_disk_material)?)?;
 
     // Connect amplifier stages
     amps.connect_nodes(i_amp1, "output", i_amp2, "input", millimeter!(880.0))?;
@@ -146,13 +178,18 @@ fn main() -> OpmResult<()> {
     amps.map_input_port(i_amp1, "input", "input")?;
     amps.map_output_port(i_amp6, "output", "output")?;
 
-    // Double-pass amplifier section
+    // Double-pass amplifier section. The periscope turns the beam upside down (up is -y here),
+    // which flips the sense of the tilts below and in `amp`.
     let mut main_amp = NodeGroup::new("Double-Pass Amps");
 
     // Add forward amplifier chain
     let i_amps = main_amp.add_node(amps)?;
-    // Steering mirror for the return path
-    let i_mm1 = main_amp.add_node(ThinMirror::new("MM1").with_tilt(degree!(0.0, 0.5, 0.0))?)?;
+    // Steering mirror for the return path. Tilted by 0.1°, it sends the beam back through the
+    // disks at most 230 mm off their centers, within their octagonal outline.
+    let i_mm1 = main_amp.add_node(with_optic_shape(
+        ThinMirror::new("MM1").with_tilt(degree!(0.0, -0.1, 0.0))?,
+        amplifier_optics,
+    )?)?;
     // Create inverted reference for reverse propagation
     let mut amps_r = NodeReference::from_node(&main_amp.node(i_amps)?)?;
     amps_r.set_inverted(true)?;
@@ -173,7 +210,7 @@ fn main() -> OpmResult<()> {
     // Final transport optics
     // Final relay optic
     let lens3 = ParaxialSurface::new("MA exit lens", millimeter!(7590.0))?;
-    let i_l3 = scenery.add_node(lens3)?;
+    let i_l3 = scenery.add_node(with_optic_shape(lens3, amplifier_optics)?)?;
     // Create ray propagation visualizer
     let mut ray_prop_vis = RayPropagationVisualizer::new("propagation", None)?;
     // Configure ray visualization transparency
@@ -313,20 +350,42 @@ fn main() -> OpmResult<()> {
 ///
 /// Returns:
 /// - `NodeGroup` representing one amplifier stage
-fn amp(name: &str) -> OpmResult<NodeGroup> {
-    // Constant refractive-index material
-    let fused_silica = RefrIndexConst::new(1.5)?;
+fn amp(name: &str, disk_material: Material) -> OpmResult<NodeGroup> {
     // Create amplifier node group
     let mut amp = NodeGroup::new(name);
+    // The disks are octagons, 621.19 mm wide in their tilt plane and 330.18 mm high.
+    let octagon: OpticShape = PolygonShape::new(
+        [
+            (310.595, 38.025),
+            (183.53, 165.09),
+            (-183.53, 165.09),
+            (-310.595, 38.025),
+            (-310.595, -38.025),
+            (-183.53, -165.09),
+            (183.53, -165.09),
+            (310.595, -38.025),
+        ]
+        .into_iter()
+        .map(|(x, y)| Point2::new(millimeter!(x), millimeter!(y)))
+        .collect(),
+    )?
+    .into();
     // First wedge element
-    let disk_a = Wedge::new("disk A", millimeter!(45.0), degree!(0.0), &fused_silica)?
-        .with_tilt(degree!(0.0, -56.0, 0.0))?;
+    let mut disk_a = Wedge::new(
+        "disk A",
+        millimeter!(45.0),
+        degree!(0.0),
+        disk_material.clone(),
+    )?
+    .with_tilt(degree!(0.0, 56.0, 0.0))?;
+    disk_a.set_property(OPTIC_SHAPE, octagon.clone().into())?;
     let i_a1 = amp.add_node(disk_a)?;
 
     // Second wedge element
-    let disk_a = Wedge::new("disk B", millimeter!(45.0), degree!(0.0), &fused_silica)?
-        .with_tilt(degree!(0.0, 56.0, 0.0))?;
-    let i_a2 = amp.add_node(disk_a)?;
+    let mut disk_b = Wedge::new("disk B", millimeter!(45.0), degree!(0.0), disk_material)?
+        .with_tilt(degree!(0.0, -56.0, 0.0))?;
+    disk_b.set_property(OPTIC_SHAPE, octagon.into())?;
+    let i_a2 = amp.add_node(disk_b)?;
 
     // Connect wedge elements
     amp.connect_nodes(i_a1, "output_1", i_a2, "input_1", millimeter!(900.0))?;
@@ -334,4 +393,20 @@ fn amp(name: &str) -> OpmResult<NodeGroup> {
     amp.map_input_port(i_a1, "input_1", "input")?;
     amp.map_output_port(i_a2, "output_1", "output")?;
     Ok(amp)
+}
+
+/// Give a component a circular optic shape.
+///
+/// Parameters:
+/// - `node`: the component
+/// - `radius`: radius of its optic shape
+///
+/// Returns:
+/// - the component with its optic shape set
+fn with_optic_shape<T: NodeAttrExt>(mut node: T, radius: Length) -> OpmResult<T> {
+    node.set_property(
+        OPTIC_SHAPE,
+        OpticShape::from(CircleShape::new(radius)?).into(),
+    )?;
+    Ok(node)
 }

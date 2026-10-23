@@ -4,7 +4,7 @@
 //! further documentation show up.
 
 #[cfg(test)]
-pub mod test_helper {
+pub mod helper {
     use crate::{
         error::{OpmResult, OpossumError},
         properties::Proptype,

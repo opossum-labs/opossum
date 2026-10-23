@@ -1,10 +1,7 @@
 //! Module for storing node specific data to be integrated in an [`AnalysisReport`](crate::reporting::analysis_report::AnalysisReport).
-use std::path::Path;
-
 use crate::{
-    error::OpmResult,
     properties::{Properties, Proptype},
-    reporting::report_note::ReportNote,
+    reporting::report_note::{ReportLevel, ReportNote},
 };
 use serde::{Deserialize, Serialize};
 
@@ -74,22 +71,42 @@ impl NodeReport {
     pub fn notes(&self) -> &[ReportNote] {
         &self.notes
     }
-    /// Export this [`NodeReport`] to a file at the given `report_path`.
-    ///
-    /// # Errors
-    ///
-    /// This function will return an error if `export_data` of [`Proptype`] returns an error.
-    pub fn export(&self, report_path: &Path) -> OpmResult<()> {
-        for (prop_id, prop) in self.properties().props_with_report_id_iter(&self.uuid) {
-            prop.export_data(report_path, &prop_id)?;
-        }
-        Ok(())
-    }
 }
 
 impl From<NodeReport> for Proptype {
     fn from(value: NodeReport) -> Self {
         Self::NodeReport(value)
+    }
+}
+
+/// Result of generating a report for an optical node.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub enum NodeReportResult {
+    /// The node produced a valid report to be displayed.
+    Report(NodeReport),
+    /// The node is incompatible with the current analyzer and emits a top-level note.
+    Incompatible(ReportNote),
+    /// The node does not generate a report.
+    None,
+}
+
+impl NodeReportResult {
+    /// Convenience helper to construct an incompatible warning note directly.
+    #[must_use]
+    pub fn incompatible_warning(message: impl Into<String>) -> Self {
+        Self::Incompatible(ReportNote::new(ReportLevel::Warning, &message.into()))
+    }
+}
+
+impl From<NodeReport> for NodeReportResult {
+    fn from(report: NodeReport) -> Self {
+        Self::Report(report)
+    }
+}
+
+impl From<Option<NodeReport>> for NodeReportResult {
+    fn from(opt: Option<NodeReport>) -> Self {
+        opt.map_or_else(|| Self::None, Self::Report)
     }
 }
 
@@ -108,7 +125,7 @@ mod test {
         assert_eq!(report.name, "detector name");
         assert_eq!(report.uuid, "123");
         assert_eq!(report.properties.nr_of_props(), 0);
-        assert_eq!(report.show_item, false);
+        assert!(!report.show_item);
 
         assert_eq!(report.node_type(), "test detector");
         assert_eq!(report.name(), "detector name");
@@ -124,10 +141,10 @@ mod test {
             "123",
             Properties::default(),
         );
-        assert_eq!(report.show_item(), false);
+        assert!(!report.show_item());
         report.set_show_item(true);
-        assert_eq!(report.show_item, true);
-        assert_eq!(report.show_item(), true);
+        assert!(report.show_item);
+        assert!(report.show_item());
     }
     #[test]
     fn to_proptype() {

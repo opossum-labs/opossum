@@ -6,9 +6,8 @@ use crate::components::scenery_editor::{GraphsWorkspaceAction, NodeType, Selecte
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use futures_util::StreamExt;
-use opossum_core::core_optics::PortType;
+use opossum_core::core_optics::node_attr::NodePositioning;
 use opossum_core::prelude::{AnalyzerType, Isometry, Proptype};
-use opossum_core::types::api_types::UpdatePortRequest;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -26,7 +25,7 @@ pub enum NodeChangeAction {
         graph_id: Uuid,
     },
     Property(String, Proptype),
-    Isometry(Option<Isometry>),
+    Isometry(NodePositioning),
     AnalyzerType(AnalyzerType),
     /// The pump scenarios an analyzer is run in, in the given order - one report per entry, and a
     /// single passive run when empty.
@@ -41,11 +40,6 @@ pub enum NodeChangeAction {
         name: String,
         graph_id: Uuid,
     },
-    PortConfig {
-        port_name: String,
-        port_type: PortType,
-        request: UpdatePortRequest,
-    },
 }
 
 #[component]
@@ -55,7 +49,7 @@ pub fn NodeConfigEditor(
     workspace_processor: Coroutine<GraphsWorkspaceAction>,
     active_graph_id: ReadSignal<Uuid>,
 ) -> Element {
-    info!("🔄 Render: NodeConfigEditor");
+    debug!("🔄 Render: NodeConfigEditor");
     let save_manager = use_save_manager();
     let flush_trigger = save_manager.flush_trigger;
     let dirty_count = save_manager.dirty_count;
@@ -269,11 +263,6 @@ fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
                             Err(e) => Err(e),
                         }
                     }
-                    NodeChangeAction::PortConfig {
-                        port_name,
-                        port_type,
-                        request,
-                    } => api::patch_node_port_config(uuid, port_name, port_type, request).await,
                 };
 
                 match result {

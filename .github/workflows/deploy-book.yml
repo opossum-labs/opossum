@@ -1,0 +1,58 @@
+name: Deploy mdBook to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+    # Trigger deployment only on changes inside the documentation folder
+    paths:
+      - 'doc/book/**'
+      - '.github/workflows/deploy-book.yml'
+  # Allows triggering the deployment manually from the GitHub Actions tab
+  workflow_dispatch:
+
+# Permissions required to publish to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Prevent concurrent deployments to avoid race conditions
+concurrency:
+  group: 'pages'
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Install mdBook binary
+      - name: Setup mdBook
+        uses: peaceiris/actions-mdbook@v2
+        with:
+          mdbook-version: 'latest'
+
+      # Build book using the path doc/book
+      - name: Build mdBook
+        run: mdbook build doc/book
+
+      # Configure Pages metadata
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      # Upload the compiled HTML directory (default: doc/book/book)
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './doc/book/book'
+
+      # Deploy artifact to GitHub Pages
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

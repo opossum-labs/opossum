@@ -509,40 +509,32 @@ impl PumpSource {
 mod test {
     use super::*;
     use crate::{
-        apertures::{Aperture, ApertureType},
+        apertures::{CircleShape, Outline},
         degree,
         error::OpossumError,
         gain::inversion_field::CellIndex,
-        geometry::{Plane, body::SurfaceBoundedBody, geo_surface::GeoSurfaceRef},
+        geometry::{Extruded, Face, SurfaceShape},
         millimeter,
-        types::validated_type_definitions::ValidatedCrossSection,
         utils::geom_transformation::Isometry,
     };
     use approx::assert_relative_eq;
-    use std::sync::{Arc, Mutex};
     use strum::IntoEnumIterator;
     use uom::si::f64::Length;
 
     /// Create a disk of the given thickness and radius, sitting at the origin.
-    fn disk(thickness: Length, radius: Length) -> OpmResult<SurfaceBoundedBody> {
-        Ok(SurfaceBoundedBody::new(
-            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(Isometry::identity())))),
-            GeoSurfaceRef(Arc::new(Mutex::new(Plane::new(Isometry::new_along_z(
-                thickness,
-            )?)))),
-            ValidatedCrossSection::try_new(Aperture::new_circle(
-                radius,
-                ApertureType::Hole,
-                None,
-            )?)?,
+    fn disk(thickness: Length, radius: Length) -> OpmResult<Extruded> {
+        Extruded::new(
             Isometry::identity(),
-        ))
+            Face::new(SurfaceShape::Plane, Isometry::identity()),
+            Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
+            Outline::new(CircleShape::new(radius)?, Vec::new())?,
+        )
     }
     /// The disk every field below is laid over: 10 mm thick, 5 mm in radius, sitting at the origin.
     ///
     /// Its bounding box therefore spans -5..5 mm transversally and 0..10 mm along the axis, which is
     /// what the expected values are worked out from.
-    fn test_disk() -> OpmResult<SurfaceBoundedBody> {
+    fn test_disk() -> OpmResult<Extruded> {
         disk(millimeter!(10.0), millimeter!(5.0))
     }
     /// Create an unpumped field over the disk, coarse enough for its corners to lie outside the body.

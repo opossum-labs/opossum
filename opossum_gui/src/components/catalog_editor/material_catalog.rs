@@ -1,3 +1,4 @@
+use super::CatalogSynchronizer;
 use crate::components::{
     asset_editor::material_editor::{MaterialChangeEvent, MaterialEditor},
     primitives::{
@@ -13,7 +14,7 @@ use crate::components::{
 use dioxus::prelude::*;
 use dioxus_free_icons::{
     Icon,
-    icons::fa_solid_icons::{FaCheck, FaPencil, FaPlus, FaTrash},
+    icons::fa_solid_icons::{FaArrowsRotate, FaCheck, FaPencil, FaPlus, FaTrash},
 };
 use dioxus_primitives::alert_dialog::AlertDialogContent;
 use opossum_core::{material::Material, refractive_index::RefrIndexSellmeier1};
@@ -80,11 +81,16 @@ pub fn MaterialCatalog(
     let mut material_state = use_signal(Material::default);
     let mut show_delete_dialog = use_signal(|| false);
     let mut pending_delete = use_signal(|| Option::<DeleteTarget>::None);
+    let mut show_synchronizer = use_signal(|| false);
 
     // Search and filter inputs
     let mut search_text = use_signal(String::new);
     let mut min_nd = use_signal(|| Option::<f64>::None);
     let mut max_nd = use_signal(|| Option::<f64>::None);
+
+    // Formatted string values for input elements to ensure controlled inputs
+    let min_nd_str = min_nd().map(|v| v.to_string()).unwrap_or_default();
+    let max_nd_str = max_nd().map(|v| v.to_string()).unwrap_or_default();
 
     // Reactive filter pipeline reading from the in-memory registry index
     let filtered_entries = use_memo(move || {
@@ -124,8 +130,7 @@ pub fn MaterialCatalog(
     let on_material_save =
         use_callback(
             move |()| match registry.write().publish(&mut *material_state.write()) {
-                Ok(saved_path) => {
-                    info!("Successfully published material to {:?}", saved_path);
+                Ok(_) => {
                     on_action.call(MaterialCatalogEvent::MaterialAdded);
                 }
                 Err(e) => {
@@ -159,20 +164,7 @@ pub fn MaterialCatalog(
     // Callback: Delete latest version and update the in-memory cache
     let handle_execute_delete = use_callback(move |target: DeleteTarget| {
         match registry.write().delete_latest_version(target.id) {
-            Ok(Some(new_latest)) => {
-                log::info!(
-                    "Deleted version v{} of '{}'. Reverted to v{}.",
-                    target.latest_version,
-                    target.name,
-                    new_latest
-                );
-                on_action.call(MaterialCatalogEvent::MaterialDeleted);
-            }
-            Ok(None) => {
-                log::info!(
-                    "Deleted final version of '{}'. Material removed from registry.",
-                    target.name
-                );
+            Ok(_) => {
                 on_action.call(MaterialCatalogEvent::MaterialDeleted);
             }
             Err(e) => {
@@ -212,11 +204,20 @@ pub fn MaterialCatalog(
                         }
                         if !is_select_mode {
                             CardAction {
-                                Button {
-                                    variant: ButtonVariant::Success,
-                                    onclick: on_create_new,
-                                    Icon { icon: FaPlus }
-                                    "New Material"
+                                div { class: "d-flex gap-2",
+                                    Button {
+                                        title: "Compare and synchronize model assets with the catalog",
+                                        variant: ButtonVariant::Outline,
+                                        onclick: move |_| show_synchronizer.set(true),
+                                        Icon { icon: FaArrowsRotate }
+                                        "Sync with Model"
+                                    }
+                                    Button {
+                                        variant: ButtonVariant::Success,
+                                        onclick: on_create_new,
+                                        Icon { icon: FaPlus }
+                                        "New Material"
+                                    }
                                 }
                             }
                         }
@@ -246,6 +247,7 @@ pub fn MaterialCatalog(
                                     class: "form-control form-control-sm",
                                     r#type: "number",
                                     step: "0.01",
+                                    value: "{min_nd_str}",
                                     oninput: move |e| min_nd.set(e.value().parse().ok()),
                                 }
                             }
@@ -261,6 +263,7 @@ pub fn MaterialCatalog(
                                     class: "form-control form-control-sm",
                                     r#type: "number",
                                     step: "0.01",
+                                    value: "{max_nd_str}",
                                     oninput: move |e| max_nd.set(e.value().parse().ok()),
                                 }
                             }
@@ -423,5 +426,6 @@ pub fn MaterialCatalog(
                 }
             }
         }
+        CatalogSynchronizer { open: show_synchronizer }
     }
 }

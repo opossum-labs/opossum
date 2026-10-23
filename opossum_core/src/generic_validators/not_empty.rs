@@ -39,29 +39,21 @@ mod tests {
     #[test]
     fn test_is_not_empty_vec_f64() {
         let validator = AllNotEmpty;
-        assert!(validator.validate_vec(&vec![1.0, 2.0]).is_ok());
+        assert!(validator.validate_vec(&[1.0, 2.0]).is_ok());
         assert!(validator.validate_vec(&Vec::<f64>::new()).is_err());
     }
 
     #[test]
     fn test_is_not_empty_vec_length() {
         let validator = AllNotEmpty;
-        assert!(
-            validator
-                .validate_vec(&vec![Length::new::<meter>(1.0)])
-                .is_ok()
-        );
+        assert!(validator.validate_vec(&[Length::new::<meter>(1.0)]).is_ok());
         assert!(validator.validate_vec(&Vec::<Length>::new()).is_err());
     }
 
     #[test]
     fn test_is_not_empty_vec_angle() {
         let validator = AllNotEmpty;
-        assert!(
-            validator
-                .validate_vec(&vec![Angle::new::<radian>(1.0)])
-                .is_ok()
-        );
+        assert!(validator.validate_vec(&[Angle::new::<radian>(1.0)]).is_ok());
         assert!(validator.validate_vec(&Vec::<Angle>::new()).is_err());
     }
 

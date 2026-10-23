@@ -8,7 +8,7 @@ mod move_nodes;
 mod paste;
 
 use nalgebra::Point2;
-use opossum_core::{core_optics::NodeAttrExt, utils::LockExt};
+use opossum_core::core_optics::NodeAttrExt;
 use utoipa_actix_web::service_config::ServiceConfig;
 
 // Not named anywhere in this crate's non-test code, but `document.rs`/`nodes/core.rs` test modules
@@ -17,21 +17,18 @@ use utoipa_actix_web::service_config::ServiceConfig;
 #[allow(unused_imports)]
 pub use convert_to_group::post_convert_nodes_to_group;
 
-use crate::{app_state::NodeCacheItem, error::BackEndErrorResponse};
+use crate::app_state::NodeCacheItem;
 
 /// The top-left corner of the given cached nodes' current GUI positions - the anchor a paste/cut
 /// shifts the pasted-in copies relative to. Shared by [`paste::post_paste_nodes`] and
 /// [`cut::post_cut_nodes`].
-fn upper_left_corner_of_nodes(
-    nodes: &[NodeCacheItem],
-) -> Result<Point2<f64>, BackEndErrorResponse> {
+fn upper_left_corner_of_nodes(nodes: &[NodeCacheItem]) -> Point2<f64> {
     let mut corner = Point2::new(f64::INFINITY, f64::INFINITY);
 
     for node in nodes {
         let pos = match node {
             NodeCacheItem::Optical(optical_node) => {
-                let node = optical_node.optical_ref.lock_opm()?;
-                node.gui_position().unwrap_or_else(Point2::origin)
+                optical_node.gui_position().unwrap_or_else(Point2::origin)
             }
             NodeCacheItem::Analyzer(analyzer_dto) => {
                 // Access info from DTO
@@ -45,8 +42,7 @@ fn upper_left_corner_of_nodes(
         corner.x = corner.x.min(pos.x);
         corner.y = corner.y.min(pos.y);
     }
-
-    Ok(corner)
+    corner
 }
 
 pub fn config(cfg: &mut ServiceConfig<'_>) {

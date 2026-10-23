@@ -60,7 +60,7 @@ pub struct AssetHeaderEditorProps {
 /// Follows the "props down, events up" pattern. Changes are emitted via `on_change`.
 #[component]
 pub fn AssetHeaderEditor(props: AssetHeaderEditorProps) -> Element {
-    info!("🔄 Render: AssetHeaderEditor");
+    debug!("🔄 Render: AssetHeaderEditor");
     let header = props.header.read();
     rsx! {
         Card {

@@ -1,0 +1,35 @@
+<div class="card border-0 bg-light p-2">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-2 px-1">
+    <div>
+      <span class="badge bg-secondary me-2">{basis_name}</span>
+      <span class="small text-muted">Residual RMS:</span>
+      <strong>{residual_rms}</strong>
+    </div>
+    <div class="small text-muted">
+      {{ for meta in metadata }}
+      <span class="ms-3">{meta.key}: <strong>{meta.val}</strong></span>
+      {{ endfor }}
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-sm table-striped table-hover table-bordered mb-0 bg-white">
+      <thead class="table-light">
+        <tr>
+          <th scope="col">Mode / Aberration</th>
+          <th scope="col" class="text-end">Amplitude (&lambda;)</th>
+          <th scope="col" class="text-end">Amplitude (Optical Path)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{ for mode in modes }}
+        <tr>
+          <td>{mode.label}</td>
+          <td class="text-end font-monospace">{mode.coeff_lambda}</td>
+          <td class="text-end font-monospace text-secondary">{mode.coeff_physical}</td>
+        </tr>
+        {{ endfor }}
+      </tbody>
+    </table>
+  </div>
+</div>

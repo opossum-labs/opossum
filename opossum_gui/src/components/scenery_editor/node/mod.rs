@@ -10,17 +10,17 @@ mod graph_node_components;
 pub mod node_component;
 mod node_icon;
 use crate::components::scenery_editor::constants::{
-    BORDER_WIDTH, HEADER_HEIGHT, NODE_WIDTH, PORT_VER_SPACING,
+    BORDER_WIDTH, HEADER_HEIGHT, NODE_WIDTH, PORT_MAP_OVERHANG, PORT_VER_SPACING,
 };
 
 use super::ports::ports_component::Ports;
 pub use node_component::Node;
 
 // Constants for node dimensions and port positions
-const GOLDEN_RATIO: f64 = 1.618_033_988_7;
+//
 // The minimum node body height is fixed such that the overall node height (header + body) corresponds to
 // to the golden ratio
-pub const MIN_NODE_BODY_HEIGHT: f64 = NODE_WIDTH / GOLDEN_RATIO - HEADER_HEIGHT;
+pub const MIN_NODE_BODY_HEIGHT: f64 = NODE_WIDTH / std::f64::consts::GOLDEN_RATIO - HEADER_HEIGHT;
 // Nodes with only one port will be vertically centered
 // in the node body, so we need to add some padding
 pub const PORT_VER_PADDING: f64 = MIN_NODE_BODY_HEIGHT / 2.0;
@@ -49,14 +49,10 @@ impl NodeType {
     /// Resolves the SVG symbol ID directly from the node type variant.
     /// Replaces spaces with underscores to form a clean, URL-safe SVG identifier.
     #[must_use]
-    pub fn symbol_id(&self) -> Option<String> {
+    pub fn symbol_id(&self) -> String {
         match self {
-            Self::Optical(name) => {
-                // E.g. "parabolic mirror" -> "parabolic_mirror"
-                Some(name.replace(' ', "_"))
-            }
-            // Analyzer nodes can return None or a dedicated shared symbol ID
-            Self::Analyzer(_) => None,
+            Self::Optical(name) => name.replace(' ', "_"),
+            Self::Analyzer(name) => name.to_string().replace(' ', "_"),
         }
     }
 }
@@ -141,13 +137,31 @@ impl NodeElement {
     pub const fn pos(&self) -> Point2D<f64> {
         self.pos
     }
+    /// Returns the standard bounding box of the node without mapped port overhangs.
     #[must_use]
     pub fn get_bounding_box(&self) -> Rect<f64> {
-        let min_x = self.pos().x;
+        self.get_bounding_box_with_mapped_ports(false, false)
+    }
+
+    /// Returns the visual bounding box of the node, optionally expanding horizontally
+    /// if input or output ports are mapped to the parent group.
+    #[must_use]
+    pub fn get_bounding_box_with_mapped_ports(
+        &self,
+        has_mapped_input: bool,
+        has_mapped_output: bool,
+    ) -> Rect<f64> {
+        let mut min_x = self.pos().x;
         let min_y = self.pos().y;
-        let max_x = self.pos().x + NODE_WIDTH;
+        let mut max_x = self.pos().x + NODE_WIDTH;
         let max_y = self.pos().y + self.total_height();
 
+        if has_mapped_input {
+            min_x -= PORT_MAP_OVERHANG;
+        }
+        if has_mapped_output {
+            max_x += PORT_MAP_OVERHANG;
+        }
         Rect::new(
             Point2D::new(min_x, min_y),
             Size2D::new(max_x - min_x, max_y - min_y),
@@ -308,8 +322,12 @@ impl From<&AnalyzerItemDto> for NodeElement {
             .gui_position()
             .map_or_else(Point2D::zero, |p| Point2D::new(p.x, p.y));
 
+        // Store only the custom name (or empty string if None) so that
+        // NodeElement::name() dynamically falls back to the analyzer type.
+        let custom_name = dto.info.name().unwrap_or_default().to_string();
+
         Self::new(
-            dto.info.display_name(),
+            custom_name,
             NodeType::Analyzer(Box::new(dto.info.analyzer_type().clone())),
             dto.id,
             position,
@@ -399,5 +417,32 @@ mod test {
         };
         let node = NodeElement::from(&without_position);
         assert_eq!(node.pos(), DEFAULT_NEW_NODE_POS);
+    }
+    #[test]
+    fn bounding_box_expands_for_mapped_ports() {
+        let node = NodeElement::from(&sample_node_info());
+        let default_box = node.get_bounding_box();
+        assert_eq!(default_box.width(), NODE_WIDTH);
+
+        let input_mapped_box = node.get_bounding_box_with_mapped_ports(true, false);
+        assert_eq!(
+            input_mapped_box.origin.x,
+            default_box.origin.x - PORT_MAP_OVERHANG
+        );
+        assert_eq!(input_mapped_box.width(), NODE_WIDTH + PORT_MAP_OVERHANG);
+
+        let output_mapped_box = node.get_bounding_box_with_mapped_ports(false, true);
+        assert_eq!(output_mapped_box.origin.x, default_box.origin.x);
+        assert_eq!(output_mapped_box.width(), NODE_WIDTH + PORT_MAP_OVERHANG);
+
+        let both_mapped_box = node.get_bounding_box_with_mapped_ports(true, true);
+        assert_eq!(
+            both_mapped_box.origin.x,
+            default_box.origin.x - PORT_MAP_OVERHANG
+        );
+        assert_eq!(
+            both_mapped_box.width(),
+            NODE_WIDTH + 2.0 * PORT_MAP_OVERHANG
+        );
     }
 }

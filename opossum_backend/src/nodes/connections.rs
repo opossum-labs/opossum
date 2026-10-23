@@ -4,7 +4,6 @@ use actix_web::{
 };
 use opossum_core::{
     meter,
-    opm_document::OpmDocument,
     types::api_types::{ConnectInfo, ErrorResponse, UpdateConnectionRequest},
 };
 use serde::Deserialize;
@@ -13,10 +12,8 @@ use utoipa::IntoParams;
 use uuid::Uuid;
 
 use crate::{
-    app_state::AppState,
-    error::BackEndErrorResponse,
-    helper_functions::is_reference_target,
-    undo::{Command, EdgeSnapshot, UpdateEdgeDistance},
+    app_state::AppState, error::BackEndErrorResponse, helper_functions::is_reference_target,
+    undo::Command,
 };
 
 #[derive(Debug, Deserialize, IntoParams)]
@@ -32,8 +29,8 @@ pub struct DeleteConnectionQuery {
         ("uuid" = Uuid, Path, description = "UUID of the group node"),
     ),
     responses(
-        (status = OK, description = "all connections of the group", body= Vec<ConnectInfo>, content_type="application/json"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found or not a group node", content_type="application/json")
+        (status = OK, description = "all connections of the group", body = Vec<ConnectInfo>, content_type = "application/json"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found or not a group node", content_type = "application/json")
     )
 )]
 #[allow(clippy::significant_drop_tightening)]
@@ -44,15 +41,12 @@ pub async fn get_connections(
 ) -> Result<Json<Vec<ConnectInfo>>, BackEndErrorResponse> {
     let document = data.document.lock();
     let scenery = document.scenery();
-
     let uuid = path.into_inner();
     let connections = scenery.with_group_node(uuid, opossum_core::nodes::NodeGroup::connections)?;
-
     let connect_infos = connections
         .iter()
         .map(|c| {
             let is_reference = is_reference_target(scenery, c.target_id);
-
             ConnectInfo::new(
                 c.src_id,
                 c.src_port.clone(),
@@ -63,7 +57,6 @@ pub async fn get_connections(
             )
         })
         .collect::<Vec<ConnectInfo>>();
-
     Ok(Json(connect_infos))
 }
 
@@ -72,12 +65,12 @@ pub async fn get_connections(
 /// Connect two optical nodes by the given connection info.
 #[utoipa::path(tag = "node",
     params(
-        ("uuid" = Uuid, Path, description = "UUID of the group node"), // <-- Fehlte!
+        ("uuid" = Uuid, Path, description = "UUID of the group node"),
     ),
     request_body = ConnectInfo,
     responses(
-        (status = CREATED, description = "node connection created", body = ConnectInfo, content_type="application/json"), // <-- 201 Created
-        (status = BAD_REQUEST, body = ErrorResponse, description = "group UUID not found", content_type="application/json")
+        (status = CREATED, description = "node connection created", body = ConnectInfo, content_type = "application/json"),
+        (status = BAD_REQUEST, body = ErrorResponse, description = "group UUID not found", content_type = "application/json")
     )
 )]
 #[post("/{uuid}/connections")]
@@ -89,7 +82,8 @@ pub async fn post_connection(
     let group_uuid = path.into_inner();
     let mut document = data.document.lock();
 
-    document
+    // The core's connect_nodes returns GraphDelta::NodesConnected directly
+    let delta = document
         .scenery_mut()
         .with_group_node_mut(group_uuid, |group| {
             group.connect_nodes(
@@ -102,17 +96,13 @@ pub async fn post_connection(
         })??;
 
     let is_ref_node = is_reference_target(document.scenery(), connect_info.target_uuid());
-
     let mut connect_info = connect_info.into_inner();
     connect_info.set_is_reference(is_ref_node);
 
-    data.push_undo(Command::RemoveEdge(EdgeSnapshot {
-        group_id: group_uuid,
-        connect_info: connect_info.clone(),
-    }));
+    data.push_undo(Command::UndoGraph(Box::new(delta)));
     drop(document);
 
-    Ok(HttpResponse::Created().json(connect_info)) // <-- REST Standard
+    Ok(HttpResponse::Created().json(connect_info))
 }
 
 /// Update a connection distance
@@ -126,7 +116,7 @@ pub async fn post_connection(
     request_body = UpdateConnectionRequest,
     responses(
         (status = NO_CONTENT, description = "Node connection successfully updated"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "Group UUID not found or connection invalid", content_type="application/json")
+        (status = BAD_REQUEST, body = ErrorResponse, description = "Group UUID not found or connection invalid", content_type = "application/json")
     )
 )]
 #[patch("/{uuid}/connections")]
@@ -137,28 +127,22 @@ pub async fn update_connection(
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let group_uuid = path.into_inner();
     let update_req = req_body.into_inner();
-
     let mut document = data.document.lock();
 
-    let old = capture_existing_connection(
-        &document,
-        group_uuid,
-        update_req.src_uuid,
-        &update_req.src_port,
-    )?;
-    let mut new = old.clone();
-    new.set_distance(update_req.distance);
+    // Core captures old and new distance inside GraphDelta::ConnectionDistanceChanged
+    let delta = document
+        .scenery_mut()
+        .with_group_node_mut(group_uuid, |group| {
+            group.update_connection_distance(
+                update_req.src_uuid,
+                &update_req.src_port,
+                meter!(update_req.distance),
+            )
+        })??;
 
-    let inverse = Command::UpdateEdgeDistance(UpdateEdgeDistance {
-        group_id: group_uuid,
-        old,
-        new,
-    })
-    .apply(&mut document)?;
-    data.push_undo(inverse);
+    data.push_undo(Command::UndoGraph(Box::new(delta)));
     drop(document);
 
-    // HIER: REST-Standard für erfolgreiche Updates ohne Rückgabedaten
     Ok(HttpResponse::NoContent().finish())
 }
 
@@ -173,7 +157,7 @@ pub async fn update_connection(
     ),
     responses(
         (status = NO_CONTENT, description = "node connection successfully deleted"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "group UUID not found or disconnection failed", content_type="application/json")
+        (status = BAD_REQUEST, body = ErrorResponse, description = "group UUID not found or disconnection failed", content_type = "application/json")
     )
 )]
 #[delete("/{uuid}/connections")]
@@ -184,54 +168,19 @@ pub async fn delete_connection(
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let group_uuid = path.into_inner();
     let query = query.into_inner();
-
     let mut document = data.document.lock();
 
-    let connect_info =
-        capture_existing_connection(&document, group_uuid, query.src_uuid, &query.src_port)?;
-
-    document
+    // Core captures connection details inside GraphDelta::NodesDisconnected
+    let delta = document
         .scenery_mut()
         .with_group_node_mut(group_uuid, |group| {
             group.disconnect_nodes(query.src_uuid, &query.src_port)
         })??;
 
-    data.push_undo(Command::AddEdge(EdgeSnapshot {
-        group_id: group_uuid,
-        connect_info,
-    }));
+    data.push_undo(Command::UndoGraph(Box::new(delta)));
     drop(document);
-    Ok(HttpResponse::NoContent().finish())
-}
 
-/// Finds the existing connection in group `group_uuid` originating from (`src_uuid`, `src_port`)
-/// and captures it as a [`ConnectInfo`] (including whether its target is a reference node) - the
-/// old-value snapshot an update/delete against that connection needs for its undo command.
-///
-/// # Errors
-///
-/// Returns an error if `group_uuid` does not resolve to a group, or a 400 "Connection not found"
-/// error if no connection originates from the given source node and port.
-fn capture_existing_connection(
-    document: &OpmDocument,
-    group_uuid: Uuid,
-    src_uuid: Uuid,
-    src_port: &str,
-) -> Result<ConnectInfo, BackEndErrorResponse> {
-    let existing = document.scenery().with_group_node(group_uuid, |g| {
-        g.connections()
-            .into_iter()
-            .find(|c| c.src_id == src_uuid && c.src_port == src_port)
-    })?;
-    let Some(existing) = existing else {
-        return Err(BackEndErrorResponse::new(
-            400,
-            "Opossum",
-            "Connection not found",
-        ));
-    };
-    let is_reference = is_reference_target(document.scenery(), existing.target_id);
-    Ok(ConnectInfo::from_connection_info(&existing, is_reference))
+    Ok(HttpResponse::NoContent().finish())
 }
 
 #[cfg(test)]
@@ -247,11 +196,9 @@ mod test {
     async fn test_get_connections_invalid_uuid() {
         let app_state = create_test_state();
         let app = test::init_service(App::new().app_data(app_state).service(get_connections)).await;
-
         let req = test::TestRequest::get()
             .uri(&format!("/{}/connections", Uuid::new_v4()))
             .to_request();
-
         let resp = app.call(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
@@ -261,7 +208,6 @@ mod test {
         let app_state = create_test_state();
         let app =
             test::init_service(App::new().app_data(app_state).service(delete_connection)).await;
-
         let req = test::TestRequest::delete()
             .uri(&format!(
                 "/{}/connections?src_uuid={}&src_port=out",
@@ -269,7 +215,6 @@ mod test {
                 Uuid::new_v4()
             ))
             .to_request();
-
         let resp = app.call(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }

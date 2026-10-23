@@ -1,4 +1,4 @@
-use opossum_core::{analyzers::energy::EnergyConfig, prelude::*, utils::LockExt};
+use opossum_core::{analyzers::energy::EnergyConfig, prelude::*};
 
 /// This test creates a simple optical setup with a source, a dummy node, and an energy meter.
 /// The dummy nodes is then inverted after already being connected in the setup. The test checks if the inversion
@@ -27,8 +27,9 @@ fn node_inversion_after_connection() -> OpmResult<()> {
     )?;
 
     // Invert the dummy node AFTER it has been connected in the setup
-    let dummy_ref = scenery.node(i_node)?;
-    dummy_ref.optical_ref.lock_opm()?.set_inverted(true)?;
+    scenery.with_node_mut(i_node, |node| {
+        node.set_inverted(true).unwrap();
+    })?;
 
     let mut doc = OpmDocument::new(scenery);
 

@@ -134,7 +134,7 @@ impl PropagationStrategy for GhostFocusConfig {
     }
 }
 #[cfg(test)]
-mod test_ghost_focus_config {
+mod test {
     use super::GhostFocusConfig;
     use crate::{
         core_optics::hit_map::fluence_estimator::FluenceEstimator, error::OpmResult,
@@ -166,11 +166,11 @@ mod test_ghost_focus_config {
         let uuid = Uuid::new_v4();
         let builder: RayDataBuilder = RayDataSource::Collimated(CollimatedSrc::default()).into();
 
-        assert_eq!(config.map_source(uuid, builder.clone()), false);
+        assert!(!config.map_source(uuid, builder.clone()));
         assert_eq!(config.get_source(&uuid), Some(&builder));
 
         let builder2: RayDataBuilder = RayDataSource::PointSrc(PointSrc::default()).into();
-        assert_eq!(config.map_source(uuid, builder2.clone()), true);
+        assert!(config.map_source(uuid, builder2.clone()));
         assert_eq!(config.get_source(&uuid), Some(&builder2));
     }
 
@@ -210,6 +210,72 @@ mod test_ghost_focus_config {
 
         assert!(config.get_source(&node_id).is_some());
         assert!(config.get_source(&uuid2).is_none());
+        Ok(())
+    }
+    #[test]
+    fn test_first_differing_source() {
+        use crate::light::lightdata::ray_data_source::{CollimatedSrc, PointSrc, RayDataSource};
+        use uuid::Uuid;
+
+        let mut config1 = GhostFocusConfig::default();
+        let mut config2 = GhostFocusConfig::default();
+
+        // 1. Identical configs -> should return None
+        assert_eq!(config1.first_differing_source(&config2), None);
+
+        let id_a = Uuid::new_v4();
+        let id_b = Uuid::new_v4();
+        let builder_collimated: RayDataBuilder =
+            RayDataSource::Collimated(CollimatedSrc::default()).into();
+        let builder_point: RayDataBuilder = RayDataSource::PointSrc(PointSrc::default()).into();
+
+        // 2. config1 has a source, config2 does not (addition in config1)
+        config1.map_source(id_a, builder_collimated.clone());
+        assert_eq!(config1.first_differing_source(&config2), Some(id_a));
+        assert_eq!(config2.first_differing_source(&config1), Some(id_a));
+
+        // 3. Both have identical mapping for id_a
+        config2.map_source(id_a, builder_collimated.clone());
+        assert_eq!(config1.first_differing_source(&config2), None);
+
+        // 4. Same key, differing builder (modification)
+        config2.map_source(id_a, builder_point);
+        assert_eq!(config1.first_differing_source(&config2), Some(id_a));
+        assert_eq!(config2.first_differing_source(&config1), Some(id_a));
+
+        // 5. Restore id_a equality, add a second key id_b only to config2 (addition in config2)
+        config2.map_source(id_a, builder_collimated.clone());
+        config2.map_source(id_b, builder_collimated);
+        assert_eq!(config1.first_differing_source(&config2), Some(id_b));
+        assert_eq!(config2.first_differing_source(&config1), Some(id_b));
+    }
+
+    #[test]
+    fn test_ambient_material_and_propagation_strategy() -> OpmResult<()> {
+        use crate::analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy};
+        use crate::material::Material;
+        use crate::prelude::RefrIndexConst;
+
+        let mut config = GhostFocusConfig::default();
+
+        // Check default missed surface strategy (MissedSurfaceStrategy::Ignore != Default::default())
+        assert_eq!(
+            config.missed_surface_strategy(),
+            MissedSurfaceStrategy::Ignore
+        );
+
+        // Check default ambient material
+        assert_eq!(config.ambient_material(), &Material::vacuum());
+
+        // Set custom ambient material and verify
+        let custom_material: Material = RefrIndexConst::new(1.5)?.into();
+        config.set_ambient_material(custom_material.clone());
+        assert_eq!(config.ambient_material(), &custom_material);
+
+        // Verify ambient_refractive_index returns custom material's refractive index
+        let refr_index = config.ambient_refractive_index();
+        assert_eq!(refr_index, *custom_material.refractive_index_type());
+
         Ok(())
     }
 }

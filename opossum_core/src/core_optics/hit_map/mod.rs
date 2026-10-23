@@ -20,26 +20,14 @@ pub mod rays_hit_map;
 
 use crate::{
     J_per_cm2,
-    apertures::Aperture,
     error::{OpmResult, OpossumError},
     meter,
     nodes::fluence_detector::{Fluence, fluence_data::FluenceData},
     properties::Proptype,
-    reporting::plottable::{
-        AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable,
-    },
-    utils::{
-        geom_transformation::Isometry,
-        unit_format::{
-            get_exponent_for_base_unit_in_e3_steps, get_prefix_for_base_unit,
-            get_unit_value_as_length_with_format_by_exponent,
-        },
-    },
 };
 use fluence_estimator::FluenceEstimator;
 use log::warn;
-use nalgebra::{DMatrix, DVector, MatrixXx2, Point2};
-use plotters::style::RGBAColor;
+use nalgebra::DMatrix;
 use rays_hit_map::{HitPoint, HitPoints, RaysHitMap};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, ops::Range};
@@ -75,18 +63,18 @@ impl BouncedHitMap {
         }
         Ok(())
     }
+    /// Returns a reference to the internal map of [`RaysHitMap`]s.
+    #[must_use]
+    pub const fn hit_map(&self) -> &HashMap<Uuid, RaysHitMap> {
+        &self.hit_map
+    }
+
     /// Returns a reference to a [`RaysHitMap`] in this [`BouncedHitMap`]
     #[must_use]
     pub fn get_rays_hit_map(&self, uuid: Uuid) -> Option<&RaysHitMap> {
         self.hit_map.get(&uuid)
     }
 
-    /// Prunes the [`BouncedHitMap`] by removing all hit points that are outside the given [`Aperture`].
-    pub fn prune_by_aperture(&mut self, aperture: &Aperture, surface_iso: &Isometry) {
-        for rhm in self.hit_map.values_mut() {
-            rhm.prune_by_aperture(aperture, surface_iso);
-        }
-    }
     /// Consolidates all internal `RaysHitMap`s by merging points with identical spatial coordinates.
     pub fn consolidate(&mut self) {
         for rays_hit_map in self.hit_map.values_mut() {
@@ -112,13 +100,6 @@ impl HitMap {
     #[allow(clippy::missing_const_for_fn)]
     pub fn hit_map(&self) -> &[BouncedHitMap] {
         &self.hit_map
-    }
-
-    /// Prunes the [`HitMap`] by removing all hit points that are outside the given [`Aperture`].
-    pub fn prune_by_aperture(&mut self, aperture: &Aperture, surface_iso: &Isometry) {
-        for bhm in &mut self.hit_map {
-            bhm.prune_by_aperture(aperture, surface_iso);
-        }
     }
 
     /// Add intersection point to this [`HitMap`].
@@ -441,110 +422,6 @@ impl From<HitMap> for Proptype {
     }
 }
 
-impl Plottable for HitMap {
-    fn get_plot_series(
-        &self,
-        plt_type: &mut PlotType,
-        _legend: bool,
-    ) -> OpmResult<Option<Vec<PlotSeries>>> {
-        //ray plot series
-        if self.hit_map.is_empty() {
-            Ok(None)
-        } else {
-            let mut plt_series = Vec::<PlotSeries>::with_capacity(self.hit_map.len());
-            let mut xy_positions = Vec::<Vec<Point2<Length>>>::with_capacity(self.hit_map.len());
-            let mut x_max = f64::NEG_INFINITY;
-            let mut y_max = f64::NEG_INFINITY;
-            let mut x_min = f64::INFINITY;
-            let mut y_min = f64::INFINITY;
-
-            for (i, bounced_ray_bundles) in self.hit_map.iter().enumerate() {
-                xy_positions.push(Vec::<Point2<Length>>::new());
-                for rays_hitmap in bounced_ray_bundles.hit_map.values() {
-                    for p in rays_hitmap.hit_map().positions() {
-                        xy_positions[i].push(Point2::new(p.x, p.y));
-                        x_max = x_max.max(p.x.value);
-                        y_max = y_max.max(p.y.value);
-                        x_min = x_min.min(p.x.value);
-                        y_min = y_min.min(p.y.value);
-                    }
-                }
-            }
-            let x_exponent = get_exponent_for_base_unit_in_e3_steps(x_max);
-            let y_exponent = get_exponent_for_base_unit_in_e3_steps(y_max);
-            let y_prefix = get_prefix_for_base_unit(y_max);
-            let x_prefix = get_prefix_for_base_unit(x_max);
-
-            plt_type.set_plot_param(&PlotArgs::XLabel(format!("x position ({y_prefix}m)")))?;
-            plt_type.set_plot_param(&PlotArgs::YLabel(format!("y position ({x_prefix}m)")))?;
-
-            for (i, xy_pos) in xy_positions.iter().enumerate() {
-                if xy_pos.is_empty() {
-                    continue;
-                }
-                let x_vals = xy_pos
-                    .iter()
-                    .map(|p| get_unit_value_as_length_with_format_by_exponent(p.x, x_exponent))
-                    .collect::<Vec<f64>>();
-                let y_vals = xy_pos
-                    .iter()
-                    .map(|p| get_unit_value_as_length_with_format_by_exponent(p.y, y_exponent))
-                    .collect::<Vec<f64>>();
-
-                let data = PlotData::Dim2 {
-                    xy_data: MatrixXx2::from_columns(&[
-                        DVector::from_vec(x_vals),
-                        DVector::from_vec(y_vals),
-                    ]),
-                };
-
-                let gradient = colorous::TURBO;
-                let c = if self.hit_map.len() > 10 {
-                    gradient.eval_rational(i, self.hit_map.len())
-                } else {
-                    colorous::CATEGORY10[i]
-                };
-                let label = format!("Bounce: {i}");
-                plt_series.push(PlotSeries::new(
-                    &data,
-                    RGBAColor(c.r, c.g, c.b, 1.),
-                    Some(label),
-                ));
-            }
-
-            x_max *= f64::powi(10., -x_exponent);
-            y_max *= f64::powi(10., -y_exponent);
-            x_min *= f64::powi(10., -x_exponent);
-            y_min *= f64::powi(10., -y_exponent);
-
-            let x_diff = x_max - x_min;
-            let y_diff = y_max - y_min;
-            let x_limits = AxLims::create_useful_axlims(
-                0.1f64.mul_add(-x_diff, x_min),
-                0.1f64.mul_add(x_diff, x_max),
-            );
-            let y_limits = AxLims::create_useful_axlims(
-                0.1f64.mul_add(-y_diff, y_min),
-                0.1f64.mul_add(y_diff, y_max),
-            );
-
-            plt_type.set_plot_param(&PlotArgs::XLim(x_limits))?;
-            plt_type.set_plot_param(&PlotArgs::YLim(y_limits))?;
-            Ok(Some(plt_series))
-        }
-    }
-    fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
-        plt_params
-            .set(&PlotArgs::AxisEqual(true))?
-            .set(&PlotArgs::PlotAutoSize(true))?
-            .set(&PlotArgs::PlotSize((800, 800)))?;
-        Ok(())
-    }
-    fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
-        PlotType::Scatter2D(plt_params.clone())
-    }
-}
-
 #[cfg(test)]
 mod test_bounced_hit_map {
     use crate::{
@@ -571,7 +448,7 @@ mod test_bounced_hit_map {
                 .len(),
             1
         );
-        assert!(bhm.hit_map.get(&uuid2).is_none());
+        assert!(!bhm.hit_map.contains_key(&uuid2));
         bhm.add_to_hitmap(
             HitPoint::Energy(EnergyHitPoint::new(meter!(1.0, 0.0, 0.0), joule!(1.0))?),
             uuid1,
@@ -584,7 +461,7 @@ mod test_bounced_hit_map {
                 .len(),
             2
         );
-        assert!(bhm.hit_map.get(&uuid2).is_none());
+        assert!(!bhm.hit_map.contains_key(&uuid2));
         bhm.add_to_hitmap(
             HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?),
             uuid2,
@@ -654,11 +531,10 @@ mod test_hit_map {
             fluence_estimator::FluenceEstimator,
             rays_hit_map::{EnergyHitPoint, FluenceHitPoint},
         },
-        error::{OpmResult, OpossumError},
+        error::OpmResult,
         joule, meter,
         properties::Proptype,
-        reporting::plottable::{PlotParameters, Plottable},
-        utils::test_helper::test_helper::check_logs,
+        utils::test_helper::helper::check_logs,
     };
 
     #[test]
@@ -1027,7 +903,7 @@ mod test_hit_map {
         ];
         for pos in &pos1 {
             hm.add_to_hitmap(
-                HitPoint::Energy(EnergyHitPoint::new(pos.clone(), joule!(1.0))?),
+                HitPoint::Energy(EnergyHitPoint::new(*pos, joule!(1.0))?),
                 1,
                 uuid,
             )?;
@@ -1045,7 +921,7 @@ mod test_hit_map {
         ];
         for pos in &pos2 {
             hm.add_to_hitmap(
-                HitPoint::Energy(EnergyHitPoint::new(pos.clone(), joule!(1.0))?),
+                HitPoint::Energy(EnergyHitPoint::new(*pos, joule!(1.0))?),
                 1,
                 uuid,
             )?;
@@ -1062,7 +938,7 @@ mod test_hit_map {
         let pos1 = vec![meter!(-0.5, -0.5, 0.0), meter!(0., 0., 0.0)];
         for pos in &pos1 {
             hm.add_to_hitmap(
-                HitPoint::Energy(EnergyHitPoint::new(pos.clone(), joule!(1.0))?),
+                HitPoint::Energy(EnergyHitPoint::new(*pos, joule!(1.0))?),
                 1,
                 uuid,
             )?;
@@ -1085,7 +961,7 @@ mod test_hit_map {
         ];
         for pos in &pos1 {
             hm.add_to_hitmap(
-                HitPoint::Fluence(FluenceHitPoint::new(pos.clone(), J_per_cm2!(1.0))?),
+                HitPoint::Fluence(FluenceHitPoint::new(*pos, J_per_cm2!(1.0))?),
                 1,
                 uuid,
             )?;
@@ -1114,7 +990,7 @@ mod test_hit_map {
         ];
         for pos in &pos1 {
             hm.add_to_hitmap(
-                HitPoint::Fluence(FluenceHitPoint::new(pos.clone(), J_per_cm2!(1.0))?),
+                HitPoint::Fluence(FluenceHitPoint::new(*pos, J_per_cm2!(1.0))?),
                 1,
                 uuid,
             )?;
@@ -1132,7 +1008,7 @@ mod test_hit_map {
         ];
         for pos in &pos2 {
             hm.add_to_hitmap(
-                HitPoint::Fluence(FluenceHitPoint::new(pos.clone(), J_per_cm2!(1.0))?),
+                HitPoint::Fluence(FluenceHitPoint::new(*pos, J_per_cm2!(1.0))?),
                 1,
                 uuid,
             )?;
@@ -1179,7 +1055,7 @@ mod test_hit_map {
         ];
         for pos in &pos1 {
             hm.add_to_hitmap(
-                HitPoint::Energy(EnergyHitPoint::new(pos.clone(), joule!(1.0))?),
+                HitPoint::Energy(EnergyHitPoint::new(*pos, joule!(1.0))?),
                 1,
                 uuid,
             )?;
@@ -1208,7 +1084,7 @@ mod test_hit_map {
         ];
         for pos in &pos1 {
             hm.add_to_hitmap(
-                HitPoint::Energy(EnergyHitPoint::new(pos.clone(), joule!(1.0))?),
+                HitPoint::Energy(EnergyHitPoint::new(*pos, joule!(1.0))?),
                 1,
                 uuid,
             )?;
@@ -1229,7 +1105,7 @@ mod test_hit_map {
         ];
         for pos in &pos2 {
             hm.add_to_hitmap(
-                HitPoint::Energy(EnergyHitPoint::new(pos.clone(), joule!(1.0))?),
+                HitPoint::Energy(EnergyHitPoint::new(*pos, joule!(1.0))?),
                 1,
                 uuid,
             )?;
@@ -1255,7 +1131,7 @@ mod test_hit_map {
         ];
         for pos in &pos1 {
             hm.add_to_hitmap(
-                HitPoint::Fluence(FluenceHitPoint::new(pos.clone(), J_per_cm2!(1.0))?),
+                HitPoint::Fluence(FluenceHitPoint::new(*pos, J_per_cm2!(1.0))?),
                 1,
                 uuid,
             )?;
@@ -1284,7 +1160,7 @@ mod test_hit_map {
         ];
         for pos in &pos1 {
             hm.add_to_hitmap(
-                HitPoint::Energy(EnergyHitPoint::new(pos.clone(), joule!(1.0))?),
+                HitPoint::Energy(EnergyHitPoint::new(*pos, joule!(1.0))?),
                 1,
                 uuid,
             )?;
@@ -1302,7 +1178,7 @@ mod test_hit_map {
         ];
         for pos in &pos2 {
             hm.add_to_hitmap(
-                HitPoint::Energy(EnergyHitPoint::new(pos.clone(), joule!(1.0))?),
+                HitPoint::Energy(EnergyHitPoint::new(*pos, joule!(1.0))?),
                 1,
                 uuid,
             )?;
@@ -1325,7 +1201,7 @@ mod test_hit_map {
         ];
         for pos in &pos1 {
             hm.add_to_hitmap(
-                HitPoint::Fluence(FluenceHitPoint::new(pos.clone(), J_per_cm2!(1.0))?),
+                HitPoint::Fluence(FluenceHitPoint::new(*pos, J_per_cm2!(1.0))?),
                 1,
                 uuid,
             )?;
@@ -1354,7 +1230,7 @@ mod test_hit_map {
         ];
         for pos in &pos1 {
             hm.add_to_hitmap(
-                HitPoint::Energy(EnergyHitPoint::new(pos.clone(), joule!(1.0))?),
+                HitPoint::Energy(EnergyHitPoint::new(*pos, joule!(1.0))?),
                 1,
                 uuid,
             )?;
@@ -1375,33 +1251,6 @@ mod test_hit_map {
             hm.calc_fluence_map((51, 51), &FluenceEstimator::HelperRays)
                 .is_ok()
         );
-        Ok(())
-    }
-
-    #[test]
-    fn get_plot_series() -> OpmResult<()> {
-        let mut hm = HitMap::default();
-        let uuid = Uuid::new_v4();
-        let pos1 = vec![
-            meter!(-0.5, -0.5, 0.0),
-            meter!(0., 0., 0.0),
-            meter!(-0.5, 0.5, 0.0),
-            meter!(0.5, 0.5, 0.0),
-            meter!(0.5, -0.5, 0.0),
-        ];
-        for pos in &pos1 {
-            hm.add_to_hitmap(
-                HitPoint::Energy(EnergyHitPoint::new(pos.clone(), joule!(1.0))?),
-                1,
-                uuid,
-            )?;
-        }
-        let mut plt_params = PlotParameters::default();
-        hm.add_plot_specific_params(&mut plt_params)?;
-        let plt_series = hm.get_plot_series(&mut hm.get_plot_type(&plt_params), false);
-        assert!(plt_series.is_ok());
-        let plt_series = plt_series?.ok_or(OpossumError::Other("UUID1 not found in map".into()))?;
-        assert!(plt_series.len() == 1);
         Ok(())
     }
 }

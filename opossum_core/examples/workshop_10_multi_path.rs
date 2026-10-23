@@ -10,20 +10,6 @@
 //! 4. Channelized output routing based on long-pass edge filter behavior
 //! 5. Energy analysis across multiple wavelength components
 //!
-//! Principles and Objectives
-//! Each source emits a wavelength-resolved optical energy distribution
-//! (i.e., discrete wavelength bins carrying optical energy or power).
-//!
-//! The system models how wavelength-resolved optical energy propagates through
-//! an optical network where:
-//! - shorter wavelengths are partially reflected or redirected according to the edge filter transfer function,
-//! - longer wavelengths are preferentially transmitted (long-pass behavior),
-//! - and total optical energy is conserved under ideal, lossless component assumptions.
-//! This example shows how optical energy is distributed in a graph-based system
-//! when multiple independent sources interact with wavelength-selective components.
-//! The goal is to demonstrate wavelength-dependent energy routing
-//! and redistribution in a graph-based optical network.
-//!
 //! This example demonstrates:
 //! - How wavelength-selective beam splitters separate optical energy into distinct paths
 //! - How multiple independent sources propagate through a shared optical network
@@ -57,7 +43,7 @@ fn main() -> OpmResult<()> {
         EdgeFilter::new(
             EdgeFilterType::LongPass,
             nanometer!(980.0),
-            (0.)..(1.),
+            (0.)..1.,
             None,
             nanometer!(800.0)..nanometer!(1100.0),
             nanometer!(0.5),
@@ -80,7 +66,7 @@ fn main() -> OpmResult<()> {
         EdgeFilter::new(
             EdgeFilterType::LongPass,
             nanometer!(1025.0),
-            (0.)..(1.),
+            (0.)..1.,
             None,
             nanometer!(800.0)..nanometer!(1100.0),
             nanometer!(0.5),
@@ -172,8 +158,8 @@ fn main() -> OpmResult<()> {
     // Configure wavelength-resolved optical energy analysis
     let mut config = EnergyConfig::default();
     // Map sources into energy analysis model
-    config.map_source(i_src, energy_data_builder_1.into());
-    config.map_source(i_src2, energy_data_builder_2.into());
+    config.map_source(i_src, energy_data_builder_1);
+    config.map_source(i_src2, energy_data_builder_2);
     // Attach analyzer to document
     doc.add_analyzer(AnalyzerType::Energy(config));
 

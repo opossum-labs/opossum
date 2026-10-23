@@ -1,4 +1,4 @@
-use num::Zero;
+use num_traits::Zero;
 use opossum_core::{analyzers::energy::EnergyConfig, prelude::*};
 use std::path::Path;
 use uom::si::f64::Length;
@@ -43,7 +43,7 @@ fn main() -> OpmResult<()> {
             BandFilterType::BandPass,
             nanometer!(630.),
             nanometer!(50.),
-            (0.)..(1.),
+            (0.)..1.,
             Some(nanometer!(25.)),
             nanometer!(560.)..nanometer!(700.),
             nanometer!(0.01),
