@@ -78,7 +78,8 @@ pub trait OpticNode: Dottable + HasNodeAttr + OpticNodeAny {
         self.update_surfaces()
     }
 
-    /// Resets internal data (e.g., captured light data in detectors and runtime medium states).
+    /// Resets internal data: the captured light data, the caches and hit maps of the optic surfaces
+    /// and the inversion in the body of the runtime geometry.
     fn reset_data(&mut self) {
         self.set_light_data(None);
         self.reset_optic_surfaces();

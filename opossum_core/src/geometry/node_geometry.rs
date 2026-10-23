@@ -423,7 +423,12 @@ impl Geometry {
         for rays in &mut *bundles {
             let mut reflected = self.interact_with_rays(face, rays, effect, part, missed)?;
             reflected.set_node_origin_uuid(node);
-            strategy.on_surface_interaction(self.surface_of_mut(face)?, rays, reflected, backward)?;
+            strategy.on_surface_interaction(
+                self.surface_of_mut(face)?,
+                rays,
+                reflected,
+                backward,
+            )?;
         }
         bundles.extend_from_slice(self.surface_of_mut(face)?.get_rays_cache(backward));
         Ok(())
@@ -1148,7 +1153,9 @@ mod test {
     }
     /// The given geometry with the given coating on its face 0.
     fn coated(mut geometry: Geometry, coating: CoatingType) -> OpmResult<Geometry> {
-        geometry.surface_of_mut(FaceIndex::new(0))?.set_coating(coating);
+        geometry
+            .surface_of_mut(FaceIndex::new(0))?
+            .set_coating(coating);
         Ok(geometry)
     }
     /// A reflectivity of 20 %.

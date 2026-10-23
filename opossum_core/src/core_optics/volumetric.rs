@@ -651,13 +651,13 @@ mod test {
     }
     /// A passive volume node gets a prepared body even without a gain model.
     ///
-    /// This is the regression test for the new `prepare_volume` contract: the body is geometry, so
-    /// it is built for every volume node regardless of the operating point. Previously a passive lens
-    /// (no active scenario) returned from `prepare_volume` immediately, leaving `runtime_medium`
-    /// unset. Now it is always set — the inversion slot is `None`, but the body is there.
+    /// This is the regression test for the `prepare_volume` contract: the body is geometry, so it is
+    /// built for every volume node regardless of the operating point. A passive lens (no active
+    /// scenario) once returned from `prepare_volume` before its body was built. Now its runtime
+    /// geometry always has a body, with no inversion.
     ///
-    /// The second assertion (energy ratio `1.0`) pins the "stays passive" guarantee: a body in the
-    /// medium slot must not cause any energy change when no gain model is present.
+    /// The last assertion (energy ratio `1.0`) pins the "stays passive" guarantee: the body must not
+    /// cause any energy change when no gain model is present.
     #[test]
     fn a_passive_volume_node_has_a_prepared_body_after_prepare_volume() -> OpmResult<()> {
         let mut lens = placed_lens()?;
@@ -1068,15 +1068,15 @@ mod test {
     /// `prepare_volume` always uses the current node position, not a body cached at an earlier one.
     ///
     /// This is the regression test for the bug commit `b1f766b8` identified but incompletely fixed.
-    /// `init_runtime_medium` (called from `after_deserialization_hook`) built and stored a body at
-    /// the node's position at deserialization time — which is the origin, because `set_isometry`
-    /// from `calc_node_positions` had not run yet — and `prepare_volume`'s first branch then reused
-    /// that stale body for all subsequent runs. A head placed anywhere but the origin had its
-    /// inversion field laid out at the wrong coordinates, so `gain_exponent_at` found no inversion
-    /// for any real ray and returned exactly `0.0`, giving a gain factor of `1.0`.
+    /// The body was once kept apart from the surfaces and built when the node was loaded
+    /// (`after_deserialization_hook`), at the origin, because `calc_node_positions` had not run
+    /// yet; `prepare_volume` then reused that stale body for all subsequent runs. A head placed
+    /// anywhere but the origin had its inversion field laid out at the wrong coordinates, so
+    /// `gain_exponent_at` found no inversion for any real ray and returned exactly `0.0`, giving a
+    /// gain factor of `1.0`.
     ///
-    /// After the fix: `prepare_volume` always re-derives the body from the current geometry, so the
-    /// inversion and the sampling frame are always consistent with the node's actual position.
+    /// After the fix: `prepare_volume` always installs the geometry anew at the current position,
+    /// so the inversion and the sampling frame are always consistent with the node's actual position.
     #[test]
     fn prepare_volume_uses_current_position_not_a_cached_body() -> OpmResult<()> {
         let mut head = amplifier_head()?;
@@ -1084,8 +1084,7 @@ mod test {
         head.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let node_id = head.node_attr().uuid();
 
-        // Seed a body at the current (identity) position, simulating what
-        // `init_runtime_medium` used to do inside `after_deserialization_hook`.
+        // Seed a body at the current (identity) position, as loading the node used to.
         let identity_body = placed_geometry(&head)?;
         head.node_attr_mut().set_runtime_geometry(identity_body);
 
@@ -1106,12 +1105,8 @@ mod test {
         let mut config = RayTraceConfig::default();
         config.set_active_pump_scenario(Some(scenario_with_small_signal(node_id)?));
 
-        // `traced_energy_ratio` calls `prepare_volume` and then analyzes.
-        // Before the fix: `prepare_volume` saw `runtime_medium().is_some()` and reused the
-        // identity body; `gain_exponent_at` sampled at the real position, found no inversion, and
-        // returned `0.0` — giving factor `1.0`, a silently passive amplifier.
-        // After the fix: `prepare_volume` always rebuilds the body from the 500 mm isometry,
-        // so the inversion covers the real position and the result is the expected gain.
+        // `traced_energy_ratio` calls `prepare_volume`, which rebuilds the body at 500 mm; a reused
+        // identity body would find no inversion at the real position and give a factor of `1.0`.
         assert_relative_eq!(
             traced_energy_ratio(&mut head, &config)?,
             single_pass_gain(),
