@@ -20,7 +20,9 @@ use crate::{
 };
 use core::fmt::Debug;
 
-/// An optical surface of a component: one face of its geometry, with what the surface adds to it:
+/// An optical surface of a component
+/// 
+/// One face of its geometry, with what the surface adds to it:
 /// its [`CoatingType`], its laser induced damage threshold (LIDT), and what an analysis records
 /// there (ray caches and a hit map).
 ///

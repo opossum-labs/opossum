@@ -403,7 +403,7 @@ pub struct PositionUpdate {
 // ============================================================================
 
 /// Response payload containing the port names of a node
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, ToSchema, Eq)]
 pub struct NodePortsResponse {
     /// The input ports of the node (accounts for node inversion)
     pub inputs: BTreeSet<String>,
