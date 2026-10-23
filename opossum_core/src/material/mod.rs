@@ -274,7 +274,7 @@ impl From<&RefrIndexAir> for Material {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use uom::si::length::{millimeter, nanometer};
+    use crate::{millimeter, nanometer};
 
     #[test]
     fn test_custom_material_creation() -> OpmResult<()> {
@@ -284,7 +284,7 @@ mod tests {
         assert_eq!(material.name(), "Test Glass");
         assert_eq!(material.version(), 0);
 
-        let wvl = Length::new::<nanometer>(550.0);
+        let wvl = nanometer!(550.0);
         let n = material.get_refractive_index(wvl)?;
         assert!((n - 1.5).abs() < 1e-12);
 
@@ -300,7 +300,7 @@ mod tests {
         let air = Material::material_air();
         assert_eq!(air.name(), "air");
 
-        let wvl = Length::new::<nanometer>(589.3);
+        let wvl = nanometer!(589.3);
         assert!((vacuum.refractive_index(wvl)? - 1.0).abs() < 1e-12);
 
         Ok(())
@@ -312,20 +312,28 @@ mod tests {
         let original =
             Material::new_for_test(Uuid::new_v4(), 3, "Catalog Material", const_refr.into());
 
+        // Verifies version getter returns the actual non-zero version (kills `version -> 0`)
+        assert_eq!(original.version(), 3);
+
         let draft = original.new_draft_from();
         assert_eq!(draft.id(), original.id());
         assert_eq!(draft.version(), 0);
+        assert_eq!(draft.name(), original.name());
 
         let adhoc = original.clone_as_adhoc();
         assert_ne!(adhoc.id(), original.id());
         assert_eq!(adhoc.version(), 0);
+        // Distinguishes from Material::default() (kills `clone_as_adhoc -> Default::default()`)
+        assert_eq!(adhoc.name(), "Catalog Material");
+        assert_eq!(adhoc.optical, original.optical);
+        assert_ne!(adhoc.name(), Material::default().name());
     }
 
     #[test]
     fn test_default_transmission() -> OpmResult<()> {
         let material = Material::default();
-        let wvl = Length::new::<nanometer>(550.0);
-        let path = Length::new::<millimeter>(10.0);
+        let wvl = nanometer!(550.0);
+        let path = millimeter!(10.0);
 
         let t = material.transmission(wvl, path)?;
         assert_eq!(t, 1.0);

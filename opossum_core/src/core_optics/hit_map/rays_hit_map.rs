@@ -7,8 +7,8 @@ use crate::{
     kde::Kde,
     meter, micrometer,
     nodes::fluence_detector::{Fluence, fluence_data::FluenceData},
-    reporting::plottable::AxLims,
     utils::{
+        AxLims,
         griddata::{
             VoronoiedData, calc_closed_poly_area, create_voronoi_cells,
             grid_interpolate_3d_triangulated_scatter_data, linspace,

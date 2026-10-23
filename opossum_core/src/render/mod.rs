@@ -8,10 +8,6 @@ use crate::{
 use itertools::Itertools;
 use nalgebra::{Point2, Point3, Vector2, Vector3};
 use num_traits::ToPrimitive;
-use plotters::{
-    backend::BitMapBackend, chart::ChartBuilder, drawing::IntoDrawingArea, element::BitMapElement,
-    style::WHITE,
-};
 use rayon::prelude::*;
 use uom::si::{
     angle::radian,
@@ -34,33 +30,20 @@ pub trait Render<'a>: SDF + Sync {
                 "Shape of image and vector length does not match! Cannot render image!".into(),
             ));
         }
-        let root = BitMapBackend::new(fpath, image_shape).into_drawing_area();
-        root.fill(&WHITE).unwrap();
-
-        let mut chart = ChartBuilder::on(&root)
-            .build_cartesian_2d(0.0..1.0, 0.0..1.0)
-            .unwrap();
-
-        chart
-            .configure_mesh()
-            .disable_mesh()
-            .disable_y_axis()
-            .disable_x_axis()
-            .draw()
-            .unwrap();
         let u8_image_dat = image_dat
             .iter()
             .map(|x| (x.abs() * 255.).to_u8().unwrap())
             .collect_vec();
 
-        let elem_opt = BitMapElement::with_owned_buffer((0., 1.0), image_shape, u8_image_dat);
-
-        if let Some(elem) = elem_opt {
-            chart.draw_series(std::iter::once(elem)).unwrap();
-            // To avoid the IO failure being ignored silently, we manually call the present function
-            root.present().expect("Unable to write result to file, please make sure 'plotters-doc-data' dir exists under current dir");
-            println!("Result has been saved to {fpath}");
-        }
+        image::save_buffer(
+            fpath,
+            &u8_image_dat,
+            image_shape.0,
+            image_shape.1,
+            image::ExtendedColorType::Rgb8,
+        )
+        .map_err(|e| OpossumError::Other(format!("Failed to save image: {e}")))?;
+        println!("Result has been saved to {fpath}");
         Ok(())
     }
     /// renders this renderable object

@@ -2,11 +2,9 @@ use nalgebra::{DMatrix, DVector};
 use opossum_core::prelude::*;
 use opossum_core::{
     distributions::energy::general_gaussian::General2DGaussian,
-    distributions::position::FibonacciRectangle,
-    light::Rays,
-    reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType},
-    utils::geom_transformation::Isometry,
+    distributions::position::FibonacciRectangle, light::Rays, utils::geom_transformation::Isometry,
 };
+use opossum_reporter::plotting::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType};
 use plotters::style::RGBAColor;
 use uom::si::{length::millimeter, radiant_exposure::joule_per_square_centimeter};
 
@@ -29,9 +27,12 @@ fn main() -> OpmResult<()> {
 
     let mut plt_params = PlotParameters::default();
     plt_params
-        .set(&PlotArgs::FName("gaussian.png".into()))?
-        .set(&PlotArgs::FDir("./opossum_core/playground/".into()))?
-        .set(&PlotArgs::PlotSize((1000, 800)))?;
+        .set(&PlotArgs::FName("gaussian.png".into()))
+        .unwrap()
+        .set(&PlotArgs::FDir("./opossum_reporter/playground/".into()))
+        .unwrap()
+        .set(&PlotArgs::PlotSize((1000, 800)))
+        .unwrap();
     let plt_dat = PlotData::ColorMesh {
         x_dat_n: DVector::from_iterator(
             fl_x.len(),

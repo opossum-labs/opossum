@@ -24,8 +24,8 @@ use crate::{
     prelude::EnergyLaserLines,
     properties::Proptype,
     refractive_index::RefractiveIndexType,
-    reporting::plottable::AxLims,
     utils::{
+        AxLims,
         filter_data::get_unique_finite_values_sorted,
         geom_transformation::Isometry,
         griddata::{

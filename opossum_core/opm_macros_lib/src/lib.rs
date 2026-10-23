@@ -94,7 +94,7 @@ pub fn derive_ensure_validated(input: TokenStream) -> TokenStream {
 ///
 /// # Attribute Syntax
 ///
-/// ```
+/// ```text
 /// #[rule(
 ///     rule_fn_name,                     // name of the validation function (required)
 ///     message = "Custom error message", // optional custom error message

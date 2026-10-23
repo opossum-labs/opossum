@@ -10,7 +10,6 @@ mod analysis_raytrace;
 pub mod optic_graph;
 pub mod port_map;
 mod undo;
-mod visualization;
 
 use crate::{
     analyzers::{AnalyzerKind, propagation_strategy::PropagationStrategy},
@@ -46,6 +45,7 @@ inventory::submit! {
 }
 
 #[derive(OpmNode, Debug, Clone, Serialize, Deserialize)]
+#[opm_node("yellow")]
 #[manual_analyzable]
 /// The basic building block of an optical system. It represents a group of other optical
 /// nodes ([`OpticNode`]s) arranged in a (sub)graph.
@@ -92,6 +92,26 @@ impl NodeGroup {
         let mut group = Self::default();
         group.node_attr.set_name(name);
         group
+    }
+
+    /// Returns the expansion flag of this [`NodeGroup`].
+    ///
+    /// If true, the group expands and the internal nodes of this group are displayed in diagrams.
+    /// If false, only the group node itself is displayed.
+    ///
+    /// # Errors
+    /// Returns an error if the property "expand view" does not exist or fails to evaluate as boolean.
+    pub fn expand_view(&self) -> OpmResult<bool> {
+        self.node_attr.get_property_bool("expand view")
+    }
+
+    /// Defines whether a [`NodeGroup`] should be displayed expanded or collapsed in diagrams.
+    ///
+    /// # Errors
+    /// Returns an error if setting the "expand view" property fails.
+    pub fn set_expand_view(&mut self, expand_view: bool) -> OpmResult<()> {
+        self.node_attr
+            .set_property("expand view", expand_view.into())
     }
 
     /// Add a given [`OpticNode`] to the (sub-)graph of this [`NodeGroup`].
@@ -791,13 +811,13 @@ mod test {
             energy::{AnalysisEnergy, EnergyConfig},
             raytrace::AnalysisRayTrace,
         },
+        core_optics::VisualNode,
         core_optics::{OpticNode, OpticNodeExt, node_attr::NodePositioning},
         joule,
         light::{LightResult, Ray, Rays},
         millimeter, nanometer,
         nodes::{Dummy, EnergyMeter, SourcePort, test_helper::helper::*},
         prelude::RayDataSource,
-        reporting::Dottable,
         utils::geom_transformation::Isometry,
     };
     use num_traits::Zero;
@@ -1074,53 +1094,6 @@ mod group_port_mapping_tests {
     use super::*;
     use crate::{meter, nodes::Dummy};
 
-    fn simple_group() -> OpmResult<NodeGroup> {
-        let mut group = NodeGroup::new("g");
-        let n1 = group.add_node(Dummy::new("n1"))?;
-        group.map_input_port(n1, "input_1", "in")?;
-        group.set_expand_view(true)?;
-        Ok(group)
-    }
-
-    fn nested_group() -> OpmResult<NodeGroup> {
-        let mut outer = NodeGroup::new("outer");
-        let mut inner = NodeGroup::new("inner");
-        let node = inner.add_node(Dummy::new("leaf"))?;
-        inner.map_input_port(node, "input_1", "in")?;
-        inner.set_expand_view(true)?;
-        let inner_id = outer.add_node(inner)?;
-        outer.map_input_port(inner_id, "in", "in")?;
-        outer.set_expand_view(true)?;
-        Ok(outer)
-    }
-
-    fn deep_nested_group(depth: usize) -> OpmResult<NodeGroup> {
-        let mut leaf_group = NodeGroup::new("leaf_group");
-        let leaf_node = leaf_group.add_node(Dummy::new("leaf"))?;
-        leaf_group.map_input_port(leaf_node, "input_1", "in")?;
-        leaf_group.set_expand_view(true)?;
-
-        let mut current = leaf_group;
-        for i in 0..depth {
-            let mut parent = NodeGroup::new(&format!("g{i}"));
-            let id = parent.add_node(current)?;
-            parent.map_input_port(id, "in", "in")?;
-            parent.set_expand_view(true)?;
-            current = parent;
-        }
-        Ok(current)
-    }
-
-    #[test]
-    fn mapped_port_simple_group() -> OpmResult<()> {
-        let group = simple_group()?;
-        let node_id = group.node_attr().uuid().as_simple().to_string();
-        let result = group.get_mapped_port_str("in", &node_id)?;
-        assert!(result.contains(":input_1"));
-        assert!(result.starts_with('i'));
-        Ok(())
-    }
-
     #[test]
     fn connecting_already_mapped_port() -> OpmResult<()> {
         let mut group = NodeGroup::new("g");
@@ -1128,45 +1101,6 @@ mod group_port_mapping_tests {
         group.map_input_port(n1, "input_1", "in")?;
         let n2 = group.add_node(Dummy::default())?;
         let result = group.connect_nodes(n2, "output_1", n1, "input_1", meter!(0.));
-        assert!(result.is_err());
-        Ok(())
-    }
-
-    #[test]
-    fn mapped_port_nested_group() -> OpmResult<()> {
-        let group = nested_group()?;
-        let node_id = group.node_attr().uuid().as_simple().to_string();
-        let result = group.get_mapped_port_str("in", &node_id)?;
-        assert!(result.contains(":input_1"));
-        assert!(result.starts_with('i'));
-        Ok(())
-    }
-
-    #[test]
-    fn mapped_port_deep_nested_groups() -> OpmResult<()> {
-        let group = deep_nested_group(5)?;
-        let node_id = group.node_attr().uuid().as_simple().to_string();
-        let result = group.get_mapped_port_str("in", &node_id)?;
-        assert!(result.contains(":input_1"));
-        assert!(result.starts_with('i'));
-        Ok(())
-    }
-
-    #[test]
-    fn collapsed_group_returns_external_port() -> OpmResult<()> {
-        let mut group = simple_group()?;
-        group.set_expand_view(false)?;
-        let node_id = group.node_attr().uuid().as_simple().to_string();
-        let result = group.get_mapped_port_str("in", &node_id)?;
-        assert_eq!(result, format!("{node_id}:in"));
-        Ok(())
-    }
-
-    #[test]
-    fn unmapped_port_returns_error() -> OpmResult<()> {
-        let group = simple_group()?;
-        let node_id = group.node_attr().uuid().as_simple().to_string();
-        let result = group.get_mapped_port_str("does_not_exist", &node_id);
         assert!(result.is_err());
         Ok(())
     }

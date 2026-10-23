@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 //! Module handling analysis reports, serialization, and report generation.
 
-use super::{html_report::HtmlReport, node_report::NodeReport, report_note::ReportNote};
+use super::{node_report::NodeReport, report_note::ReportNote};
 use crate::{
     error::{OpmResult, OpossumError},
     get_version,
@@ -149,31 +149,6 @@ impl AnalysisReport {
         Ok(())
     }
 
-    /// Saves the HTML representation and associated export data.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if HTML generation or export writing fails.
-    pub fn save_html(&self, report_directory: &Path, report_number: usize) -> OpmResult<()> {
-        let html_report = HtmlReport::from_analysis_report(self, report_number)?;
-        html_report.generate_report_files(report_directory, self, report_number)?;
-        Ok(())
-    }
-
-    /// Saves the complete report to the specified directory.
-    ///
-    /// This creates a compact RON file for the report data, an HTML representation,
-    /// and exports all associated data files (e.g., plots, images).
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if any file I/O or data export operation fails.
-    pub fn save(&self, report_directory: &Path, report_number: usize) -> OpmResult<()> {
-        self.save_ron(report_directory, report_number)?;
-        self.save_html(report_directory, report_number)?;
-        Ok(())
-    }
-
     /// Sets the analysis type of this [`AnalysisReport`].
     ///
     /// This information is used i.e. in the [`HtmlReport`].
@@ -214,9 +189,7 @@ impl AnalysisReport {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{
-        opm_document::OpmDocument, properties::Properties, reporting::report_note::ReportLevel,
-    };
+    use crate::{properties::Properties, reporting::report_note::ReportLevel};
 
     #[test]
     fn new_and_default() {
@@ -319,46 +292,5 @@ mod test {
 
         report.set_analyzer_name(None);
         assert_eq!(report.analyzer_name(), None);
-    }
-
-    #[test]
-    fn save() -> OpmResult<()> {
-        let mut document =
-            OpmDocument::from_file(Path::new("./files_for_testing/opm/opticscenery.opm"))?;
-        let reports = document.analyze()?;
-        let report = &reports[0];
-
-        let temp_dir = tempfile::tempdir()
-            .map_err(|e| OpossumError::Other(format!("Failed to create temp dir: {e}")))?;
-
-        let non_existent_path = temp_dir.path().join("missing_folder").join("nested");
-        assert!(
-            report.save(&non_existent_path, 0).is_err(),
-            "Saving to an invalid directory path must return an error"
-        );
-
-        let valid_target = temp_dir.path();
-        report.save(valid_target, 0)?;
-
-        let ron_file = valid_target.join("report_0.ron");
-        let html_file = valid_target.join("report_0.html");
-        let data_dir = valid_target.join("data_0");
-
-        assert!(ron_file.is_file(), "Expected 'report_0.ron' to be created");
-        assert!(
-            html_file.is_file(),
-            "Expected 'report_0.html' to be created"
-        );
-        assert!(
-            data_dir.is_dir(),
-            "Expected 'data_0' directory to be created"
-        );
-
-        let ron_len = std::fs::metadata(&ron_file)
-            .map_err(|e| OpossumError::Other(format!("Failed to read metadata: {e}")))?
-            .len();
-        assert!(ron_len > 0, "Generated 'report_0.ron' file is empty");
-
-        Ok(())
     }
 }
