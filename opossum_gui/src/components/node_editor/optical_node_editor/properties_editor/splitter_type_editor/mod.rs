@@ -1,17 +1,15 @@
 use crate::components::node_editor::{
-    accordion::ElementList,
     hooks::use_synced_signal,
-    inputs::{input_components::LabeledSelect, select_options_from_enum_iterator},
     node_config_editor::NodeChangeEvent,
     optical_node_editor::properties_editor::{
-        filter_type_editor::{ConstantFilterTypeEditor, SpectralFilterTypeEditor},
-        on_save_proptype_handler,
+        on_save_proptype_handler, surface_config_editor::coating_editor::SplittingConfigEditor,
     },
 };
 use dioxus::prelude::*;
-use opossum_core::{coatings::SplittingConfigBuilder, utils::default_from_name::DefaultFromName};
+use opossum_core::coatings::SplittingConfigBuilder;
 use uuid::Uuid;
 
+/// Edits the splitting configuration of a beam splitter, stored in the property `property_key`.
 #[component]
 pub fn SplitterTypeEditor(
     node_id: ReadSignal<Uuid>,
@@ -27,54 +25,11 @@ pub fn SplitterTypeEditor(
         on_change,
         node_id,
     );
-
-    let mut element_list = vec![rsx! {
-        SplittingConfigSelector { splitting_config_builder_handler: on_save, splitting_config_builder_sig, readonly }
-    }];
-
-    match &*splitting_config_builder_sig.read() {
-        SplittingConfigBuilder::FixedRatio(transmission) => {
-            element_list.push(rsx! {
-                ConstantFilterTypeEditor {
-                    transmission: *transmission,
-                    on_transmission_change: on_save,
-                    readonly,
-                }
-            });
-        }
-        SplittingConfigBuilder::Spectrum(spectral_filter_builder) => element_list.push(rsx! {
-            SpectralFilterTypeEditor {
-                spectral_filter_builder: spectral_filter_builder.clone(),
-                on_spectral_filter_change: on_save,
-                readonly,
-            }
-        }),
-    }
     rsx! {
-        ElementList { element_list }
-    }
-}
-
-#[component]
-pub fn SplittingConfigSelector(
-    splitting_config_builder_handler: EventHandler<SplittingConfigBuilder>,
-    splitting_config_builder_sig: ReadSignal<SplittingConfigBuilder>,
-    readonly: bool,
-) -> Element {
-    rsx! {
-        LabeledSelect {
-            id: "splitterConfigBuilderPropertySelection",
-            label: "Splitting configuration",
-            options: select_options_from_enum_iterator(&*splitting_config_builder_sig.read(), None),
+        SplittingConfigEditor {
+            splitting_config_builder: splitting_config_builder_sig.read().clone(),
+            on_change: on_save,
             readonly,
-            onchange: move |e: Event<FormData>| {
-                let val = e.value();
-                if let Some(splitting_config_builder) = SplittingConfigBuilder::default_from_name(
-                    val.as_str(),
-                ) {
-                    splitting_config_builder_handler.call(splitting_config_builder);
-                }
-            },
         }
     }
 }
