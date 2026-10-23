@@ -24,9 +24,9 @@ pub fn CoatingEditor(
     on_change: EventHandler<CoatingType>,
     readonly: bool,
 ) -> Element {
-    let mut coating_type_sig = use_synced_signal(*coating_type.read());
+    let mut coating_type_sig = use_synced_signal(coating_type.read().clone());
     let on_coating_changed = move |ct: CoatingType| {
-        coating_type_sig.set(ct);
+        coating_type_sig.set(ct.clone());
         on_change.call(ct);
     };
     let mut element_list: Vec<Result<VNode, RenderError>> = vec![rsx! {

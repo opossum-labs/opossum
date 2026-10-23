@@ -23,6 +23,7 @@ use uuid::Uuid;
 use crate::{
     analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
     apertures::Outline,
+    coatings::Coating,
     core_optics::{optic_surface::OpticSurface, surface_effect::SurfaceEffect},
     error::{OpmResult, OpossumError},
     geometry::{
@@ -301,7 +302,8 @@ impl Geometry {
     /// that misses it follows the missed surface strategy. At a hit, the effect acts on the ray (see
     /// [`SurfaceEffect::act_at`]) and, if the ray sends a part back, on its helper rays as well; the
     /// surface records the hit in its hit map. Which of the two parts is the intended beam is
-    /// recorded on both (see [`ReflectedPart`]).
+    /// recorded on both (see [`ReflectedPart`]). The coating of the surface is built once for the
+    /// whole bundle.
     ///
     /// # Arguments
     ///
@@ -322,8 +324,8 @@ impl Geometry {
     ///
     /// # Errors
     ///
-    /// This function returns an error if there is no such face, if the effect fails for a ray or if
-    /// a hit cannot be recorded.
+    /// This function returns an error if there is no such face, if its coating cannot be built, if
+    /// the effect fails for a ray or if a hit cannot be recorded.
     pub fn interact_with_rays(
         &mut self,
         face: FaceIndex,
@@ -332,7 +334,7 @@ impl Geometry {
         part: ReflectedPart,
         missed: MissedSurfaceStrategy,
     ) -> OpmResult<Rays> {
-        let coating = *self.surface_of_mut(face)?.coating();
+        let coating = Box::<dyn Coating>::try_from(self.surface_of_mut(face)?.coating())?;
         let uuid = rays.uuid();
         let mut valid_rays_found = false;
         let mut rays_missed = false;
@@ -346,7 +348,7 @@ impl Geometry {
                 rays_missed = true;
                 continue;
             };
-            let (reflected, hit_point) = effect.act_at(ray, &surface_hit, &coating)?;
+            let (reflected, hit_point) = effect.act_at(ray, &surface_hit, coating.as_ref())?;
             if let Some(mut reflected) = reflected {
                 if let (Some(helpers), Some(reflected_helpers)) =
                     (ray.helper_rays_mut(), reflected.helper_rays_mut())
@@ -359,7 +361,7 @@ impl Geometry {
                             continue;
                         };
                         if let (Some(helper_reflected), _) =
-                            effect.act_at(helper, &helper_hit, &coating)?
+                            effect.act_at(helper, &helper_hit, coating.as_ref())?
                         {
                             reflected_helper.set_direction(helper_reflected.direction())?;
                         }

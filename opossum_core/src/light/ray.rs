@@ -12,7 +12,7 @@ use uom::si::{
 };
 
 use crate::{
-    coatings::CoatingType,
+    coatings::Coating,
     core_optics::hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint, HitPoint},
     error::{OpmResult, OpossumError},
     geometry::SurfaceHit,
@@ -571,7 +571,7 @@ impl Ray {
     pub fn refract_at(
         &mut self,
         hit: &SurfaceHit,
-        coating: &CoatingType,
+        coating: &dyn Coating,
         n2: Option<f64>,
     ) -> OpmResult<(Option<Self>, Option<HitPoint>)> {
         let n_refri_2 = n2.unwrap_or_else(|| self.refractive_index());
@@ -811,7 +811,7 @@ mod test {
     use super::*;
     use crate::{
         J_per_cm2,
-        coatings::CoatingConstantR,
+        coatings::{CoatingConstantR, IdealAR},
         degree,
         geometry::{Face, Geometry, SurfaceGeometry, SurfaceShape},
         joule,
@@ -1138,7 +1138,7 @@ mod test {
     fn refract_on_plane(
         ray: &mut Ray,
         frame: Isometry,
-        coating: &CoatingType,
+        coating: &dyn Coating,
         n2: Option<f64>,
     ) -> OpmResult<(Option<Ray>, Option<HitPoint>)> {
         let hit = Geometry::from(Face::new(SurfaceShape::Plane, frame))
@@ -1158,7 +1158,7 @@ mod test {
             Point3::new(Length::zero(), Length::zero(), plane_z_pos),
             degree!(0.0, 0.0, 0.0),
         )?;
-        let coating: CoatingType = CoatingConstantR::new(reflectivity)?.into();
+        let coating = CoatingConstantR::new(reflectivity)?;
         for n2 in [0.9, f64::NAN, f64::INFINITY] {
             assert!(refract_on_plane(&mut ray, isometry, &coating, Some(n2)).is_err());
         }
@@ -1220,7 +1220,7 @@ mod test {
         let surface_hit = lens
             .intersect(Extruded::FRONT, &ray)
             .ok_or_else(|| OpossumError::Other("the ray missed the lens".into()))?;
-        let (_, hit) = ray.refract_at(&surface_hit, &CoatingType::IdealAR, Some(1.5))?;
+        let (_, hit) = ray.refract_at(&surface_hit, &IdealAR, Some(1.5))?;
         let Some(HitPoint::Energy(hit)) = hit else {
             return Err(OpossumError::Other("the ray left no energy hit".into()));
         };
@@ -1272,7 +1272,7 @@ mod test {
             Point3::new(Length::zero(), Length::zero(), plane_z_pos),
             degree!(0.0, 0.0, 0.0),
         )?;
-        refract_on_plane(&mut ray, isometry, &CoatingType::IdealAR, None)?;
+        refract_on_plane(&mut ray, isometry, &IdealAR, None)?;
         assert_eq!(ray.pos, millimeter!(0., 10., 10.));
         assert_eq!(ray.dir[0], 0.0);
         assert_abs_diff_eq!(ray.dir[1], direction.normalize()[1]);
@@ -1311,7 +1311,7 @@ mod test {
             Point3::new(Length::zero(), Length::zero(), plane_z_pos),
             degree!(0.0, 0.0, 0.0),
         )?;
-        let coating = CoatingType::IdealAR;
+        let coating = IdealAR;
         for n2 in [0.9, f64::NAN, f64::INFINITY] {
             assert!(refract_on_plane(&mut ray, isometry, &coating, Some(n2)).is_err());
         }
@@ -1350,8 +1350,7 @@ mod test {
             Point3::new(Length::zero(), Length::zero(), millimeter!(10.0)),
             degree!(0.0, 0.0, 0.0),
         )?;
-        let (reflected, _hitpoint) =
-            refract_on_plane(&mut ray, isometry, &CoatingType::IdealAR, Some(1.0))?;
+        let (reflected, _hitpoint) = refract_on_plane(&mut ray, isometry, &IdealAR, Some(1.0))?;
         assert!(reflected.is_none());
         assert_eq!(ray.pos, millimeter!(0., 20., 10.));
         let test_reflect = vector![0.0, 2.0, -1.0].normalize();

@@ -21,7 +21,7 @@ use crate::{
 use core::fmt::Debug;
 
 /// An optical surface of a component
-/// 
+///
 /// One face of its geometry, with what the surface adds to it:
 /// its [`CoatingType`], its laser induced damage threshold (LIDT), and what an analysis records
 /// there (ray caches and a hit map).
@@ -55,7 +55,7 @@ impl OpticSurface {
     pub fn new(face: Face, config: &SurfaceConfig) -> Self {
         Self {
             face,
-            coating: *config.coating(),
+            coating: config.coating().clone(),
             lidt: config.lidt(),
             backward_rays_cache: Vec::new(),
             forward_rays_cache: Vec::new(),
@@ -73,7 +73,7 @@ impl OpticSurface {
     }
     /// Set the coating and the LIDT of this [`OpticSurface`].
     pub fn set_config(&mut self, config: &SurfaceConfig) {
-        self.coating = *config.coating();
+        self.coating = config.coating().clone();
         self.lidt = config.lidt();
     }
     /// Gets a reference to the forward / backward rays cache of this [`OpticSurface`].

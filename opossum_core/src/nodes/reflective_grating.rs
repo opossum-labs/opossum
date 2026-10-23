@@ -8,7 +8,7 @@ use crate::{
         propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
         raytrace::AnalysisRayTrace,
     },
-    coatings::CoatingType,
+    coatings::Coating,
     core_optics::{
         NodeAttr, OpticNode, OpticNodeExt, PortType, SurfacePorts, hit_map::rays_hit_map::HitPoint,
         node_attr::HasNodeAttr, surface_effect::SurfaceEffect,
@@ -291,7 +291,7 @@ impl SurfaceEffect for Diffraction {
         &self,
         ray: &mut Ray,
         hit: &SurfaceHit,
-        _coating: &CoatingType,
+        _coating: &dyn Coating,
     ) -> OpmResult<(Option<Ray>, Option<HitPoint>)> {
         let n2 = self.index.get_refractive_index(ray.wavelength())?;
         Ok((

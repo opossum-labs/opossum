@@ -6,7 +6,7 @@ mod analysis_raytrace;
 
 use crate::{
     analyzers::{AnalyzerType, propagation_strategy::MissedSurfaceStrategy},
-    coatings::{CoatingConstantR, CoatingType},
+    coatings::Coating,
     core_optics::{
         NodeAttr, OpticNode, OpticNodeExt, PortType, SurfacePorts, hit_map::rays_hit_map::HitPoint,
         node_attr::HasNodeAttr, surface_effect::SurfaceEffect,
@@ -25,6 +25,7 @@ use crate::{
     properties::{Proptype, validator::Validator},
     utils::default_from_name::DefaultFromName,
 };
+use nalgebra::Vector3;
 use opm_macros_lib::OpmNode;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
@@ -153,41 +154,34 @@ impl SplittingConfig {
         }
         Ok(transmission)
     }
-    /// Returns the coating of a splitting surface with this [`SplittingConfig`] at a given wavelength.
-    ///
-    /// The splitting surface reflects everything that it does not transmit, so the returned
-    /// coating has a constant reflectivity of `1 - transmission`.
-    ///
-    /// # Arguments
-    ///
-    /// * `wavelength` - the wavelength of the light hitting the splitting surface.
-    ///
-    /// # Returns
-    ///
-    /// A [`CoatingType::ConstantR`] with the reflectivity of the splitting surface.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the transmission cannot be determined (see
-    /// [`transmission`](Self::transmission)).
-    pub fn coating(&self, wavelength: Length) -> OpmResult<CoatingType> {
-        let reflectivity = Ratio::new::<ratio>(1.0 - self.transmission(wavelength)?);
-        Ok(CoatingType::ConstantR(CoatingConstantR::new(reflectivity)?))
+}
+
+/// A splitting surface reflects everything that it does not transmit: its reflectivity is
+/// `1 - transmission` at the wavelength of the ray, whatever the angle of incidence or the medium.
+impl Coating for SplittingConfig {
+    fn calc_reflectivity(
+        &self,
+        incoming_ray: &Ray,
+        _surface_normal: Vector3<f64>,
+        _n2: f64,
+    ) -> OpmResult<Ratio> {
+        Ok(Ratio::new::<ratio>(
+            1.0 - self.transmission(incoming_ray.wavelength())?,
+        ))
     }
 }
 
-/// A splitting surface splits a ray as if it had the coating of [`SplittingConfig::coating`] at the
-/// wavelength of the ray; the coating of the surface itself is not used. The transmitted part keeps
-/// its direction, the reflected part is mirrored about the surface normal.
+/// A splitting surface splits a ray by this [`SplittingConfig`] as its coating; the coating of the
+/// surface itself is not used. The transmitted part keeps its direction, the reflected part is
+/// mirrored about the surface normal.
 impl SurfaceEffect for SplittingConfig {
     fn act_at(
         &self,
         ray: &mut Ray,
         hit: &SurfaceHit,
-        _coating: &CoatingType,
+        _coating: &dyn Coating,
     ) -> OpmResult<(Option<Ray>, Option<HitPoint>)> {
-        let coating = self.coating(ray.wavelength())?;
-        ray.refract_at(hit, &coating, None)
+        ray.refract_at(hit, self, None)
     }
 }
 
@@ -487,6 +481,7 @@ mod test {
             raytrace::AnalysisRayTrace,
         },
         core_optics::{NodeAttrExt, PortType},
+        joule,
         light::{LightRays, LightResult},
         millimeter, nanometer,
         nodes::{
@@ -581,14 +576,18 @@ mod test {
         Ok(())
     }
     #[test]
-    fn splitting_config_coating() -> OpmResult<()> {
-        let CoatingType::ConstantR(coating) =
-            SplittingConfig::Ratio(0.6).coating(nanometer!(1000.0))?
-        else {
-            panic!("expected a constant reflectivity coating");
+    fn splitting_config_reflectivity() -> OpmResult<()> {
+        let reflectivity = |config: &SplittingConfig, wavelength| -> OpmResult<f64> {
+            let ray = Ray::origin_along_z(wavelength, joule!(1.0))?;
+            Ok(config
+                .calc_reflectivity(&ray, Vector3::z(), 1.5)?
+                .get::<ratio>())
         };
-        assert_abs_diff_eq!(coating.reflectivity().get::<ratio>(), 0.4);
-        assert!(short_pass_config()?.coating(nanometer!(1501.0)).is_err());
+        assert_abs_diff_eq!(
+            reflectivity(&SplittingConfig::Ratio(0.6), nanometer!(1000.0))?,
+            0.4
+        );
+        assert!(reflectivity(&short_pass_config()?, nanometer!(1501.0)).is_err());
         Ok(())
     }
     #[test]

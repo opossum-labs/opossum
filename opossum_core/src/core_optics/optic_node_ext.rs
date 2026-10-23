@@ -381,14 +381,14 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
 
     fn set_coating(&mut self, face: FaceIndex, coating: &CoatingType) -> OpmResult<()> {
         let name = self.face_name(face)?;
-        let config = SurfaceConfig::new(*coating, self.surface_config(&name)?.lidt())?;
+        let config = SurfaceConfig::new(coating.clone(), self.surface_config(&name)?.lidt())?;
         self.node_attr_mut().set_property(&name, config.into())?;
         self.update_surfaces()
     }
 
     fn set_lidt(&mut self, face: FaceIndex, lidt: Fluence) -> OpmResult<()> {
         let name = self.face_name(face)?;
-        let config = SurfaceConfig::new(*self.surface_config(&name)?.coating(), lidt)?;
+        let config = SurfaceConfig::new(self.surface_config(&name)?.coating().clone(), lidt)?;
         self.node_attr_mut().set_property(&name, config.into())?;
         self.update_surfaces()
     }
@@ -725,7 +725,7 @@ mod test {
         lens.set_coating(Extruded::FRONT, &CoatingType::Fresnel)?;
         let coating = |port: &str| {
             lens.get_optic_surface(port)
-                .map(|surface| *surface.coating())
+                .map(|surface| surface.coating().clone())
                 .ok_or_else(|| OpossumError::Other(format!("the lens has no {port} surface")))
         };
         assert!(matches!(coating("input_1")?, CoatingType::Fresnel));
