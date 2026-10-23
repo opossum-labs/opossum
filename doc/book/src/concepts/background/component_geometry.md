@@ -175,7 +175,9 @@ the geometry does not have is an error that names the port, the face and the num
 
 To trace rays at a surface, a node lets its runtime geometry act on them:
 `Geometry::interact_with_rays(face, &mut rays, effect, part, missed)`, with the face under the port the light arrives
-at (`OpticNodeExt::face_of_port`). The component acts on the light, not the other way round. For every valid ray:
+at (`OpticNodeExt::face_of_port`). The component acts on the light, not the other way round. The coating of the face
+is built once for the whole bundle (`Box<dyn Coating>`), so a `Separator` builds its spectrum once, not per ray. For
+every valid ray:
 
 1. The geometry answers where the ray hits the face (`Geometry::intersect`, which returns a `SurfaceHit`). A ray that
    misses follows the missed-surface strategy.
@@ -192,7 +194,7 @@ not touch the loop:
 | Effect | Where | At a hit |
 |---|---|---|
 | `Refraction` | `core_optics/surface_effect.rs` | Snell's law into the index behind the surface; the coating splits off a reflected part (`Ray::refract_at`). Without an index the surface is passive and keeps each ray's direction |
-| `SplittingConfig` | `nodes/beam_splitter/mod.rs` | a passive refraction with the coating `1 − T(λ)` of the splitting configuration instead of the surface's own |
+| `SplittingConfig` | `coatings/separator.rs` | a passive refraction with the reflectivity `1 − T(λ)` of the splitting configuration instead of the surface's coating; only the positioning of a beam splitter uses it, for a neutral 50:50 split |
 | `FilterType` | `nodes/ideal_filter/filter_types/mod.rs` | a passive refraction, then the attenuation by the transmission (`Ray::filter_energy`) |
 | `ParaxialLens` | `nodes/paraxial_surface.rs` | a passive refraction, then the deflection of an ideal thin lens (`Ray::refract_paraxial`) |
 | `Diffraction` | `nodes/reflective_grating.rs` | the grating equation for one order (`Ray::diffract_at`); the whole energy goes into the order, and no hit is recorded |
@@ -480,7 +482,7 @@ endpoint for a single component (`opossum_backend/src/document.rs`) therefore me
 | Node | What differs |
 |---|---|
 | Parabolic mirror | `Geometry::surface` with an axis other than the identity. The node sits where the chief ray hits the mirror. `calc_off_axis_frames` returns two frames: the frame of the parent parabola's axis through the node, in which the optic shape is measured, and the vertex of the parent parabola, stated in that frame. |
-| Beam splitter | One plane, face 0, under four port names: its surface ports put `input_1` and `input_2` and the outputs `out1_trans1_refl2` and `out2_trans2_refl1` all on `SurfaceGeometry::FACE`, so all four share the one optic surface. Its analysis addresses the ports by name itself and splits with its `SplittingConfig` as the effect and `ReflectedPart::Branch`; the coating of its `surface` takes no part in the split yet. The second input enters mirrored on the plane (`axis_entrance_frame`). |
+| Beam splitter | One plane, face 0, under four port names: its surface ports put `input_1` and `input_2` and the outputs `out1_trans1_refl2` and `out2_trans2_refl1` all on `SurfaceGeometry::FACE`, so all four share the one optic surface. Its analysis addresses the ports by name itself and splits with `Refraction(None)` and `ReflectedPart::Branch`, so the coating of its `surface` is the split (by default a `Separator` of 50 %). Its positioning splits the axis with `SplittingConfig::Ratio(0.5)` as the effect, whatever the coating. The second input enters mirrored on the plane (`axis_entrance_frame`). |
 | Detectors | `Geometry::detector` gives the extent window. A window is no edge: the face reaches everywhere, so all light passes. `SurfaceHit::recorded` decides which hit points are recorded, and `record_within_window` cuts the recorded light to the window of the geometry. With an open optic shape there is no window, and everything is recorded. |
 | Ideal filter, paraxial surface | `Geometry::plane`. Their effects (`FilterType`, `ParaxialLens`) attenuate or deflect at the hit, so a ray or helper ray that misses is neither. The paraxial surface may be unbounded. |
 | Grating | `Geometry::plane`. Its effect, `Diffraction`, sends the whole energy into one order, and the diffracted part is the intended beam (`ReflectedPart::Main`), like the reflection of a mirror. |
