@@ -352,8 +352,8 @@ pub fn MenuBar(
                 rsx! {
                     div { class: "d-flex align-items-center",
                         button {
-                            // class: if is_connected { "btn btn-success me-4" } else { "btn btn-secondary me-4 disabled pe-none" },
-                            // disabled: !is_connected,
+                            class: if is_connected { "btn btn-success me-4" } else { "btn btn-secondary me-4 disabled pe-none" },
+                            disabled: !is_connected,
                             "data-mdb-ripple-init": "",
                             "data-mdb-tooltip-init": format!("{}", title_str),
                             "data-mdb-original-title": format!("{}", title_str),
