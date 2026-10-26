@@ -156,12 +156,16 @@ Surfaces belong to the geometry. Every face holds its *optic surface*:
 
 The coating and the LIDT are properties of the node, one per face and named after it (`GeometryKind::face_name`):
 `surface` for a single surface, `front surface` and `rear surface` for an extruded solid, `surface 1`, `surface 2`, ...
-for a parametric solid or an assembly. Each holds a `SurfaceConfig`: an ideal antireflective coating and an infinite
-LIDT by default. A node creates these properties when it is made (`create_default_surface_properties`), and every
-face gets its own, whether a port sits on it or not.
+for a parametric solid or an assembly. Each holds a `SurfaceConfig`: by default an ideal antireflective coating, or a
+`Separator` of 50 % on a splitting face (see below), and an infinite LIDT. A node creates these properties when it is
+made (`create_default_surface_properties`), and every face gets its own, whether a port sits on it or not.
 
 The node decides which port sits on which face (`OpticNode::surface_ports`): a list of port names, each with the
-number of its face. A lens puts its input port on the front face and its output port on the rear face; what is "in"
+number of its face. It also names the faces at which it follows both parts of the light, the transmitted and the
+reflected one (`SurfacePorts::splitting`; today only the face of a beam splitter). The surface property of such a
+face takes only a `Separator` coating, that of every other face any coating but a `Separator`
+(`Validator::SurfaceCoating`), so neither a file nor the node editor gives a face a coating its node is not made
+for. A lens puts its input port on the front face and its output port on the rear face; what is "in"
 and what is "out" is thus the node's decision, not the geometry's. A mirror or a beam splitter has one face, so all of
 its ports name that face, and they share its one optic surface: its coating, its caches and its hit map. A face
 without a port still exists and keeps its coating.
@@ -175,7 +179,9 @@ the geometry does not have is an error that names the port, the face and the num
 
 To trace rays at a surface, a node lets its runtime geometry act on them:
 `Geometry::interact_with_rays(face, &mut rays, effect, part, missed)`, with the face under the port the light arrives
-at (`OpticNodeExt::face_of_port`). The component acts on the light, not the other way round. For every valid ray:
+at (`OpticNodeExt::face_of_port`). The component acts on the light, not the other way round. The coating of the face
+is built once for the whole bundle (`Box<dyn Coating>`), so a `Separator` builds its spectrum once, not per ray. For
+every valid ray:
 
 1. The geometry answers where the ray hits the face (`Geometry::intersect`, which returns a `SurfaceHit`). A ray that
    misses follows the missed-surface strategy.
@@ -192,7 +198,7 @@ not touch the loop:
 | Effect | Where | At a hit |
 |---|---|---|
 | `Refraction` | `core_optics/surface_effect.rs` | Snell's law into the index behind the surface; the coating splits off a reflected part (`Ray::refract_at`). Without an index the surface is passive and keeps each ray's direction |
-| `SplittingConfig` | `nodes/beam_splitter/mod.rs` | a passive refraction with the coating `1 − T(λ)` of the splitting configuration instead of the surface's own |
+| `SplittingConfig` | `coatings/separator.rs` | a passive refraction with the reflectivity `1 − T(λ)` of the splitting configuration instead of the surface's coating; only the positioning of a beam splitter uses it, for a neutral 50:50 split |
 | `FilterType` | `nodes/ideal_filter/filter_types/mod.rs` | a passive refraction, then the attenuation by the transmission (`Ray::filter_energy`) |
 | `ParaxialLens` | `nodes/paraxial_surface.rs` | a passive refraction, then the deflection of an ideal thin lens (`Ray::refract_paraxial`) |
 | `Diffraction` | `nodes/reflective_grating.rs` | the grating equation for one order (`Ray::diffract_at`); the whole energy goes into the order, and no hit is recorded |
@@ -289,7 +295,7 @@ All paths are relative to `opossum_core/src` unless stated otherwise.
 | `SurfaceEffect`, `Refraction` | `core_optics/surface_effect.rs` | what a surface does to a ray at a hit; the other effects live next to their nodes (see [Surface effects](#surface-effects)) |
 | `ReflectedPart` | `light/rays.rs` | which part of a split is the intended beam: the position history, bounce counter and bundle identity of both parts |
 | `OpticPorts` | `core_optics/optic_ports.rs` | the names of the input and output ports, graph logic only |
-| `SurfacePorts` | `core_optics/optic_ports.rs` | the ports a node declares, each with the face it sits on (`OpticNode::surface_ports`); `face_of` looks one up |
+| `SurfacePorts` | `core_optics/optic_ports.rs` | the ports a node declares, each with the face it sits on, and its splitting faces (`OpticNode::surface_ports`); `face_of` looks one up |
 | `Volumetric`, `Planar` | `core_optics/volumetric.rs`, `core_optics/planar.rs` | the capabilities |
 
 ### Example 1: a plano-convex lens
@@ -480,7 +486,7 @@ endpoint for a single component (`opossum_backend/src/document.rs`) therefore me
 | Node | What differs |
 |---|---|
 | Parabolic mirror | `Geometry::surface` with an axis other than the identity. The node sits where the chief ray hits the mirror. `calc_off_axis_frames` returns two frames: the frame of the parent parabola's axis through the node, in which the optic shape is measured, and the vertex of the parent parabola, stated in that frame. |
-| Beam splitter | One plane, face 0, under four port names: its surface ports put `input_1` and `input_2` and the outputs `out1_trans1_refl2` and `out2_trans2_refl1` all on `SurfaceGeometry::FACE`, so all four share the one optic surface. Its analysis addresses the ports by name itself and splits with its `SplittingConfig` as the effect and `ReflectedPart::Branch`; the coating of its `surface` takes no part in the split yet. The second input enters mirrored on the plane (`axis_entrance_frame`). |
+| Beam splitter | One plane, face 0, under four port names: its surface ports put `input_1` and `input_2` and the outputs `out1_trans1_refl2` and `out2_trans2_refl1` all on `SurfaceGeometry::FACE`, so all four share the one optic surface, and declare that face splitting, so its `surface` takes only a `Separator`. Its analysis addresses the ports by name itself and splits with `Refraction(None)` and `ReflectedPart::Branch`, so the coating of its `surface` is the split (by default a `Separator` of 50 %). Its positioning splits the axis with `SplittingConfig::Ratio(0.5)` as the effect, whatever the coating. The second input enters mirrored on the plane (`axis_entrance_frame`). |
 | Detectors | `Geometry::detector` gives the extent window. A window is no edge: the face reaches everywhere, so all light passes. `SurfaceHit::recorded` decides which hit points are recorded, and `record_within_window` cuts the recorded light to the window of the geometry. With an open optic shape there is no window, and everything is recorded. |
 | Ideal filter, paraxial surface | `Geometry::plane`. Their effects (`FilterType`, `ParaxialLens`) attenuate or deflect at the hit, so a ray or helper ray that misses is neither. The paraxial surface may be unbounded. |
 | Grating | `Geometry::plane`. Its effect, `Diffraction`, sends the whole energy into one order, and the diffracted part is the intended beam (`ReflectedPart::Main`), like the reflection of a mirror. |
@@ -518,7 +524,8 @@ analysis's sources. Then the bounce passes follow:
 - **A new node type.**
   - Implement `OpticNode::create_geometry` with a preset. The method has no default, so the compiler forces an
     answer; `None` is the answer for a node without a shape of its own.
-  - Implement `OpticNode::surface_ports`: the port names of the node, each with the number of the face it sits on.
+  - Implement `OpticNode::surface_ports`: the port names of the node, each with the number of the face it sits on,
+    and the faces at which the node follows both parts of the light (`splitting`, usually none).
     `SurfacePorts::SINGLE_SURFACE` and `SurfacePorts::THROUGH_SOLID` cover the usual cases.
   - In `Default`, declare the `OPTIC_SHAPE` property and the properties the geometry is derived from, then call
     `create_default_surface_properties` before anything installs the surfaces (`update_surfaces`, `set_positioning`,

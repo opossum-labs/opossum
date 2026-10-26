@@ -72,6 +72,10 @@ pub struct SurfacePorts {
     /// The output ports light leaves through: their (physical) names and the face each one sits
     /// on.
     pub outputs: &'static [(&'static str, FaceIndex)],
+    /// The faces at which the node follows both parts of the light, the transmitted and the
+    /// reflected one; at every other face it follows only one of them. Such a splitting face takes
+    /// only a separator coating, every other face any coating but a separator.
+    pub splitting: &'static [FaceIndex],
 }
 
 impl SurfacePorts {
@@ -79,16 +83,19 @@ impl SurfacePorts {
     pub const NONE: Self = Self {
         inputs: &[],
         outputs: &[],
+        splitting: &[],
     };
     /// `input_1` and `output_1`, both on the one face of a single surface.
     pub const SINGLE_SURFACE: Self = Self {
         inputs: &[("input_1", SurfaceGeometry::FACE)],
         outputs: &[("output_1", SurfaceGeometry::FACE)],
+        splitting: &[],
     };
     /// `input_1` on the front face and `output_1` on the rear face of an extruded solid.
     pub const THROUGH_SOLID: Self = Self {
         inputs: &[("input_1", Extruded::FRONT)],
         outputs: &[("output_1", Extruded::REAR)],
+        splitting: &[],
     };
     /// Return the face the port of the given (physical) name sits on.
     ///

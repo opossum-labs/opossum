@@ -6,7 +6,7 @@
 //! [`Geometry::interact`](crate::geometry::Geometry::interact)).
 
 use crate::{
-    coatings::CoatingType, core_optics::hit_map::rays_hit_map::HitPoint, error::OpmResult,
+    coatings::Coating, core_optics::hit_map::rays_hit_map::HitPoint, error::OpmResult,
     geometry::SurfaceHit, light::Ray, refractive_index::RefractiveIndexType,
 };
 
@@ -35,7 +35,7 @@ pub trait SurfaceEffect {
         &self,
         ray: &mut Ray,
         hit: &SurfaceHit,
-        coating: &CoatingType,
+        coating: &dyn Coating,
     ) -> OpmResult<(Option<Ray>, Option<HitPoint>)>;
 }
 
@@ -51,7 +51,7 @@ impl SurfaceEffect for Refraction<'_> {
         &self,
         ray: &mut Ray,
         hit: &SurfaceHit,
-        coating: &CoatingType,
+        coating: &dyn Coating,
     ) -> OpmResult<(Option<Ray>, Option<HitPoint>)> {
         let n2 = self
             .0

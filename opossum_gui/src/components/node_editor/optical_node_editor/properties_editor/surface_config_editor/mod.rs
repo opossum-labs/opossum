@@ -3,6 +3,7 @@ mod coating_editor;
 use dioxus::prelude::*;
 use opossum_core::{
     coatings::CoatingType, core_optics::SurfaceConfig, nodes::fluence_detector::Fluence,
+    properties::validator::Validator,
 };
 use uom::si::radiant_exposure::joule_per_square_centimeter;
 use uuid::Uuid;
@@ -22,11 +23,12 @@ use crate::{
 };
 
 /// Edits the coating and the LIDT of one surface of a component, the property named after its
-/// face.
+/// face. Only the coatings the property's `validator` may accept are offered.
 #[component]
 pub fn SurfaceConfigEditor(
     node_id: ReadSignal<Uuid>,
     surface_config: SurfaceConfig,
+    validator: Option<Validator>,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
@@ -36,10 +38,11 @@ pub fn SurfaceConfigEditor(
         on_save_proptype_handler(surface_config_sig, property_key.clone(), on_change, node_id);
     let config = surface_config_sig.read().clone();
     let lidt = config.lidt();
-    let coating = *config.coating();
+    let coating = config.coating().clone();
     let accordion_content = vec![rsx! {
         CoatingEditor {
-            coating_type: coating,
+            coating_type: config.coating().clone(),
+            validator,
             on_change: move |coating: CoatingType| {
                 match SurfaceConfig::new(coating, lidt) {
                     Ok(config) => on_save.call(config),
@@ -54,7 +57,7 @@ pub fn SurfaceConfigEditor(
             value: lidt.get::<joule_per_square_centimeter>(),
             unit_config: UnitHandling::new("J/cm²", true),
             onchange: move |value: f64| {
-                match SurfaceConfig::new(coating, Fluence::new::<joule_per_square_centimeter>(value)) {
+                match SurfaceConfig::new(coating.clone(), Fluence::new::<joule_per_square_centimeter>(value)) {
                     Ok(config) => on_save.call(config),
                     Err(err) => OPOSSUM_UI_LOGS.write().add_log(&format!("Invalid LIDT value: {err}")),
                 }

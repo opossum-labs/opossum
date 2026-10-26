@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     J_per_cm2,
     coatings::CoatingType,
-    error::OpmResult,
+    error::{OpmResult, OpossumError},
     generic_validators::{AllNotNan, AllPositive},
     nodes::fluence_detector::Fluence,
     validated, validated_type,
@@ -52,8 +52,14 @@ impl SurfaceConfig {
     ///
     /// # Errors
     ///
-    /// This function returns an error if the LIDT is negative or NaN.
+    /// This function returns an error if the coating is not valid (see [`CoatingType::is_valid`]),
+    /// or the LIDT is negative or NaN.
     pub fn new(coating: CoatingType, lidt: Fluence) -> OpmResult<Self> {
+        if !coating.is_valid()? {
+            return Err(OpossumError::Properties(format!(
+                "the coating {coating:?} is outside its allowed range"
+            )));
+        }
         Ok(Self {
             coating,
             lidt: validated!(lidt, AllPositive && AllNotNan)?,
@@ -73,8 +79,15 @@ impl SurfaceConfig {
 
 impl Default for SurfaceConfig {
     fn default() -> Self {
+        Self::from(CoatingType::IdealAR)
+    }
+}
+
+impl From<CoatingType> for SurfaceConfig {
+    /// A surface with the given coating and the default, infinite LIDT.
+    fn from(coating: CoatingType) -> Self {
         Self {
-            coating: CoatingType::IdealAR,
+            coating,
             lidt: default_lidt(),
         }
     }
@@ -84,7 +97,9 @@ impl Default for SurfaceConfig {
 mod test {
     use super::*;
     use crate::{
-        error::OpossumError,
+        coatings::SplittingConfigBuilder,
+        nanometer,
+        nodes::ideal_filter::{EdgeFilter, EdgeFilterType, SpectralFilterBuilder},
         properties::{Properties, Proptype},
         utils::test_helper::helper::check_logs,
     };
@@ -96,14 +111,34 @@ mod test {
         }
         assert!(SurfaceConfig::new(CoatingType::Fresnel, J_per_cm2!(f64::INFINITY)).is_ok());
     }
+    #[test]
+    fn an_invalid_coating_is_rejected() {
+        let lidt = J_per_cm2!(f64::INFINITY);
+        for transmission in [-0.01, 1.01] {
+            let coating = CoatingType::Separator(transmission.into());
+            assert!(SurfaceConfig::new(coating, lidt).is_err());
+        }
+        assert!(SurfaceConfig::new(CoatingType::Separator(1.0.into()), lidt).is_ok());
+    }
     /// A default surface, which leaves out its infinite LIDT, reads back as a property of a node
-    /// file, and so does one with both fields set.
+    /// file, and so does one with both fields set, and one with a separator whose spectrum is
+    /// defined by filter parameters.
     #[test]
     fn a_surface_property_reads_back() -> OpmResult<()> {
         let to_error = |e: &dyn std::fmt::Display| OpossumError::Other(e.to_string());
+        let short_pass =
+            SplittingConfigBuilder::Spectrum(SpectralFilterBuilder::EdgeFilter(EdgeFilter::new(
+                EdgeFilterType::ShortPass,
+                nanometer!(1000.0),
+                0.0..1.0,
+                None,
+                nanometer!(500.0)..nanometer!(1500.0),
+                nanometer!(1.0),
+            )?));
         for config in [
             SurfaceConfig::default(),
             SurfaceConfig::new(CoatingType::Fresnel, J_per_cm2!(2.0))?,
+            SurfaceConfig::new(short_pass.into(), J_per_cm2!(2.0))?,
         ] {
             let mut props = Properties::default();
             props.create("surface", "a surface", config.clone().into())?;

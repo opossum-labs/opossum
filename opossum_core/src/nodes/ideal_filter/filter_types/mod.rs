@@ -12,7 +12,7 @@ use uom::si::f64::Ratio;
 use std::fmt::Display;
 
 use crate::{
-    coatings::CoatingType,
+    coatings::Coating,
     core_optics::{
         hit_map::rays_hit_map::HitPoint,
         surface_effect::{Refraction, SurfaceEffect},
@@ -152,7 +152,7 @@ impl SurfaceEffect for FilterType {
         &self,
         ray: &mut Ray,
         hit: &SurfaceHit,
-        coating: &CoatingType,
+        coating: &dyn Coating,
     ) -> OpmResult<(Option<Ray>, Option<HitPoint>)> {
         let split = Refraction(None).act_at(ray, hit, coating)?;
         ray.filter_energy(self)?;

@@ -6,205 +6,25 @@ mod analysis_raytrace;
 
 use crate::{
     analyzers::{AnalyzerType, propagation_strategy::MissedSurfaceStrategy},
-    coatings::{CoatingConstantR, CoatingType},
+    coatings::{CoatingType, SplittingConfig, SplittingConfigBuilder},
     core_optics::{
-        NodeAttr, OpticNode, OpticNodeExt, PortType, SurfacePorts, hit_map::rays_hit_map::HitPoint,
-        node_attr::HasNodeAttr, surface_effect::SurfaceEffect,
+        NodeAttr, OpticNode, OpticNodeExt, PortType, SurfacePorts, node_attr::HasNodeAttr,
+        surface_effect::Refraction,
     },
     error::{OpmResult, OpossumError},
     geometry::{
-        Geometry, SurfaceGeometry, SurfaceHit,
+        Geometry, SurfaceGeometry,
         body::{OPTIC_SHAPE, default_optic_shape},
     },
     light::{
-        LightData, Ray, Rays,
+        LightData, Rays,
         rays::ReflectedPart,
         spectrum::{Spectrum, merge_spectra},
     },
-    nodes::{NodeRegistration, ideal_filter::SpectralFilterBuilder},
-    properties::{Proptype, validator::Validator},
-    utils::default_from_name::DefaultFromName,
+    nodes::NodeRegistration,
+    properties::validator::Validator,
 };
 use opm_macros_lib::OpmNode;
-use serde::{Deserialize, Serialize};
-use std::fmt::Display;
-use strum::{EnumIter, IntoEnumIterator};
-use uom::si::{
-    f64::{Length, Ratio},
-    ratio::ratio,
-};
-
-/// Config data builder for a [`BeamSplitter`].
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter)]
-pub enum SplittingConfigBuilder {
-    /// a fixed (wavelength-independant) transmission value. Must be between 0.0 and 1.0
-    FixedRatio(f64),
-    /// splitting based on given transmission spectrum.
-    Spectrum(SpectralFilterBuilder),
-}
-
-impl SplittingConfigBuilder {
-    /// Constructs a [`SplittingConfig`] object from the builder.
-    /// # Errors
-    /// Returns an error if the creation of a spectrum fails.
-    pub fn build(&self) -> OpmResult<SplittingConfig> {
-        match self {
-            Self::FixedRatio(c) => Ok(SplittingConfig::Ratio(*c)),
-            Self::Spectrum(spectral_filter_builder) => {
-                Ok(SplittingConfig::Spectrum(spectral_filter_builder.build()?))
-            }
-        }
-    }
-}
-
-impl From<SpectralFilterBuilder> for SplittingConfigBuilder {
-    fn from(val: SpectralFilterBuilder) -> Self {
-        Self::Spectrum(val)
-    }
-}
-impl From<f64> for SplittingConfigBuilder {
-    fn from(val: f64) -> Self {
-        Self::FixedRatio(val)
-    }
-}
-
-impl Display for SplittingConfigBuilder {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::FixedRatio(_) => write!(f, "Fixed Ratio"),
-            Self::Spectrum(_) => write!(f, "Spectral filter"),
-        }
-    }
-}
-
-impl DefaultFromName for SplittingConfigBuilder {
-    fn default_from_name(name: &str) -> Option<Self> {
-        for ftb in Self::iter() {
-            if name == format!("{ftb}") {
-                match ftb {
-                    Self::FixedRatio(_) => {
-                        return Some(Self::FixedRatio(0.5));
-                    }
-                    Self::Spectrum(_) => return Some(ftb),
-                }
-            }
-        }
-        None
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter)]
-/// Configuration for splitting a [`Ray`](crate::light::Ray) into multiple parts.
-///
-/// This enum defines how a ray is split, either by a fixed ratio or by a wavelength-dependent spectrum.
-pub enum SplittingConfig {
-    /// Ideal beam splitter with a fixed splitting ratio.
-    ///
-    /// The `f64` value must be in the range (0.0..=1.0), where 1.0 means all energy remains in the initial beam,
-    /// and 0.0 means all energy is transferred to the split beam.
-    Ratio(f64),
-    /// Beam splitter with a wavelength-dependent transmission spectrum.
-    ///
-    /// The [`Spectrum`] must contain values in the range (0.0..=1.0).
-    Spectrum(Spectrum),
-}
-impl SplittingConfig {
-    /// Checks the validity of the [`SplittingConfig`].
-    ///
-    /// Returns `true` if all values in the spectrum or the ratio are within the range (0.0..=1.0).
-    #[must_use]
-    pub fn is_valid(&self) -> bool {
-        match self {
-            Self::Ratio(r) => (0.0..=1.0).contains(r),
-            Self::Spectrum(s) => s.is_transmission_spectrum(),
-        }
-    }
-    /// Returns the transmission of this [`SplittingConfig`] at a given wavelength.
-    ///
-    /// The transmission is the part of the energy that remains in the initial beam. For
-    /// [`SplittingConfig::Ratio`] it is the ratio itself, for [`SplittingConfig::Spectrum`] it is the
-    /// spectrum value at the given wavelength.
-    ///
-    /// # Arguments
-    ///
-    /// * `wavelength` - the wavelength of the light to be split.
-    ///
-    /// # Returns
-    ///
-    /// The transmission in the range `(0.0..=1.0)`.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the wavelength is outside the given spectrum or the
-    /// transmission is outside the interval `[0.0..1.0]`.
-    pub fn transmission(&self, wavelength: Length) -> OpmResult<f64> {
-        let transmission = match self {
-            Self::Ratio(r) => *r,
-            Self::Spectrum(spectrum) => spectrum.get_value(&wavelength).ok_or_else(|| {
-                OpossumError::Spectrum(
-                    "ray splitting failed. wavelength outside given spectrum".into(),
-                )
-            })?,
-        };
-        if !(0.0..=1.0).contains(&transmission) {
-            return Err(OpossumError::Other(
-                "splitting_ratio must be within [0.0;1.0]".into(),
-            ));
-        }
-        Ok(transmission)
-    }
-    /// Returns the coating of a splitting surface with this [`SplittingConfig`] at a given wavelength.
-    ///
-    /// The splitting surface reflects everything that it does not transmit, so the returned
-    /// coating has a constant reflectivity of `1 - transmission`.
-    ///
-    /// # Arguments
-    ///
-    /// * `wavelength` - the wavelength of the light hitting the splitting surface.
-    ///
-    /// # Returns
-    ///
-    /// A [`CoatingType::ConstantR`] with the reflectivity of the splitting surface.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the transmission cannot be determined (see
-    /// [`transmission`](Self::transmission)).
-    pub fn coating(&self, wavelength: Length) -> OpmResult<CoatingType> {
-        let reflectivity = Ratio::new::<ratio>(1.0 - self.transmission(wavelength)?);
-        Ok(CoatingType::ConstantR(CoatingConstantR::new(reflectivity)?))
-    }
-}
-
-/// A splitting surface splits a ray as if it had the coating of [`SplittingConfig::coating`] at the
-/// wavelength of the ray; the coating of the surface itself is not used. The transmitted part keeps
-/// its direction, the reflected part is mirrored about the surface normal.
-impl SurfaceEffect for SplittingConfig {
-    fn act_at(
-        &self,
-        ray: &mut Ray,
-        hit: &SurfaceHit,
-        _coating: &CoatingType,
-    ) -> OpmResult<(Option<Ray>, Option<HitPoint>)> {
-        let coating = self.coating(ray.wavelength())?;
-        ray.refract_at(hit, &coating, None)
-    }
-}
-
-impl Display for SplittingConfig {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Ratio(_) => write!(f, "Fixed Ratio"),
-            Self::Spectrum(_) => write!(f, "Split by Spectrum"),
-        }
-    }
-}
-
-impl From<SplittingConfigBuilder> for Proptype {
-    fn from(config: SplittingConfigBuilder) -> Self {
-        Self::SplittingConfigBuilder(config)
-    }
-}
 
 inventory::submit! {
     NodeRegistration::new::<BeamSplitter>("beam splitter", "ideal beam splitter")
@@ -212,14 +32,14 @@ inventory::submit! {
 
 #[derive(OpmNode, Debug, Clone)]
 #[opm_node("lightpink")]
-/// An ideal beamsplitter node with a given splitting ratio.
+/// An ideal beamsplitter node: a thin splitting surface in the plane of the node.
 ///
-/// The splitting surface is the plane of the node. Its transmission is given by the
-/// [`SplittingConfig`]; the surface reflects the rest. The coatings of the ports are not used for
-/// the split. In ray tracing, the transmitted light keeps its direction while the reflected light
-/// is mirrored about the splitting surface. Hence, the beam splitter has to be tilted via its
-/// alignment (e.g. by 45°) to send the reflected light sideways; an untilted beam splitter reflects
-/// it back onto the incoming beam.
+/// The coating of its `surface` is the split. The surface is a splitting surface (see
+/// [`SurfacePorts::splitting`]), so it takes only a [`CoatingType::Separator`], by default one that
+/// transmits half of the light and reflects the rest. In ray tracing, the transmitted light keeps
+/// its direction while the reflected light is mirrored about the splitting surface. Hence, the beam splitter has to be tilted via its alignment (e.g. by 45°)
+/// to send the reflected light sideways; an untilted beam splitter reflects it back onto the
+/// incoming beam.
 ///
 /// ## Optical Ports
 ///   - Inputs
@@ -232,7 +52,7 @@ inventory::submit! {
 /// ## Properties
 ///   - `name`
 ///   - `inverted`
-///   - `splitter config`
+///   - `surface`: the coating (the split) and the LIDT of the splitting surface
 ///   - `optic shape`: the extent of the splitting surface; a ray beyond it misses the splitter
 ///     and follows the analyzer's missed surface strategy
 pub struct BeamSplitter {
@@ -243,14 +63,6 @@ impl Default for BeamSplitter {
     /// Create a 50:50 beamsplitter.
     fn default() -> Self {
         let mut node_attr = NodeAttr::new("beam splitter");
-        node_attr
-            .create_property_with_validator(
-                "splitter config builder",
-                "config data of the beam splitter",
-                Validator::NumericInRange { min: 0., max: 1. },
-                SplittingConfigBuilder::FixedRatio(0.5).into(),
-            )
-            .unwrap();
         node_attr
             .create_property_with_validator(
                 OPTIC_SHAPE,
@@ -266,42 +78,33 @@ impl Default for BeamSplitter {
     }
 }
 impl BeamSplitter {
-    /// Creates a new [`BeamSplitter`] with a given [`SplittingConfig`].
+    /// Creates a new [`BeamSplitter`] whose surface splits by the given configuration, as a
+    /// [`CoatingType::Separator`].
     ///
     /// ## Errors
-    /// This function returns an [`OpossumError::Other`] if the [`SplittingConfig`] is invalid.
+    /// This function returns an error if the configuration does not transmit within `[0.0, 1.0]`.
     pub fn new(name: &str, config: &SplittingConfigBuilder) -> OpmResult<Self> {
         let mut bs = Self::default();
         bs.node_attr.set_name(name);
-        bs.node_attr
-            .set_property("splitter config builder", config.clone().into())?;
-        bs.update_surfaces()?;
+        bs.set_coating(SurfaceGeometry::FACE, &config.clone().into())?;
         Ok(bs)
     }
-    /// Returns the splitting config of this [`BeamSplitter`].
+    /// Returns the splitting configuration of the separator coating of this [`BeamSplitter`]'s
+    /// surface, by which the energy analysis splits.
     ///
-    /// See [`SplittingConfig`] for further details.
     /// # Errors
-    /// This functions errors if the specified [`Properties`](crate::properties::Properties), do not exist or if the property has the wrong data format
+    /// This function returns an error if the configuration cannot be built, or if the surface has
+    /// no separator coating, which its property does not take.
     pub fn splitting_config(&self) -> OpmResult<SplittingConfig> {
-        if let Ok(Proptype::SplittingConfigBuilder(config)) =
-            self.node_attr.get_property("splitter config builder")
-        {
-            config.build()
-        } else {
-            Err(OpossumError::Other(
-                "property `splitter config` does not exist or has wrong data format".into(),
-            ))
+        let surface = self.face_name(SurfaceGeometry::FACE)?;
+        match self.surface_config(&surface)?.coating() {
+            CoatingType::Separator(config) => config.build(),
+            coating => Err(OpossumError::Analysis(format!(
+                "the energy analysis splits only by a separator coating, but the {surface} of \
+                 beam splitter '{}' has the coating '{coating}'",
+                self.node_attr.name()
+            ))),
         }
-    }
-    /// Sets the [`SplittingConfig`] of this [`BeamSplitter`].
-    ///
-    /// # Errors
-    /// This function returns an [`OpossumError::Other`] if the [`SplittingConfig`] is invalid.
-    pub fn set_splitting_config(&mut self, config: &SplittingConfigBuilder) -> OpmResult<()> {
-        self.node_attr
-            .set_property("splitter config builder", config.clone().into())?;
-        Ok(())
     }
     fn split_spectrum(
         input: Option<&LightData>,
@@ -362,14 +165,13 @@ impl BeamSplitter {
     }
     /// Processes rays arriving at a single input port.
     ///
-    /// The rays are split on the splitting surface of this port: the transmitted part keeps its
+    /// The rays are split by the coating of the splitting surface: the transmitted part keeps its
     /// direction, the reflected part is mirrored about the surface normal.
     ///
     /// # Arguments
     ///
     /// * `input` - the light arriving at the port, if any.
-    /// * `port_name` - the name of the input port (and its surface).
-    /// * `splitting_config` - the [`SplittingConfig`] defining the transmission of the splitting surface.
+    /// * `port_name` - the name of the input port.
     /// * `missed_surface_strategy` - what happens to rays that do not hit the splitting surface.
     ///
     /// # Returns
@@ -386,7 +188,6 @@ impl BeamSplitter {
         &mut self,
         input: Option<&LightData>,
         port_name: &str,
-        splitting_config: &SplittingConfig,
         missed_surface_strategy: MissedSurfaceStrategy,
     ) -> OpmResult<(Rays, Rays)> {
         let Some(light_data) = input else {
@@ -407,7 +208,7 @@ impl BeamSplitter {
         let reflected = geometry.interact_with_rays(
             face,
             &mut rays,
-            splitting_config,
+            &Refraction(None),
             ReflectedPart::Branch,
             missed_surface_strategy,
         )?;
@@ -426,7 +227,6 @@ impl BeamSplitter {
         let in1_port_name = &self.ports().names(&PortType::Input)[0];
         let in2_port_name = &self.ports().names(&PortType::Input)[1];
 
-        let splitting_config = self.splitting_config()?;
         let missed_surface_strategy = match analyzer_type {
             AnalyzerType::Energy(_) => &MissedSurfaceStrategy::Stop,
             AnalyzerType::RayTrace(ray_trace_config) => ray_trace_config.missed_surface_strategy(),
@@ -434,18 +234,10 @@ impl BeamSplitter {
         };
 
         // Process both inputs
-        let (mut main_rays1, split_rays1) = self.process_input_port(
-            in1,
-            in1_port_name,
-            &splitting_config,
-            *missed_surface_strategy,
-        )?;
-        let (mut main_rays2, split_rays2) = self.process_input_port(
-            in2,
-            in2_port_name,
-            &splitting_config,
-            *missed_surface_strategy,
-        )?;
+        let (mut main_rays1, split_rays1) =
+            self.process_input_port(in1, in1_port_name, *missed_surface_strategy)?;
+        let (mut main_rays2, split_rays2) =
+            self.process_input_port(in2, in2_port_name, *missed_surface_strategy)?;
 
         // Merge the transmitted and reflected rays for the two outputs.
         main_rays1.merge(&split_rays2); // out1 = trans1 + refl2
@@ -475,6 +267,7 @@ impl OpticNode for BeamSplitter {
                 ("out1_trans1_refl2", SurfaceGeometry::FACE),
                 ("out2_trans2_refl1", SurfaceGeometry::FACE),
             ],
+            splitting: &[SurfaceGeometry::FACE],
         }
     }
 }
@@ -486,22 +279,26 @@ mod test {
             GhostFocusConfig, RayTraceConfig, ghostfocus::AnalysisGhostFocus,
             raytrace::AnalysisRayTrace,
         },
+        coatings::{CoatingConstantR, CoatingType},
         core_optics::{NodeAttrExt, PortType},
         light::{LightRays, LightResult},
         millimeter, nanometer,
-        nodes::{
-            ideal_filter::{EdgeFilter, EdgeFilterType},
-            test_helper::helper::*,
-        },
+        nodes::test_helper::helper::*,
+        percent,
     };
-    use approx::assert_abs_diff_eq;
     #[test]
     fn default() -> OpmResult<()> {
         let node = BeamSplitter::default();
-        assert!(matches!(
-            node.splitting_config()?,
-            SplittingConfig::Ratio(_)
-        ));
+        assert_eq!(
+            node.surface_config(&node.face_name(SurfaceGeometry::FACE)?)?
+                .coating(),
+            &CoatingType::Separator(SplittingConfigBuilder::FixedRatio(0.5))
+        );
+        assert!(
+            node.node_attr()
+                .get_property("splitter config builder")
+                .is_err()
+        );
         assert_eq!(node.name(), "beam splitter");
         assert_eq!(node.node_type(), "beam splitter");
         assert!(!node.inverted());
@@ -546,51 +343,6 @@ mod test {
     fn analyze_empty() -> OpmResult<()> {
         test_analyze_empty::<BeamSplitter>()
     }
-    fn short_pass_config() -> OpmResult<SplittingConfig> {
-        let spectrum: Spectrum = EdgeFilter::new(
-            EdgeFilterType::ShortPass,
-            nanometer!(1000.0),
-            0.0..1.0,
-            None,
-            nanometer!(500.0)..nanometer!(1500.0),
-            nanometer!(1.0),
-        )?
-        .into();
-        Ok(SplittingConfig::Spectrum(spectrum))
-    }
-    #[test]
-    fn splitting_config_transmission() -> OpmResult<()> {
-        assert_abs_diff_eq!(
-            SplittingConfig::Ratio(0.6).transmission(nanometer!(1000.0))?,
-            0.6
-        );
-        assert!(
-            SplittingConfig::Ratio(1.1)
-                .transmission(nanometer!(1000.0))
-                .is_err()
-        );
-        assert!(
-            SplittingConfig::Ratio(-0.1)
-                .transmission(nanometer!(1000.0))
-                .is_err()
-        );
-        let config = short_pass_config()?;
-        assert_abs_diff_eq!(config.transmission(nanometer!(999.0))?, 1.0);
-        assert_abs_diff_eq!(config.transmission(nanometer!(1001.0))?, 0.0);
-        assert!(config.transmission(nanometer!(1501.0)).is_err());
-        Ok(())
-    }
-    #[test]
-    fn splitting_config_coating() -> OpmResult<()> {
-        let CoatingType::ConstantR(coating) =
-            SplittingConfig::Ratio(0.6).coating(nanometer!(1000.0))?
-        else {
-            panic!("expected a constant reflectivity coating");
-        };
-        assert_abs_diff_eq!(coating.reflectivity().get::<ratio>(), 0.4);
-        assert!(short_pass_config()?.coating(nanometer!(1501.0)).is_err());
-        Ok(())
-    }
     #[test]
     fn optic_shape_absent_in_file() -> OpmResult<()> {
         test_optic_shape_absent_in_file::<BeamSplitter>()
@@ -602,6 +354,60 @@ mod test {
             .map(|y| millimeter!(0.0, *y, -10.0))
             .collect();
         rays_along_z_from(&starts, nanometer!(1000.0))
+    }
+    /// Send rays into `input_1` of the splitter in a ray trace.
+    ///
+    /// # Returns
+    ///
+    /// The transmitted and the reflected bundle.
+    fn ray_trace(splitter: &mut BeamSplitter, rays: Rays) -> OpmResult<(Rays, Rays)> {
+        let output = AnalysisRayTrace::analyze(
+            splitter,
+            LightResult::from([("input_1".into(), LightData::Geometric(rays))]),
+            &RayTraceConfig::default(),
+        )?;
+        let (Some(LightData::Geometric(transmitted)), Some(LightData::Geometric(reflected))) = (
+            output.get("out1_trans1_refl2"),
+            output.get("out2_trans2_refl1"),
+        ) else {
+            panic!("expected ray data at both outputs");
+        };
+        Ok((transmitted.clone(), reflected.clone()))
+    }
+    #[test]
+    fn the_split_follows_the_surface_coating() -> OpmResult<()> {
+        let mut splitter = placed_at_origin::<BeamSplitter>()?;
+        splitter.set_coating(
+            SurfaceGeometry::FACE,
+            &SplittingConfigBuilder::FixedRatio(0.3).into(),
+        )?;
+        let (transmitted, reflected) = ray_trace(&mut splitter, rays_at(&[0.0])?)?;
+        assert_valid_energies(&transmitted, &[0.3], "the separator transmits 30 %");
+        assert_valid_energies(&reflected, &[0.7], "the separator reflects the rest");
+        Ok(())
+    }
+    /// Both parts of the light leave the splitting surface, so it takes only a separator.
+    #[test]
+    fn a_beam_splitter_takes_only_a_separator_coating() -> OpmResult<()> {
+        let mut splitter = BeamSplitter::default();
+        let surface = splitter.face_name(SurfaceGeometry::FACE)?;
+        for coating in [
+            CoatingType::IdealAR,
+            CoatingConstantR::new(percent!(30.0))?.into(),
+            CoatingType::Fresnel,
+        ] {
+            assert!(
+                splitter
+                    .set_coating(SurfaceGeometry::FACE, &coating)
+                    .is_err(),
+                "{coating}"
+            );
+        }
+        assert_eq!(
+            splitter.surface_config(&surface)?.coating(),
+            &CoatingType::Separator(SplittingConfigBuilder::default())
+        );
+        Ok(())
     }
     /// Send rays into `input_1` of the splitter in a ghost focus analysis.
     ///
@@ -630,27 +436,17 @@ mod test {
     /// is split.
     #[test]
     fn rays_beyond_optic_shape_are_lost() -> OpmResult<()> {
-        let output = AnalysisRayTrace::analyze(
+        let (transmitted, reflected) = ray_trace(
             &mut placed_at_origin::<BeamSplitter>()?,
-            LightResult::from([(
-                "input_1".into(),
-                LightData::Geometric(rays_at(&[12.4, 12.6])?),
-            )]),
-            &RayTraceConfig::default(),
+            rays_at(&[12.4, 12.6])?,
         )?;
-        let (Some(LightData::Geometric(transmitted)), Some(LightData::Geometric(reflected))) = (
-            output.get("out1_trans1_refl2"),
-            output.get("out2_trans2_refl1"),
-        ) else {
-            panic!("expected ray data at both outputs");
-        };
         assert_valid_energies(
-            transmitted,
+            &transmitted,
             &[0.5],
             "a ray trace transmits half of the ray inside",
         );
         assert_valid_energies(
-            reflected,
+            &reflected,
             &[0.5],
             "a ray trace reflects half of the ray inside",
         );

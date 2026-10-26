@@ -5,7 +5,7 @@ use crate::{
         GhostFocusConfig, RayTraceConfig, energy::AnalysisEnergy, ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
-    coatings::CoatingType,
+    coatings::Coating,
     core_optics::{
         NodeAttr, OpticNode, OpticNodeExt, PortType, SurfacePorts,
         hit_map::rays_hit_map::HitPoint,
@@ -134,7 +134,7 @@ impl SurfaceEffect for ParaxialLens {
         &self,
         ray: &mut Ray,
         hit: &SurfaceHit,
-        coating: &CoatingType,
+        coating: &dyn Coating,
     ) -> OpmResult<(Option<Ray>, Option<HitPoint>)> {
         let split = Refraction(None).act_at(ray, hit, coating)?;
         ray.refract_paraxial(self.focal_length, &self.frame)?;

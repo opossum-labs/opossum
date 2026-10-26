@@ -4,6 +4,7 @@ use crate::distributions::spectral::laser_lines::MIN_WAVELENGTH_DIFF_NM;
 use crate::geometry::Rim;
 use crate::{
     J_per_cm2, centimeter,
+    coatings::SplittingConfig,
     core_optics::hit_map::fluence_estimator::FluenceEstimator,
     degree,
     distributions::{
@@ -17,7 +18,6 @@ use crate::{
     light::{Ray, Spectrum},
     meter, millimeter, nanometer,
     nodes::{
-        SplittingConfig,
         fluence_detector::{Fluence, fluence_data::FluenceData},
         ray_propagation_visualizer::{RayPositionHistories, RayPositionHistorySpectrum},
     },
@@ -1522,9 +1522,9 @@ mod test {
     };
     use crate::{
         apertures::{CircleShape, Outline},
-        centimeter, joule, meter, millimeter, nanometer,
-        nodes::SplittingConfig,
-        radian,
+        centimeter,
+        coatings::SplittingConfig,
+        joule, meter, millimeter, nanometer, radian,
         refractive_index::RefrIndexConst,
         utils::test_helper::helper::check_logs,
     };
