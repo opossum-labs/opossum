@@ -9,8 +9,7 @@ use crate::{
         raytrace::AnalysisRayTrace,
     },
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, Planar, SurfaceKind,
-        SurfacePorts,
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, Planar, SurfaceKind, SurfacePorts,
         optic_node::APERTURE_LIMIT_NOTE,
     },
     error::OpmResult,

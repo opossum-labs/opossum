@@ -27,9 +27,8 @@ use crate::{
     core_optics::{optic_surface::OpticSurface, surface_effect::SurfaceEffect},
     error::{OpmResult, OpossumError},
     geometry::{
-        
-        Assembly, Extruded, Face, FaceIndex, ParametricSolid, Rim, SurfaceMesh, SurfaceShape, body::Body,
-    ,
+        Assembly, Extruded, Face, FaceIndex, ParametricSolid, Rim, SurfaceMesh, SurfaceShape,
+        body::Body,
     },
     light::{Ray, Rays, rays::ReflectedPart},
     utils::geom_transformation::Isometry,
@@ -685,10 +684,11 @@ impl GeometryKind for SurfaceGeometry {
     fn mesh(&self, segments: usize, unbounded: &Outline) -> OpmResult<Vec<SurfaceMesh>> {
         let (outline, frame) = match &self.extent {
             SurfaceExtent::Edge(rim) | SurfaceExtent::Window(rim) => (rim.outline(), *rim.frame()),
-            SurfaceExtent::Open => (unbounded, *self.face.frame()),
+            SurfaceExtent::Open => (unbounded, *self.surface.face().frame()),
         };
         let mesh = self
-            .face
+            .surface
+            .face()
             .mesh_over(&outline.triangulate(segments)?, &frame)?;
         Ok(vec![mesh.transformed(&frame)])
     }
@@ -717,8 +717,8 @@ mod test {
         utils::test_helper::helper::check_logs,
     };
     use approx::assert_abs_diff_eq;
-    use nalgebra::{Point2, Vector3};
     use nalgebra::vector;
+    use nalgebra::{Point2, Vector3};
     use uom::si::{energy::joule, f64::Energy, length::millimeter};
 
     fn circle() -> OpmResult<Outline> {
@@ -1240,7 +1240,6 @@ mod test {
             )));
         };
         let face = geometry
-            .kind()
             .face(SurfaceGeometry::FACE)
             .ok_or_else(|| OpossumError::Other("the surface has no face".into()))?;
         let mut farthest = 0.0_f64;
@@ -1276,7 +1275,8 @@ mod test {
         let beside = Isometry::new_translation(millimeter!(-50.0, 0.0, 0.0))?;
         let parabola = SurfaceShape::Parabola(Parabola::new(millimeter!(100.0))?);
         let mirror = Geometry::surface(axis, parabola, beside, Some(circle()?))?;
-        let detector = Geometry::detector(SurfaceShape::Plane, Some(circle()?))?.moved(&axis);
+        let mut detector = Geometry::detector(SurfaceShape::Plane, Some(circle()?))?;
+        detector.move_by(&axis);
         // the outline handed in is for unbounded surfaces only
         let unused = Outline::new(CircleShape::new(millimeter!(1.0))?, Vec::new())?;
         for geometry in [mirror, detector] {

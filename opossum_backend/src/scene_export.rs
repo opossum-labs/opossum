@@ -811,7 +811,7 @@ fn glass_of(node: &dyn Volumetric, wavelength: Length) -> OpmResult<Material> {
         );
         FALLBACK_REFRACTIVE_INDEX
     });
-    let geometry = node.geometry()?;
+    let geometry = node.create_geometry()?;
     let body = geometry
         .as_ref()
         .and_then(|geometry| geometry.kind().as_body())

@@ -10,8 +10,8 @@ use crate::{
     },
     coatings::Coating,
     core_optics::{
-        Appearance, NodeAttr, OpticNode, OpticNodeExt, Planar, PortType,
-        SurfaceFinish, SurfaceKind, SurfacePorts, hit_map::rays_hit_map::HitPoint, node_attr::HasNodeAttr,
+        Appearance, NodeAttr, OpticNode, OpticNodeExt, Planar, PortType, SurfaceFinish,
+        SurfaceKind, SurfacePorts, hit_map::rays_hit_map::HitPoint, node_attr::HasNodeAttr,
         surface_effect::SurfaceEffect,
     },
     error::{OpmResult, OpossumError},

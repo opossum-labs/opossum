@@ -13,8 +13,7 @@ use crate::{
     },
     core_optics::{
         NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, Planar, PortType, SurfaceKind,
-        SurfacePorts,
-        optic_node::APERTURE_LIMIT_NOTE,
+        SurfacePorts, optic_node::APERTURE_LIMIT_NOTE,
     },
     error::OpmResult,
     geometry::{

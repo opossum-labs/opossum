@@ -11,9 +11,8 @@ use crate::{
         raytrace::AnalysisRayTrace,
     },
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, Planar, PortType, SurfacePorts,
-        SurfaceKind,
-        optic_node::APERTURE_LIMIT_NOTE,
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, Planar, PortType, SurfaceKind,
+        SurfacePorts, optic_node::APERTURE_LIMIT_NOTE,
     },
     error::{OpmResult, OpossumError},
     geometry::{

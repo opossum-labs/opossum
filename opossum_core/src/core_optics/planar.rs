@@ -93,7 +93,7 @@ mod test {
         core_optics::{NodeAttrExt, OpticNodeExt, node_attr::NodePositioning},
         degree,
         error::{OpmResult, OpossumError},
-        geometry::{SurfaceMesh, body::OPTIC_SHAPE},
+        geometry::{SurfaceGeometry, SurfaceMesh, body::OPTIC_SHAPE},
         millimeter,
         nodes::{EnergyMeter, IdealFilter, ParabolicMirror, ThinMirror},
         properties::Proptype,
@@ -222,11 +222,10 @@ mod test {
         parabola.set_property(OPTIC_SHAPE, optic_shape.into())?;
         let mesh = surface_mesh(&parabola, 32)?;
         let geometry = parabola
-            .geometry()?
+            .create_geometry()?
             .ok_or_else(|| OpossumError::Other("a mirror has a geometry".into()))?;
         let face = geometry
-            .kind()
-            .face(0)
+            .face(SurfaceGeometry::FACE)
             .ok_or_else(|| OpossumError::Other("a mirror has a face".into()))?;
         for (point, normal) in mesh.points().iter().zip(mesh.normals()) {
             assert!(

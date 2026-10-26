@@ -142,8 +142,8 @@ impl GeometryKind for Extruded {
     fn mesh(&self, segments: usize, _unbounded: &Outline) -> OpmResult<Vec<SurfaceMesh>> {
         let outline_mesh = self.rim.outline().triangulate(segments)?;
         let frame = self.isometry();
-        let front = self.front.mesh_over(&outline_mesh, &frame)?;
-        let rear = self.rear.mesh_over(&outline_mesh, &frame)?;
+        let front = self.front.face().mesh_over(&outline_mesh, &frame)?;
+        let rear = self.rear.face().mesh_over(&outline_mesh, &frame)?;
         // Both faces were sampled above the very same positions, so whether they cross can be
         // read off point by point rather than guessed at from their rims.
         for (front_point, rear_point) in front.points().iter().zip(rear.points()) {

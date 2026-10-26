@@ -8,8 +8,8 @@ use crate::{
     analyzers::{AnalyzerType, propagation_strategy::MissedSurfaceStrategy},
     coatings::{CoatingType, SplittingConfig, SplittingConfigBuilder},
     core_optics::{
-        NodeAttr, OpticNode, OpticNodeExt, Planar, PortType, SurfaceKind,SurfacePorts,
-        hit_map::rays_hit_map::HitPoint, node_attr::HasNodeAttr, surface_effect::SurfaceEffect, surface_effect::Refraction,
+        NodeAttr, OpticNode, OpticNodeExt, Planar, PortType, SurfaceKind, SurfacePorts,
+        node_attr::HasNodeAttr, surface_effect::Refraction,
     },
     error::{OpmResult, OpossumError},
     geometry::{

@@ -11,8 +11,8 @@ use crate::{
     },
     error::{OpmResult, OpossumError},
     geometry::{
-        SurfaceMesh,
-        {FaceIndex, Geometry, body::{OPTIC_SHAPE}, default_optic_shape},
+        FaceIndex, Geometry, SurfaceMesh,
+        body::{OPTIC_SHAPE, default_optic_shape},
     },
     light::{LightData, LightResult, Rays, rays::ReflectedPart},
     nodes::fluence_detector::Fluence,
@@ -356,7 +356,7 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
     }
 
     fn geometry_mesh(&self, segments: usize) -> OpmResult<Vec<SurfaceMesh>> {
-        let Some(geometry) = self.geometry()? else {
+        let Some(geometry) = self.create_geometry()? else {
             return Err(OpossumError::Other(format!(
                 "node '{}' has no geometry to draw",
                 self.name()
@@ -652,7 +652,7 @@ mod test {
         joule,
         light::Ray,
         millimeter, nanometer,
-        nodes::{BeamSplitter, Dummy, NodeGroup, Lens, ThinMirror},
+        nodes::{BeamSplitter, Dummy, Lens, NodeGroup, ThinMirror},
         properties::Properties,
     };
     use approx::assert_abs_diff_eq;
