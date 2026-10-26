@@ -4,7 +4,7 @@
 
 ## Analysis
 
-For energy analysis, the spectrum arriving at each input is split according to the `Separator` coating of the `surface` (see [Properties](#properties)): the transmitted part leaves through the output of the same number (e.g. `input_1` → `out1_trans1_refl2`), the reflected part through the other output (e.g. `input_1` → `out2_trans2_refl1`). The energy analysis knows no angle of incidence, so any other coating stops it with an error.
+For energy analysis, the spectrum arriving at each input is split according to the `Separator` coating of the `surface` (see [Properties](#properties)): the transmitted part leaves through the output of the same number (e.g. `input_1` → `out1_trans1_refl2`), the reflected part through the other output (e.g. `input_1` → `out2_trans2_refl1`).
 
 For ray tracing, the beam splitter acts as a thin splitting surface lying in the plane of the node. The coating of its `surface` is the split: what the coating does not reflect is transmitted (see [Surfaces](../nodes.md#surfaces)). Transmitted rays keep their direction, while reflected rays are deflected according to the laws of reflection. The same holds for the optical axis, so nodes connected to the reflected output are placed along the *reflected* axis (see [Geometry](../../concepts/geometry.md)).
 
@@ -41,12 +41,10 @@ During the alignment run (which precedes ray tracing and ghost-focus analysis), 
 ## Properties
 
 `surface`
-: Coating and laser induced damage threshold of the splitting surface (see [Surfaces](../nodes.md#surfaces)). The coating defines how incoming beams are split or merged respectively. It defaults to a `Separator` that transmits half of the light. A `Separator` transmits according to its splitting configuration and reflects the rest, whatever the angle of incidence:
+: Coating and laser induced damage threshold of the splitting surface (see [Surfaces](../nodes.md#surfaces)). The coating defines how incoming beams are split or merged respectively. The surface is a splitting surface, so it takes only a `Separator`, by default one that transmits half of the light. A `Separator` transmits according to its splitting configuration and reflects the rest, whatever the angle of incidence:
 
 - Fixed Ratio: The incoming light is split according to a fixed (wavelength-independent) transmission between 0.0 and 1.0. A value of 1.0 fully transmits both inputs (`input_1` → `out1_trans1_refl2`, `input_2` → `out2_trans2_refl1`), while a value of 0.0 fully reflects them (`input_1` → `out2_trans2_refl1`, `input_2` → `out1_trans1_refl2`).
 - Spectral filter: The incoming light is split with respect to its wavelength. The provided spectrum defines a wavelength-dependent transmission between 0.0 and 1.0.
-
-Any other coating splits in ray tracing as well; a constant reflectivity of 30 %, for instance, reflects 30 % and transmits the rest. The energy analysis, however, needs a `Separator`.
 
 `optic shape`
 : Transversal extent of the splitting surface. Only rays within it are split. A ray outside of it, or through one of its bores, follows the analyzer's missed surface strategy: with `Ignore` (always in a ghost focus analysis) it passes on as transmitted light, with `Stop` it is lost. A bore therefore models a scraper mirror whose hole lets part of the beam pass (see [Optic shape](../nodes.md#optic-shape)). Defaults to a circle of 12.5 mm radius; `Open` is refused.

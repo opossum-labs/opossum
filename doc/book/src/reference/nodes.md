@@ -167,10 +167,14 @@ The coating decides which part of the light a surface reflects and which part it
 above which the ghost focus analysis reports the surface as at risk. By default a surface has an ideal antireflective
 coating (`IdealAR`, no reflection) and an infinite LIDT, so it cannot be damaged. Further coatings are a constant
 reflectivity (`ConstantR`), the Fresnel reflection of an uncoated surface (`Fresnel`), and a `Separator`, which
-transmits a fixed ratio or a spectrum and reflects the rest, whatever the angle of incidence; on a mirror it acts, for
-instance, as a dichroic coating. A thin mirror and a parabolic mirror start with a fully reflecting coating
-(`ConstantR` of 100 %), a beam splitter with a `Separator` that transmits half of the light: the coating of its
-surface is its split (see [Beam splitter](nodes/beam_splitter.md)).
+transmits a fixed ratio or a spectrum and reflects the rest, whatever the angle of incidence. A thin mirror and a
+parabolic mirror start with a fully reflecting coating (`ConstantR` of 100 %).
+
+A `Separator` belongs to a splitting surface, one at which the node follows both the transmitted and the reflected
+part of the light; today that is the surface of a beam splitter, whose coating is its split (see
+[Beam splitter](nodes/beam_splitter.md)). A splitting surface takes only a `Separator`, by default one that transmits
+half of the light, and every other surface takes any coating but a `Separator`. The node editor offers only the
+coatings a surface takes, and a file that gives a surface another coating loads with the default one.
 
 A surface is one surface, however many ports sit on it. The input and the output of a mirror or a detector, and all
 four ports of a beam splitter, share the one surface of the node: its coating, and the hits an analysis records on it.
