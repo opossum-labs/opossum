@@ -282,6 +282,30 @@ mod tests {
         Ok(())
     }
 
+    /// A surface coating the node does not take, such as a beam splitter's surface without a
+    /// separator, falls back to the default when the file is loaded.
+    #[test]
+    fn an_invalid_surface_coating_in_a_file_falls_back_to_the_default() -> OpmResult<()> {
+        let mut document = OpmDocument::default();
+        let splitter_id = document.scenery_mut().add_node(BeamSplitter::default())?;
+        let serialized = document.to_opm_file_string()?;
+        assert!(serialized.contains("coating: Separator(FixedRatio(0.5))"));
+
+        let without_separator = serialized.replace("Separator(FixedRatio(0.5))", "IdealAR");
+        let reloaded = OpmDocument::from_string(&without_separator)?;
+        let surface = reloaded
+            .scenery()
+            .with_node_attr(splitter_id, |attr| attr.get_property("surface").cloned())??;
+        let Proptype::SurfaceConfig(config) = surface else {
+            panic!("a beam splitter must carry a surface property")
+        };
+        assert_eq!(
+            config.coating(),
+            &CoatingType::Separator(SplittingConfigBuilder::default())
+        );
+        Ok(())
+    }
+
     #[test]
     fn from_file() {
         let result =

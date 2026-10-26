@@ -171,6 +171,7 @@ pub fn is_volume_node_type(node_type: &str) -> bool {
 mod test {
     use super::*;
     use crate::{
+        coatings::{CoatingType, SplittingConfigBuilder},
         core_optics::{OpticNode, OpticNodeExt, SurfacePorts, node_attr::NodePositioning},
         degree,
         geometry::{Extruded, FaceIndex, Sphere, SurfaceGeometry, SurfaceShape},
@@ -866,10 +867,12 @@ mod test {
         const BEHIND_THE_LENS: SurfacePorts = SurfacePorts {
             inputs: &[("input_1", Extruded::FRONT)],
             outputs: &[("output_1", FaceIndex::new(2))],
+            splitting: &[],
         };
         const BEHIND_THE_SURFACE: SurfacePorts = SurfacePorts {
             inputs: &[("input_1", SurfaceGeometry::FACE)],
             outputs: &[("output_1", FaceIndex::new(1))],
+            splitting: &[],
         };
         let mut lens = Lens::default();
         let error = lens
@@ -887,6 +890,38 @@ mod test {
             .to_string();
         assert!(error.contains("face 1"), "{error}");
         assert!(error.contains("face count: 1"), "{error}");
+    }
+
+    /// Every surface of every node type takes a separator coating exactly when it splits the
+    /// light, and any other coating exactly when it does not. The beam splitter's surface splits.
+    #[test]
+    fn every_surface_takes_a_separator_exactly_when_it_splits() -> OpmResult<()> {
+        let separator: CoatingType = SplittingConfigBuilder::default().into();
+        for (node_type, _) in node_types() {
+            let mut node = create_node_ref(node_type)?;
+            let Some(geometry) = node.create_geometry()? else {
+                continue;
+            };
+            let splitting = node.surface_ports().splitting;
+            for face in (0..geometry.kind().face_count()).map(FaceIndex::new) {
+                let splits = splitting.contains(&face);
+                assert_eq!(
+                    node.set_coating(face, &separator).is_ok(),
+                    splits,
+                    "{node_type}, face {face}"
+                );
+                assert_eq!(
+                    node.set_coating(face, &CoatingType::IdealAR).is_ok(),
+                    !splits,
+                    "{node_type}, face {face}"
+                );
+            }
+        }
+        assert_eq!(
+            BeamSplitter::default().surface_ports().splitting,
+            [SurfaceGeometry::FACE]
+        );
+        Ok(())
     }
 
     /// Place a node (see [`place`]) and take its surface snapshot.

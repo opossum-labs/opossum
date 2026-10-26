@@ -44,10 +44,9 @@ mod test {
 
     use crate::{
         analyzers::energy::{AnalysisEnergy, EnergyConfig},
-        coatings::{CoatingType, SplittingConfigBuilder},
-        core_optics::{OpticNode, OpticNodeExt},
+        coatings::SplittingConfigBuilder,
+        core_optics::OpticNode,
         error::OpmResult,
-        geometry::SurfaceGeometry,
         joule,
         light::{LightData, LightResult, spectrum_helper::create_he_ne_spec},
         nanometer,
@@ -86,16 +85,6 @@ mod test {
             0.0
         };
         assert_eq!(energy, 0.4);
-        Ok(())
-    }
-    /// The energy analysis knows no angle of incidence, so it splits only by a separator coating.
-    #[test]
-    fn energy_analysis_needs_a_separator_coating() -> OpmResult<()> {
-        let mut node = BeamSplitter::default();
-        node.set_coating(SurfaceGeometry::FACE, &CoatingType::IdealAR)?;
-        let input =
-            LightResult::from([("input_1".into(), LightData::Energy(create_he_ne_spec(1.0)?))]);
-        assert!(AnalysisEnergy::analyze(&mut node, input, &EnergyConfig::default()).is_err());
         Ok(())
     }
     #[test]

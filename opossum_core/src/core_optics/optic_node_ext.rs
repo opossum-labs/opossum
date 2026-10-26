@@ -3,7 +3,7 @@ use uom::si::f64::{Angle, Length};
 use crate::{
     analyzers::propagation_strategy::PropagationStrategy,
     apertures::Outline,
-    coatings::CoatingType,
+    coatings::{CoatingType, SplittingConfigBuilder},
     core_optics::{
         NodeAttrExt, OpticNode, OpticPorts, PortType, SurfaceConfig, SurfacePorts,
         optic_surface::OpticSurface,
@@ -13,7 +13,7 @@ use crate::{
     geometry::{FaceIndex, Geometry, body::OPTIC_SHAPE},
     light::{LightData, LightResult, Rays, rays::ReflectedPart},
     nodes::fluence_detector::Fluence,
-    properties::Proptype,
+    properties::{Proptype, validator::Validator},
     utils::geom_transformation::Isometry,
 };
 
@@ -89,8 +89,11 @@ pub trait OpticNodeExt {
     /// Create a [`SurfaceConfig`] property with the default coating and LIDT for every face of
     /// this node's geometry, named after the face.
     ///
-    /// A node calls this once when it is created, after the properties its geometry is derived
-    /// from. A node without a shape of its own gets none.
+    /// The property only takes coatings that fit its face (see [`Validator::SurfaceCoating`]): a
+    /// splitting face (see [`SurfacePorts::splitting`]) only a separator, by default one that
+    /// transmits half of the light; every other face any other coating, by default an ideal
+    /// antireflective one. A node calls this once when it is created, after the properties its
+    /// geometry is derived from. A node without a shape of its own gets none.
     ///
     /// # Errors
     ///
@@ -368,12 +371,23 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         let Some(geometry) = self.create_geometry()? else {
             return Ok(());
         };
+        let splitting_faces = self.surface_ports().splitting;
         let kind = geometry.kind();
-        for name in (0..kind.face_count()).filter_map(|face| kind.face_name(FaceIndex::new(face))) {
-            self.node_attr_mut().create_property(
+        for face in (0..kind.face_count()).map(FaceIndex::new) {
+            let Some(name) = kind.face_name(face) else {
+                continue;
+            };
+            let splitting = splitting_faces.contains(&face);
+            let coating = if splitting {
+                SplittingConfigBuilder::default().into()
+            } else {
+                CoatingType::default()
+            };
+            self.node_attr_mut().create_property_with_validator(
                 &name,
                 &format!("coating and laser induced damage threshold of the {name}"),
-                SurfaceConfig::default().into(),
+                Validator::SurfaceCoating { splitting },
+                SurfaceConfig::from(coating).into(),
             )?;
         }
         Ok(())
@@ -593,6 +607,7 @@ mod test {
         J_per_cm2,
         analyzers::RayTraceConfig,
         apertures::OpticShape,
+        coatings::SplittingConfigBuilder,
         core_optics::{
             node_attr::{HasNodeAttr, NodePositioning},
             optic_node::LIDT,
@@ -602,7 +617,7 @@ mod test {
         joule,
         light::Ray,
         millimeter, nanometer,
-        nodes::{BeamSplitter, Dummy, Lens},
+        nodes::{BeamSplitter, Dummy, Lens, ThinMirror},
         properties::Properties,
     };
     use approx::assert_abs_diff_eq;
@@ -732,6 +747,20 @@ mod test {
         assert!(matches!(coating("output_1")?, CoatingType::IdealAR));
         Ok(())
     }
+    /// A mirror or a lens sends only one part of the light on at each surface, so none of their
+    /// surfaces takes a separator.
+    #[test]
+    fn only_a_beam_splitter_takes_a_separator() {
+        let separator: CoatingType = SplittingConfigBuilder::default().into();
+        assert!(
+            ThinMirror::default()
+                .set_coating(SurfaceGeometry::FACE, &separator)
+                .is_err()
+        );
+        for face in [Extruded::FRONT, Extruded::REAR] {
+            assert!(Lens::default().set_coating(face, &separator).is_err());
+        }
+    }
     /// Pass a ray along the axis through the given port of a node, as a ray trace does.
     fn pass_along_the_axis<T: OpticNodeExt>(node: &mut T, port: &str) -> OpmResult<Rays> {
         let rays = Rays::from(Ray::new_collimated(
@@ -819,6 +848,7 @@ mod test {
         const BEHIND_THE_SURFACE: SurfacePorts = SurfacePorts {
             inputs: &[("input_1", SurfaceGeometry::FACE)],
             outputs: &[("output_2", FaceIndex::new(1))],
+            splitting: &[],
         };
         let mut node = Dummy::default();
         let error = node

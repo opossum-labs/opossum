@@ -6,6 +6,7 @@ use uom::si::{angle::degree, f64::Angle};
 
 use crate::{
     apertures::OpticShape,
+    coatings::CoatingType,
     error::{OpmResult, OpossumError},
     nodes::ideal_filter::FilterTypeBuilder,
     properties::Proptype,
@@ -29,6 +30,13 @@ pub enum Validator {
     StringIsNotEmpty,
     /// The optic shape must bound the component: it may not be open.
     OpticShapeIsBounded,
+    /// The coating of a surface must be valid (see [`CoatingType::is_valid`]) and fit the surface:
+    /// a separator on a splitting surface, any other coating on every other surface (see
+    /// [`SurfacePorts::splitting`](crate::core_optics::SurfacePorts::splitting)).
+    SurfaceCoating {
+        /// Whether the surface splits the light.
+        splitting: bool,
+    },
     OrValidator {
         validators: Vec<Self>,
     },
@@ -59,6 +67,7 @@ impl Validator {
             } => Self::validate_angle_is_in_range(prop, *min, *max, *inclusive),
             Self::StringIsNotEmpty => Self::validate_string_is_not_empty(prop),
             Self::OpticShapeIsBounded => Self::validate_optic_shape_is_bounded(prop),
+            Self::SurfaceCoating { splitting } => Self::validate_surface_coating(prop, *splitting),
             Self::OrValidator { validators } => Self::validate_or_validator(prop, validators),
             Self::AndValidator { validators } => Self::validate_and_validator(prop, validators),
             Self::LightDataBuilderValidator => Self::validate_light_data_builder(prop),
@@ -69,8 +78,8 @@ impl Validator {
     ///
     /// An editor that offers a choice of kinds (such as an open optic shape) asks here, so it
     /// offers only what the property can take; the value itself is still checked by
-    /// [`Validator::validate`] when it is set. Only [`Validator::OpticShapeIsBounded`] restricts
-    /// kinds.
+    /// [`Validator::validate`] when it is set. Only [`Validator::OpticShapeIsBounded`] and
+    /// [`Validator::SurfaceCoating`] restrict kinds.
     ///
     /// # Arguments
     ///
@@ -80,6 +89,9 @@ impl Validator {
         match (self, prop) {
             (Self::OpticShapeIsBounded, Proptype::OpticShape(optic_shape)) => {
                 !matches!(optic_shape, OpticShape::Open)
+            }
+            (Self::SurfaceCoating { splitting }, Proptype::SurfaceConfig(config)) => {
+                matches!(config.coating(), CoatingType::Separator(_)) == *splitting
             }
             (Self::OrValidator { validators }, _) => validators
                 .iter()
@@ -96,10 +108,29 @@ impl Validator {
                 | Self::AngleInRange { .. }
                 | Self::StringIsNotEmpty
                 | Self::OpticShapeIsBounded
+                | Self::SurfaceCoating { .. }
                 | Self::LightDataBuilderValidator,
                 _,
             ) => true,
         }
+    }
+    fn validate_surface_coating(prop: &Proptype, splitting: bool) -> OpmResult<()> {
+        let Proptype::SurfaceConfig(config) = prop else {
+            return Ok(());
+        };
+        let coating = config.coating();
+        if matches!(coating, CoatingType::Separator(_)) != splitting {
+            return Err(OpossumError::Properties(format!(
+                "the coating '{coating}' does not fit this surface: a splitting surface takes only \
+                 a separator coating, every other surface any coating but a separator"
+            )));
+        }
+        if !coating.is_valid()? {
+            return Err(OpossumError::Properties(format!(
+                "the coating {coating:?} is outside its allowed range"
+            )));
+        }
+        Ok(())
     }
     fn validate_optic_shape_is_bounded(prop: &Proptype) -> OpmResult<()> {
         if matches!(prop, Proptype::OpticShape(OpticShape::Open)) {
@@ -452,5 +483,38 @@ mod test_apertures {
             }
             .may_accept(&open)
         );
+    }
+}
+
+#[cfg(test)]
+mod test_surface_coating {
+    use super::*;
+    use crate::{coatings::SplittingConfigBuilder, core_optics::SurfaceConfig};
+
+    fn surface(coating: CoatingType) -> Proptype {
+        SurfaceConfig::from(coating).into()
+    }
+    /// A splitting surface takes a separator and nothing else, every other surface anything but a
+    /// separator; the kind alone decides, for both the editor's offer and the check.
+    #[test]
+    fn a_surface_takes_a_separator_exactly_when_it_splits() {
+        let separator = surface(SplittingConfigBuilder::default().into());
+        let antireflective = surface(CoatingType::IdealAR);
+        for splitting in [true, false] {
+            let validator = Validator::SurfaceCoating { splitting };
+            assert_eq!(validator.may_accept(&separator), splitting);
+            assert_eq!(validator.validate(&separator).is_ok(), splitting);
+            assert_eq!(validator.may_accept(&antireflective), !splitting);
+            assert_eq!(validator.validate(&antireflective).is_ok(), !splitting);
+        }
+    }
+    /// A separator on a splitting surface must transmit within zero and one, although it is of the
+    /// right kind.
+    #[test]
+    fn a_separator_out_of_range_is_refused() {
+        let validator = Validator::SurfaceCoating { splitting: true };
+        let too_much = surface(SplittingConfigBuilder::FixedRatio(1.5).into());
+        assert!(validator.may_accept(&too_much));
+        assert!(validator.validate(&too_much).is_err());
     }
 }

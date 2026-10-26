@@ -68,6 +68,7 @@ impl OpticNode for SourcePort {
         SurfacePorts {
             inputs: &[],
             outputs: &[("output_1", SurfaceGeometry::FACE)],
+            splitting: &[],
         }
     }
 }

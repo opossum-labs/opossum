@@ -308,6 +308,54 @@ mod test {
         assert_eq!(response.properties.get("surface").unwrap(), &surface);
     }
 
+    /// The backend refuses a coating a surface does not take: a beam splitter's surface without a
+    /// separator, and a separator that transmits more than everything. The surface keeps its
+    /// coating.
+    #[actix_web::test]
+    async fn test_a_surface_refuses_a_coating_it_does_not_take() {
+        let app_state = create_test_state();
+        let node_id = {
+            let mut document = app_state.document.lock();
+            document
+                .scenery_mut()
+                .add_node(BeamSplitter::default())
+                .unwrap()
+        };
+        let surface_of_node = || {
+            app_state
+                .document
+                .lock()
+                .scenery()
+                .with_node_attr(node_id, |attr| attr.properties().get("surface").cloned())
+                .unwrap()
+                .unwrap()
+        };
+        let before = surface_of_node();
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(patch_property),
+        )
+        .await;
+
+        for payload in [
+            "SurfaceConfig((coating: IdealAR))",
+            "SurfaceConfig((coating: Separator(FixedRatio(1.5))))",
+        ] {
+            let req = test::TestRequest::patch()
+                .uri(&format!("/{node_id}/properties/surface"))
+                .set_payload(payload)
+                .insert_header(("Content-Type", "application/ron"))
+                .to_request();
+            assert_eq!(
+                app.call(req).await.unwrap().status(),
+                StatusCode::BAD_REQUEST,
+                "{payload}"
+            );
+            assert_eq!(surface_of_node(), before, "{payload}");
+        }
+    }
+
     /// The GUI offers only the optic shapes a node can take, and learns them from the property's
     /// validator: a lens must be bounded, a paraxial surface has no validator and may also be open.
     #[actix_web::test]

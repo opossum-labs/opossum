@@ -79,8 +79,15 @@ impl SurfaceConfig {
 
 impl Default for SurfaceConfig {
     fn default() -> Self {
+        Self::from(CoatingType::IdealAR)
+    }
+}
+
+impl From<CoatingType> for SurfaceConfig {
+    /// A surface with the given coating and the default, infinite LIDT.
+    fn from(coating: CoatingType) -> Self {
         Self {
-            coating: CoatingType::IdealAR,
+            coating,
             lidt: default_lidt(),
         }
     }

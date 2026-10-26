@@ -34,11 +34,10 @@ inventory::submit! {
 #[opm_node("lightpink")]
 /// An ideal beamsplitter node: a thin splitting surface in the plane of the node.
 ///
-/// The coating of its `surface` is the split. By default it is a [`CoatingType::Separator`] that
-/// transmits half of the light and reflects the rest. Any other coating splits in ray tracing as
-/// well, while the energy analysis, which knows no angle of incidence, needs a separator. In ray
-/// tracing, the transmitted light keeps its direction while the reflected light is mirrored about
-/// the splitting surface. Hence, the beam splitter has to be tilted via its alignment (e.g. by 45°)
+/// The coating of its `surface` is the split. The surface is a splitting surface (see
+/// [`SurfacePorts::splitting`]), so it takes only a [`CoatingType::Separator`], by default one that
+/// transmits half of the light and reflects the rest. In ray tracing, the transmitted light keeps
+/// its direction while the reflected light is mirrored about the splitting surface. Hence, the beam splitter has to be tilted via its alignment (e.g. by 45°)
 /// to send the reflected light sideways; an untilted beam splitter reflects it back onto the
 /// incoming beam.
 ///
@@ -74,11 +73,7 @@ impl Default for BeamSplitter {
             .unwrap();
         let mut bs = Self { node_attr };
         bs.create_default_surface_properties().unwrap();
-        bs.set_coating(
-            SurfaceGeometry::FACE,
-            &SplittingConfigBuilder::default().into(),
-        )
-        .unwrap();
+        bs.update_surfaces().unwrap();
         bs
     }
 }
@@ -95,14 +90,11 @@ impl BeamSplitter {
         Ok(bs)
     }
     /// Returns the splitting configuration of the separator coating of this [`BeamSplitter`]'s
-    /// surface.
-    ///
-    /// The energy analysis splits by it: it knows no angle of incidence, so it cannot split by any
-    /// other coating.
+    /// surface, by which the energy analysis splits.
     ///
     /// # Errors
-    /// This function returns an error if the surface has no separator coating or its configuration
-    /// cannot be built.
+    /// This function returns an error if the configuration cannot be built, or if the surface has
+    /// no separator coating, which its property does not take.
     pub fn splitting_config(&self) -> OpmResult<SplittingConfig> {
         let surface = self.face_name(SurfaceGeometry::FACE)?;
         match self.surface_config(&surface)?.coating() {
@@ -275,6 +267,7 @@ impl OpticNode for BeamSplitter {
                 ("out1_trans1_refl2", SurfaceGeometry::FACE),
                 ("out2_trans2_refl1", SurfaceGeometry::FACE),
             ],
+            splitting: &[SurfaceGeometry::FACE],
         }
     }
 }
@@ -393,16 +386,27 @@ mod test {
         assert_valid_energies(&reflected, &[0.7], "the separator reflects the rest");
         Ok(())
     }
+    /// Both parts of the light leave the splitting surface, so it takes only a separator.
     #[test]
-    fn a_constant_reflectivity_coating_splits_too() -> OpmResult<()> {
-        let mut splitter = placed_at_origin::<BeamSplitter>()?;
-        splitter.set_coating(
-            SurfaceGeometry::FACE,
-            &CoatingConstantR::new(percent!(30.0))?.into(),
-        )?;
-        let (transmitted, reflected) = ray_trace(&mut splitter, rays_at(&[0.0])?)?;
-        assert_valid_energies(&transmitted, &[0.7], "the coating transmits 70 %");
-        assert_valid_energies(&reflected, &[0.3], "the coating reflects 30 %");
+    fn a_beam_splitter_takes_only_a_separator_coating() -> OpmResult<()> {
+        let mut splitter = BeamSplitter::default();
+        let surface = splitter.face_name(SurfaceGeometry::FACE)?;
+        for coating in [
+            CoatingType::IdealAR,
+            CoatingConstantR::new(percent!(30.0))?.into(),
+            CoatingType::Fresnel,
+        ] {
+            assert!(
+                splitter
+                    .set_coating(SurfaceGeometry::FACE, &coating)
+                    .is_err(),
+                "{coating}"
+            );
+        }
+        assert_eq!(
+            splitter.surface_config(&surface)?.coating(),
+            &CoatingType::Separator(SplittingConfigBuilder::default())
+        );
         Ok(())
     }
     /// Send rays into `input_1` of the splitter in a ghost focus analysis.
