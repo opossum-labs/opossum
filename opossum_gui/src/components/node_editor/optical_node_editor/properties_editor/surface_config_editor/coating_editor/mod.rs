@@ -77,7 +77,7 @@ pub fn CoatingTypeSelector(
     coating_type_sig: ReadSignal<CoatingType>,
     validator: Option<Validator>,
     on_change: EventHandler<CoatingType>,
-    readonly: bool
+    readonly: bool,
 ) -> Element {
     let refused: Vec<CoatingType> = CoatingType::iter()
         .filter(|coating| {

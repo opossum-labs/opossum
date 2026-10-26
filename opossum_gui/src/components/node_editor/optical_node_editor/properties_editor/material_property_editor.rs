@@ -100,7 +100,6 @@ pub fn MaterialPropertyEditor(
         })
     };
 
-
     rsx! {
 
         div { class: "form-floating border-start",
