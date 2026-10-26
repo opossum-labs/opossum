@@ -93,9 +93,14 @@ fn get_editor(
         return Some(editor);
     }
 
-    if let Some(editor) =
-        get_optical_editor(node_id, property, property_key.clone(), on_change, readonly)
-    {
+    if let Some(editor) = get_optical_editor(
+        node_id,
+        property,
+        validator.clone(),
+        property_key.clone(),
+        on_change,
+        readonly,
+    ) {
         return Some(editor);
     }
     get_geometric_editor(
@@ -178,6 +183,7 @@ fn get_primitive_editor(
 fn get_optical_editor(
     node_id: ReadSignal<Uuid>,
     property: &Property,
+    validator: Option<Validator>,
     property_key: String,
     on_change: EventHandler<NodeChangeEvent>,
     readonly: bool,
@@ -224,6 +230,7 @@ fn get_optical_editor(
             SurfaceConfigEditor {
                 node_id,
                 surface_config,
+                validator,
                 property_key,
                 on_change,
                 readonly,
