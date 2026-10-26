@@ -722,7 +722,7 @@ body {
     display: flex !important;
     align-items: flex-end;
     gap: 4px;
-    padding-top: 0.8rem !important;
+    padding-top: 1.1rem !important;
     padding-bottom: 0.2rem !important;
     max-height: none !important;
     height: auto !important;
@@ -735,7 +735,8 @@ body {
     color: #ebebeb !important;
     border: none !important;
 }
-.material-btn:hover{
+/* Only real buttons react to hover; the AdHoc badge shares the look but is not clickable. */
+button.material-btn:hover{
     background-color: rgb(169, 169, 169) !important;
 }
 
@@ -743,6 +744,14 @@ body {
     flex: 1 1 0;
     min-width: 0;
     color: rgb(235, 235, 235);
+}
+
+/* Readonly (e.g. reference node): grayed like a disabled input; `[disabled]` also drops the hover. */
+.material-prop-display[disabled] .material-prop-name {
+    color: rgb(141, 141, 141);
+}
+.material-prop-display[disabled] .badge {
+    opacity: 0.5;
 }
 
 /* Static (non-collapsible) analyzer config sections (see `StaticSection` in accordion.rs): reuse
