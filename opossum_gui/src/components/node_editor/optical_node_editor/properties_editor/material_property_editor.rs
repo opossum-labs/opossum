@@ -100,10 +100,13 @@ pub fn MaterialPropertyEditor(
         })
     };
 
+
     rsx! {
 
         div { class: "form-floating border-start",
-            div { class: "form-control form-control-sm material-prop-display",
+            div {
+                class: "form-control form-control-sm material-prop-display",
+                "disabled": readonly,
                 span {
                     class: "material-prop-name text-truncate ",
                     title: "{material_name}",

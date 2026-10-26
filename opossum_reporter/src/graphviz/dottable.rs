@@ -411,10 +411,9 @@ pub fn format_node_to_dot(
 mod test {
     use num_traits::Zero;
     use opossum_core::{
-        error::{OpmResult, OpossumError},
-        nodes::{
+        coatings::SplittingConfigBuilder, error::{OpmResult, OpossumError}, nodes::{
             BeamSplitter, Dummy, EnergyMeter, Metertype, NodeGroup, SourcePort,
-            SplittingConfigBuilder,
+            
         },
     };
     use std::{fs::File, io::Read};
