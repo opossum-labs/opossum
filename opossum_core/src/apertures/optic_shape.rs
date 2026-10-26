@@ -8,8 +8,8 @@
 //! plotted.
 
 use super::{
-    Aperture, ApertureShape, ApertureType, Bounded, CircleShape, OutlineMesh, PolygonShape,
-    RectangleShape, Shape,
+    Aperture, ApertureShape, ApertureType, CircleShape, OutlineMesh, PolygonShape, RectangleShape,
+    Shape, resample_ring,
 };
 use crate::{
     error::{OpmResult, OpossumError},
@@ -140,12 +140,10 @@ impl OutlineShape {
                 "an outline of {segments} points encloses nothing, at least 3 are needed"
             )));
         }
-        let shape: &dyn Bounded = match self {
-            Self::Circle(circle) => circle,
-            Self::Rectangle(rectangle) => rectangle,
-            Self::Polygon(polygon) => polygon,
-        };
-        shape.outline_points(segments)
+        match self {
+            Self::Circle(circle) => circle.outline_points(segments),
+            Self::Rectangle(_) | Self::Polygon(_) => resample_ring(&self.corners(), segments),
+        }
     }
 }
 

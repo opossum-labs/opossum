@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use uom::si::{f64::Length, length::meter};
 use utoipa::ToSchema;
 
-use super::{Bounded, Shape, resample_ring};
+use super::Shape;
 use crate::{
     apertures::ApertureShape, error::OpmResult,
     types::validated_type_definitions::ValidatedSideLengths2D,
@@ -74,20 +74,6 @@ impl RectangleShape {
             Point2::new(-half_width, -half_height),
             Point2::new(half_width, -half_height),
         ]
-    }
-}
-impl Bounded for RectangleShape {
-    /// Return the edge of this rectangle as a counter-clockwise ring of about `segments` points.
-    ///
-    /// The four corners are always part of it; see
-    /// [`OutlineShape::outline_points`](crate::apertures::OutlineShape::outline_points).
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the rectangle has no area, which its validated side
-    /// lengths rule out.
-    fn outline_points(&self, segments: usize) -> OpmResult<Vec<Point2<Length>>> {
-        resample_ring(&self.corners(), segments)
     }
 }
 impl Shape for RectangleShape {

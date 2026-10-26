@@ -191,23 +191,6 @@ impl Aperture {
     pub const fn isometry(&self) -> Option<&Isometry> {
         self.isometry.as_ref()
     }
-    /// Return whether this [`Aperture`] delimits a region geometrically.
-    ///
-    /// An aperture describes how much light a surface transmits where, which is more general than
-    /// an outline: only a binary shape used as a [`ApertureType::Hole`] encloses a well-defined
-    /// region. A [`ApertureShape::Gaussian`] has no edge at all — it attenuates everywhere and
-    /// transmits nowhere completely — an [`ApertureType::Obstruction`] delimits the *complement* of
-    /// a region, and a [`ApertureShape::Stack`] may combine both. Anything that has to know where a
-    /// body ends, rather than how much light passes, has to ask this first.
-    ///
-    /// # Returns
-    ///
-    /// `true` if the aperture can be read as the outline of a region.
-    #[must_use]
-    pub const fn is_geometric_bound(&self) -> bool {
-        matches!(self.a_type, ApertureType::Hole) && self.shape.is_binary()
-    }
-
     /// Set the shape of this [`Aperture`].
     pub fn set_shape(&mut self, shape: ApertureShape) {
         self.shape = shape;
@@ -367,19 +350,6 @@ impl Display for ApertureShape {
 }
 
 impl ApertureShape {
-    /// Check whether this shape has a hard edge, i.e. transmits either fully or not at all.
-    ///
-    /// # Returns
-    ///
-    /// `true` for the binary shapes, `false` for [`ApertureShape::Open`],
-    /// [`ApertureShape::Gaussian`] and [`ApertureShape::Stack`].
-    #[must_use]
-    pub const fn is_binary(&self) -> bool {
-        matches!(
-            self,
-            Self::BinaryCircle(_) | Self::BinaryRectangle(_) | Self::BinaryPolygon(_)
-        )
-    }
     #[must_use]
     /// Check if the aperture is [`ApertureShape::Open`]
     pub const fn is_none(&self) -> bool {
@@ -501,34 +471,6 @@ fn resample_ring(corners: &[Point2<Length>], segments: usize) -> OpmResult<Vec<P
 pub trait Shape {
     /// Calculate the transmission factor (always treated as aperture type `hole`).
     fn transmission_factor(&self, point: &Point3<Length>) -> f64;
-}
-
-/// Capability of a shape with a hard edge: where its inside *ends*.
-///
-/// Where [`Shape`] states how much light passes at a single point, this walks the edge. The shapes
-/// an [`Outline`] is made of have one (see [`OutlineShape`]).
-///
-/// Like [`Shape`], this works in the shape's own frame and applies no validation: the contract on
-/// the number of segments lives on [`OutlineShape::outline_points`], which is what callers outside
-/// this module should be using.
-///
-/// The trait deliberately has **no default methods**. A shape added later must answer every
-/// question here itself, and a default would silently answer for it.
-pub trait Bounded {
-    /// Return the edge of this shape as a closed, counter-clockwise polygon in its own frame.
-    ///
-    /// # Arguments
-    ///
-    /// - `segments`: the number of outline points to aim for
-    ///
-    /// # Returns
-    ///
-    /// The outline points in counter-clockwise order, without a repeated first point.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the shape encloses no area.
-    fn outline_points(&self, segments: usize) -> OpmResult<Vec<Point2<Length>>>;
 }
 #[cfg(test)]
 mod test {
