@@ -19,6 +19,34 @@ struct AnalysisRun {
 }
 
 impl OpmDocument {
+    /// Executes the optical simulation without generating reports or resetting node data.
+    ///
+    /// This is optimized for numerical inner loops (e.g. solvers, optimizers) where
+    /// intermediate reports are unnecessary and detector nodes must retain their light data
+    /// for direct metric querying.
+    pub fn analyze_headless(&mut self) -> OpmResult<()> {
+        if self.analyzers.is_empty() {
+            return Ok(());
+        }
+
+        let runs = self.analysis_runs()?;
+
+        for AnalysisRun { analyzer_type, .. } in runs {
+            let analyzer_box = inventory::iter::<AnalyzerRegistration>
+                .into_iter()
+                .find_map(|reg| (reg.builder)(&analyzer_type))
+                .ok_or_else(|| {
+                    OpossumError::Other(format!(
+                        "No analyzer implementation found for type: {analyzer_type:?}"
+                    ))
+                })?;
+
+            // Execute raw physics/raytracing directly on the scenery
+            analyzer_box.analyze(&mut self.scenery)?;
+        }
+
+        Ok(())
+    }
     /// Performs an analysis run of this [`OpmDocument`].
     ///
     /// Executes the defined analyzers in the order they were registered.
@@ -53,26 +81,10 @@ impl OpmDocument {
                         "No analyzer implementation found for type: {analyzer_type:?}"
                     ))
                 })?;
-            let analyzer: &dyn Analyzer = &*analyzer_box;
 
-            match (&analyzer_name, &scenario_name) {
-                (Some(name), Some(scenario)) => {
-                    info!("Analysis #{analyzer_nr} '{name}', pump scenario '{scenario}'");
-                }
-                (Some(name), None) => {
-                    info!("Analysis #{analyzer_nr} '{name}'");
-                }
-                (None, Some(scenario)) => {
-                    info!("Analysis #{analyzer_nr}, pump scenario '{scenario}'");
-                }
-                (None, None) => {
-                    info!("Analysis #{analyzer_nr}");
-                }
-            }
-
-            analyzer.analyze(&mut self.scenery)?;
+            analyzer_box.analyze(&mut self.scenery)?;
             info!("Generating report #{analyzer_nr}");
-            let mut report = analyzer.report(&self.scenery)?;
+            let mut report = analyzer_box.report(&self.scenery)?;
 
             if let Some(name) = &scenario_name {
                 report.set_analysis_type(&format!("{} - {name}", report.analysis_type()));
