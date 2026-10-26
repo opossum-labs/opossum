@@ -9,13 +9,15 @@
         never written to the file: create_geometry() turns the shape into the Geometry in the node's
         own frame, with numbered faces, where each face ends and the body of a solid;
         effective_node_iso() is the position followed by the alignment. move_by(node iso) moves the
-        geometry to the node. install_geometry(), run by update_surfaces(), keeps the moved geometry as
-        the runtime geometry, gives every face the coating and LIDT of its surface property and lets
+        geometry to the node. Separately, mesh() turns the geometry, still in the node's own frame,
+        into triangle meshes, which are placed at the node iso. install_geometry(), run by
+        update_surfaces(), keeps the moved geometry as the runtime geometry, gives every face the
+        coating and LIDT of its surface property and lets
         every port name its face; it is rebuilt on create, load, placement, alignment, set_coating,
         set_lidt and analysis start, not on set_property. The runtime geometry holds the faces with
         their optic surfaces and, for a solid, the body, which is the medium and holds the inversion
         built by prepare_volume(). Used by: ray trace and ghost focus at the faces, gain and absorption
-        in the body, the 3D view, which moves the geometry itself and never reads the runtime geometry,
+        in the body, the 3D view, which draws those meshes and never reads the runtime geometry,
         and the alignment run, which traces the axis ray through the faces and, with the distance of
         the connection, sets the automatic position of the next node.</desc>
 
@@ -87,8 +89,18 @@
   <!-- Moving the geometry is an operation, not a stage: geometry and placement meet in move_by. -->
   <line x1="446" y1="332" x2="446" y2="356" stroke="#4a5568" marker-end="url(#arrow)"/>
   <line x1="736" y1="332" x2="736" y2="356" stroke="#4a5568" marker-end="url(#arrow)"/>
+  <!-- The 3D view takes the geometry in the node's own frame: its line passes under move_by,
+       drawn first and cut by a halo, so the crossing reads as a bridge. -->
+  <line x1="572" y1="332" x2="572" y2="436" stroke="#4a5568" marker-end="url(#arrow)"/>
+  <line x1="562" y1="360" x2="582" y2="360" stroke="#f0fff4" stroke-width="8"/>
   <line x1="446" y1="360" x2="736" y2="360" stroke="#276749" stroke-width="3"/>
-  <text x="591" y="352" font-size="12" text-anchor="middle" fill="#276749">move_by(node iso)</text>
+  <text x="660" y="352" font-size="12" text-anchor="middle" fill="#276749">move_by(node iso)</text>
+
+  <!-- Drawing is an operation of its own: the geometry is meshed in the node's frame and the
+       meshes are placed at the node iso; the geometry itself is not moved. -->
+  <line x1="800" y1="332" x2="800" y2="436" stroke="#4a5568" marker-end="url(#arrow)"/>
+  <line x1="572" y1="440" x2="800" y2="440" stroke="#276749" stroke-width="3"/>
+  <text x="686" y="432" font-size="12" text-anchor="middle" fill="#276749">mesh(), placed at node iso</text>
 
   <!-- install_geometry: the moved geometry, with the surface properties, becomes the runtime geometry -->
   <line x1="520" y1="360" x2="520" y2="476" stroke="#4a5568" marker-end="url(#arrow)"/>
@@ -131,9 +143,9 @@
 
   <rect x="616" y="652" width="240" height="90" rx="6" fill="#ffffff" stroke="#dd6b20"/>
   <text x="736" y="674" font-size="13" text-anchor="middle" fill="#1a202c">3D view (GUI)</text>
-  <text x="736" y="694" font-size="11" text-anchor="middle" fill="#4a5568">moves the geometry by the</text>
-  <text x="736" y="709" font-size="11" text-anchor="middle" fill="#4a5568">node iso itself and never reads</text>
-  <text x="736" y="724" font-size="11" text-anchor="middle" fill="#4a5568">the runtime geometry</text>
+  <text x="736" y="694" font-size="11" text-anchor="middle" fill="#4a5568">draws the meshes of the geometry,</text>
+  <text x="736" y="709" font-size="11" text-anchor="middle" fill="#4a5568">placed at the node iso; never</text>
+  <text x="736" y="724" font-size="11" text-anchor="middle" fill="#4a5568">reads the runtime geometry</text>
 
   <rect x="872" y="652" width="208" height="90" rx="6" fill="#ffffff" stroke="#dd6b20"/>
   <text x="976" y="674" font-size="13" text-anchor="middle" fill="#1a202c">alignment run</text>
@@ -144,10 +156,10 @@
   <!-- band 2 to band 3 -->
   <line x1="194" y1="594" x2="194" y2="648" stroke="#4a5568" marker-end="url(#arrow)"/>
   <line x1="462" y1="594" x2="462" y2="648" stroke="#4a5568" marker-end="url(#arrow)"/>
-  <!-- The 3D view takes the moved geometry, not the runtime geometry. -->
-  <line x1="680" y1="360" x2="680" y2="648" stroke="#4a5568" marker-end="url(#arrow)"/>
+  <!-- The 3D view takes the placed meshes, not the runtime geometry. -->
+  <line x1="720" y1="440" x2="720" y2="648" stroke="#4a5568" marker-end="url(#arrow)"/>
   <!-- Drawn over the 3D-view line with a white halo, so the crossing reads as a bridge. -->
-  <line x1="670" y1="540" x2="690" y2="540" stroke="#f0fff4" stroke-width="6"/>
+  <line x1="710" y1="540" x2="730" y2="540" stroke="#f0fff4" stroke-width="6"/>
   <path d="M 600 540 L 920 540 L 920 648" fill="none" stroke="#4a5568" marker-end="url(#arrow)"/>
 
   <!-- The alignment run places the next node: the axis ray it leaves with, carried on by the

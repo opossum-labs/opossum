@@ -41,7 +41,8 @@ and from what uses the result; the rest of this page explains each box.
      flow analysis.
    - The alignment run traces the axis ray through the faces. Where the ray leaves a node, carried on by the distance
      of the connection, is the automatic position of the next node.
-   - The 3D view moves the geometry to the node's placement itself and never reads the runtime geometry.
+   - The 3D view meshes the geometry in the node's own frame (`OpticNodeExt::geometry_mesh`) and puts the mesh at
+     the node's placement; it never reads the runtime geometry.
 
 All of it comes from one description: the surface a ray hits, the edge that decides whether it hits, and the medium a
 gain model acts in. They therefore cannot disagree.
@@ -94,12 +95,14 @@ test checks this for every node type.
 All kinds are moved the same way. Each says whether a point lies inside it, how far a ray travels through it and
 which side of each of its faces it lies on (the `Body`), and where its faces end sideways (`GeometryKind::includes`).
 No node type uses a parametric solid or an assembly so far; they are described already so that the data model is
-settled before the first component needs them. Two limits are stated, not hidden:
+settled before the first component needs them. Three limits are stated, not hidden:
 
 - The bounding box of a parametric solid or an assembly is not determined yet, so a gain grid over such a medium is
   refused.
 - A face is the part of its surface on the sheet through its vertex, as for every component. A face that is a whole
   closed surface, such as a ball, cannot be traced yet.
+- A parametric solid cannot be meshed yet: its faces end where they meet each other, which no outline states. The
+  3D view lists such a node as skipped instead of drawing it.
 
 ### Faces, optic shape and rim
 
@@ -278,7 +281,7 @@ All paths are relative to `opossum_core/src` unless stated otherwise.
 |---|---|---|
 | `Geometry` | `geometry/node_geometry.rs` | the geometry of a component with the optic surface of every face, one variant per kind: `Surface`, `Extruded`, `Parametric`, `Assembly`. `Geometry::kind` is the one place that tells the kinds apart; `Geometry::intersect` answers where a ray hits a face; `interact_with_rays` and `propagate_rays` let the surface of a face act on rays; `move_by` moves it |
 | `SurfaceHit` | `geometry/node_geometry.rs` | where a ray hits a face: the point, in the frame of the geometry and in that of the face, the normal, and whether a detector records it |
-| `GeometryKind` | `geometry/node_geometry.rs` | what every kind answers: the optic surfaces of its numbered faces (`surface`, `surface_mut`), the names of its faces (`face_name`), where they end (`includes`), the window of a detector, its body (`as_body`, `as_body_mut`) and how it moves (`move_by`). It has no default methods, so a new kind has to answer every question |
+| `GeometryKind` | `geometry/node_geometry.rs` | what every kind answers: the optic surfaces of its numbered faces (`surface`, `surface_mut`), the names of its faces (`face_name`), where they end (`includes`), the window of a detector, its body (`as_body`, `as_body_mut`), how it moves (`move_by`) and how it is drawn (`mesh`). It has no default methods, so a new kind has to answer every question |
 | `FaceIndex` | `geometry/face.rs` | the number of a face in its geometry |
 | `SurfaceGeometry`, `SurfaceExtent` | `geometry/node_geometry.rs` | a single surface: one face, and whether it is open, ends at an edge or records within a window |
 | `Extruded` | `geometry/solid/extruded.rs` | two faces capping a profile; holds a `Rim` |
@@ -289,6 +292,8 @@ All paths are relative to `opossum_core/src` unless stated otherwise.
 | `Rim` | `geometry/rim.rs` | an outline at a frame: whether a point lies within it, whether a face reaches a point |
 | `Body`, `BoundingBox` | `geometry/body/mod.rs` | what a volume answers: is a point inside, how far a ray travels in it, which box encloses it, which side of a face it lies on, and the inversion a gain model built in it (`inversion`, `inversion_mut`). Each kind of solid implements it next to its definition |
 | `OpticShape`, `Outline`, `Bore` | `apertures/optic_shape.rs` | value of the `optic shape` property; the outline says whether a point lies within it |
+| `OutlineMesh` | `apertures/mesh.rs` | an outline triangulated in its plane (`Outline::triangulate`): where a face is sampled when it is drawn |
+| `SurfaceMesh` | `geometry/mesh.rs` | one drawn patch of surface: points, normals and triangles. A face laid over an outline mesh gives one (`Face::mesh_over`), and the lateral face of a solid is drawn between two (`SurfaceMesh::between`) |
 | `OpticSurface` | `core_optics/optic_surface.rs` | the surface of one face: the face, coating, LIDT, caches and hit map |
 | `SurfaceConfig` | `core_optics/surface_config.rs` | value of a surface property: the coating and the LIDT of one face |
 | `NodeAttr` | `core_optics/node_attr.rs` | keeps the runtime geometry (`runtime_geometry`, `set_runtime_geometry`), `#[serde(skip)]` |
@@ -543,7 +548,8 @@ analysis's sources. Then the bounce passes follow:
 - **A new surface shape.**
   - Add a type for it in a file of its own in `geometry/surface/`, like `Sphere`, and implement `GeoSurface` for it
     in its vertex frame. Its `local_z_at` has to describe the sheet through the vertex: `is_on_vertex_sheet`, and with
-    it every hit test, is derived from it.
+    it every hit test, is derived from it. Its `local_normal_at` gives the normal there; the 3D view lays the face
+    over an outline with both (`Face::mesh_over`).
   - Add a variant to `SurfaceShape` in `geometry/surface/mod.rs`. The compiler then points at `as_geo_surface`,
     `matches` and `depends_on_roll`.
 - **A node made of a parametric solid or an assembly.** `Geometry::move_by`, `GeometryKind`, `Body` and
@@ -553,7 +559,8 @@ analysis's sources. Then the bounce passes follow:
   face that is a whole closed surface.
 - **A new kind of solid.** Add a file in `geometry/solid/` with the type, holding an `OpticSurface` per face, and its
   implementations of `GeometryKind` and `Body`, a variant in `Geometry`, and its arms in `Geometry::kind` and
-  `Geometry::kind_mut`. Nothing else changes.
+  `Geometry::kind_mut`. `GeometryKind::mesh` is part of it: a kind that cannot be drawn yet returns an error, as the
+  parametric solid does. Nothing else changes.
 - **Where a face ends.** To change how a kind decides it, change its implementation of `GeometryKind::includes`.
   Surfaces, the body and the analyzers ask nothing else.
 - **Who reads what.**
