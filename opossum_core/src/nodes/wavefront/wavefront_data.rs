@@ -3,19 +3,11 @@ use crate::{
     light::Rays,
     millimeter, nanometer,
     nodes::wavefront::zernike::{Basis2D, DecompositionResult, fit_wavefront_points},
-    reporting::plottable::{
-        AxLims, PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable,
-    },
-    utils::{
-        geom_transformation::Isometry,
-        griddata::{create_linspace_axes, grid_interpolate_3d_scatter_data},
-        to_f64,
-    },
+    utils::{geom_transformation::Isometry, to_f64},
 };
 use approx::relative_eq;
 use log::warn;
-use nalgebra::{DVector, DVectorView, MatrixXx2, MatrixXx3, Point2, Vector2};
-use plotters::style::RGBAColor;
+use nalgebra::{DVector, MatrixXx3, Point2, Vector2};
 use serde::{Deserialize, Serialize};
 use uom::si::{
     f64::Length,
@@ -369,170 +361,23 @@ impl WaveFrontMap {
 
         fit_wavefront_points(&points, &self.opd, basis)
     }
-}
 
-impl Plottable for WaveFrontMap {
-    fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
-        let min_x = self.x.iter().fold(f64::INFINITY, |a, &b| a.min(b));
-        let max_x = self.x.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
-        let range_x = max_x - min_x;
-
-        let min_y = self.y.iter().fold(f64::INFINITY, |a, &b| a.min(b));
-        let max_y = self.y.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
-        let range_y = max_y - min_y;
-
-        let eps = 1e-12;
-
-        if range_x > eps && range_y > eps {
-            // 2D Map Case
-            plt_params
-                .set(&PlotArgs::XLabel("x position in mm".into()))?
-                .set(&PlotArgs::YLabel("y position in mm".into()))?
-                .set(&PlotArgs::CBarLabel("wavefront error in λ".into()))?
-                .set(&PlotArgs::ExpandBounds(false))?
-                .set(&PlotArgs::AxisEqual(true))?
-                .set(&PlotArgs::PlotAutoSize(true))?;
-        } else if range_x > eps {
-            // 1D Line Cut (X varies)
-            plt_params
-                .set(&PlotArgs::XLabel("x position in mm".into()))?
-                .set(&PlotArgs::YLabel("wavefront error in λ".into()))?
-                .set(&PlotArgs::PlotSize((1200, 800)))?
-                .set(&PlotArgs::AxisEqual(false))?;
-        } else if range_y > eps {
-            // 1D Line Cut (Y varies)
-            plt_params
-                .set(&PlotArgs::XLabel("y position in mm".into()))?
-                .set(&PlotArgs::YLabel("wavefront error in λ".into()))?
-                .set(&PlotArgs::PlotSize((1200, 800)))?
-                .set(&PlotArgs::AxisEqual(false))?;
-        }
-        Ok(())
+    /// Returns the x coordinates of the wavefront error data in mm.
+    #[must_use]
+    pub fn x(&self) -> &[f64] {
+        &self.x
     }
-    fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
-        let min_x = self.x.iter().fold(f64::INFINITY, |a, &b| a.min(b));
-        let max_x = self.x.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
-        let range_x = max_x - min_x;
 
-        let min_y = self.y.iter().fold(f64::INFINITY, |a, &b| a.min(b));
-        let max_y = self.y.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
-        let range_y = max_y - min_y;
-
-        let eps = 1e-12;
-
-        if range_x > eps && range_y > eps {
-            // 2D Map Case
-            let mut plt_type = PlotType::ColorMesh(plt_params.clone());
-            let legend = plt_params.get_legend_flag().unwrap_or(false);
-
-            // Adjust Z-axis bounds for 2D plots if data is nearly flat
-            if let Some(plt_series) = &self.get_plot_series(&mut plt_type, legend).unwrap_or(None)
-                && !plt_series.is_empty()
-            {
-                let ranges = plt_series[0].define_data_based_axes_bounds(false);
-                let z_bounds = ranges
-                    .get_z_bounds()
-                    .unwrap_or_else(|| AxLims::new(-0.5e-3, 0.5e-3).unwrap());
-                if z_bounds.min > -1e-3 && z_bounds.max < 1e-3 {
-                    _ = plt_type.set_plot_param(&PlotArgs::ZLim(Some(AxLims {
-                        min: -1e-3,
-                        max: 1e-3,
-                    })));
-                }
-            }
-            plt_type
-        } else {
-            // 1D Line or Point Case
-            PlotType::Line2D(plt_params.clone())
-        }
+    /// Returns the y coordinates of the wavefront error data in mm.
+    #[must_use]
+    pub fn y(&self) -> &[f64] {
+        &self.y
     }
-    fn get_plot_series(
-        &self,
-        _plt_type: &mut PlotType,
-        _legend: bool,
-    ) -> OpmResult<Option<Vec<PlotSeries>>> {
-        let min_x = self.x.iter().fold(f64::INFINITY, |a, &b| a.min(b));
-        let max_x = self.x.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
-        let range_x = max_x - min_x;
 
-        let min_y = self.y.iter().fold(f64::INFINITY, |a, &b| a.min(b));
-        let max_y = self.y.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
-        let range_y = max_y - min_y;
-
-        let eps = 1e-12;
-
-        // Case 0: Single Point (0D)
-        if range_x <= eps && range_y <= eps {
-            warn!("Wavefront data has zero dimension in X and Y. Cannot plot.");
-            return Ok(None);
-        }
-
-        // Case 1: 1D Line Cut (One dimension is effectively zero)
-        if range_x <= eps || range_y <= eps {
-            // Select the varying axis and corresponding values
-            let mut data: Vec<(f64, f64)> = if range_x > eps {
-                // X varies, Y is constant
-                self.x
-                    .iter()
-                    .zip(self.opd.iter())
-                    .map(|(&x, &z)| (x, z))
-                    .collect()
-            } else {
-                // Y varies, X is constant
-                self.y
-                    .iter()
-                    .zip(self.opd.iter())
-                    .map(|(&y, &z)| (y, z))
-                    .collect()
-            };
-
-            // Sort data by the independent axis to ensure correct line plotting
-            data.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
-
-            let mut mat = MatrixXx2::zeros(data.len());
-            for (i, (coord, val)) in data.iter().enumerate() {
-                mat[(i, 0)] = *coord;
-                mat[(i, 1)] = *val;
-            }
-
-            let plt_series = PlotSeries::new(
-                &PlotData::Dim2 { xy_data: mat },
-                RGBAColor(255, 0, 0, 1.),
-                None,
-            );
-            return Ok(Some(vec![plt_series]));
-        }
-
-        // Case 2: 2D Map (Original Logic)
-        if let (Ok((x_interp, _)), Ok((y_interp, _))) = (
-            create_linspace_axes(DVectorView::from(&DVector::from_vec(self.x.clone())), 100),
-            create_linspace_axes(DVectorView::from(&DVector::from_vec(self.y.clone())), 100),
-        ) {
-            let scattered_data = MatrixXx3::from_columns(&[
-                DVector::from_vec(self.x.clone()),
-                DVector::from_vec(self.y.clone()),
-                DVector::from_vec(self.opd.clone()),
-            ]);
-            if let Ok((interp_dat, _)) =
-                grid_interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp)
-            {
-                let plt_data = PlotData::ColorMesh {
-                    x_dat_n: x_interp,
-                    y_dat_m: y_interp,
-                    z_dat_nxm: interp_dat,
-                };
-                let plt_series = PlotSeries::new(&plt_data, RGBAColor(255, 0, 0, 1.), None);
-                Ok(Some(vec![plt_series]))
-            } else {
-                warn!(
-                    "Could not create interpolated wavefront map for plotting! Returning no plot data."
-                );
-                Ok(None)
-            }
-        } else {
-            warn!("Could not create axes from provided data! Returning no plot data.");
-            Ok(None)
-        }
+    /// Returns the optical path difference (OPD) error data in waves.
+    #[must_use]
+    pub fn opd(&self) -> &[f64] {
+        &self.opd
     }
 }
 
@@ -541,17 +386,14 @@ mod test {
     use super::*;
     use crate::{
         analyzers::propagation_strategy::MissedSurfaceStrategy,
-        core_optics::{optic_surface::OpticSurface, surface_effect::Refraction},
+        core_optics::surface_effect::Refraction,
         degree,
         error::OpmResult,
-        geometry::{Face, Geometry, SurfaceShape},
+        geometry::{Face, Geometry, SurfaceGeometry, SurfaceShape},
         joule,
         light::{Ray, Rays, rays::ReflectedPart},
         millimeter, nanometer,
-        nodes::{
-            WaveFrontData, WaveFrontMap, test_helper::helper::traced_at,
-            wavefront::zernike::ZernikeNoll,
-        },
+        nodes::{WaveFrontData, WaveFrontMap, wavefront::zernike::ZernikeNoll},
         refractive_index::refr_index_vaccuum,
         utils::geom_transformation::Isometry,
     };
@@ -574,15 +416,14 @@ mod test {
             joule!(1.),
         )?;
 
-        let plane = Geometry::from(Face::new(
+        let mut plane = Geometry::from(Face::new(
             SurfaceShape::Plane,
             Isometry::new_along_z(millimeter!(10.0))?,
         ));
-        let mut plane = traced_at(plane, OpticSurface::default())?;
         let vacuum = refr_index_vaccuum();
         let mut refract = |rays: &mut Rays| {
-            plane.interact(
-                "input_1",
+            plane.interact_with_rays(
+                SurfaceGeometry::FACE,
                 rays,
                 &Refraction(Some(&vacuum)),
                 ReflectedPart::Ghost,

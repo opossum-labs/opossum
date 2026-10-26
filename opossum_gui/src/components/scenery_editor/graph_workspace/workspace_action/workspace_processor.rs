@@ -1157,7 +1157,7 @@ async fn apply_document_changes(
                 .nodes
                 .set_node_active(graph_id, node, is_optical, 0);
             // Held until the node's editor loads and opens the panel, then cleared by it - see
-            // `OpticalNodeEditor`/`PortConfigEditor`.
+            // `OpticalNodeEditor`.
             if let Some(panel) = panel {
                 *PENDING_PANEL_OPEN.write() = Some((node, panel));
             }
@@ -1376,8 +1376,8 @@ async fn refresh_group_ports(ws_handler: WorkSpaceSignalHandlers, group_id: Uuid
     eval_action_run(
         api::get_ports_of_group(group_id).await,
         Some(move |ports_config: NodePortsResponse| {
-            let input_ports = ports_config.inputs.into_keys().collect();
-            let output_ports = ports_config.outputs.into_keys().collect();
+            let input_ports = ports_config.inputs.into_iter().collect();
+            let output_ports = ports_config.outputs.into_iter().collect();
             ws_handler
                 .nodes
                 .update_group_ports(input_ports, output_ports, group_id);
@@ -1404,8 +1404,8 @@ async fn refresh_reference_ports(ws_handler: WorkSpaceSignalHandlers, group_id: 
         eval_action_run(
             api::get_ports_of_group(ref_id).await,
             Some(move |ports_config: NodePortsResponse| {
-                let input_ports = ports_config.inputs.into_keys().collect();
-                let output_ports = ports_config.outputs.into_keys().collect();
+                let input_ports = ports_config.inputs.into_iter().collect();
+                let output_ports = ports_config.outputs.into_iter().collect();
                 ws_handler
                     .nodes
                     .update_group_ports(input_ports, output_ports, ref_id);

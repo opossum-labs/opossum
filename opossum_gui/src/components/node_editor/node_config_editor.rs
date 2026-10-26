@@ -6,10 +6,8 @@ use crate::components::scenery_editor::{GraphsWorkspaceAction, NodeType, Selecte
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use futures_util::StreamExt;
-use opossum_core::core_optics::PortType;
 use opossum_core::core_optics::node_attr::NodePositioning;
 use opossum_core::prelude::{AnalyzerType, Isometry, Proptype};
-use opossum_core::types::api_types::UpdatePortRequest;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -41,11 +39,6 @@ pub enum NodeChangeAction {
     AnalyzerName {
         name: String,
         graph_id: Uuid,
-    },
-    PortConfig {
-        port_name: String,
-        port_type: PortType,
-        request: UpdatePortRequest,
     },
 }
 
@@ -270,11 +263,6 @@ fn use_node_config_processor(is_modified_handler: EventHandler<bool>) {
                             Err(e) => Err(e),
                         }
                     }
-                    NodeChangeAction::PortConfig {
-                        port_name,
-                        port_type,
-                        request,
-                    } => api::patch_node_port_config(uuid, port_name, port_type, request).await,
                 };
 
                 match result {

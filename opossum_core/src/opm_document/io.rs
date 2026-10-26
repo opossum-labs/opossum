@@ -5,7 +5,6 @@ use crate::{
     core_optics::OpticNode,
     error::{OpmResult, OpossumError},
     properties::{Proptype, proptype::AssetRef},
-    utils::file_utils::{create_f_path, create_file_instance},
 };
 use log::warn;
 use ron::{extensions::Extensions, ser::PrettyConfig};
@@ -174,20 +173,6 @@ impl OpmDocument {
             OpossumError::OpticScenery(format!("serialization of OpmDocument failed: {e}"))
         })
     }
-
-    /// Creates DOT and SVG diagram files representing the optical scenery.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if generating or writing the diagram files fails.
-    pub fn create_dot_file(&self, dot_path: &Path) -> OpmResult<()> {
-        let mut output = create_file_instance(dot_path, "scenery", "dot")?;
-        write!(output, "{}", self.scenery.toplevel_dot("")?)
-            .map_err(|e| OpossumError::Other(format!("writing diagram file (.dot) failed: {e}")))?;
-        let mut output = create_file_instance(dot_path, "scenery", "svg")?;
-        let f_path = create_f_path(dot_path, "scenery", "dot");
-        self.scenery.toplevel_dot_svg(&f_path, &mut output)
-    }
 }
 
 #[cfg(test)]
@@ -198,6 +183,7 @@ mod tests {
             Analyzer, AnalyzerType, GhostFocusConfig, RayTraceConfig,
             ghostfocus::GhostFocusAnalyzer, raytrace::RayTracingAnalyzer,
         },
+        coatings::{CoatingType, SplittingConfigBuilder},
         core_optics::{Alignable, OpticNode, PortType, node_attr::NodePositioning},
         degree,
         gain::{ConstGain, GainModel},
@@ -208,7 +194,9 @@ mod tests {
             BeamSplitter, CylindricLens, Dummy, EnergyMeter, FluenceDetector, IdealFilter, Lens,
             NodeGroup, ParabolicMirror, ParaxialSurface, RayPropagationVisualizer,
             ReflectiveGrating, SourcePort, Spectrometer, SpotDiagram, ThinMirror, WaveFront, Wedge,
-            collimated_line_ray_builder, round_collimated_ray_builder,
+            collimated_line_ray_builder,
+            ideal_filter::{EdgeFilter, EdgeFilterType, SpectralFilterBuilder},
+            round_collimated_ray_builder,
         },
         refractive_index::RefrIndexConst,
         utils::test_helper::helper::check_logs,
@@ -262,6 +250,59 @@ mod tests {
     fn a_document_without_amplifier_nodes_writes_none() -> OpmResult<()> {
         let document = OpmDocument::default();
         assert!(!document.to_opm_file_string()?.contains("amplifier_nodes"));
+        Ok(())
+    }
+
+    /// A beam splitter whose surface splits by a spectrum keeps the filter parameters defining it,
+    /// not a spectrum built from them.
+    #[test]
+    fn a_spectral_separator_survives_a_file_round_trip() -> OpmResult<()> {
+        let short_pass =
+            SplittingConfigBuilder::Spectrum(SpectralFilterBuilder::EdgeFilter(EdgeFilter::new(
+                EdgeFilterType::ShortPass,
+                nanometer!(1000.0),
+                0.0..1.0,
+                None,
+                nanometer!(500.0)..nanometer!(1500.0),
+                nanometer!(1.0),
+            )?));
+        let mut document = OpmDocument::default();
+        let splitter_id = document
+            .scenery_mut()
+            .add_node(BeamSplitter::new("splitter", &short_pass)?)?;
+
+        let reloaded = OpmDocument::from_string(&document.to_opm_file_string()?)?;
+        let surface = reloaded
+            .scenery()
+            .with_node_attr(splitter_id, |attr| attr.get_property("surface").cloned())??;
+        let Proptype::SurfaceConfig(config) = surface else {
+            panic!("a beam splitter must carry a surface property")
+        };
+        assert_eq!(config.coating(), &CoatingType::Separator(short_pass));
+        Ok(())
+    }
+
+    /// A surface coating the node does not take, such as a beam splitter's surface without a
+    /// separator, falls back to the default when the file is loaded.
+    #[test]
+    fn an_invalid_surface_coating_in_a_file_falls_back_to_the_default() -> OpmResult<()> {
+        let mut document = OpmDocument::default();
+        let splitter_id = document.scenery_mut().add_node(BeamSplitter::default())?;
+        let serialized = document.to_opm_file_string()?;
+        assert!(serialized.contains("coating: Separator(FixedRatio(0.5))"));
+
+        let without_separator = serialized.replace("Separator(FixedRatio(0.5))", "IdealAR");
+        let reloaded = OpmDocument::from_string(&without_separator)?;
+        let surface = reloaded
+            .scenery()
+            .with_node_attr(splitter_id, |attr| attr.get_property("surface").cloned())??;
+        let Proptype::SurfaceConfig(config) = surface else {
+            panic!("a beam splitter must carry a surface property")
+        };
+        assert_eq!(
+            config.coating(),
+            &CoatingType::Separator(SplittingConfigBuilder::default())
+        );
         Ok(())
     }
 
@@ -610,34 +651,6 @@ mod tests {
         assert_eq!(output_names, vec!["output_1".to_string()]);
         check_logs(log::Level::Warn, vec![]);
 
-        Ok(())
-    }
-
-    #[test]
-    fn create_dot_file_test() -> OpmResult<()> {
-        let document =
-            OpmDocument::from_file(Path::new("./files_for_testing/opm/opticscenery.opm"))?;
-        let temp_dir = tempfile::tempdir()
-            .map_err(|e| OpossumError::OpmDocument(format!("Error creating temp dir: {e}")))?;
-        let non_existent_path = temp_dir.path().join("non_existent_folder");
-        assert!(
-            document.create_dot_file(&non_existent_path).is_err(),
-            "Writing to an invalid/non-existent directory should return an error"
-        );
-        assert!(
-            document.create_dot_file(temp_dir.path()).is_ok(),
-            "Writing dot and svg files to valid directory failed"
-        );
-        let dot_file = temp_dir.path().join("scenery.dot");
-        let svg_file = temp_dir.path().join("scenery.svg");
-
-        assert!(dot_file.is_file(), "scenery.dot was not created");
-        assert!(svg_file.is_file(), "scenery.svg was not created");
-
-        let dot_len = fs::metadata(&dot_file)
-            .map_err(|e| OpossumError::OpmDocument(format!("Failed to read dot metadata: {e}")))?
-            .len();
-        assert!(dot_len > 0, "Generated scenery.dot file is empty");
         Ok(())
     }
 

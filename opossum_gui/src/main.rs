@@ -150,7 +150,7 @@ static SCENE_VIEW_REQUEST: GlobalSignal<Option<SceneViewRequest>> = Signal::glob
 static KEEP_SCENE_IN_FRONT: GlobalSignal<bool> = Signal::global(|| false);
 /// Set from the backend's authoritative `JumpTarget` when an undo/redo focuses a node: the node it
 /// selected and the panel to open once that node's editor has loaded. Consumed (cleared) by whichever
-/// `OpticalNodeEditor`/`PortConfigEditor` instance matches the uuid. `apply_document_changes` sets it
+/// `OpticalNodeEditor` instance matches the uuid. `apply_document_changes` sets it
 /// whether or not it had to switch nodes, so an undo of a detail on the already-selected node still opens
 /// its panel.
 static PENDING_PANEL_OPEN: GlobalSignal<Option<(Uuid, NodeEditorPanel)>> = Signal::global(|| None);

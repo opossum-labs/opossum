@@ -1,11 +1,9 @@
 //! Module for gridding data
 
 #![warn(missing_docs)]
+use super::AxLims;
 use super::filter_data::filter_nan_infinite;
-use crate::{
-    error::{OpmResult, OpossumError},
-    reporting::plottable::AxLims,
-};
+use crate::error::{OpmResult, OpossumError};
 use approx::abs_diff_ne;
 use itertools::Itertools;
 use log::warn;

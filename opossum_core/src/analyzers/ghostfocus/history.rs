@@ -1,7 +1,6 @@
 use std::collections::{HashMap, hash_map::Values};
 
 use nalgebra::{MatrixXx2, MatrixXx3, Vector3};
-use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 use uom::si::length::millimeter;
@@ -14,7 +13,6 @@ use crate::{
     millimeter,
     nodes::OpticGraph,
     prelude::Proptype,
-    reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
 };
 
 /// Struct to store the node origin uuid and parent ray bundle Uuid of a ray bundle
@@ -78,7 +76,7 @@ impl GhostFocusHistory {
     /// This function errors if the length of the plane normal vector is zero
     /// # Returns
     /// This function returns a set of 2d vectors in the defined plane projected to a view that is perpendicular to this plane.
-    fn project_to_plane(
+    pub fn project_to_plane(
         &self,
         plane_normal_vec: Vector3<f64>,
     ) -> OpmResult<Vec<Vec<Vec<MatrixXx2<Length>>>>> {
@@ -262,74 +260,6 @@ impl From<(&Vec<HashMap<Uuid, Rays>>, Uuid, usize)> for GhostFocusHistory {
         ghost_focus_history
     }
 }
-impl Plottable for GhostFocusHistory {
-    fn add_plot_specific_params(&self, plt_params: &mut PlotParameters) -> OpmResult<()> {
-        plt_params
-            .set(&PlotArgs::XLabel("position in mm (z axis)".into()))?
-            .set(&PlotArgs::YLabel("position in mm (y axis)".into()))?
-            .set(&PlotArgs::PlotSize((1200, 1200)))?
-            .set(&PlotArgs::AxisEqual(true))?
-            .set(&PlotArgs::PlotAutoSize(true))?
-            .set(&PlotArgs::Legend(false))?;
-        Ok(())
-    }
-
-    fn get_plot_type(&self, plt_params: &PlotParameters) -> PlotType {
-        PlotType::MultiLine2D(plt_params.clone())
-    }
-
-    fn get_plot_series(
-        &self,
-        _plt_type: &mut PlotType,
-        _legend: bool,
-    ) -> OpmResult<Option<Vec<PlotSeries>>> {
-        if self.rays_pos_history.is_empty() {
-            Ok(None)
-        } else {
-            let num_series = self.rays_pos_history.len();
-            let mut plt_series = Vec::<PlotSeries>::with_capacity(num_series);
-
-            let Some(plot_view_direction) = self.plot_view_direction else {
-                return Err(OpossumError::Other("cannot get plot series for raypropagationvisualizer, plot_view_direction not defined".into()));
-            };
-
-            let projected_positions = self.project_to_plane(plot_view_direction)?;
-            for (i, bounce_positions) in projected_positions.iter().enumerate() {
-                let mut proj_pos_mm =
-                    Vec::<MatrixXx2<f64>>::with_capacity(projected_positions.len());
-                for rays_in_bounce in bounce_positions {
-                    for ray_pos in rays_in_bounce {
-                        proj_pos_mm.push(MatrixXx2::from_vec(
-                            ray_pos
-                                .iter()
-                                .map(uom::si::f64::Length::get::<millimeter>)
-                                .collect::<Vec<f64>>(),
-                        ));
-                    }
-                }
-                let gradient = colorous::TURBO;
-
-                let c = if projected_positions.len() > 10 {
-                    gradient.eval_rational(i, projected_positions.len())
-                } else {
-                    colorous::CATEGORY10[i]
-                };
-
-                let plt_data = PlotData::MultiDim2 {
-                    vec_of_xy_data: proj_pos_mm,
-                };
-                let series_label = format!("Bounce: {i}");
-
-                plt_series.push(PlotSeries::new(
-                    &plt_data,
-                    RGBAColor(c.r, c.g, c.b, 0.2),
-                    Some(series_label),
-                ));
-            }
-            Ok(Some(plt_series))
-        }
-    }
-}
 #[cfg(test)]
 mod test_rays_origin {
     use super::RaysOrigin;
@@ -422,7 +352,7 @@ mod test_rays_node_correlation {
 }
 
 #[cfg(test)]
-mod test_rays_ghost_focus_history {
+mod test {
     use super::*;
     use crate::{distributions::position::Grid, joule, light::Rays, millimeter, nanometer};
     use approx::assert_relative_eq;
@@ -672,5 +602,104 @@ mod test_rays_ghost_focus_history {
             GhostFocusHistory::default().into(),
             Proptype::GhostFocusHistory(_)
         ));
+    }
+    #[test]
+    fn test_project_to_plane_non_unit_normal_and_arbitrary_direction() -> OpmResult<()> {
+        let mut accumulated_rays = Vec::<HashMap<Uuid, Rays>>::new();
+        let rays = Rays::new_uniform_collimated(
+            nanometer!(1000.),
+            joule!(1.),
+            &Grid::new(millimeter!(10.0, 10.0), point![3, 3])?,
+        )?;
+        let mut hash = HashMap::new();
+        hash.insert(rays.uuid(), rays);
+        accumulated_rays.push(hash);
+
+        let hist = GhostFocusHistory::from(accumulated_rays);
+
+        // 1. Error on zero norm
+        assert!(hist.project_to_plane(Vector3::zeros()).is_err());
+
+        // 2. Kill `replace < with ==` in `vec_norm < f64::EPSILON`
+        // 0.5 * EPSILON is strictly < EPSILON, so original code returns Err
+        assert!(
+            hist.project_to_plane(Vector3::new(f64::EPSILON * 0.5, 0.0, 0.0))
+                .is_err()
+        );
+
+        // 3. Kill `replace < with <=` in `vec_norm < f64::EPSILON`
+        // norm == EPSILON is NOT < EPSILON, so original code returns Ok, but mutant returns Err
+        assert!(
+            hist.project_to_plane(Vector3::new(f64::EPSILON, 0.0, 0.0))
+                .is_ok()
+        );
+
+        // 4. Non-unit normal vector with components in all 3 axes:
+        // Kills:
+        // - `replace / with *` on line 92 (normed_normal_vec)
+        // - `replace - with +` on line 107 (proj_x)
+        // - `replace /= with *=` on line 108 (proj_x normalization)
+        // - `replace - with +` on line 131 (proj_pos)
+        let normal_diag = Vector3::new(1.0, 2.0, 3.0);
+        let proj_diag = hist.project_to_plane(normal_diag)?;
+        assert_eq!(proj_diag.len(), 1);
+        let val_0_0 = proj_diag[0][0][0][(0, 0)].value;
+        let val_0_1 = proj_diag[0][0][0][(0, 1)].value;
+        assert!(val_0_0.abs() > 1e-6);
+        assert!(val_0_1.abs() > 1e-6);
+
+        // 5. Kill `replace < with <=` on line 97 (cross with x == EPSILON)
+        // Original falls through to `else` (co_ax_1 has non-zero xy-components),
+        // mutant takes `if` (co_ax_1 is z-axis -> dot with (x, y, 0) is 0.0).
+        let normal_eps_x = Vector3::new(1.0, f64::EPSILON, 0.0);
+        let proj_eps_x = hist.project_to_plane(normal_eps_x)?;
+        assert!(proj_eps_x[0][0][0][(0, 0)].value.abs() > 1e-6);
+
+        // 6. Kill `replace < with <=` on line 100 (cross with y == EPSILON)
+        // Original falls through to `else` (co_ax_1 is x-axis -> dot is -5.0),
+        // mutant takes z-axis (dot is 0.0).
+        let normal_eps_y = Vector3::new(f64::EPSILON, 1.0, 0.0);
+        let proj_eps_y = hist.project_to_plane(normal_eps_y)?;
+        assert!(proj_eps_y[0][0][0][(0, 0)].value.abs() > 1e-6);
+
+        // 7. Kill `replace < with <=` on line 102 (cross with z == EPSILON)
+        // Ray 0 in 3x3 grid has y = -5.0 mm.
+        // In `else`, co_ax_2 is (0, -1, 0), resulting in +5.0 (> 0.0).
+        // In mutant, co_ax_2 is (0, 1, 0), resulting in -5.0 (< 0.0).
+        let normal_eps_z = Vector3::new(f64::EPSILON, 0.0, 1.0);
+        let proj_eps_z = hist.project_to_plane(normal_eps_z)?;
+        assert!(proj_eps_z[0][0][0][(0, 1)].value > 0.0);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_rays_origin_report_str() -> OpmResult<()> {
+        let mut group = crate::nodes::NodeGroup::default();
+        let n1 = group.add_node(crate::nodes::Dummy::new("NodePrimary"))?;
+        let n2 = group.add_node(crate::nodes::Dummy::new("NodeGhost"))?;
+
+        let mut hist = GhostFocusHistory::default();
+
+        // Bounce 0 (primary): should NOT have "bounce 0 at node" prefix
+        let mut corr0 = RaysNodeCorrelation::default();
+        corr0.insert(Uuid::new_v4(), &RaysOrigin::new(None, Some(n1)));
+        hist.ray_node_correlation.push(corr0);
+
+        // Bounce 1: MUST have "bounce 1 at node" prefix
+        let mut corr1 = RaysNodeCorrelation::default();
+        corr1.insert(Uuid::new_v4(), &RaysOrigin::new(None, Some(n2)));
+        hist.ray_node_correlation.push(corr1);
+
+        let report_str = hist.rays_origin_report_str(group.graph());
+
+        // Verify bounce 0 output formatting
+        assert!(report_str.contains("NodePrimary', "));
+        assert!(!report_str.contains("bounce 0 at node"));
+
+        // Verify bounce 1 output formatting
+        assert!(report_str.contains("bounce 1 at node 'NodeGhost', "));
+
+        Ok(())
     }
 }

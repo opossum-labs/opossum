@@ -18,9 +18,9 @@ use crate::{
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt},
+    core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, SurfacePorts},
     error::OpmResult,
-    geometry::{Geometry, SurfaceGeometry},
+    geometry::Geometry,
     light::{LightData, LightResult, Spectrum},
     nodes::NodeRegistration,
     properties::{Properties, Proptype, validator::Validator},
@@ -78,6 +78,7 @@ impl Default for RayPropagationVisualizer {
             node_attr,
             apodization_warning: false,
         };
+        rpv.create_default_surface_properties().unwrap();
         rpv.update_surfaces().unwrap();
         rpv
     }
@@ -107,18 +108,15 @@ impl RayPropagationVisualizer {
 }
 
 impl OpticNode for RayPropagationVisualizer {
-    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::plane(None)))
     }
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
     }
 
-    fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.install_geometry(
-            &[("input_1", SurfaceGeometry::FACE)],
-            &[("output_1", SurfaceGeometry::FACE)],
-        )
+    fn surface_ports(&self) -> SurfacePorts {
+        SurfacePorts::SINGLE_SURFACE
     }
 
     fn node_report(&self, uuid: &str, analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {

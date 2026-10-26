@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     fmt::Display,
 };
 
@@ -10,12 +10,7 @@ use uuid::Uuid;
 
 use crate::{
     analyzers::Analyzable,
-    coatings::CoatingType,
-    core_optics::{
-        NodeAttrExt,
-        node_attr::NodePositioning,
-        optic_ports::{PortConfig, ValidatedLidt},
-    },
+    core_optics::{NodeAttrExt, node_attr::NodePositioning},
     gain::{GainModel, PumpConfig, PumpScenario, PumpSource},
     nodes::ConnectionInfo,
     opm_document::AnalyzerInfo,
@@ -407,26 +402,13 @@ pub struct PositionUpdate {
 // PORTS & PORT MAPPINGS
 // ============================================================================
 
-/// Response payload containing port configurations (Aperture, Coating, LIDT)
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, ToSchema)]
+/// Response payload containing the port names of a node
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, ToSchema, Eq)]
 pub struct NodePortsResponse {
     /// The input ports of the node (accounts for node inversion)
-    pub inputs: BTreeMap<String, PortConfig>,
+    pub inputs: BTreeSet<String>,
     /// The output ports of the node (accounts for node inversion)
-    pub outputs: BTreeMap<String, PortConfig>,
-}
-
-/// Request payload for partial updates of a specific port
-#[derive(Debug, Default, Serialize, Deserialize, ToSchema, Clone, PartialEq)]
-pub struct UpdatePortRequest {
-    /// The new coating of the port
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub coating: Option<CoatingType>,
-
-    /// The new Laser Induced Damage Threshold
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[schema(value_type = Option<f64>)]
-    pub lidt: Option<ValidatedLidt>,
+    pub outputs: BTreeSet<String>,
 }
 
 /// Request payload to expose an internal node's port to a parent group
@@ -788,12 +770,11 @@ pub struct ScenarioAmplifierDto {
 // UNDO / REDO
 // ============================================================================
 
-/// Which of the node-editor sidebar's 5 accordion sections (`OpticalNodeEditor`) a document change
+/// Which of the node-editor sidebar's 4 accordion sections (`OpticalNodeEditor`) a document change
 /// belongs to, so undo/redo can auto-select the node and open the panel whose value it just changed.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize, ToSchema)]
 pub enum NodeEditorPanel {
     General,
-    PortConfig,
     Properties,
     Positioning,
     Alignment,

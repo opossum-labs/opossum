@@ -5,7 +5,7 @@ use nalgebra::{Point3, vector};
 use num_traits::Zero;
 use opossum_core::{
     J_per_cm2,
-    coatings::CoatingType,
+    coatings::IdealAR,
     degree,
     error::OpossumError,
     geometry::{Face, Geometry, SurfaceGeometry, SurfaceShape},
@@ -93,7 +93,7 @@ fn bench_refract_on_surface(c: &mut Criterion) {
         // iter_with_setup is used because the function requires mutable access to the ray.
         b.iter_with_setup(setup, |(mut ray, plane, n2)| {
             if let Some(hit) = plane.intersect(SurfaceGeometry::FACE, &ray) {
-                std::hint::black_box(ray.refract_at(&hit, &CoatingType::IdealAR, n2))?;
+                std::hint::black_box(ray.refract_at(&hit, &IdealAR, n2))?;
             }
             Ok::<(), OpossumError>(())
         });

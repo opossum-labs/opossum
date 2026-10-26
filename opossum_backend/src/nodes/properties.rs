@@ -115,10 +115,16 @@ mod test {
     use crate::document::undo_document;
     use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
     use opossum_core::{
-        core_optics::node_attr::HasNodeAttr,
+        J_per_cm2,
+        coatings::SplittingConfigBuilder,
+        core_optics::{SurfaceConfig, node_attr::HasNodeAttr},
         geometry::body::OPTIC_SHAPE,
         material::{MATERIAL, Material},
-        nodes::{Dummy, Lens, ParaxialSurface},
+        nanometer,
+        nodes::{
+            BeamSplitter, Dummy, Lens, ParaxialSurface,
+            ideal_filter::{EdgeFilter, EdgeFilterType, SpectralFilterBuilder},
+        },
         properties::{proptype::AssetRef, validator::Validator},
         refractive_index::{RefrIndexConst, RefractiveIndexType},
         types::api_types::{DocumentChange, NodeEditorPanel, UndoRedoResponse},
@@ -244,6 +250,110 @@ mod test {
             StatusCode::NO_CONTENT
         );
         assert_eq!(index_model_of_node(), index_model(2.0));
+    }
+
+    /// The coating editor of the GUI patches a whole `SurfaceConfig` as RON and reads the properties
+    /// back as RON. A separator whose spectrum is defined by filter parameters must arrive at the
+    /// node and come back with those parameters.
+    #[actix_web::test]
+    async fn test_a_separator_coating_reaches_the_node_and_reads_back() {
+        let app_state = create_test_state();
+        let node_id = {
+            let mut document = app_state.document.lock();
+            document
+                .scenery_mut()
+                .add_node(BeamSplitter::default())
+                .unwrap()
+        };
+        let short_pass = SplittingConfigBuilder::Spectrum(SpectralFilterBuilder::EdgeFilter(
+            EdgeFilter::new(
+                EdgeFilterType::ShortPass,
+                nanometer!(1000.0),
+                0.0..1.0,
+                None,
+                nanometer!(500.0)..nanometer!(1500.0),
+                nanometer!(1.0),
+            )
+            .unwrap(),
+        ));
+        let surface =
+            Proptype::from(SurfaceConfig::new(short_pass.into(), J_per_cm2!(2.0)).unwrap());
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state)
+                .service(patch_property)
+                .service(get_properties),
+        )
+        .await;
+
+        let req = test::TestRequest::patch()
+            .uri(&format!("/{node_id}/properties/surface"))
+            .set_payload(ron::to_string(&surface).unwrap())
+            .insert_header(("Content-Type", "application/ron"))
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+
+        let req = test::TestRequest::get()
+            .uri(&format!("/{node_id}/properties"))
+            .insert_header(("Accept", "application/ron"))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = test::read_body(resp).await;
+        let response: NodePropertiesResponse =
+            ron::from_str(std::str::from_utf8(&body).unwrap()).unwrap();
+        assert_eq!(response.properties.get("surface").unwrap(), &surface);
+    }
+
+    /// The backend refuses a coating a surface does not take: a beam splitter's surface without a
+    /// separator, and a separator that transmits more than everything. The surface keeps its
+    /// coating.
+    #[actix_web::test]
+    async fn test_a_surface_refuses_a_coating_it_does_not_take() {
+        let app_state = create_test_state();
+        let node_id = {
+            let mut document = app_state.document.lock();
+            document
+                .scenery_mut()
+                .add_node(BeamSplitter::default())
+                .unwrap()
+        };
+        let surface_of_node = || {
+            app_state
+                .document
+                .lock()
+                .scenery()
+                .with_node_attr(node_id, |attr| attr.properties().get("surface").cloned())
+                .unwrap()
+                .unwrap()
+        };
+        let before = surface_of_node();
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(patch_property),
+        )
+        .await;
+
+        for payload in [
+            "SurfaceConfig((coating: IdealAR))",
+            "SurfaceConfig((coating: Separator(FixedRatio(1.5))))",
+        ] {
+            let req = test::TestRequest::patch()
+                .uri(&format!("/{node_id}/properties/surface"))
+                .set_payload(payload)
+                .insert_header(("Content-Type", "application/ron"))
+                .to_request();
+            assert_eq!(
+                app.call(req).await.unwrap().status(),
+                StatusCode::BAD_REQUEST,
+                "{payload}"
+            );
+            assert_eq!(surface_of_node(), before, "{payload}");
+        }
     }
 
     /// The GUI offers only the optic shapes a node can take, and learns them from the property's

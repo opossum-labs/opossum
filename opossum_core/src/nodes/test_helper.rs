@@ -11,14 +11,11 @@ pub mod helper {
         coatings::{CoatingConstantR, CoatingType},
         core_optics::{
             NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, OpticPorts, OpticRef, PortType,
-            Volumetric,
-            node_attr::NodePositioning,
-            optic_surface::OpticSurface,
-            runtime_geometry::{RuntimeGeometry, RuntimeSurfaces},
+            Volumetric, node_attr::NodePositioning, optic_surface::OpticSurface,
         },
         error::{OpmResult, OpossumError},
         geometry::{
-            Face, Geometry,
+            Face, FaceIndex, Geometry, SurfaceGeometry,
             body::{Body, OPTIC_SHAPE, default_optic_shape},
         },
         joule,
@@ -72,18 +69,20 @@ pub mod helper {
         );
         Ok(())
     }
-    /// Assert that a node reflects completely on `input_1` and `output_1`: the ports and the
-    /// surfaces built from them carry a constant reflectivity of 100 %.
+    /// Assert that a node reflects completely: its surface carries a constant reflectivity of
+    /// 100 %, and so do the surfaces built under `input_1` and `output_1`.
     ///
     /// # Panics
     ///
-    /// Panics if a port or its surface carries another coating.
+    /// Panics if the surface or a surface built from it carries another coating.
     pub fn test_reflects_completely<T: Default + OpticNode>() {
         let node = T::default();
         let full: CoatingType = CoatingConstantR::new(percent!(100.0)).unwrap().into();
-        let ports = node.ports();
-        for (port_type, name) in [(PortType::Input, "input_1"), (PortType::Output, "output_1")] {
-            assert_eq!(ports.coating(&port_type, name), Some(&full), "port {name}");
+        let config = node
+            .surface_config(&node.face_name(SurfaceGeometry::FACE).unwrap())
+            .unwrap();
+        assert_eq!(config.coating(), &full);
+        for name in ["input_1", "output_1"] {
             assert_eq!(
                 node.get_optic_surface(name).map(OpticSurface::coating),
                 Some(&full),
@@ -435,16 +434,6 @@ pub mod helper {
             .collect::<OpmResult<Vec<_>>>()?;
         Ok(Rays::from(rays))
     }
-    /// Return a component of the given geometry whose face 0 is the surface `input_1`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the surface is no face of the geometry.
-    pub fn traced_at(geometry: Geometry, surface: OpticSurface) -> OpmResult<RuntimeGeometry> {
-        let mut surfaces = RuntimeSurfaces::default();
-        surfaces.inputs.insert("input_1".into(), surface);
-        RuntimeGeometry::new(geometry, surfaces)
-    }
     /// Return a default node of the given type, placed at the origin.
     ///
     /// # Errors
@@ -675,10 +664,8 @@ pub mod helper {
     ///
     /// Returns an error if the node's geometry cannot be derived or if the node has none.
     pub fn placed_geometry<T: OpticNode + ?Sized>(node: &T) -> OpmResult<Geometry> {
-        let geometry = node.geometry()?.ok_or_else(|| {
-            OpossumError::Other(format!("node '{}' has no geometry", node.name()))
-        })?;
-        Ok(geometry.moved(&node.effective_node_iso().unwrap_or_else(Isometry::identity)))
+        node.placed_geometry()?
+            .ok_or_else(|| OpossumError::Other(format!("node '{}' has no geometry", node.name())))
     }
 
     /// Return the volume a geometry encloses.
@@ -988,9 +975,9 @@ pub mod helper {
     /// Panics if a surface is no face of the geometry the node installed.
     #[must_use]
     pub fn surface_snapshot<T: OpticNode + ?Sized>(node: &T) -> Vec<String> {
-        let installed = node.node_attr().runtime();
+        let installed = node.node_attr().runtime_geometry();
         describe_faces_under_ports(node, |face| {
-            installed.and_then(|runtime| runtime.geometry().kind().face(face).cloned())
+            installed.and_then(|geometry| geometry.face(face).cloned())
         })
         .expect("every installed surface is a face of the installed geometry")
     }
@@ -1015,11 +1002,10 @@ pub mod helper {
     /// Returns an error if the geometry cannot be derived, or if it has no face an installed
     /// surface sits on.
     pub fn geometry_snapshot<T: OpticNode + ?Sized>(node: &T) -> OpmResult<Vec<String>> {
-        let Some(geometry) = node.geometry()? else {
+        let Some(placed) = node.placed_geometry()? else {
             return Ok(Vec::new());
         };
-        let placed = geometry.moved(&node.effective_node_iso().unwrap_or_else(Isometry::identity));
-        describe_faces_under_ports(node, |face| placed.kind().face(face).cloned())
+        describe_faces_under_ports(node, |face| placed.face(face).cloned())
     }
 
     /// Describe, under every port of a node with an installed surface, the face that surface sits
@@ -1035,24 +1021,36 @@ pub mod helper {
     /// Returns an error if there is no face an installed surface sits on.
     fn describe_faces_under_ports<T: OpticNode + ?Sized>(
         node: &T,
-        face_of: impl Fn(usize) -> Option<Face>,
+        face_of: impl Fn(FaceIndex) -> Option<Face>,
     ) -> OpmResult<Vec<String>> {
-        let Some(runtime) = node.node_attr().runtime().map(RuntimeGeometry::surfaces) else {
+        if node.node_attr().runtime_geometry().is_none() {
             return Ok(Vec::new());
-        };
+        }
         let mut surfaces = Vec::new();
-        for (port_type, ports) in [("in", &runtime.inputs), ("out", &runtime.outputs)] {
-            for (name, installed) in ports {
-                let face = face_of(installed.face()).ok_or_else(|| {
-                    OpossumError::Other(format!(
-                        "there is no face {} for the surface at port '{name}'",
-                        installed.face()
-                    ))
-                })?;
-                surfaces.push((port_type, name.as_str(), face));
-            }
+        for (port_type, name, face) in sorted_surface_ports(node) {
+            let placed = face_of(face).ok_or_else(|| {
+                OpossumError::Other(format!(
+                    "there is no face {face} for the surface at port '{name}'"
+                ))
+            })?;
+            surfaces.push((port_type, name, placed));
         }
         Ok(describe_surfaces(node, &surfaces))
+    }
+
+    /// Return the ports of a node with the face each one sits on (see
+    /// [`OpticNode::surface_ports`]): the inputs first, then the outputs, each sorted by name.
+    fn sorted_surface_ports<T: OpticNode + ?Sized>(
+        node: &T,
+    ) -> Vec<(&'static str, &'static str, FaceIndex)> {
+        let ports = node.surface_ports();
+        let mut sorted = Vec::new();
+        for (port_type, list) in [("in", ports.inputs), ("out", ports.outputs)] {
+            let mut list = list.to_vec();
+            list.sort_by_key(|(name, _)| *name);
+            sorted.extend(list.into_iter().map(|(name, face)| (port_type, name, face)));
+        }
+        sorted
     }
 
     /// Describe surfaces one line each, as documented at [`surface_snapshot`].
@@ -1241,47 +1239,44 @@ pub mod helper {
     /// Returns an error if a ray cannot be built.
     pub fn hit_snapshot<T: OpticNode + ?Sized>(node: &T) -> OpmResult<Vec<String>> {
         let node_frame = node.effective_node_iso().unwrap_or_else(Isometry::identity);
-        let Some(runtime) = node.node_attr().runtime() else {
+        let Some(geometry) = node.node_attr().runtime_geometry() else {
             return Ok(Vec::new());
         };
-        let (geometry, surfaces) = (runtime.geometry(), runtime.surfaces());
         let mut lines = Vec::new();
-        for (port_type, ports) in [("in", &surfaces.inputs), ("out", &surfaces.outputs)] {
-            for (name, surface) in ports {
-                for (x, y, tilt) in [
-                    (0.0, 0.0, 0.0),
-                    (5.0, 0.0, 10.0),
-                    (-8.0, 3.0, 0.0),
-                    (0.0, 5.0, 10.0),
-                    (12.4, 0.0, 0.0),
-                    (12.6, 0.0, 0.0),
-                ] {
-                    let hit = geometry
-                        .intersect(surface.face(), &probe_ray(x, y, tilt, &node_frame)?)
-                        .map_or_else(
-                            || "miss".to_owned(),
-                            |hit| {
-                                let local = node_frame.inverse_transform_point(&hit.point());
-                                let recorded = if hit.recorded() {
-                                    "recorded"
-                                } else {
-                                    "not recorded"
-                                };
-                                format!(
-                                    "({}, {}, {}) n={} {recorded}",
-                                    rounded(local.x.get::<millimeter>()),
-                                    rounded(local.y.get::<millimeter>()),
-                                    rounded(local.z.get::<millimeter>()),
-                                    rounded_vector(
-                                        &node_frame.inverse_transform_vector_f64(&hit.normal())
-                                    ),
-                                )
-                            },
-                        );
-                    lines.push(format!(
-                        "{port_type} {name} from ({x}, {y}) at {tilt} deg: {hit}"
-                    ));
-                }
+        for (port_type, name, face) in sorted_surface_ports(node) {
+            for (x, y, tilt) in [
+                (0.0, 0.0, 0.0),
+                (5.0, 0.0, 10.0),
+                (-8.0, 3.0, 0.0),
+                (0.0, 5.0, 10.0),
+                (12.4, 0.0, 0.0),
+                (12.6, 0.0, 0.0),
+            ] {
+                let hit = geometry
+                    .intersect(face, &probe_ray(x, y, tilt, &node_frame)?)
+                    .map_or_else(
+                        || "miss".to_owned(),
+                        |hit| {
+                            let local = node_frame.inverse_transform_point(&hit.point());
+                            let recorded = if hit.recorded() {
+                                "recorded"
+                            } else {
+                                "not recorded"
+                            };
+                            format!(
+                                "({}, {}, {}) n={} {recorded}",
+                                rounded(local.x.get::<millimeter>()),
+                                rounded(local.y.get::<millimeter>()),
+                                rounded(local.z.get::<millimeter>()),
+                                rounded_vector(
+                                    &node_frame.inverse_transform_vector_f64(&hit.normal())
+                                ),
+                            )
+                        },
+                    );
+                lines.push(format!(
+                    "{port_type} {name} from ({x}, {y}) at {tilt} deg: {hit}"
+                ));
             }
         }
         Ok(lines)

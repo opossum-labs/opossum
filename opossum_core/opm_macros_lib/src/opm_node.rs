@@ -37,7 +37,7 @@ fn expand_opm_node(struct_input: &ItemStruct) -> syn::Result<TokenStream2> {
     };
 
     // Parse the optional #[opm_node("...")] attribute cleanly without panicking
-    let dottable_impl = if let Some(attr) = struct_input
+    let visual_node_impl = if let Some(attr) = struct_input
         .attrs
         .iter()
         .find(|a| a.path().is_ident("opm_node") && a.style == AttrStyle::Outer)
@@ -45,15 +45,18 @@ fn expand_opm_node(struct_input: &ItemStruct) -> syn::Result<TokenStream2> {
         // Parsing errors are propagated with '?' instead of causing a panic
         let color_lit: LitStr = attr.parse_args()?;
         quote! {
-            use crate::reporting::Dottable;
-            impl Dottable for #struct_name {
+            use crate::core_optics::VisualNode;
+            impl VisualNode for #struct_name {
                 fn node_color(&self) -> &'static str {
                     #color_lit
                 }
             }
         }
     } else {
-        quote! {}
+        quote! {
+            use crate::core_optics::VisualNode;
+            impl VisualNode for #struct_name {}
+        }
     };
 
     // Combine all generated trait implementations
@@ -64,7 +67,7 @@ fn expand_opm_node(struct_input: &ItemStruct) -> syn::Result<TokenStream2> {
         };
 
         #analyzable_impl
-        #dottable_impl
+        #visual_node_impl
 
         impl Alignable for #struct_name {}
         impl LIDT for #struct_name {}

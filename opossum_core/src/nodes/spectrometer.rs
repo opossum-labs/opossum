@@ -10,11 +10,12 @@ use crate::{
     },
     core_optics::{
         NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, Planar, SurfaceKind,
+        SurfacePorts,
         optic_node::APERTURE_LIMIT_NOTE,
     },
     error::OpmResult,
     geometry::{
-        Geometry, SurfaceGeometry, SurfaceShape,
+        Geometry, SurfaceShape,
         body::{OPTIC_SHAPE, default_square_optic_shape},
     },
     light::{LightData, Rays, Spectrum},
@@ -100,6 +101,7 @@ impl Default for Spectrometer {
             node_attr,
             apodization_warning: false,
         };
+        spect.create_default_surface_properties().unwrap();
         spect.update_surfaces().unwrap();
         spect
     }
@@ -175,7 +177,7 @@ impl Planar for Spectrometer {
     }
 }
 impl OpticNode for Spectrometer {
-    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::detector(
             SurfaceShape::Plane,
             self.cross_section()?,
@@ -188,11 +190,8 @@ impl OpticNode for Spectrometer {
         self.apodization_warning = apodized;
     }
 
-    fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.install_geometry(
-            &[("input_1", SurfaceGeometry::FACE)],
-            &[("output_1", SurfaceGeometry::FACE)],
-        )
+    fn surface_ports(&self) -> SurfacePorts {
+        SurfacePorts::SINGLE_SURFACE
     }
 
     fn node_report(&self, uuid: &str, _analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {

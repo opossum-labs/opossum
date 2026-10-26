@@ -8,7 +8,7 @@
 //! on.
 //!
 //! A body answers in the frame its solid is stated in; moved to its node (see
-//! [`Geometry::moved`](crate::geometry::Geometry::moved)), it answers there. Every kind of solid
+//! [`Geometry::move_by`](crate::geometry::Geometry::move_by)), it answers there. Every kind of solid
 //! implements the trait next to its definition and hands it out through
 //! [`GeometryKind::as_body`](crate::geometry::GeometryKind::as_body): an
 //! [`Extruded`](crate::geometry::Extruded) solid, a volume bounded
@@ -26,7 +26,8 @@
 use crate::{
     apertures::{CircleShape, OpticShape, RectangleShape},
     error::{OpmResult, OpossumError},
-    geometry::Side,
+    gain::Inversion,
+    geometry::{FaceIndex, Side},
     light::Ray,
     millimeter, nanometer,
     utils::{geom_transformation::Isometry, math_utils::distance_3d_point},
@@ -209,7 +210,11 @@ pub trait Body: Debug + Send + Sync {
     /// # Returns
     ///
     /// The side of the face the body lies on, or `None` if there is no such face.
-    fn side(&self, face: usize) -> Option<Side>;
+    fn side(&self, face: FaceIndex) -> Option<Side>;
+    /// Return the inversion a gain model built in this [`Body`], or `None` if there is none.
+    fn inversion(&self) -> Option<&Inversion>;
+    /// Return the inversion of this [`Body`], to be built, depleted or cleared.
+    fn inversion_mut(&mut self) -> &mut Option<Inversion>;
     /// Return the length of the straight chord a [`Ray`] cuts through this [`Body`], found from the
     /// points where it meets the boundary.
     ///

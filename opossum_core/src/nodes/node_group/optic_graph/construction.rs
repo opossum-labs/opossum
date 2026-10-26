@@ -603,10 +603,8 @@ impl OpticGraph {
                 if output_ports.len() == 1 && input_ports.len() == 1 {
                     if let Some(outgoing_edge) = outgoing_edges.first()
                         && outgoing_edges.len() == 1
-                        && let (Some((output_port, _)), Some(target_node)) = (
-                            output_ports.first_key_value(),
-                            self.g.node_weight(outgoing_edge.1),
-                        )
+                        && let (Some(output_port), Some(target_node)) =
+                            (output_ports.first(), self.g.node_weight(outgoing_edge.1))
                     {
                         self.connect_nodes(
                             node_id,
@@ -618,10 +616,8 @@ impl OpticGraph {
                     }
                     if let Some(incoming_edge) = incoming_edges.first()
                         && incoming_edges.len() == 1
-                        && let (Some((input_port, _)), Some(src_node)) = (
-                            input_ports.first_key_value(),
-                            self.g.node_weight(incoming_edge.2),
-                        )
+                        && let (Some(input_port), Some(src_node)) =
+                            (input_ports.first(), self.g.node_weight(incoming_edge.2))
                     {
                         self.connect_nodes(
                             src_node.uuid(),

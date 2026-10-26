@@ -611,18 +611,15 @@ async fn simulate(data: web::Data<AppState>, report_dir: String) -> impl Respond
             Ok(report_dir) => {
                 info!("Creating report directory: {}", report_dir.display());
                 info!("Creating diagram files");
-                document
-                    .create_dot_file(&report_dir)
+                opossum_reporter::create_dot_file(document.scenery(), &report_dir)
                     .unwrap_or_else(|e| warn!("{e}"));
                 info!("Starting analysis");
                 let analysis_reports = document.analyze();
                 match analysis_reports {
                     Ok(reports) => {
                         info!("Generating report(s)");
-                        for report in reports.iter().enumerate() {
-                            report
-                                .1
-                                .save(&report_dir, report.0)
+                        for (report_nr, report) in reports.iter().enumerate() {
+                            opossum_reporter::save_report(report, &report_dir, report_nr)
                                 .unwrap_or_else(|e| warn!("{e}"));
                         }
                     }

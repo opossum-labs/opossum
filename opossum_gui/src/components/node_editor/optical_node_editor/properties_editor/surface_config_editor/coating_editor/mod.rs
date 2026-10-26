@@ -1,9 +1,16 @@
+mod splitting_config_editor;
+
+use splitting_config_editor::SplittingConfigEditor;
+
 use dioxus::prelude::*;
 use opossum_core::{
-    coatings::{CoatingConstantR, CoatingType},
+    coatings::{CoatingConstantR, CoatingType, SplittingConfigBuilder},
+    core_optics::SurfaceConfig,
     percent,
+    properties::validator::Validator,
     utils::default_from_name::DefaultFromName,
 };
+use strum::IntoEnumIterator;
 use uom::si::ratio::percent;
 
 use crate::{
@@ -21,19 +28,20 @@ use crate::{
 #[component]
 pub fn CoatingEditor(
     coating_type: ReadSignal<CoatingType>,
+    validator: Option<Validator>,
     on_change: EventHandler<CoatingType>,
     readonly: bool,
 ) -> Element {
-    let mut coating_type_sig = use_synced_signal(*coating_type.read());
+    let mut coating_type_sig = use_synced_signal(coating_type.read().clone());
     let on_coating_changed = move |ct: CoatingType| {
-        coating_type_sig.set(ct);
+        coating_type_sig.set(ct.clone());
         on_change.call(ct);
     };
     let mut element_list: Vec<Result<VNode, RenderError>> = vec![rsx! {
-        CoatingTypeSelector {coating_type_sig, on_change: on_coating_changed }
+        CoatingTypeSelector {coating_type_sig, validator, on_change: on_coating_changed }
     }];
-    if let CoatingType::ConstantR(conf) = &*coating_type_sig.read() {
-        element_list.push(rsx! {
+    match &*coating_type_sig.read() {
+        CoatingType::ConstantR(conf) => element_list.push(rsx! {
             NodeConfigUnitInput {
                 id: "coatingReflectivityInput",
                 label: "Reflectivity",
@@ -48,23 +56,41 @@ pub fn CoatingEditor(
                 },
                 readonly,
             }
-        });
+        }),
+        CoatingType::Separator(config) => element_list.push(rsx! {
+            SplittingConfigEditor {
+                splitting_config_builder: config.clone(),
+                on_change: move |config: SplittingConfigBuilder| on_change.call(config.into()),
+                readonly,
+            }
+        }),
+        CoatingType::IdealAR | CoatingType::Fresnel => {}
     }
     rsx! {
         ElementList { element_list }
     }
 }
 
+/// Selects the kind of coating among those the surface's `validator` may accept.
 #[component]
 pub fn CoatingTypeSelector(
     coating_type_sig: ReadSignal<CoatingType>,
+    validator: Option<Validator>,
     on_change: EventHandler<CoatingType>,
 ) -> Element {
+    let refused: Vec<CoatingType> = CoatingType::iter()
+        .filter(|coating| {
+            validator.as_ref().is_some_and(|validator| {
+                !validator.may_accept(&SurfaceConfig::from(coating.clone()).into())
+            })
+        })
+        .collect();
+    let refused: Vec<&CoatingType> = refused.iter().collect();
     rsx! {
         LabeledSelect {
             id: "nodeFilterTypeSelector",
             label: "Coating type definition",
-            options: select_options_from_enum_iterator(&*coating_type_sig.read(), None),
+            options: select_options_from_enum_iterator(&*coating_type_sig.read(), Some(&refused)),
             onchange: move |e: Event<FormData>| {
                 let val = e.value();
                 if let Some(ftb) = CoatingType::default_from_name(val.as_str()) {

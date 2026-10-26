@@ -45,7 +45,6 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
 
     // port CRUD services
     cfg.service(ports::get_ports);
-    cfg.service(ports::patch_port);
 
     cfg.app_data(PathConfig::default().error_handler(|err, _req| {
         BackEndErrorResponse::new(400, "parse error", &err.to_string()).into()

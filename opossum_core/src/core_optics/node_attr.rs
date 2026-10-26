@@ -10,8 +10,9 @@ use uom::si::f64::Length;
 use uuid::Uuid;
 
 use crate::{
-    core_optics::{OpticPorts, runtime_geometry::RuntimeGeometry},
+    core_optics::OpticPorts,
     error::{OpmResult, OpossumError},
+    geometry::Geometry,
     properties::{Properties, Proptype, validator::Validator},
     utils::{file_utils::sanitize_filename, geom_transformation::Isometry},
 };
@@ -149,10 +150,12 @@ pub struct NodeAttr {
     /// The name of the node.
     #[serde(deserialize_with = "deserialize_name")]
     name: String,
-    #[serde(default, skip_serializing_if = "OpticPorts::is_all_default")]
+    /// The ports are graph logic only: a node creates them with its geometry, so they are never
+    /// written to a file, and a `ports` entry of an older file is ignored.
+    #[serde(skip)]
     ports: OpticPorts,
     #[serde(skip)]
-    runtime: Option<RuntimeGeometry>,
+    runtime_geometry: Option<Geometry>,
     uuid: Uuid,
     #[serde(default, skip_serializing_if = "Properties::is_empty")]
     props: Properties,
@@ -193,7 +196,7 @@ impl NodeAttr {
             name: node_type.into(),
             props: Properties::default(),
             ports: OpticPorts::default(),
-            runtime: None,
+            runtime_geometry: None,
             positioning: NodePositioning::Automatic(None),
             inverted: false,
             alignment: None,
@@ -382,32 +385,32 @@ impl NodeAttr {
         self.ports = ports;
     }
 
-    /// Returns the runtime state of this node: its geometry as its surfaces were installed (see
+    /// Returns the runtime geometry of this node: its geometry as it was installed (see
     /// [`OpticNodeExt::install_geometry`](crate::core_optics::OpticNodeExt::install_geometry)),
-    /// with the optic surfaces and the medium it carries.
+    /// moved to where the node sits, with the optic surfaces of its faces and the medium it
+    /// encloses.
     ///
     /// # Returns
     ///
-    /// The runtime state, or `None` if no geometry was installed.
+    /// The runtime geometry, or `None` if no geometry was installed.
     #[must_use]
-    pub const fn runtime(&self) -> Option<&RuntimeGeometry> {
-        self.runtime.as_ref()
+    pub const fn runtime_geometry(&self) -> Option<&Geometry> {
+        self.runtime_geometry.as_ref()
     }
 
-    /// Returns the runtime state of this node mutably (see [`NodeAttr::runtime`]).
-    pub const fn runtime_mut(&mut self) -> Option<&mut RuntimeGeometry> {
-        self.runtime.as_mut()
+    /// Returns the runtime geometry of this node mutably (see [`NodeAttr::runtime_geometry`]).
+    pub const fn runtime_geometry_mut(&mut self) -> Option<&mut Geometry> {
+        self.runtime_geometry.as_mut()
     }
 
-    /// Sets the runtime state of this node: its geometry, moved to where the node sits, with the
-    /// optic surfaces on its faces. It replaces the runtime state set before, with everything an
+    /// Sets the runtime geometry of this node. It replaces the one set before, with everything an
     /// analysis left on it.
     ///
     /// # Arguments
     ///
-    /// * `runtime` - the new runtime state.
-    pub fn set_runtime(&mut self, runtime: RuntimeGeometry) {
-        self.runtime = Some(runtime);
+    /// * `geometry` - the geometry, moved to where the node sits.
+    pub fn set_runtime_geometry(&mut self, geometry: Geometry) {
+        self.runtime_geometry = Some(geometry);
     }
 
     /// Returns the unique identifier of this node.
@@ -464,7 +467,7 @@ mod test {
     use super::*;
     use crate::{
         apertures::{CircleShape, Outline},
-        core_optics::runtime_geometry::RuntimeSurfaces,
+        core_optics::PortType,
         geometry::Geometry,
         millimeter,
     };
@@ -549,27 +552,49 @@ mod test {
         assert_eq!(deserialized.positioning(), &NodePositioning::Absolute(iso));
         Ok(())
     }
-
+    /// Ports are graph logic only: they are never written, and the ports of an older file, which
+    /// may still carry coatings, are ignored when it is read.
     #[test]
-    fn the_runtime_state_starts_unset() {
-        assert!(NodeAttr::new("test").runtime().is_none());
+    fn ports_are_neither_written_nor_read() -> OpmResult<()> {
+        let mut attr = NodeAttr::new("test");
+        let mut ports = OpticPorts::new();
+        ports.add(&PortType::Input, "input_1")?;
+        attr.set_ports(ports);
+        let serialized = ron::to_string(&attr).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert!(!serialized.contains("ports"), "{serialized}");
+        let older = r#"#![enable(unwrap_variant_newtypes)]
+        (
+            node_type: "test",
+            name: "test",
+            ports: (
+                inputs: { "input_1": (coating: ConstantR(reflectivity: 1.0)) },
+                outputs: { "output_1": () },
+            ),
+            uuid: "587ee70f-6f52-4420-89f6-e1618ff4dbdb",
+        )"#;
+        let read: NodeAttr =
+            ron::from_str(older).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert!(read.raw_ports().ports_raw(&PortType::Input).is_empty());
+        Ok(())
     }
 
     #[test]
-    fn runtime_state_is_not_in_ron_roundtrip() -> OpmResult<()> {
+    fn the_runtime_geometry_starts_unset() {
+        assert!(NodeAttr::new("test").runtime_geometry().is_none());
+    }
+
+    #[test]
+    fn the_runtime_geometry_is_not_in_ron_roundtrip() -> OpmResult<()> {
         let mut attr = NodeAttr::new("test");
-        attr.set_runtime(RuntimeGeometry::new(
-            test_body()?,
-            RuntimeSurfaces::default(),
-        )?);
+        attr.set_runtime_geometry(test_body()?);
         let serialized = ron::to_string(&attr).map_err(|e| OpossumError::Other(e.to_string()))?;
         assert!(
             !serialized.contains("runtime"),
-            "the runtime state must not be serialized: {serialized}"
+            "the runtime geometry must not be serialized: {serialized}"
         );
         let back: NodeAttr =
             ron::from_str(&serialized).map_err(|e| OpossumError::Other(e.to_string()))?;
-        assert!(back.runtime().is_none());
+        assert!(back.runtime_geometry().is_none());
         Ok(())
     }
 

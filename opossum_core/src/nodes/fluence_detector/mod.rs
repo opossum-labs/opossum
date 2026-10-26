@@ -8,12 +8,13 @@ use crate::{
         raytrace::AnalysisRayTrace,
     },
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, Planar, SurfaceKind,
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, Planar, SurfaceKind, SurfacePorts,
         hit_map::fluence_estimator::FluenceEstimator, optic_node::APERTURE_LIMIT_NOTE,
+        optic_surface::OpticSurface,
     },
     error::OpmResult,
     geometry::{
-        Geometry, SurfaceGeometry, SurfaceShape,
+        Geometry, SurfaceShape,
         body::{OPTIC_SHAPE, default_square_optic_shape},
     },
     light::LightData,
@@ -82,6 +83,7 @@ impl Default for FluenceDetector {
             apodization_warning: false,
             light_data: None,
         };
+        fld.create_default_surface_properties().unwrap();
         fld.update_surfaces().unwrap();
         fld
     }
@@ -103,7 +105,7 @@ impl Planar for FluenceDetector {
     }
 }
 impl OpticNode for FluenceDetector {
-    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::detector(
             SurfaceShape::Plane,
             self.cross_section()?,
@@ -115,11 +117,8 @@ impl OpticNode for FluenceDetector {
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
     }
-    fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.install_geometry(
-            &[("input_1", SurfaceGeometry::FACE)],
-            &[("output_1", SurfaceGeometry::FACE)],
-        )
+    fn surface_ports(&self) -> SurfacePorts {
+        SurfacePorts::SINGLE_SURFACE
     }
     fn node_report(&self, uuid: &str, analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {
         if analyzer == AnalyzerKind::Energy {
@@ -130,8 +129,11 @@ impl OpticNode for FluenceDetector {
             )));
         }
         let mut props = Properties::default();
-        let hit_maps = self.hit_maps();
-        let Some(hit_map) = hit_maps.get("input_1") else {
+        let Some(hit_map) = self
+            .get_optic_surface("input_1")
+            .map(OpticSurface::hit_map)
+            .filter(|hit_map| !hit_map.is_empty())
+        else {
             warn!("could not get surface hitmap using default");
             return Ok(NodeReportResult::None);
         };

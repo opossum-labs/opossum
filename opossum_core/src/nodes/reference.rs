@@ -6,7 +6,7 @@ use crate::{
         raytrace::AnalysisRayTrace,
     },
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticPorts, OpticRef,
+        NodeAttr, NodeAttrExt, OpticNode, OpticPorts, OpticRef, SurfacePorts,
         node_attr::{HasNodeAttr, NodePositioning},
     },
     error::{OpmResult, OpossumError},
@@ -126,7 +126,7 @@ impl NodeReference {
 
 impl OpticNode for NodeReference {
     /// A reference has no shape of its own; it is traced through the node it refers to.
-    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(None)
     }
     fn ports(&self) -> OpticPorts {
@@ -142,6 +142,10 @@ impl OpticNode for NodeReference {
     fn set_positioning(&mut self, positioning: NodePositioning) -> OpmResult<()> {
         self.node_attr_mut().set_positioning(positioning);
         Ok(())
+    }
+    /// A reference is traced at the surfaces of the node it refers to.
+    fn surface_ports(&self) -> SurfacePorts {
+        SurfacePorts::NONE
     }
     fn update_surfaces(&mut self) -> OpmResult<()> {
         Ok(())

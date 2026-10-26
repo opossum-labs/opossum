@@ -3,8 +3,9 @@
 //!
 //! A node's properties (curvatures, thickness, optic shape, ...) are what a user enters; the node
 //! derives a [`Geometry`] from them (see
-//! [`OpticNode::geometry`](crate::core_optics::OpticNode::geometry)), stated relative to the node.
-//! Moved to where the node sits (see [`Geometry::moved`]), the same geometry is what rays are
+//! [`OpticNode::create_geometry`](crate::core_optics::OpticNode::create_geometry)), stated
+//! relative to the node.
+//! Moved to where the node sits (see [`Geometry::move_by`]), the same geometry is what rays are
 //! traced against. The node type thereby acts as a preset: a lens is a [`Geometry::singlet`] whose
 //! parameters are the lens's properties.
 //!
@@ -14,21 +15,28 @@
 
 use nalgebra::{Point3, Vector3};
 use num_traits::Zero;
-use serde::{Deserialize, Serialize};
 use uom::si::f64::{Angle, Length};
 
+use log::warn;
+use uuid::Uuid;
+
 use crate::{
+    analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
     apertures::Outline,
-    error::OpmResult,
+    coatings::Coating,
+    core_optics::{optic_surface::OpticSurface, surface_effect::SurfaceEffect},
+    error::{OpmResult, OpossumError},
     geometry::{
-        Assembly, Extruded, Face, ParametricSolid, Rim, SurfaceMesh, SurfaceShape, body::Body,
+        
+        Assembly, Extruded, Face, FaceIndex, ParametricSolid, Rim, SurfaceMesh, SurfaceShape, body::Body,
+    ,
     },
-    light::Ray,
+    light::{Ray, Rays, rays::ReflectedPart},
     utils::geom_transformation::Isometry,
 };
 
-/// The shape of an optical component.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// The shape of an optical component, with the optic surface of every face.
+#[derive(Debug, Clone, PartialEq)]
 pub enum Geometry {
     /// A single surface without thickness, such as a thin mirror, a grating or a detector.
     Surface(Box<SurfaceGeometry>),
@@ -178,7 +186,7 @@ impl Geometry {
     pub fn plane(outline: Option<Outline>) -> Self {
         // A plane reaches every outline, so nothing is left to check.
         Self::Surface(Box::new(SurfaceGeometry {
-            face: Face::new(SurfaceShape::Plane, Isometry::identity()),
+            surface: Face::new(SurfaceShape::Plane, Isometry::identity()).into(),
             extent: outline.map_or(SurfaceExtent::Open, |outline| {
                 SurfaceExtent::Edge(Rim::new(outline, Isometry::identity()))
             }),
@@ -204,21 +212,20 @@ impl Geometry {
     ) -> OpmResult<Self> {
         Ok(Self::Extruded(Box::new(Extruded::new(
             Isometry::identity(),
-            &Face::new(front, Isometry::identity()),
-            &Face::new(rear, rear_vertex),
+            Face::new(front, Isometry::identity()),
+            Face::new(rear, rear_vertex),
             outline,
         )?)))
     }
-    /// Return this geometry moved by an isometry, such as the placement of its node.
+    /// Move this geometry by an isometry, such as the placement of its node.
     ///
     /// Every face and every rim is moved; the geometry is the same thing at another place.
     ///
     /// # Arguments
     ///
     /// * `by` - the frame this geometry is stated in, given in the frame it is moved to.
-    #[must_use]
-    pub fn moved(&self, by: &Isometry) -> Self {
-        self.kind().moved(by)
+    pub fn move_by(&mut self, by: &Isometry) {
+        self.kind_mut().move_by(by);
     }
     /// Return the kind of geometry this is, as the one thing every question is asked of.
     #[must_use]
@@ -229,6 +236,28 @@ impl Geometry {
             Self::Parametric(parametric) => parametric,
             Self::Assembly(assembly) => assembly,
         }
+    }
+    /// Return the kind of geometry this is, as [`Geometry::kind`] does, mutably.
+    pub fn kind_mut(&mut self) -> &mut dyn GeometryKind {
+        match self {
+            Self::Surface(surface) => &mut **surface,
+            Self::Extruded(extruded) => &mut **extruded,
+            Self::Parametric(parametric) => parametric,
+            Self::Assembly(assembly) => assembly,
+        }
+    }
+    /// Return the face with the given number (see [`GeometryKind::surface`]).
+    #[must_use]
+    pub fn face(&self, face: FaceIndex) -> Option<&Face> {
+        self.kind().surface(face).map(OpticSurface::face)
+    }
+    /// Return every optic surface of this geometry with the number of its face, in the order the
+    /// faces are numbered.
+    pub fn surfaces(&self) -> impl Iterator<Item = (FaceIndex, &OpticSurface)> {
+        let kind = self.kind();
+        (0..kind.face_count())
+            .map(FaceIndex::new)
+            .filter_map(move |face| Some((face, kind.surface(face)?)))
     }
     /// Return where a ray meets one face of this geometry.
     ///
@@ -245,9 +274,9 @@ impl Geometry {
     /// The hit; or `None` if there is no such face, if the ray misses its surface or if it meets
     /// the surface beyond the edge of the face.
     #[must_use]
-    pub fn intersect(&self, face: usize, ray: &Ray) -> Option<SurfaceHit> {
+    pub fn intersect(&self, face: FaceIndex, ray: &Ray) -> Option<SurfaceHit> {
         let kind = self.kind();
-        let surface = kind.face(face)?;
+        let surface = kind.surface(face)?.face();
         let (point, normal) = surface.intersect(ray)?;
         kind.includes(face, &point).then(|| SurfaceHit {
             point,
@@ -258,11 +287,163 @@ impl Geometry {
     }
 }
 
+impl Geometry {
+    /// Return the optic surface of one face, mutably.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if there is no such face.
+    fn surface_of_mut(&mut self, face: FaceIndex) -> OpmResult<&mut OpticSurface> {
+        self.kind_mut()
+            .surface_mut(face)
+            .ok_or_else(|| OpossumError::Analysis(format!("there is no face {face}")))
+    }
+    /// Let the surface of one face of this component act on a bundle of rays.
+    ///
+    /// The geometry answers where each valid ray hits the face (see [`Geometry::intersect`]). A ray
+    /// that misses it follows the missed surface strategy. At a hit, the effect acts on the ray (see
+    /// [`SurfaceEffect::act_at`]) and, if the ray sends a part back, on its helper rays as well; the
+    /// surface records the hit in its hit map. Which of the two parts is the intended beam is
+    /// recorded on both (see [`ReflectedPart`]). The coating of the surface is built once for the
+    /// whole bundle.
+    ///
+    /// # Arguments
+    ///
+    /// * `face` - the number of the face.
+    /// * `rays` - the bundle. Its rays are moved to the surface and continue as the transmitted part.
+    /// * `effect` - what the surface does to a ray that hits it.
+    /// * `part` - what the reflected part is to the bundle.
+    /// * `missed` - what happens to a ray that misses the surface.
+    ///
+    /// # Returns
+    ///
+    /// The bundle of reflected parts.
+    ///
+    /// # Warnings
+    ///
+    /// This function warns if a ray missed the surface or sent nothing back, and if the bundle has
+    /// no valid ray.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if there is no such face, if its coating cannot be built, if
+    /// the effect fails for a ray or if a hit cannot be recorded.
+    pub fn interact_with_rays(
+        &mut self,
+        face: FaceIndex,
+        rays: &mut Rays,
+        effect: &dyn SurfaceEffect,
+        part: ReflectedPart,
+        missed: MissedSurfaceStrategy,
+    ) -> OpmResult<Rays> {
+        let coating = Box::<dyn Coating>::try_from(self.surface_of_mut(face)?.coating())?;
+        let uuid = rays.uuid();
+        let mut valid_rays_found = false;
+        let mut rays_missed = false;
+        let mut reflected_rays = Rays::with_capacity(rays.nr_of_rays(false));
+        // The hits are recorded once the geometry has answered for every ray.
+        let mut hit_points = Vec::new();
+        for ray in rays.iter_mut().filter(|ray| ray.valid()) {
+            valid_rays_found = true;
+            let Some(surface_hit) = self.intersect(face, ray) else {
+                missed.apply_to(ray);
+                rays_missed = true;
+                continue;
+            };
+            let (reflected, hit_point) = effect.act_at(ray, &surface_hit, coating.as_ref())?;
+            if let Some(mut reflected) = reflected {
+                if let (Some(helpers), Some(reflected_helpers)) =
+                    (ray.helper_rays_mut(), reflected.helper_rays_mut())
+                {
+                    for (helper, reflected_helper) in
+                        helpers.iter_mut().zip(reflected_helpers.iter_mut())
+                    {
+                        let Some(helper_hit) = self.intersect(face, helper) else {
+                            missed.apply_to(helper);
+                            continue;
+                        };
+                        if let (Some(helper_reflected), _) =
+                            effect.act_at(helper, &helper_hit, coating.as_ref())?
+                        {
+                            reflected_helper.set_direction(helper_reflected.direction())?;
+                        }
+                    }
+                }
+                part.record_split(ray, &mut reflected);
+                reflected_rays.add_ray(reflected);
+            } else {
+                rays_missed = true;
+            }
+            if let Some(hit_point) = hit_point {
+                hit_points.push((hit_point, ray.number_of_bounces()));
+            }
+        }
+        let surface = self.surface_of_mut(face)?;
+        for (hit_point, bounces) in hit_points {
+            surface.add_to_hit_map(hit_point, bounces, uuid)?;
+        }
+        if rays_missed {
+            warn!("rays totally reflected or missed a surface");
+        }
+        if !valid_rays_found {
+            warn!("ray bundle contains no valid rays - not propagating");
+        }
+        part.link_bundles(rays, &mut reflected_rays);
+        Ok(reflected_rays)
+    }
+    /// Let the surface of one face of this component act on the bundles of an analysis (see
+    /// [`Geometry::interact`]).
+    ///
+    /// After each bundle, the analysis does what it does at a surface (see
+    /// [`PropagationStrategy::on_surface_interaction`]). Then the ghost reflections cached at the
+    /// surface for this direction are appended to the bundles.
+    ///
+    /// # Arguments
+    ///
+    /// * `face` - the number of the face.
+    /// * `bundles` - the bundles of the analysis.
+    /// * `effect` - what the surface does to a ray that hits it.
+    /// * `part` - what the reflected part is to each bundle.
+    /// * `backward` - whether the light runs through the node backward.
+    /// * `node` - the node of this component, which the reflected bundles originate from.
+    /// * `strategy` - the analysis.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if there is no such face, if the interaction fails or if the
+    /// analysis fails at the surface (e.g. in its fluence evaluation).
+    #[allow(clippy::too_many_arguments)]
+    pub fn propagate_rays(
+        &mut self,
+        face: FaceIndex,
+        bundles: &mut Vec<Rays>,
+        effect: &dyn SurfaceEffect,
+        part: ReflectedPart,
+        backward: bool,
+        node: Uuid,
+        strategy: &dyn PropagationStrategy,
+    ) -> OpmResult<()> {
+        let missed = strategy.missed_surface_strategy();
+        for rays in &mut *bundles {
+            let mut reflected = self.interact_with_rays(face, rays, effect, part, missed)?;
+            reflected.set_node_origin_uuid(node);
+            strategy.on_surface_interaction(
+                self.surface_of_mut(face)?,
+                rays,
+                reflected,
+                backward,
+            )?;
+        }
+        bundles.extend_from_slice(self.surface_of_mut(face)?.get_rays_cache(backward));
+        Ok(())
+    }
+}
+
 /// An unbounded surface made of one face, such as a virtual surface a ray is traced to.
 impl From<Face> for Geometry {
     fn from(face: Face) -> Self {
         Self::Surface(Box::new(SurfaceGeometry {
-            face,
+            surface: face.into(),
             extent: SurfaceExtent::Open,
         }))
     }
@@ -310,14 +491,27 @@ impl SurfaceHit {
 /// through, is not decided here but by the node using the geometry. Every kind answers each
 /// question itself.
 pub trait GeometryKind {
-    /// Return the face with the given number.
+    /// Return the optic surface of the face with the given number.
     ///
     /// # Returns
     ///
-    /// The face, in the frame the geometry is stated in, or `None` if there is no such face.
-    fn face(&self, index: usize) -> Option<&Face>;
+    /// The surface, its face in the frame the geometry is stated in, or `None` if there is no such
+    /// face.
+    fn surface(&self, face: FaceIndex) -> Option<&OpticSurface>;
+    /// Return the optic surface of the face with the given number, mutably: for its coating and
+    /// what an analysis records there.
+    fn surface_mut(&mut self, face: FaceIndex) -> Option<&mut OpticSurface>;
     /// Return the number of faces.
     fn face_count(&self) -> usize;
+    /// Return the name of the face with the given number, such as "front surface".
+    ///
+    /// A node names the property holding the coating and the LIDT of a face after it (see
+    /// [`SurfaceConfig`](crate::core_optics::SurfaceConfig)).
+    ///
+    /// # Returns
+    ///
+    /// The name, or `None` if there is no such face.
+    fn face_name(&self, face: FaceIndex) -> Option<String>;
     /// Return whether a point on the unbounded surface of a face belongs to the component.
     ///
     /// The surface of a face is unbounded: a plane reaches in every direction, a sphere closes on
@@ -335,7 +529,7 @@ pub trait GeometryKind {
     ///
     /// `true` if the face reaches to this point; `false` if the point lies on the surface beyond
     /// the edge of the face, or if there is no such face.
-    fn includes(&self, face: usize, point: &Point3<Length>) -> bool;
+    fn includes(&self, face: FaceIndex, point: &Point3<Length>) -> bool;
     /// Return the window a detector records within, or `None` if all light on its faces is recorded.
     ///
     /// A window is no boundary: light outside it passes the face like light inside, it is just not
@@ -344,12 +538,15 @@ pub trait GeometryKind {
     /// Return the volume this geometry encloses, or `None` for a single surface, which encloses
     /// none.
     fn as_body(&self) -> Option<&dyn Body>;
-    /// Return this geometry moved by an isometry (see [`Geometry::moved`]).
+    /// Return the volume this geometry encloses, as [`GeometryKind::as_body`] does, mutably: for
+    /// the inversion a gain model builds or depletes in it.
+    fn as_body_mut(&mut self) -> Option<&mut dyn Body>;
+    /// Move this geometry by an isometry (see [`Geometry::move_by`]).
     ///
     /// # Arguments
     ///
     /// * `by` - the frame this geometry is stated in, given in the frame it is moved to.
-    fn moved(&self, by: &Isometry) -> Geometry;
+    fn move_by(&mut self, by: &Isometry);
     /// Return triangle meshes of the surfaces that bound this geometry, to draw it.
     ///
     /// Each mesh is one patch of surface: a face laid over the outline it ends at, or the lateral
@@ -380,14 +577,14 @@ pub trait GeometryKind {
 /// the axis its outline is extruded along; an off-axis parabola uses it to measure its optic shape
 /// parallel to the axis of its parent parabola. An open surface has no rim and so no axis of its
 /// own, which is why the axis is already applied to the face.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SurfaceGeometry {
-    face: Face,
+    surface: OpticSurface,
     extent: SurfaceExtent,
 }
 
 /// How far a [`SurfaceGeometry`] reaches sideways, and what its rim means for a ray outside it.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SurfaceExtent {
     /// The surface is unbounded.
     Open,
@@ -400,12 +597,11 @@ pub enum SurfaceExtent {
 }
 
 impl SurfaceExtent {
-    /// Return this extent moved by an isometry (see [`Rim::moved`]).
-    fn moved(&self, by: &Isometry) -> Self {
+    /// Move the rim of this extent, if there is one, by an isometry (see [`Rim::move_by`]).
+    fn move_by(&mut self, by: &Isometry) {
         match self {
-            Self::Open => Self::Open,
-            Self::Edge(rim) => Self::Edge(rim.moved(by)),
-            Self::Window(rim) => Self::Window(rim.moved(by)),
+            Self::Open => {}
+            Self::Edge(rim) | Self::Window(rim) => rim.move_by(by),
         }
     }
 }
@@ -437,28 +633,34 @@ impl SurfaceGeometry {
             face.check_reach(outline.transversal_reach(), "surface")?;
         }
         Ok(Self {
-            face,
+            surface: face.into(),
             extent: outline.map_or(SurfaceExtent::Open, |outline| {
                 extent(Rim::new(outline, axis))
             }),
         })
     }
     /// The number of the one face of a surface.
-    pub const FACE: usize = 0;
+    pub const FACE: FaceIndex = FaceIndex::new(0);
 }
 
 /// A surface ends at its edge, if it has one. The window of a detector is no edge: the surface
 /// reaches as far as light does.
 impl GeometryKind for SurfaceGeometry {
-    fn face(&self, index: usize) -> Option<&Face> {
-        (index == Self::FACE).then_some(&self.face)
+    fn surface(&self, face: FaceIndex) -> Option<&OpticSurface> {
+        (face == Self::FACE).then_some(&self.surface)
+    }
+    fn surface_mut(&mut self, face: FaceIndex) -> Option<&mut OpticSurface> {
+        (face == Self::FACE).then_some(&mut self.surface)
     }
     fn face_count(&self) -> usize {
         1
     }
-    fn includes(&self, face: usize, point: &Point3<Length>) -> bool {
-        GeometryKind::face(self, face).is_some_and(|surface| match &self.extent {
-            SurfaceExtent::Edge(rim) => rim.bounds(surface, point),
+    fn face_name(&self, face: FaceIndex) -> Option<String> {
+        (face == Self::FACE).then(|| "surface".into())
+    }
+    fn includes(&self, face: FaceIndex, point: &Point3<Length>) -> bool {
+        GeometryKind::surface(self, face).is_some_and(|surface| match &self.extent {
+            SurfaceExtent::Edge(rim) => rim.bounds(surface.face(), point),
             SurfaceExtent::Open | SurfaceExtent::Window(_) => true,
         })
     }
@@ -471,11 +673,12 @@ impl GeometryKind for SurfaceGeometry {
     fn as_body(&self) -> Option<&dyn Body> {
         None
     }
-    fn moved(&self, by: &Isometry) -> Geometry {
-        Geometry::Surface(Box::new(Self {
-            face: self.face.moved(by),
-            extent: self.extent.moved(by),
-        }))
+    fn as_body_mut(&mut self) -> Option<&mut dyn Body> {
+        None
+    }
+    fn move_by(&mut self, by: &Isometry) {
+        self.surface.move_by(by);
+        self.extent.move_by(by);
     }
     /// The face is laid over the outline of its rim, measured along the axis of the rim; an open
     /// surface has no rim and is drawn over the given outline around its own vertex.
@@ -495,37 +698,51 @@ impl GeometryKind for SurfaceGeometry {
 mod test {
     use super::*;
     use crate::{
+        analyzers::RayTraceConfig,
         apertures::CircleShape,
+        coatings::{CoatingConstantR, CoatingType, SplittingConfig, SplittingConfigBuilder},
+        core_optics::surface_effect::Refraction,
         degree,
-        error::OpossumError,
+        distributions::{fluence::general_gaussian::General2DGaussian, position::Hexapolar},
+        gain::Inversion,
         geometry::{Parabola, Part, Side, Sphere},
         joule,
         material::Material,
         meter, millimeter, nanometer,
+        nodes::ideal_filter::{EdgeFilter, EdgeFilterType, SpectralFilterBuilder},
+        percent,
         properties::proptype::AssetRef,
-        refractive_index::RefrIndexConst,
+        radian,
+        refractive_index::{RefrIndexConst, refr_index_vaccuum},
+        utils::test_helper::helper::check_logs,
     };
     use approx::assert_abs_diff_eq;
     use nalgebra::{Point2, Vector3};
-    use uom::si::length::millimeter;
+    use nalgebra::vector;
+    use uom::si::{energy::joule, f64::Energy, length::millimeter};
 
     fn circle() -> OpmResult<Outline> {
         Outline::new(CircleShape::new(millimeter!(12.5))?, Vec::new())
     }
     /// Return the frame of the face with the given number.
-    fn frame_of(geometry: &Geometry, index: usize) -> OpmResult<Isometry> {
+    fn frame_of(geometry: &Geometry, index: FaceIndex) -> OpmResult<Isometry> {
         geometry
-            .kind()
             .face(index)
             .map(|face| *face.frame())
             .ok_or_else(|| OpossumError::Other(format!("there is no face {index}")))
+    }
+    /// A copy of the geometry, moved by the given isometry.
+    fn moved_copy(geometry: &Geometry, by: &Isometry) -> Geometry {
+        let mut moved = geometry.clone();
+        moved.move_by(by);
+        moved
     }
     #[test]
     fn a_surface_has_one_face() {
         let plane = Geometry::plane(None);
         assert_eq!(plane.kind().face_count(), 1);
-        assert!(plane.kind().face(SurfaceGeometry::FACE).is_some());
-        assert!(plane.kind().face(SurfaceGeometry::FACE + 1).is_none());
+        assert!(plane.face(SurfaceGeometry::FACE).is_some());
+        assert!(plane.face(FaceIndex::new(1)).is_none());
     }
     #[test]
     fn a_singlet_has_its_rear_vertex_one_center_thickness_behind_the_front() -> OpmResult<()> {
@@ -577,9 +794,9 @@ mod test {
             Geometry::surface(axis, SurfaceShape::Plane, vertex, Some(circle()?))?,
         ];
         for geometry in geometries {
-            let moved = geometry.moved(&node_frame);
+            let moved = moved_copy(&geometry, &node_frame);
             assert_eq!(moved.kind().face_count(), geometry.kind().face_count());
-            for index in 0..geometry.kind().face_count() {
+            for index in (0..geometry.kind().face_count()).map(FaceIndex::new) {
                 assert_eq!(
                     frame_of(&moved, index)?,
                     node_frame.append(&frame_of(&geometry, index)?)
@@ -591,15 +808,14 @@ mod test {
         let point = millimeter!(23.0, 0.0, 12.0);
         assert!(surface.kind().includes(SurfaceGeometry::FACE, &point));
         assert!(
-            surface
-                .moved(&node_frame)
+            moved_copy(&surface, &node_frame)
                 .kind()
                 .includes(SurfaceGeometry::FACE, &node_frame.transform_point(&point))
         );
         Ok(())
     }
-    /// Every kind of solid has its faces numbered, encloses a volume and moves its faces along; a
-    /// single surface encloses none.
+    /// Every kind of solid has its faces numbered, encloses a volume that holds an inversion and
+    /// moves its faces along; a single surface encloses none.
     #[test]
     fn every_kind_of_solid_numbers_its_faces_and_encloses_a_volume() -> OpmResult<()> {
         let parametric = Geometry::Parametric(ParametricSolid::new(vec![(
@@ -607,18 +823,42 @@ mod test {
             Side::Behind,
         )])?);
         let glass = AssetRef::Inline(Material::from(&RefrIndexConst::new(1.5)?));
-        let part = Part::new(&Isometry::identity(), &parametric, glass)?;
+        let part = Part::new(&Isometry::identity(), parametric.clone(), glass)?;
         let assembly = Geometry::Assembly(Assembly::new(vec![part], vec![])?);
         let frame = Isometry::new(millimeter!(1.0, -2.0, 30.0), degree!(10.0, 5.0, 0.0))?;
-        for geometry in [parametric, assembly] {
+        for mut geometry in [parametric, assembly] {
             assert_eq!(geometry.kind().face_count(), 1);
+            assert_eq!(
+                geometry.kind().face_name(FaceIndex::new(0)).as_deref(),
+                Some("surface 1")
+            );
+            assert!(geometry.kind().face_name(FaceIndex::new(1)).is_none());
+            geometry
+                .surface_of_mut(FaceIndex::new(0))?
+                .set_coating(CoatingType::Fresnel);
+            assert!(matches!(
+                geometry
+                    .kind()
+                    .surface(FaceIndex::new(0))
+                    .map(OpticSurface::coating),
+                Some(CoatingType::Fresnel)
+            ));
             assert!(geometry.kind().as_body().is_some());
             assert_eq!(
-                frame_of(&geometry.moved(&frame), 0)?,
-                frame.append(&frame_of(&geometry, 0)?)
+                frame_of(&moved_copy(&geometry, &frame), FaceIndex::new(0))?,
+                frame.append(&frame_of(&geometry, FaceIndex::new(0))?)
+            );
+            let body = geometry
+                .kind_mut()
+                .as_body_mut()
+                .ok_or_else(|| OpossumError::Other("the solid encloses no volume".into()))?;
+            *body.inversion_mut() = Some(Inversion::Uniform(1.0));
+            assert_eq!(
+                geometry.kind().as_body().and_then(Body::inversion),
+                Some(&Inversion::Uniform(1.0))
             );
         }
-        assert!(Geometry::plane(None).kind().as_body().is_none());
+        assert!(Geometry::plane(None).kind_mut().as_body_mut().is_none());
         Ok(())
     }
     /// A curved face has to reach as far out as the outline it is bounded by; a sphere or a
@@ -734,19 +974,21 @@ mod test {
             (
                 geometry
                     .kind()
-                    .includes(0, &millimeter!(along_axis, 5.0, 0.0)),
+                    .includes(FaceIndex::new(0), &millimeter!(along_axis, 5.0, 0.0)),
                 geometry
                     .kind()
-                    .includes(0, &millimeter!(along_axis, 1000.0, 1000.0)),
+                    .includes(FaceIndex::new(0), &millimeter!(along_axis, 1000.0, 1000.0)),
             )
         };
         // The plane faces along z, so its points are given in the xy plane: x off the axis.
         let plane = |geometry: Geometry| {
             (
-                geometry.kind().includes(0, &millimeter!(0.0, 5.0, 0.0)),
                 geometry
                     .kind()
-                    .includes(0, &millimeter!(1000.0, 1000.0, 0.0)),
+                    .includes(FaceIndex::new(0), &millimeter!(0.0, 5.0, 0.0)),
+                geometry
+                    .kind()
+                    .includes(FaceIndex::new(0), &millimeter!(1000.0, 1000.0, 0.0)),
             )
         };
         assert_eq!(plane(Geometry::plane(None)), (true, true));
@@ -754,8 +996,8 @@ mod test {
         let axis = Isometry::new(millimeter!(3.0, 0.0, 0.0), degree!(0.0, 90.0, 0.0))?;
         let extruded = Geometry::Extruded(Box::new(Extruded::new(
             axis,
-            &Face::new(SurfaceShape::Plane, Isometry::identity()),
-            &Face::new(
+            Face::new(SurfaceShape::Plane, Isometry::identity()),
+            Face::new(
                 SurfaceShape::Plane,
                 Isometry::new_along_z(millimeter!(20.0))?,
             ),
@@ -780,7 +1022,7 @@ mod test {
                 joule!(1.0),
             )
         };
-        let mirror = Geometry::plane(Some(circle()?)).moved(&frame);
+        let mirror = moved_copy(&Geometry::plane(Some(circle()?)), &frame);
         let hit = mirror
             .intersect(SurfaceGeometry::FACE, &ray_at(3.0)?)
             .ok_or_else(|| OpossumError::Other("the ray missed the mirror".into()))?;
@@ -802,13 +1044,12 @@ mod test {
                 .intersect(SurfaceGeometry::FACE, &ray_at(12.0)?)
                 .is_none()
         );
-        assert!(
-            mirror
-                .intersect(SurfaceGeometry::FACE + 1, &ray_at(3.0)?)
-                .is_none()
-        );
+        assert!(mirror.intersect(FaceIndex::new(1), &ray_at(3.0)?).is_none());
         // A detector is hit there too, but does not record it.
-        let detector = Geometry::detector(SurfaceShape::Plane, Some(circle()?))?.moved(&frame);
+        let detector = moved_copy(
+            &Geometry::detector(SurfaceShape::Plane, Some(circle()?))?,
+            &frame,
+        );
         let outside = detector
             .intersect(SurfaceGeometry::FACE, &ray_at(12.0)?)
             .ok_or_else(|| OpossumError::Other("the ray missed the detector".into()))?;
@@ -863,8 +1104,16 @@ mod test {
             ),
             (Face::new(SurfaceShape::Plane, side), Side::InFront),
         ])?);
-        assert!(solid.intersect(0, &ray_along_z(4.9, 0.0)?).is_some());
-        assert!(solid.intersect(0, &ray_along_z(5.1, 0.0)?).is_none());
+        assert!(
+            solid
+                .intersect(FaceIndex::new(0), &ray_along_z(4.9, 0.0)?)
+                .is_some()
+        );
+        assert!(
+            solid
+                .intersect(FaceIndex::new(0), &ray_along_z(5.1, 0.0)?)
+                .is_none()
+        );
         Ok(())
     }
     /// A sphere of 15 mm radius bounded to 12.5 mm around its axis is hit only on the sheet through
@@ -928,7 +1177,7 @@ mod test {
             Isometry::new_along_z(millimeter!(5.0))?,
         );
         let geometry = Geometry::from(face.clone());
-        assert_eq!(geometry.kind().face(SurfaceGeometry::FACE), Some(&face));
+        assert_eq!(geometry.face(SurfaceGeometry::FACE), Some(&face));
         assert!(geometry.kind().window().is_none());
         assert!(
             geometry
@@ -936,6 +1185,42 @@ mod test {
                 .includes(SurfaceGeometry::FACE, &millimeter!(1000.0, 1000.0, 5.0))
         );
         Ok(())
+    }
+    /// The given geometry with the given coating on its face 0.
+    fn coated(mut geometry: Geometry, coating: CoatingType) -> OpmResult<Geometry> {
+        geometry
+            .surface_of_mut(FaceIndex::new(0))?
+            .set_coating(coating);
+        Ok(geometry)
+    }
+    /// A reflectivity of 20 %.
+    fn twenty_percent() -> OpmResult<CoatingType> {
+        Ok(CoatingConstantR::new(percent!(20.0))?.into())
+    }
+    /// Refract a bundle into vacuum at face 0 of the given component, with its ghost reflection.
+    fn refract(geometry: &mut Geometry, rays: &mut Rays) -> OpmResult<Rays> {
+        geometry.interact_with_rays(
+            FaceIndex::new(0),
+            rays,
+            &Refraction(Some(&refr_index_vaccuum())),
+            ReflectedPart::Ghost,
+            MissedSurfaceStrategy::Stop,
+        )
+    }
+    /// Split a bundle at face 0 of the given component with a beam splitter of the given
+    /// configuration.
+    fn split(
+        geometry: &mut Geometry,
+        rays: &mut Rays,
+        config: &SplittingConfig,
+    ) -> OpmResult<Rays> {
+        geometry.interact_with_rays(
+            FaceIndex::new(0),
+            rays,
+            config,
+            ReflectedPart::Branch,
+            MissedSurfaceStrategy::Stop,
+        )
     }
     /// The number of points the rim of an outline is sampled with in the mesh tests.
     const MESH_SEGMENTS: usize = 24;
@@ -1012,17 +1297,376 @@ mod test {
         check_drawn(&geometry, &meshes, &axis.append(&vertex), 5.0)
     }
     #[test]
-    fn a_geometry_survives_a_round_trip_through_a_file() -> OpmResult<()> {
-        let singlet = Geometry::singlet(
-            millimeter!(50.0),
-            millimeter!(-80.0),
-            millimeter!(5.0),
-            circle()?,
+    fn refraction_of_an_empty_bundle() -> OpmResult<()> {
+        let mut rays = Rays::default();
+        testing_logger::setup();
+        let reflected = refract(&mut Geometry::plane(None), &mut rays)?;
+        check_logs(
+            log::Level::Warn,
+            vec!["ray bundle contains no valid rays - not propagating"],
+        );
+        assert_eq!(reflected.nr_of_rays(false), 0);
+        Ok(())
+    }
+    #[test]
+    fn refraction_of_helper_rays() -> OpmResult<()> {
+        let tot_energy = joule!(1.);
+        let pos_strategy = Hexapolar::new(millimeter!(15.), 5)?;
+        let fluence_strategy = General2DGaussian::new(
+            tot_energy,
+            millimeter!(0., 0.),
+            millimeter!(2.5, 2.5),
+            radian!(0.),
         )?;
-        let text = ron::to_string(&singlet).map_err(|e| OpossumError::Other(e.to_string()))?;
-        let read: Geometry =
-            ron::from_str(&text).map_err(|e| OpossumError::Other(e.to_string()))?;
-        assert_eq!(read, singlet);
+        let mut rays = Rays::new_collimated_w_fluence_helper(
+            nanometer!(1000.),
+            &fluence_strategy,
+            &pos_strategy,
+        )?;
+        refract(&mut Geometry::plane(None), &mut rays)?;
+        Ok(())
+    }
+    /// The intended beam of a reflection continues the incoming bundle.
+    #[test]
+    fn a_main_reflection_continues_the_bundle() -> OpmResult<()> {
+        let mut rays = Rays::default();
+        let node_uuid = Uuid::new_v4();
+        let parent_uuid = Uuid::new_v4();
+        rays.set_node_origin_uuid(node_uuid);
+        rays.set_parent_uuid(parent_uuid);
+        rays.set_parent_node_split_idx(10);
+        let reflected = Geometry::plane(None).interact_with_rays(
+            SurfaceGeometry::FACE,
+            &mut rays,
+            &Refraction(Some(&refr_index_vaccuum())),
+            ReflectedPart::Main,
+            MissedSurfaceStrategy::Stop,
+        )?;
+        assert_eq!(*reflected.parent_pos_split_idx(), 10);
+        assert_eq!(reflected.node_origin(), &Some(node_uuid));
+        assert_eq!(reflected.parent_id(), Some(parent_uuid));
+        assert_eq!(reflected.uuid(), rays.uuid());
+        Ok(())
+    }
+    /// A ghost reflection branches off the incoming bundle where the rays hit the surface: it is a
+    /// bounce of its own and starts its position history there.
+    #[test]
+    fn a_ghost_reflection_branches_off_the_bundle() -> OpmResult<()> {
+        let mut rays = Rays::from(collimated_ray_along_z(nanometer!(1000.0))?);
+        let reflected = refract(
+            &mut coated(Geometry::plane(None), twenty_percent()?)?,
+            &mut rays,
+        )?;
+        assert_eq!(reflected.parent_id(), Some(rays.uuid()));
+        assert_eq!(*reflected.parent_pos_split_idx(), rays.ray_history_len());
+        assert_eq!(reflected.bounce_lvl(), rays.bounce_lvl() + 1);
+        assert_eq!(reflected.ray_history_len(), 0);
+        Ok(())
+    }
+    #[test]
+    fn an_unknown_face_is_an_error() -> OpmResult<()> {
+        let mut rays = Rays::from(collimated_ray_along_z(nanometer!(1000.0))?);
+        let error = Geometry::plane(None)
+            .interact_with_rays(
+                FaceIndex::new(1),
+                &mut rays,
+                &Refraction(None),
+                ReflectedPart::Ghost,
+                MissedSurfaceStrategy::Stop,
+            )
+            .expect_err("a face that does not exist was traced");
+        assert!(error.to_string().contains("there is no face 1"), "{error}");
+        Ok(())
+    }
+    /// A passive surface keeps the refractive index of each ray, and so its direction.
+    #[test]
+    fn a_passive_refraction_keeps_the_direction() -> OpmResult<()> {
+        let mut rays = Rays::default();
+        let mut ray0 = Ray::new(
+            millimeter!(0., 0., -10.),
+            vector![0.0, 1.0, 1.0],
+            nanometer!(1053.0),
+            joule!(1.0),
+        )?;
+        ray0.set_refractive_index(1.5)?;
+        let mut ray1 = Ray::new(
+            millimeter!(0., 1., -10.),
+            vector![0.0, 1.0, 1.0],
+            nanometer!(1053.0),
+            joule!(1.0),
+        )?;
+        ray1.set_refractive_index(2.0)?;
+        rays.add_ray(ray0);
+        rays.add_ray(ray1);
+        Geometry::plane(None).interact_with_rays(
+            SurfaceGeometry::FACE,
+            &mut rays,
+            &Refraction(None),
+            ReflectedPart::Ghost,
+            MissedSurfaceStrategy::Stop,
+        )?;
+        for ray in rays.iter() {
+            assert_abs_diff_eq!(ray.direction(), vector![0.0, 1.0, 1.0].normalize());
+        }
+        Ok(())
+    }
+    #[test]
+    fn refraction_missed() -> OpmResult<()> {
+        let mut rays = Rays::from(Ray::new_collimated(
+            millimeter!(0.0, 0.0, 1.0),
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?);
+        testing_logger::setup();
+        let reflected = refract(&mut Geometry::plane(None), &mut rays)?;
+        check_logs(
+            log::Level::Warn,
+            vec!["rays totally reflected or missed a surface"],
+        );
+        assert_eq!(reflected.nr_of_rays(false), 0);
+        Ok(())
+    }
+    #[test]
+    fn refraction_energy() -> OpmResult<()> {
+        let mut rays = Rays::default();
+        rays.add_ray(Ray::new_collimated(
+            millimeter!(0.0, 0.0, -1.0),
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?);
+        let reflected = refract(
+            &mut coated(Geometry::plane(None), twenty_percent()?)?,
+            &mut rays,
+        )?;
+        assert_eq!(rays.total_energy(), joule!(0.8));
+        assert_eq!(reflected.total_energy(), joule!(0.2));
+        Ok(())
+    }
+    /// A flat surface through the origin, tilted by 45° about the y axis.
+    fn tilted_splitting_plane() -> OpmResult<Geometry> {
+        let iso = Isometry::new(millimeter!(0., 0., 0.), degree!(0., 45., 0.))?;
+        Ok(Geometry::from(Face::new(SurfaceShape::Plane, iso)))
+    }
+    fn collimated_ray_along_z(wavelength: Length) -> OpmResult<Ray> {
+        Ray::new_collimated(millimeter!(0., 0., -10.), wavelength, joule!(1.0))
+    }
+    fn energies(rays: &Rays) -> Vec<Energy> {
+        rays.iter().map(Ray::energy).collect()
+    }
+    #[test]
+    fn splitting_tilted() -> OpmResult<()> {
+        let mut rays = Rays::from(collimated_ray_along_z(nanometer!(1000.0))?);
+        let mut plane = tilted_splitting_plane()?;
+        let reflected = split(&mut plane, &mut rays, &SplittingConfig::Ratio(0.6))?;
+        assert_abs_diff_eq!(rays.total_energy().get::<joule>(), 0.6);
+        assert_abs_diff_eq!(reflected.total_energy().get::<joule>(), 0.4);
+        let transmitted_ray = rays.iter().next().expect("a transmitted ray");
+        let reflected_ray = reflected.iter().next().expect("a reflected ray");
+        assert_abs_diff_eq!(transmitted_ray.direction(), Vector3::z(), epsilon = 1e-12);
+        assert_abs_diff_eq!(reflected_ray.direction().x.abs(), 1.0, epsilon = 1e-12);
+        assert_abs_diff_eq!(reflected_ray.direction().y, 0.0, epsilon = 1e-12);
+        assert_abs_diff_eq!(reflected_ray.direction().z, 0.0, epsilon = 1e-12);
+        assert_eq!(reflected_ray.position(), transmitted_ray.position());
+        Ok(())
+    }
+    #[test]
+    fn splitting_ignores_the_surface_coating() -> OpmResult<()> {
+        let mut rays = Rays::from(collimated_ray_along_z(nanometer!(1000.0))?);
+        let mut plane = coated(tilted_splitting_plane()?, twenty_percent()?)?;
+        let reflected = split(&mut plane, &mut rays, &SplittingConfig::Ratio(0.6))?;
+        assert_abs_diff_eq!(rays.total_energy().get::<joule>(), 0.6);
+        assert_abs_diff_eq!(reflected.total_energy().get::<joule>(), 0.4);
+        Ok(())
+    }
+    #[test]
+    fn splitting_keeps_both_parts_intended() -> OpmResult<()> {
+        let mut rays = Rays::from(collimated_ray_along_z(nanometer!(1000.0))?);
+        let mut plane = tilted_splitting_plane()?;
+        let reflected = split(&mut plane, &mut rays, &SplittingConfig::Ratio(0.6))?;
+        // the reflected part is an intended beam, not a ghost reflection
+        assert_eq!(reflected.bounce_lvl(), rays.bounce_lvl());
+        // neither part loses the position history before the splitting surface
+        assert_eq!(rays.ray_history_len(), 1);
+        assert_eq!(reflected.ray_history_len(), 1);
+        assert_ne!(reflected.uuid(), rays.uuid());
+        assert!(reflected.parent_id().is_none());
+        Ok(())
+    }
+    /// A short pass transmitting below 1000 nm, defined from 500 nm to 1500 nm.
+    fn short_pass() -> OpmResult<EdgeFilter> {
+        EdgeFilter::new(
+            EdgeFilterType::ShortPass,
+            nanometer!(1000.0),
+            0.0..1.0,
+            None,
+            nanometer!(500.0)..nanometer!(1500.0),
+            nanometer!(1.0),
+        )
+    }
+    #[test]
+    fn splitting_by_spectrum() -> OpmResult<()> {
+        let config = SplittingConfig::Spectrum(short_pass()?.into());
+        let mut rays = Rays::default();
+        rays.add_ray(collimated_ray_along_z(nanometer!(999.0))?);
+        rays.add_ray(collimated_ray_along_z(nanometer!(1001.0))?);
+        let mut plane = tilted_splitting_plane()?;
+        let reflected = split(&mut plane, &mut rays, &config)?;
+        assert_eq!(energies(&rays), [joule!(1.0), joule!(0.0)]);
+        assert_eq!(energies(&reflected), [joule!(0.0), joule!(1.0)]);
+
+        let mut rays = Rays::from(collimated_ray_along_z(nanometer!(1501.0))?);
+        assert!(split(&mut plane, &mut rays, &config).is_err());
+        Ok(())
+    }
+    /// Split a bundle at face 0 of the given component by the coating of its surface, keeping
+    /// both parts.
+    fn split_by_coating(geometry: &mut Geometry, rays: &mut Rays) -> OpmResult<Rays> {
+        geometry.interact_with_rays(
+            FaceIndex::new(0),
+            rays,
+            &Refraction(None),
+            ReflectedPart::Branch,
+            MissedSurfaceStrategy::Stop,
+        )
+    }
+    #[test]
+    fn a_separator_coating_splits_like_its_configuration() -> OpmResult<()> {
+        let mut rays = Rays::from(collimated_ray_along_z(nanometer!(1000.0))?);
+        let separator = SplittingConfigBuilder::FixedRatio(0.6).into();
+        let mut plane = coated(tilted_splitting_plane()?, separator)?;
+        let reflected = split_by_coating(&mut plane, &mut rays)?;
+        assert_abs_diff_eq!(rays.total_energy().get::<joule>(), 0.6);
+        assert_abs_diff_eq!(reflected.total_energy().get::<joule>(), 0.4);
+        Ok(())
+    }
+    #[test]
+    fn a_separator_coating_splits_by_spectrum() -> OpmResult<()> {
+        let separator =
+            SplittingConfigBuilder::Spectrum(SpectralFilterBuilder::EdgeFilter(short_pass()?));
+        let mut plane = coated(tilted_splitting_plane()?, separator.into())?;
+        let mut rays = Rays::default();
+        rays.add_ray(collimated_ray_along_z(nanometer!(999.0))?);
+        rays.add_ray(collimated_ray_along_z(nanometer!(1001.0))?);
+        let reflected = split_by_coating(&mut plane, &mut rays)?;
+        assert_eq!(energies(&rays), [joule!(1.0), joule!(0.0)]);
+        assert_eq!(energies(&reflected), [joule!(0.0), joule!(1.0)]);
+
+        let mut rays = Rays::from(collimated_ray_along_z(nanometer!(1501.0))?);
+        assert!(split_by_coating(&mut plane, &mut rays).is_err());
+        Ok(())
+    }
+    #[test]
+    fn splitting_missed() -> OpmResult<()> {
+        let mut rays = Rays::from(Ray::new_collimated(
+            millimeter!(0.0, 0.0, 1.0),
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?);
+        testing_logger::setup();
+        let reflected = split(
+            &mut Geometry::plane(None),
+            &mut rays,
+            &SplittingConfig::Ratio(0.6),
+        )?;
+        check_logs(
+            log::Level::Warn,
+            vec!["rays totally reflected or missed a surface"],
+        );
+        assert_eq!(reflected.nr_of_rays(false), 0);
+        Ok(())
+    }
+    /// A plane through the node, its component reaching 5 mm around the node's axis.
+    fn bounded_plane() -> OpmResult<Geometry> {
+        Ok(Geometry::plane(Some(Outline::new(
+            CircleShape::new(millimeter!(5.0))?,
+            Vec::new(),
+        )?)))
+    }
+    /// A ray along z, the given distance off the axis in y.
+    fn ray_at(y: f64) -> OpmResult<Ray> {
+        Ray::new_collimated(millimeter!(0.0, y, -10.0), nanometer!(1000.0), joule!(1.0))
+    }
+    /// Propagate bundles forward through the passive surface of a face of a component.
+    fn propagate(
+        geometry: &mut Geometry,
+        face: FaceIndex,
+        bundles: &mut Vec<Rays>,
+        config: &RayTraceConfig,
+    ) -> OpmResult<()> {
+        geometry.propagate_rays(
+            face,
+            bundles,
+            &Refraction(None),
+            ReflectedPart::Ghost,
+            false,
+            Uuid::new_v4(),
+            config,
+        )
+    }
+    /// After the bundles, the ghost reflections cached at the surface for this direction join them.
+    #[test]
+    fn propagation_appends_the_ghost_reflections_cached_at_the_surface() -> OpmResult<()> {
+        let cached = Rays::from(vec![ray_at(0.0)?, ray_at(7.0)?]);
+        let mut plane = bounded_plane()?;
+        plane
+            .surface_of_mut(SurfaceGeometry::FACE)?
+            .set_forward_rays_cache(vec![cached.clone()]);
+        let mut bundles = vec![Rays::from(vec![ray_at(4.9)?, ray_at(5.1)?])];
+        propagate(
+            &mut plane,
+            SurfaceGeometry::FACE,
+            &mut bundles,
+            &RayTraceConfig::default(),
+        )?;
+        assert_eq!(bundles.len(), 2);
+        assert_eq!(bundles[1], cached);
+        Ok(())
+    }
+    /// A ray trace invalidates the rays the surface pass leaves below its energy threshold. The
+    /// positioning run keeps them: geometry alone places the optical axis.
+    #[test]
+    fn a_ray_trace_drops_rays_below_the_energy_threshold() -> OpmResult<()> {
+        let mut config = RayTraceConfig::default();
+        config.set_min_energy_per_ray(joule!(0.5))?;
+        for (config, valid) in [(config.for_positioning(), 2), (config, 1)] {
+            let weak = Ray::new_collimated(
+                millimeter!(0.0, 0.0, -10.0),
+                nanometer!(1000.0),
+                joule!(0.1),
+            )?;
+            let mut bundles = vec![Rays::from(vec![ray_at(0.0)?, weak])];
+            propagate(
+                &mut bounded_plane()?,
+                SurfaceGeometry::FACE,
+                &mut bundles,
+                &config,
+            )?;
+            assert_eq!(bundles[0].nr_of_rays(true), valid);
+        }
+        Ok(())
+    }
+    /// A bundle is traced at the face it is given: the rear face of a plate here, so a ray along
+    /// the axis meets it 10 mm behind the front.
+    #[test]
+    fn a_bundle_is_traced_at_the_face_it_is_given() -> OpmResult<()> {
+        let mut plate = Geometry::singlet(
+            millimeter!(f64::INFINITY),
+            millimeter!(f64::INFINITY),
+            millimeter!(10.0),
+            Outline::new(CircleShape::new(millimeter!(5.0))?, Vec::new())?,
+        )?;
+        let mut bundles = vec![Rays::from(ray_at(0.0)?)];
+        propagate(
+            &mut plate,
+            Extruded::REAR,
+            &mut bundles,
+            &RayTraceConfig::default(),
+        )?;
+        let ray = bundles[0]
+            .iter()
+            .next()
+            .ok_or_else(|| OpossumError::Other("the bundle lost its ray".into()))?;
+        assert_eq!(ray.position(), millimeter!(0.0, 0.0, 10.0));
         Ok(())
     }
 }

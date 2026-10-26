@@ -4,17 +4,14 @@
 //! on any type that implements [`HasNodeAttr`].
 
 use crate::{
-    core_optics::{
-        NodeAttr, hit_map::HitMap, node_attr::HasNodeAttr, optic_surface::OpticSurface,
-        runtime_geometry::RuntimeGeometry,
-    },
+    core_optics::{NodeAttr, node_attr::HasNodeAttr, optic_surface::OpticSurface},
     error::OpmResult,
+    geometry::FaceIndex,
     light::Rays,
     properties::{Properties, Proptype},
     utils::geom_transformation::Isometry,
 };
 use nalgebra::Point2;
-use std::collections::HashMap;
 
 /// Extension trait providing standardized, non-overridable methods
 /// for checking and manipulating core node attributes.
@@ -44,14 +41,10 @@ pub trait NodeAttrExt {
     /// Return a display string in the format `'<name>' (<node_type>)`.
     fn node_info(&self) -> String;
 
-    /// Returns a reference to an [`OpticSurface`] of this node matching `surf_name`.
-    ///
-    /// # Arguments
-    /// * `surf_name`: Name of the optical surface (corresponds to port name).
-    fn get_optic_surface(&self, surf_name: &str) -> Option<&OpticSurface>;
-
-    /// Return all hit maps (if any) currently stored in the surfaces of this node.
-    fn hit_maps(&self) -> HashMap<String, HitMap>;
+    /// Return the optic surfaces of this node that recorded hits, each with the name of its face
+    /// (see [`GeometryKind::face_name`](crate::geometry::GeometryKind::face_name)), in the order
+    /// the faces are numbered.
+    fn surfaces_with_hits(&self) -> Vec<(String, &OpticSurface)>;
 
     // --- Mutable Methods (Setters / Actions) ---
 
@@ -63,12 +56,6 @@ pub trait NodeAttrExt {
     ///
     /// Returns an error if the property is undefined or if the value type does not match.
     fn set_property(&mut self, name: &str, proptype: Proptype) -> OpmResult<()>;
-
-    /// Returns a mutable reference to an [`OpticSurface`] of this node matching `surf_name`.
-    ///
-    /// # Arguments
-    /// * `surf_name`: Name of the optical surface (corresponds to port name).
-    fn get_optic_surface_mut(&mut self, surf_name: &str) -> Option<&mut OpticSurface>;
 
     /// Resets the ray caches and hit maps of all optical surfaces belonging to this node.
     fn reset_optic_surfaces(&mut self);
@@ -113,17 +100,14 @@ impl<T: ?Sized + HasNodeAttr> NodeAttrExt for T {
         format!("'{}' ({})", self.name(), self.node_type())
     }
 
-    fn get_optic_surface(&self, surf_name: &str) -> Option<&OpticSurface> {
-        self.node_attr().runtime()?.surfaces().get(surf_name)
-    }
-
-    fn hit_maps(&self) -> HashMap<String, HitMap> {
-        self.node_attr()
-            .runtime()
-            .into_iter()
-            .flat_map(|runtime| runtime.surfaces().iter())
-            .filter(|(_, optic_surf)| !optic_surf.hit_map().is_empty())
-            .map(|(port_name, optic_surf)| (port_name.clone(), optic_surf.hit_map().clone()))
+    fn surfaces_with_hits(&self) -> Vec<(String, &OpticSurface)> {
+        let Some(geometry) = self.node_attr().runtime_geometry() else {
+            return Vec::new();
+        };
+        geometry
+            .surfaces()
+            .filter(|(_, surface)| !surface.hit_map().is_empty())
+            .filter_map(|(face, surface)| Some((geometry.kind().face_name(face)?, surface)))
             .collect()
     }
 
@@ -131,16 +115,17 @@ impl<T: ?Sized + HasNodeAttr> NodeAttrExt for T {
         self.node_attr_mut().set_property(name, proptype)
     }
 
-    fn get_optic_surface_mut(&mut self, surf_name: &str) -> Option<&mut OpticSurface> {
-        self.node_attr_mut().runtime_mut()?.surface_mut(surf_name)
-    }
-
     fn reset_optic_surfaces(&mut self) {
-        let runtime = self.node_attr_mut().runtime_mut();
-        for optic_surf in runtime.into_iter().flat_map(RuntimeGeometry::surfaces_mut) {
-            optic_surf.set_backwards_rays_cache(Vec::<Rays>::new());
-            optic_surf.set_forward_rays_cache(Vec::<Rays>::new());
-            optic_surf.reset_hit_map();
+        let Some(geometry) = self.node_attr_mut().runtime_geometry_mut() else {
+            return;
+        };
+        let kind = geometry.kind_mut();
+        for face in (0..kind.face_count()).map(FaceIndex::new) {
+            if let Some(optic_surf) = kind.surface_mut(face) {
+                optic_surf.set_backwards_rays_cache(Vec::<Rays>::new());
+                optic_surf.set_forward_rays_cache(Vec::<Rays>::new());
+                optic_surf.reset_hit_map();
+            }
         }
     }
 

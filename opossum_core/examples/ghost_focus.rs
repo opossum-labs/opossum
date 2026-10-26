@@ -1,7 +1,8 @@
 use opossum_core::{
     coatings::{CoatingConstantR, CoatingType},
-    core_optics::{OpticNodeExt, PortType},
+    core_optics::OpticNodeExt,
     distributions::{energy::General2DGaussian, position::HexagonalTiling, spectral::LaserLines},
+    geometry::Extruded,
     percent,
     prelude::*,
 };
@@ -12,30 +13,26 @@ fn main() -> OpmResult<()> {
     let i_src = scenery.add_node(SourcePort::new("collimated ray source"))?;
     let mut lens = Lens::default();
     lens.set_coating(
-        &PortType::Input,
-        "input_1",
+        Extruded::FRONT,
         &CoatingConstantR::new(percent!(5.0))?.into(),
     )?;
     lens.set_coating(
-        &PortType::Output,
-        "output_1",
+        Extruded::REAR,
         &CoatingConstantR::new(percent!(5.0))?.into(),
     )?;
     let i_l = scenery.add_node(lens)?;
 
     let mut lens2 = Lens::default();
     lens2.set_coating(
-        &PortType::Input,
-        "input_1",
+        Extruded::FRONT,
         &CoatingConstantR::new(percent!(2.0))?.into(),
     )?;
     lens2.set_coating(
-        &PortType::Output,
-        "output_1",
+        Extruded::REAR,
         &CoatingConstantR::new(percent!(2.0))?.into(),
     )?;
-    lens2.set_coating(&PortType::Input, "input_1", &CoatingType::Fresnel)?;
-    lens2.set_coating(&PortType::Output, "output_1", &CoatingType::Fresnel)?;
+    lens2.set_coating(Extruded::FRONT, &CoatingType::Fresnel)?;
+    lens2.set_coating(Extruded::REAR, &CoatingType::Fresnel)?;
     let i_l2 = scenery.add_node(lens2)?;
 
     let mir1 = scenery.add_node(ThinMirror::new("mirror 1").with_tilt(degree!(45., 0., 0.))?)?;

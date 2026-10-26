@@ -17,7 +17,7 @@ use crate::{apertures::Outline, geometry::Face, utils::geom_transformation::Isom
 /// The lateral boundary of a component: its outline, extruded along an axis.
 ///
 /// A point lies within the rim if its projection along the axis falls into the outline. The rim
-/// lies where its frame says; moving the component moves it along (see [`Rim::moved`]).
+/// lies where its frame says; moving the component moves it along (see [`Rim::move_by`]).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Rim {
     outline: Outline,
@@ -47,17 +47,13 @@ impl Rim {
     pub const fn frame(&self) -> &Isometry {
         &self.frame
     }
-    /// Return this rim moved by an isometry.
+    /// Move this rim by an isometry.
     ///
     /// # Arguments
     ///
     /// * `by` - the frame this rim is stated in, given in the frame it is moved to.
-    #[must_use]
-    pub fn moved(&self, by: &Isometry) -> Self {
-        Self {
-            outline: self.outline.clone(),
-            frame: by.append(&self.frame),
-        }
+    pub fn move_by(&mut self, by: &Isometry) {
+        self.frame = by.append(&self.frame);
     }
     /// Return whether the given point lies within this [`Rim`].
     ///
@@ -110,6 +106,8 @@ mod test {
                 .transform_point(&millimeter!(x, y, z))
         };
         // Along the axis the rim reaches arbitrarily far; across it only as far as the circle.
+        let mut at_reference = rim.clone();
+        at_reference.move_by(&reference);
         for ((x, y, z), inside) in [
             ((3.0, 4.0, 0.0), true),
             ((6.0, 4.0, -20.0), true),
@@ -118,14 +116,16 @@ mod test {
             ((-1.0, 0.5, 0.0), false),
         ] {
             assert_eq!(
-                rim.moved(&reference).contains(&placed(x, y, z)),
+                at_reference.contains(&placed(x, y, z)),
                 inside,
                 "({x}, {y}, {z})"
             );
         }
         // The rim follows its frame: moved 20 mm across the axis, it leaves the point behind.
         let moved = reference.append(&Isometry::new_translation(millimeter!(0.0, 20.0, 0.0))?);
-        assert!(!rim.moved(&moved).contains(&placed(3.0, 4.0, 0.0)));
+        let mut aside = rim;
+        aside.move_by(&moved);
+        assert!(!aside.contains(&placed(3.0, 4.0, 0.0)));
         Ok(())
     }
 }

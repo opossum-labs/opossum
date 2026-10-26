@@ -36,7 +36,6 @@ use crate::{
     error::{OpmResult, OpossumError},
     meter,
     prelude::Isometry,
-    reporting::plottable::{PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, Plottable},
     types::validated_type_definitions::{ValidatedAngle1D, ValidatedCenter2D},
     utils::{
         default_from_name::DefaultFromName,
@@ -45,17 +44,13 @@ use crate::{
     },
 };
 use core::f64;
-use nalgebra::{Matrix2xX, MatrixXx2, Point2, Point3};
+use nalgebra::{Point2, Point3};
 use num_traits::Zero;
 use opm_macros_lib::EnsureValidated;
-use plotters::style::RGBAColor;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use strum::EnumIter;
-use uom::si::{
-    f64::{Angle, Length},
-    length::millimeter,
-};
+use uom::si::f64::{Angle, Length};
 
 pub use circle::CircleShape;
 pub use gaussian::GaussianShape;
@@ -197,6 +192,23 @@ impl Aperture {
     pub const fn isometry(&self) -> Option<&Isometry> {
         self.isometry.as_ref()
     }
+    /// Return whether this [`Aperture`] delimits a region geometrically.
+    ///
+    /// An aperture describes how much light a surface transmits where, which is more general than
+    /// an outline: only a binary shape used as a [`ApertureType::Hole`] encloses a well-defined
+    /// region. A [`ApertureShape::Gaussian`] has no edge at all — it attenuates everywhere and
+    /// transmits nowhere completely — an [`ApertureType::Obstruction`] delimits the *complement* of
+    /// a region, and a [`ApertureShape::Stack`] may combine both. Anything that has to know where a
+    /// body ends, rather than how much light passes, has to ask this first.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the aperture can be read as the outline of a region.
+    #[must_use]
+    pub const fn is_geometric_bound(&self) -> bool {
+        matches!(self.a_type, ApertureType::Hole) && self.shape.is_binary()
+    }
+
     /// Set the shape of this [`Aperture`].
     pub fn set_shape(&mut self, shape: ApertureShape) {
         self.shape = shape;
@@ -356,6 +368,19 @@ impl Display for ApertureShape {
 }
 
 impl ApertureShape {
+    /// Check whether this shape has a hard edge, i.e. transmits either fully or not at all.
+    ///
+    /// # Returns
+    ///
+    /// `true` for the binary shapes, `false` for [`ApertureShape::Open`],
+    /// [`ApertureShape::Gaussian`] and [`ApertureShape::Stack`].
+    #[must_use]
+    pub const fn is_binary(&self) -> bool {
+        matches!(
+            self,
+            Self::BinaryCircle(_) | Self::BinaryRectangle(_) | Self::BinaryPolygon(_)
+        )
+    }
     #[must_use]
     /// Check if the aperture is [`ApertureShape::Open`]
     pub const fn is_none(&self) -> bool {

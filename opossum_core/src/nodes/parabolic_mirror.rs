@@ -8,7 +8,7 @@ use crate::{
     },
     coatings::CoatingConstantR,
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, Planar, PortType, SurfaceKind,
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, Planar, PortType, SurfaceKind,SurfacePorts,
         node_attr::HasNodeAttr, surface_effect::Refraction,
     },
     degree,
@@ -112,20 +112,10 @@ impl Default for ParabolicMirror {
             .unwrap();
 
         let mut parabola = Self { node_attr };
-        parabola.update_surfaces().unwrap();
-
+        parabola.create_default_surface_properties().unwrap();
         parabola
             .set_coating(
-                &PortType::Input,
-                "input_1",
-                &CoatingConstantR::new(percent!(100.0)).unwrap().into(),
-            )
-            .unwrap();
-
-        parabola
-            .set_coating(
-                &PortType::Output,
-                "output_1",
+                SurfaceGeometry::FACE,
                 &CoatingConstantR::new(percent!(100.0)).unwrap().into(),
             )
             .unwrap();
@@ -388,7 +378,7 @@ impl Planar for ParabolicMirror {
     }
 }
 impl OpticNode for ParabolicMirror {
-    fn geometry(&self) -> OpmResult<Option<Geometry>> {
+    fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         let (axis, vertex) = self.calc_off_axis_frames()?;
         Ok(Some(Geometry::surface(
             axis,
@@ -400,11 +390,8 @@ impl OpticNode for ParabolicMirror {
     fn as_surface(&self) -> Option<&dyn Planar> {
         Some(self)
     }
-    fn update_surfaces(&mut self) -> OpmResult<()> {
-        self.install_geometry(
-            &[("input_1", SurfaceGeometry::FACE)],
-            &[("output_1", SurfaceGeometry::FACE)],
-        )
+    fn surface_ports(&self) -> SurfacePorts {
+        SurfacePorts::SINGLE_SURFACE
     }
 }
 impl AnalysisGhostFocus for ParabolicMirror {
@@ -469,11 +456,12 @@ impl AnalysisRayTrace for ParabolicMirror {
         if rays.is_empty() {
             return Ok(LightResult::default());
         }
-        let Some(runtime) = self.node_attr_mut().runtime_mut() else {
+        let face = self.face_of_port(in_port)?;
+        let Some(geometry) = self.node_attr_mut().runtime_geometry_mut() else {
             return Err(OpossumError::Analysis("no surface found. Aborting".into()));
         };
-        let mut reflected_rays = runtime.interact(
-            in_port,
+        let mut reflected_rays = geometry.interact_with_rays(
+            face,
             &mut rays,
             &Refraction(None),
             ReflectedPart::Main,

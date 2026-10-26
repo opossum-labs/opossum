@@ -19,6 +19,7 @@ eula = false
 
 [dependencies]
 opossum_core = { workspace = true }
+opossum_reporter = { workspace = true }
 
 log.workspace = true
 nalgebra.workspace = true
@@ -35,7 +36,7 @@ serde_json ="1"
 # We explicitly re-enable 'macros' for routing attributes like #[get("/")].
 actix-web = { version = "4", default-features = false, features = ["macros"] }
 futures-util = "0.3"
-parking_lot = "0.12"
+parking_lot = "0.13.0"
 tokio-stream = "0.1"
 utoipa-actix-web = "0.2.0"
 utoipa-swagger-ui = { version = "10.0.1", features = ["actix-web", "vendored"] }

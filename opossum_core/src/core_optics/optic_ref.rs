@@ -160,8 +160,12 @@ impl<'de> Deserialize<'de> for OpticRef {
 mod test {
     use super::*;
     use crate::{
+        J_per_cm2,
+        coatings::CoatingType,
+        core_optics::SurfaceConfig,
         error::{OpmResult, OpossumError},
         nodes::Dummy,
+        properties::Proptype,
     };
     use std::{fs::File, io::Read, path::PathBuf};
     use uuid::uuid;
@@ -202,6 +206,10 @@ mod test {
         );
         assert_eq!(optic_ref.node_type(), "dummy");
         assert_eq!(optic_ref.name(), "dummy1");
+        assert_eq!(
+            optic_ref.node_attr().get_property("surface")?,
+            &Proptype::SurfaceConfig(SurfaceConfig::new(CoatingType::IdealAR, J_per_cm2!(1.0))?)
+        );
         Ok(())
     }
 

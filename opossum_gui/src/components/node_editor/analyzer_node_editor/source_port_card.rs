@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 /// Reusable accordion item for configuring a ray source assigned to an optical source port.
 ///
-/// Uses the same MDB [`AccordionItem`] as the node-config sidebar (e.g. `SinglePortConfigEditor`)
+/// Uses the same MDB [`AccordionItem`] as the node-config sidebar (e.g. `SurfaceConfigEditor`)
 /// so the analyzer's source definitions read as the rest of the app rather than as a bespoke card.
 /// Each card is wrapped in its own `accordion` container, so several ports can be expanded
 /// independently.

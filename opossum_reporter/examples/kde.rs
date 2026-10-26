@@ -5,14 +5,13 @@ use opossum_core::{
     },
     distributions::position::{Hexapolar, PositionDistribution},
     prelude::*,
-    reporting::plottable::{Plottable, PltBackEnd},
 };
+use opossum_reporter::plotting::{Plottable, PltBackEnd};
 use std::path::Path;
 use uom::si::f64::Ratio;
 
 fn main() -> OpmResult<()> {
     let distribution = Hexapolar::new(millimeter!(50.0), 5)?;
-    //let distribution = FibonacciEllipse::new(meter!(5.0), meter!(5.0), 91)?;
     let points = distribution.generate();
     let weight = joule!(1.0) / Ratio::new::<uom::si::ratio::ratio>(points.len() as f64);
     let mut hit_map = RaysHitMap::default();
