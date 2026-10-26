@@ -9,6 +9,8 @@ pub mod optic_surface;
 pub mod surface_config;
 pub mod surface_effect;
 pub mod volumetric;
+pub mod observable;
+
 pub use node_attr::NodeAttr;
 pub use node_attr_ext::NodeAttrExt;
 pub use optic_node::Alignable;

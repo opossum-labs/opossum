@@ -13,7 +13,9 @@ use crate::{
         raytrace::AnalysisRayTrace,
     },
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, SurfacePorts, node_attr::HasNodeAttr,
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, SurfacePorts,
+        node_attr::HasNodeAttr,
+        observable::{MetricDimension, ObservableDescriptor},
         optic_node::APERTURE_LIMIT_NOTE,
     },
     error::OpmResult,
@@ -224,6 +226,8 @@ impl OpticNode for EnergyMeter {
 
     fn node_report(&self, uuid: &str, _analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {
         let mut props = Properties::default();
+
+        // Single source of truth: using get_energy()
         if let Some(e) = self.get_energy() {
             props.create("Energy", "Output energy", e.into())?;
         } else {
@@ -245,6 +249,19 @@ impl OpticNode for EnergyMeter {
 
     fn set_light_data(&mut self, new_data: Option<LightData>) {
         self.light_data = new_data;
+    }
+    fn observable_metrics(&self, _analyzer: AnalyzerKind) -> Vec<ObservableDescriptor> {
+                vec![
+                    ObservableDescriptor::new("Energy", "Optical Energy", MetricDimension::Energy)
+                        .with_default_target(0.0),
+                ]
+        }
+    fn read_observable(&self, metric_name: &str) -> Option<f64> {
+        match metric_name {
+            // Return raw scalar value in fundamental SI base unit (Joules)
+            "Energy" => self.get_energy().map(|e| e.value),
+            _ => None,
+        }
     }
 }
 

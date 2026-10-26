@@ -13,6 +13,7 @@ use crate::{
     },
     core_optics::{
         NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, SurfacePorts,
+        observable::{MetricDimension, ObservableDescriptor},
         optic_node::APERTURE_LIMIT_NOTE,
     },
     error::OpmResult,
@@ -51,7 +52,7 @@ inventory::submit! {
 ///     outside it passes unrecorded
 ///
 /// During analysis, the output port contains a replica of the input port similar to a [`Dummy`](crate::nodes::Dummy) node. This way,
-/// different dectector nodes can be "stacked" or used somewhere within the optical setup.
+/// different detector nodes can be "stacked" or used somewhere within the optical setup.
 #[derive(OpmNode, Clone, Debug)]
 #[opm_node("darkorange")]
 pub struct SpotDiagram {
@@ -101,6 +102,34 @@ impl SpotDiagram {
         sd.update_surfaces()?;
         Ok(sd)
     }
+
+    /// Returns the ray bundle transformed into local detector surface coordinates.
+    ///
+    /// Returns `None` if no geometric ray data has been recorded.
+    #[must_use]
+    pub fn transformed_rays(&self) -> Option<Rays> {
+        let LightData::Geometric(rays) = self.light_data.as_ref()? else {
+            return None;
+        };
+
+        let input_port = self
+            .ports()
+            .names(&PortType::Input)
+            .first()
+            .cloned()
+            .unwrap_or_else(|| "input_1".to_string());
+
+        let iso = self
+            .effective_surface_iso(&input_port)
+            .unwrap_or_else(|_| Isometry::identity());
+
+        let mut transformed_rays = Rays::default();
+        for ray in rays {
+            transformed_rays.add_ray(ray.inverse_transformed_ray(&iso));
+        }
+
+        Some(transformed_rays)
+    }
 }
 
 impl OpticNode for SpotDiagram {
@@ -110,8 +139,52 @@ impl OpticNode for SpotDiagram {
             self.cross_section()?,
         )?))
     }
+
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
+    }
+
+    fn observable_metrics(&self, analyzer: AnalyzerKind) -> Vec<ObservableDescriptor> {
+        match analyzer {
+            AnalyzerKind::RayTrace | AnalyzerKind::GhostFocus => vec![
+                ObservableDescriptor::new(
+                    "rms beam radius",
+                    "RMS Beam Radius",
+                    MetricDimension::Length,
+                )
+                .with_default_target(0.0),
+                ObservableDescriptor::new(
+                    "geo beam radius",
+                    "Geometric Beam Radius",
+                    MetricDimension::Length,
+                )
+                .with_default_target(0.0),
+                ObservableDescriptor::new(
+                    "centroid x",
+                    "Energy-Weighted Centroid X",
+                    MetricDimension::Length,
+                )
+                .with_default_target(0.0),
+                ObservableDescriptor::new(
+                    "centroid y",
+                    "Energy-Weighted Centroid Y",
+                    MetricDimension::Length,
+                )
+                .with_default_target(0.0),
+            ],
+            AnalyzerKind::Energy => Vec::new(),
+        }
+    }
+
+    fn read_observable(&self, metric_name: &str) -> Option<f64> {
+        let rays = self.transformed_rays()?;
+        match metric_name {
+            "rms beam radius" => rays.energy_weighted_beam_radius_rms().map(|r| r.value),
+            "geo beam radius" => rays.beam_radius_geo().map(|r| r.value),
+            "centroid x" => rays.energy_weighted_centroid().map(|c| c.x.value),
+            "centroid y" => rays.energy_weighted_centroid().map(|c| c.y.value),
+            _ => None,
+        }
     }
 
     fn node_report(&self, uuid: &str, analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {
@@ -124,7 +197,7 @@ impl OpticNode for SpotDiagram {
         }
 
         let mut props = Properties::default();
-        let mut report = if let Some(LightData::Geometric(rays)) = &self.light_data {
+        let mut report = if let Some(transformed_rays) = self.transformed_rays() {
             let input_port = self
                 .ports()
                 .names(&PortType::Input)
@@ -136,17 +209,19 @@ impl OpticNode for SpotDiagram {
                 .effective_surface_iso(&input_port)
                 .unwrap_or_else(|_| Isometry::identity());
 
-            let mut transformed_rays = Rays::default();
-            for ray in rays {
-                transformed_rays.add_ray(ray.inverse_transformed_ray(&iso));
+            // Create compact wavelength-resolved spot diagram property from raw rays
+            if let Some(LightData::Geometric(rays)) = &self.light_data {
+                if let Ok(spot_data) = SpotDiagramData::from_rays(rays, &iso, nanometer!(0.2)) {
+                    props.create("Spot diagram", "2D spot diagram", spot_data.into())?;
+                } else {
+                    props.create(
+                        "note",
+                        "spot diagram warning",
+                        "Spot diagram could not be calculated. This could happen, if all rays miss the detector or are apodized.".into(),
+                    )?;
+                }
             }
 
-            // Create compact wavelength-resolved spot diagram property
-            if let Ok(spot_data) = SpotDiagramData::from_rays(rays, &iso, nanometer!(0.2)) {
-                props.create("Spot diagram", "2D spot diagram", spot_data.into())?;
-            } else {
-                props.create("note","spot diagram warning", "Spot diagram could not be calculated. This could happen, if all rays miss the detector or are apodized.".into())?;
-            }
             if let Some(c) = transformed_rays.energy_weighted_centroid() {
                 props.create(
                     "centroid x",
@@ -173,6 +248,7 @@ impl OpticNode for SpotDiagram {
         } else {
             NodeReport::new(self.node_type(), self.name(), uuid, Properties::default())
         };
+
         if self.apodization_warning {
             report.add_note(ReportNote::new(ReportLevel::Warning, APERTURE_LIMIT_NOTE));
         }
@@ -219,36 +295,6 @@ mod test {
     };
     use uom::{num_traits::Zero, si::f64::Length};
 
-    /// With "plot aperture" set, the plot outlines the window the spot diagram records within.
-    ///
-    /// TODO: Reenable test
-    // #[test]
-    // fn the_plot_outlines_the_window() -> OpmResult<()> {
-    //     use crate::{
-    //         analyzers::RayTraceConfig,
-    //         apertures::{CircleShape, OpticShape},
-    //         geometry::body::OPTIC_SHAPE,
-    //         millimeter,
-    //     };
-    //     let mut diagram = placed_at_origin::<SpotDiagram>()?;
-    //     diagram.set_property("plot aperture", true.into())?;
-    //     diagram.set_property(
-    //         OPTIC_SHAPE,
-    //         OpticShape::from(CircleShape::new(millimeter!(5.0))?).into(),
-    //     )?;
-    //     let rays = rays_along_z_from(&[millimeter!(0.0, 1.0, -10.0)], nanometer!(1000.0))?;
-    //     AnalysisRayTrace::analyze(
-    //         &mut diagram,
-    //         LightResult::from([("input_1".into(), LightData::Geometric(rays))]),
-    //         &RayTraceConfig::default(),
-    //     )?;
-    //     let series = diagram
-    //         .get_plot_series(&mut PlotType::Scatter2D(PlotParameters::default()), false)?
-    //         .expect("the spot diagram has plot data");
-    //     // One series for the single wavelength, one for the outline.
-    //     assert_eq!(series.len(), 2);
-    //     Ok(())
-    // }
     #[test]
     fn default() {
         let node = SpotDiagram::default();
@@ -334,6 +380,7 @@ mod test {
     fn optic_shape_absent_in_file() -> OpmResult<()> {
         test_optic_shape_absent_in_file::<SpotDiagram>()
     }
+
     #[test]
     fn records_inside_and_passes_all() -> OpmResult<()> {
         test_detector_records_inside_and_passes_all::<SpotDiagram>(|diagram| {
@@ -457,6 +504,37 @@ mod test {
                 .contains("A spot diagram can only be displayed")
         );
         assert!(note.message.contains("spot diagram"));
+        Ok(())
+    }
+
+    #[test]
+    fn observable_metrics_spot_diagram() {
+        let sd = SpotDiagram::default();
+        assert!(sd.observable_metrics(AnalyzerKind::Energy).is_empty());
+        let metrics = sd.observable_metrics(AnalyzerKind::RayTrace);
+        assert_eq!(metrics.len(), 4);
+        assert_eq!(metrics[0].name, "rms beam radius");
+        assert_eq!(metrics[1].name, "geo beam radius");
+        assert_eq!(metrics[2].name, "centroid x");
+        assert_eq!(metrics[3].name, "centroid y");
+    }
+
+    #[test]
+    fn read_observable_spot_diagram() -> OpmResult<()> {
+        let mut sd = SpotDiagram::default();
+        assert_eq!(sd.read_observable("rms beam radius"), None);
+
+        sd.light_data = Some(LightData::Geometric(Rays::new_uniform_collimated(
+            nanometer!(1053.0),
+            joule!(1.0),
+            &Hexapolar::new(Length::zero(), 1)?,
+        )?));
+
+        assert!(sd.read_observable("rms beam radius").is_some());
+        assert!(sd.read_observable("geo beam radius").is_some());
+        assert!(sd.read_observable("centroid x").is_some());
+        assert!(sd.read_observable("centroid y").is_some());
+        assert_eq!(sd.read_observable("unknown_metric"), None);
         Ok(())
     }
 }

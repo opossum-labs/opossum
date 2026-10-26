@@ -1,4 +1,4 @@
-use crate::analyzers::AnalyzerType;
+use crate::analyzers::{AnalyzerKind, AnalyzerType};
 use nalgebra::Point2;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
@@ -133,6 +133,14 @@ impl AnalyzerInfo {
     /// Sets the analyzer type of this [`AnalyzerInfo`].
     pub fn set_analyzer_type(&mut self, analyzer_type: &AnalyzerType) {
         self.analyzer_type = analyzer_type.clone();
+    }
+    /// Return the `AnalyzerKind`
+    pub fn kind(&self) -> AnalyzerKind {
+        match self.analyzer_type {
+            AnalyzerType::Energy(_) => AnalyzerKind::Energy,
+            AnalyzerType::RayTrace(_) => AnalyzerKind::RayTrace,
+            AnalyzerType::GhostFocus(_) => AnalyzerKind::GhostFocus,
+        }
     }
 }
 

@@ -9,18 +9,9 @@ use uom::si::f64::{Angle, Length};
 use uuid::Uuid;
 
 use crate::{
-    analyzers::{Analyzable, AnalyzerKind, propagation_strategy::PropagationStrategy},
-    core_optics::{
-        NodeAttrExt, OpticNodeExt, OpticPorts, SurfacePorts,
-        node_attr::{HasNodeAttr, NodePositioning},
-        volumetric::Volumetric,
-    },
-    error::{OpmResult, OpossumError},
-    geometry::{FaceIndex, Geometry},
-    light::LightData,
-    nodes::fluence_detector::Fluence,
-    reporting::node_report::NodeReportResult,
-    utils::geom_transformation::Isometry,
+    analyzers::{Analyzable, AnalyzerKind, propagation_strategy::PropagationStrategy}, core_optics::{
+        NodeAttrExt, OpticNodeExt, OpticPorts, SurfacePorts, node_attr::{HasNodeAttr, NodePositioning}, observable::ObservableDescriptor, volumetric::Volumetric,
+    }, error::{OpmResult, OpossumError}, geometry::{FaceIndex, Geometry}, light::LightData, nodes::fluence_detector::Fluence, reporting::node_report::NodeReportResult, utils::geom_transformation::Isometry,
 };
 
 /// Trait providing visual metadata for an optical component (such as node color for diagrams).
@@ -239,6 +230,16 @@ pub trait OpticNode: VisualNode + HasNodeAttr + OpticNodeAny {
     /// Returns an error if the concrete report calculation fails.
     fn node_report(&self, _uuid: &str, _analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {
         Ok(NodeReportResult::None)
+    }
+    /// Returns observable metrics available for the specified analyzer kind.
+    /// Returns an empty vector if this node cannot record data for this analysis mode.
+    fn observable_metrics(&self, _analyzer: AnalyzerKind) -> Vec<ObservableDescriptor> {
+        Vec::new()
+    }
+    /// Reads the scalar value (in SI base units) of a recorded metric after an analysis run.
+    /// Returns `None` if no simulation data is available or the key is not recognized.
+    fn read_observable(&self, _metric_name: &str) -> Option<f64> {
+        None
     }
 }
 
