@@ -97,7 +97,6 @@ pub fn NodePort(
     let on_context_menu_handler = use_on_context_menu(
         workspace,
         graph_store,
-        graph_state.graph_info().peek().clone(),
         node_id,
         port_name.clone(),
         port_type,
