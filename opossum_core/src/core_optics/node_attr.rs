@@ -280,7 +280,7 @@ impl NodeAttr {
     }
 
     /// Returns a mutable reference to the properties of this node.
-    pub fn properties_mut(&mut self) -> &mut Properties {
+    pub const fn properties_mut(&mut self) -> &mut Properties {
         &mut self.props
     }
     /// Returns a reference to a property value by name.

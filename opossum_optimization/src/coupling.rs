@@ -6,25 +6,26 @@ use opossum_core::error::{OpmResult, OpossumError};
 /// Specific coupling relationship between parameters[cite: 1].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CouplingType {
-    /// Target = Source (e.g., identical air spacings in symmetric setups)[cite: 1].
+    /// Target = Source (e.g., identical air spacings in symmetric setups)
     Identical { source: ParameterAddress },
-    /// Target = -Source (e.g., symmetric biconvex lenses with R2 = -R1)[cite: 1].
+    /// Target = -Source (e.g., symmetric biconvex lenses with R2 = -R1)
     Opposite { source: ParameterAddress },
-    /// Target = Source * factor + offset[cite: 1].
+    /// Target = Source * factor + offset
     Affine {
         source: ParameterAddress,
         factor: f64,
         offset: f64,
     },
-    /// Enforces a fixed total system length:
-    /// Target = total_length - sum(other_segments)[cite: 1].
+    /// Enforces a fixed total system length
+    ///
+    /// Target = total_length - sum(other_segments)
     TotalLengthLock {
         total_length: f64,
         other_segments: Vec<ParameterAddress>,
     },
 }
 
-/// A coupling rule that drives a dependent parameter from other system variables[cite: 1].
+/// A coupling rule that drives a dependent parameter from other system variables
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ParameterCoupling {
     /// Dependent parameter being modified[cite: 1].
@@ -35,7 +36,7 @@ pub struct ParameterCoupling {
 
 impl ParameterCoupling {
     /// Creates an identical parameter coupling[cite: 1].
-    pub fn identical(target: ParameterAddress, source: ParameterAddress) -> Self {
+    pub const fn identical(target: ParameterAddress, source: ParameterAddress) -> Self {
         Self {
             target,
             rule: CouplingType::Identical { source },
@@ -43,7 +44,7 @@ impl ParameterCoupling {
     }
 
     /// Creates an opposite parameter coupling (Target = -Source)[cite: 1].
-    pub fn opposite(target: ParameterAddress, source: ParameterAddress) -> Self {
+    pub const fn opposite(target: ParameterAddress, source: ParameterAddress) -> Self {
         Self {
             target,
             rule: CouplingType::Opposite { source },
@@ -51,7 +52,7 @@ impl ParameterCoupling {
     }
 
     /// Creates an affine coupling (Target = factor * Source + offset)[cite: 1].
-    pub fn affine(
+    pub const fn affine(
         target: ParameterAddress,
         source: ParameterAddress,
         factor: f64,

@@ -9,9 +9,19 @@ use uom::si::f64::{Angle, Length};
 use uuid::Uuid;
 
 use crate::{
-    analyzers::{Analyzable, AnalyzerKind, propagation_strategy::PropagationStrategy}, core_optics::{
-        NodeAttrExt, OpticNodeExt, OpticPorts, SurfacePorts, node_attr::{HasNodeAttr, NodePositioning}, observable::ObservableDescriptor, volumetric::Volumetric,
-    }, error::{OpmResult, OpossumError}, geometry::{FaceIndex, Geometry}, light::LightData, nodes::fluence_detector::Fluence, reporting::node_report::NodeReportResult, utils::geom_transformation::Isometry,
+    analyzers::{Analyzable, AnalyzerKind, propagation_strategy::PropagationStrategy},
+    core_optics::{
+        NodeAttrExt, OpticNodeExt, OpticPorts, SurfacePorts,
+        node_attr::{HasNodeAttr, NodePositioning},
+        observable::ObservableDescriptor,
+        volumetric::Volumetric,
+    },
+    error::{OpmResult, OpossumError},
+    geometry::{FaceIndex, Geometry},
+    light::LightData,
+    nodes::fluence_detector::Fluence,
+    reporting::node_report::NodeReportResult,
+    utils::geom_transformation::Isometry,
 };
 
 /// Trait providing visual metadata for an optical component (such as node color for diagrams).

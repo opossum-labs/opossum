@@ -30,7 +30,7 @@ impl BoxBounds {
     }
 
     #[must_use]
-    pub fn clamp(&self, value: f64) -> f64 {
+    pub const fn clamp(&self, value: f64) -> f64 {
         value.clamp(self.min, self.max)
     }
 
@@ -74,17 +74,17 @@ impl FreeVariable {
     }
 
     /// Explicitly overrides the initial parameter value.
-    pub fn with_initial_value(mut self, value: f64) -> Self {
+    pub const fn with_initial_value(mut self, value: f64) -> Self {
         self.initial_value = Some(value);
         self
     }
 
-    pub fn with_bounds(mut self, bounds: BoxBounds) -> Self {
+    pub const fn with_bounds(mut self, bounds: BoxBounds) -> Self {
         self.bounds = Some(bounds);
         self
     }
 
-    pub fn with_step_config(mut self, delta_rel: f64, delta_abs_min: f64) -> Self {
+    pub const fn with_step_config(mut self, delta_rel: f64, delta_abs_min: f64) -> Self {
         self.delta_rel = delta_rel;
         self.delta_abs_min = delta_abs_min;
         self

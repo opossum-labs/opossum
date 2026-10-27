@@ -20,7 +20,7 @@ pub struct DiscoveredObservable {
     pub descriptor: ObservableDescriptor,
 }
 
-/// Complete inventory of all controllable parameters and observable outputs of an OpmDocument.
+/// Complete inventory of all controllable parameters and observable outputs of an `OpmDocument`.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ModelOptimizationSchema {
     pub controllable_variables: Vec<DiscoveredVariable>,

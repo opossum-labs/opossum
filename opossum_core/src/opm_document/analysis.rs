@@ -24,6 +24,10 @@ impl OpmDocument {
     /// This is optimized for numerical inner loops (e.g. solvers, optimizers) where
     /// intermediate reports are unnecessary and detector nodes must retain their light data
     /// for direct metric querying.
+    ///
+    /// # Errors
+    ///
+    /// This function returns errors similar to the "regular" `analyze` function.
     pub fn analyze_headless(&mut self) -> OpmResult<()> {
         if self.analyzers.is_empty() {
             return Ok(());

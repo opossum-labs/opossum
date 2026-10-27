@@ -13,7 +13,7 @@ pub enum MetricDimension {
 /// Metadata describing a measurable metric provided by a detector node.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ObservableDescriptor {
-    /// Internal identifier, matching the key in NodeReport properties (e.g. "Energy", "rms_radius").
+    /// Internal identifier, matching the key in `NodeReport` properties (e.g. `Energy`, `rms_radius`).
     pub name: String,
     /// Human readable label for UI.
     pub display_name: String,
@@ -39,7 +39,8 @@ impl ObservableDescriptor {
     }
 
     /// Sets an optional default target.
-    pub fn with_default_target(mut self, target: f64) -> Self {
+    #[must_use]
+    pub const fn with_default_target(mut self, target: f64) -> Self {
         self.default_target = Some(target);
         self
     }

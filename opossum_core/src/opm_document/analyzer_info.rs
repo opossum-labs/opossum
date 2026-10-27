@@ -135,7 +135,8 @@ impl AnalyzerInfo {
         self.analyzer_type = analyzer_type.clone();
     }
     /// Return the `AnalyzerKind`
-    pub fn kind(&self) -> AnalyzerKind {
+    #[must_use]
+    pub const fn kind(&self) -> AnalyzerKind {
         match self.analyzer_type {
             AnalyzerType::Energy(_) => AnalyzerKind::Energy,
             AnalyzerType::RayTrace(_) => AnalyzerKind::RayTrace,

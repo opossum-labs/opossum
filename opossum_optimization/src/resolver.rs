@@ -14,7 +14,7 @@ impl ParameterResolver {
     /// Validates configuration integrity:
     /// - No parameter can be both a free variable and a coupling target.
     /// - No target parameter can be claimed by multiple couplings.
-    /// - TotalLengthLock cannot reference its own target.
+    /// - `TotalLengthLock` cannot reference its own target.
     pub fn validate_configuration(
         free_vars: &[FreeVariable],
         couplings: &[ParameterCoupling],
@@ -45,13 +45,13 @@ impl ParameterResolver {
             }
 
             // Check self-reference in TotalLengthLock
-            if let CouplingType::TotalLengthLock { other_segments, .. } = &coupling.rule {
-                if other_segments.contains(&coupling.target) {
-                    return Err(OpossumError::Other(format!(
-                        "TotalLengthLock target {:?} cannot be part of other_segments",
-                        coupling.target
-                    )));
-                }
+            if let CouplingType::TotalLengthLock { other_segments, .. } = &coupling.rule
+                && other_segments.contains(&coupling.target)
+            {
+                return Err(OpossumError::Other(format!(
+                    "TotalLengthLock target {:?} cannot be part of other_segments",
+                    coupling.target
+                )));
             }
         }
 

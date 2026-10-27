@@ -12,7 +12,7 @@ use opossum_core::{
     opm_document::OpmDocument,
 };
 
-/// High-level optical system optimizer bound to an active OpmDocument[cite: 1, 2].
+/// High-level optical system optimizer bound to an active `OpmDocument`
 pub struct OpticOptimizer<'a> {
     doc: &'a mut OpmDocument,
     free_variables: Vec<FreeVariable>,
@@ -46,26 +46,26 @@ impl<'a> OpticOptimizer<'a> {
         Ok(self)
     }
 
-    /// Registers a parameter coupling rule (e.g. Opposite, TotalLengthLock)[cite: 1].
+    /// Registers a parameter coupling rule (e.g. `Opposite`, `TotalLengthLock`)
     pub fn add_coupling(mut self, coupling: ParameterCoupling) -> Self {
         self.couplings.push(coupling);
         self
     }
 
-    /// Registers an evaluation criterion (operand) for the merit function[cite: 1].
+    /// Registers an evaluation criterion (operand) for the merit function
     pub fn add_operand(mut self, operand: impl Operand + 'static) -> Self {
         self.operands.push(Arc::new(operand));
         self
     }
 
     /// Selects the optimization algorithm and its solver-specific settings[cite: 1].
-    pub fn with_algorithm(mut self, algorithm: OptimizationAlgorithm) -> Self {
+    pub const fn with_algorithm(mut self, algorithm: OptimizationAlgorithm) -> Self {
         self.algorithm = algorithm;
         self
     }
 
     /// Sets the target cost threshold for early stopping[cite: 1].
-    pub fn with_target_cost(mut self, target_cost: f64) -> Self {
+    pub const fn with_target_cost(mut self, target_cost: f64) -> Self {
         self.target_cost = target_cost;
         self
     }

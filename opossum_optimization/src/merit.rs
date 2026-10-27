@@ -51,23 +51,25 @@ impl MeritFunction {
     }
 
     /// Sets a custom penalty value for fatal simulation crashes[cite: 1].
-    pub fn with_fatal_penalty(mut self, penalty: f64) -> Self {
+    pub const fn with_fatal_penalty(mut self, penalty: f64) -> Self {
         self.fatal_penalty = penalty;
         self
     }
 
     /// Sets a custom penalty weight for box bound violations[cite: 1].
-    pub fn with_bounds_penalty_weight(mut self, weight: f64) -> Self {
+    pub const fn with_bounds_penalty_weight(mut self, weight: f64) -> Self {
         self.bounds_penalty_weight = weight;
         self
     }
 
     /// Returns the registered free variables.
+    #[must_use]
     pub fn free_variables(&self) -> &[FreeVariable] {
         &self.free_variables
     }
 
-    /// Returns the registered parameter couplings[cite: 1].
+    /// Returns the registered parameter couplings
+    #[must_use]
     pub fn couplings(&self) -> &[ParameterCoupling] {
         &self.couplings
     }
@@ -83,7 +85,7 @@ impl MeritFunction {
             if let Some(bounds) = &var.bounds {
                 let violation = bounds.penalty(val);
                 if violation > 0.0 {
-                    total_cost += self.bounds_penalty_weight * violation;
+                    total_cost = self.bounds_penalty_weight.mul_add(violation, total_cost);
                 }
             }
         }
@@ -124,7 +126,7 @@ impl MeritFunction {
                 }
                 Err(err) => {
                     eprintln!("DEBUG: Operand '{}' failed with: {err:?}", operand.name());
-                    total_cost += self.fatal_penalty * 0.1;
+                    total_cost = self.fatal_penalty.mul_add(0.1, total_cost);
                 }
             }
         }

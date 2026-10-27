@@ -251,11 +251,11 @@ impl OpticNode for EnergyMeter {
         self.light_data = new_data;
     }
     fn observable_metrics(&self, _analyzer: AnalyzerKind) -> Vec<ObservableDescriptor> {
-                vec![
-                    ObservableDescriptor::new("Energy", "Optical Energy", MetricDimension::Energy)
-                        .with_default_target(0.0),
-                ]
-        }
+        vec![
+            ObservableDescriptor::new("Energy", "Optical Energy", MetricDimension::Energy)
+                .with_default_target(0.0),
+        ]
+    }
     fn read_observable(&self, metric_name: &str) -> Option<f64> {
         match metric_name {
             // Return raw scalar value in fundamental SI base unit (Joules)

@@ -12,15 +12,15 @@ pub mod schema_extractor;
 pub mod summary;
 pub mod variable;
 
-pub use address::{ObservableAddress, ParameterAddress};
+pub use address::{MetricSource, ObservableAddress, ParameterAddress};
 pub use algorithm::OptimizationAlgorithm;
 pub use applier::ParameterApplier;
 pub use coupling::{CouplingType, ParameterCoupling};
 pub use discovery::{DiscoveredObservable, DiscoveredVariable, ModelOptimizationSchema};
 pub use merit::{DEFAULT_BOUNDS_PENALTY_WEIGHT, DEFAULT_FATAL_PENALTY, MeritFunction};
 pub use operand::{
-    EvaluationContext, Operand, StandardOperand, TargetValueOperand, ThresholdDirection,
-    ThresholdOperand,
+    EvaluationContext, MaxTotalLengthOperand, Operand, StandardOperand, TargetValueOperand,
+    ThresholdDirection, ThresholdOperand,
 };
 pub use optimizer::OpticOptimizer;
 pub use reader::MetricReader;

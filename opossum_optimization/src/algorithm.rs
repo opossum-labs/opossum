@@ -24,7 +24,7 @@ impl Default for OptimizationAlgorithm {
 
 impl OptimizationAlgorithm {
     /// Creates a default Nelder-Mead configuration (100 iterations, 1e-6 tolerance)[cite: 1].
-    pub fn nelder_mead() -> Self {
+    pub const fn nelder_mead() -> Self {
         Self::NelderMead {
             max_iterations: 100,
             sd_tolerance: 1e-6,
@@ -32,7 +32,7 @@ impl OptimizationAlgorithm {
     }
 
     /// Sets the maximum iteration count for algorithms supporting it[cite: 1].
-    pub fn with_max_iterations(mut self, iters: u64) -> Self {
+    pub const fn with_max_iterations(mut self, iters: u64) -> Self {
         match &mut self {
             Self::NelderMead { max_iterations, .. } => *max_iterations = iters,
         }
@@ -40,7 +40,7 @@ impl OptimizationAlgorithm {
     }
 
     /// Sets the standard deviation tolerance for Nelder-Mead.
-    pub fn with_sd_tolerance(mut self, tol: f64) -> Self {
+    pub const fn with_sd_tolerance(mut self, tol: f64) -> Self {
         match &mut self {
             Self::NelderMead { sd_tolerance, .. } => *sd_tolerance = tol,
         }
@@ -84,10 +84,10 @@ impl OptimizationAlgorithm {
             };
 
             let mut candidate = current + step;
-            if let Some(bounds) = &var.bounds {
-                if candidate > bounds.max {
-                    candidate = current - step;
-                }
+            if let Some(bounds) = &var.bounds
+                && candidate > bounds.max
+            {
+                candidate = current - step;
             }
 
             vertex[i] = candidate;

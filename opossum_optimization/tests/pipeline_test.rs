@@ -8,8 +8,8 @@ use opossum_core::{
     prelude::*,
 };
 use opossum_optimization::{
-    BoxBounds, FreeVariable, MetricReader, ObservableAddress, OpticOptimizer, ParameterAddress,
-    SchemaExtractor, TargetValueOperand,
+    BoxBounds, FreeVariable, MaxTotalLengthOperand, MetricReader, ObservableAddress,
+    OpticOptimizer, OptimizationAlgorithm, ParameterAddress, SchemaExtractor, TargetValueOperand,
 };
 use uom::si::f64::Length;
 use uuid::Uuid;
@@ -85,7 +85,7 @@ fn build_kepler_setup(
     config.map_source(
         i_src,
         RayDataSource::PointSrc(PointSrc::new(
-            Hexapolar::new(millimeter!(15.0), 8)?.into(),
+            Hexapolar::new(millimeter!(15.0), 5)?.into(),
             UniformDist::new(joule!(1.0))?.into(),
             LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
             millimeter!(70.0),
@@ -155,8 +155,7 @@ fn test_schema_discovery_on_kepler_model() -> OpmResult<()> {
 #[test]
 fn test_optimize_kepler_focal_position_compact() -> OpmResult<()> {
     // 1. Defocused setup: 45 mm instead of ~58 mm
-    let (mut doc, analyzer_id, lens2_id, spot_id) =
-        build_kepler_setup(millimeter!(45.0))?;
+    let (mut doc, analyzer_id, lens2_id, spot_id) = build_kepler_setup(millimeter!(45.0))?;
 
     let dist_address = ParameterAddress::ConnectionDistance {
         src_id: lens2_id,
@@ -202,6 +201,264 @@ fn test_optimize_kepler_focal_position_compact() -> OpmResult<()> {
         summary.relative_improvement() * 100.0
     );
     eprintln!("===================================\n");
+
+    Ok(())
+}
+use opossum_optimization::ParameterCoupling;
+
+#[test]
+fn test_optimize_kepler_lens_curvature_coupled() -> OpmResult<()> {
+    // 1. Defokussiertes Setup mit FESTEM Detektorabstand von 45 mm (statt ~58 mm)
+    let fixed_image_distance = millimeter!(45.0);
+    let (mut doc, analyzer_id, lens2_id, spot_id) = build_kepler_setup(fixed_image_distance)?;
+
+    // Adressen der beiden Linsenflächen (Krümmungsradien)
+    let front_curvature_addr = ParameterAddress::NodeProperty {
+        node_id: lens2_id,
+        property_name: "front curvature".into(),
+    };
+    let rear_curvature_addr = ParameterAddress::NodeProperty {
+        node_id: lens2_id,
+        property_name: "rear curvature".into(),
+    };
+
+    let spot_observable_addr = ObservableAddress {
+        analyzer_id,
+        node_id: spot_id,
+        metric_name: "rms beam radius".into(),
+    };
+
+    // 2. High-Level-Optimierung mit Parameterkopplung R_rear = -R_front
+    let summary = OpticOptimizer::new(&mut doc)
+        // Freie Variable: Vorderflächen-Radius (Startwert ~100 mm aus dem Modell)
+        .add_variable(
+            FreeVariable::new(front_curvature_addr.clone(), "lens2_front_curvature")
+                .with_bounds(BoxBounds::new(0.030, 0.150)?), // 30 mm bis 150 mm
+        )?
+        // Kopplung: R_rear = -R_front (symmetrische Bikonvexlinse)
+        .add_coupling(ParameterCoupling::opposite(
+            rear_curvature_addr.clone(),
+            front_curvature_addr.clone(),
+        ))
+        // Zielkriterium: RMS Spotradius minimieren
+        .add_operand(TargetValueOperand::new(
+            "minimize_rms_spot",
+            spot_observable_addr.clone(),
+            0.0,
+            1.0,
+            1.0e-3,
+        ))
+        .optimize()?;
+
+    // 3. Verifikation
+    let best_r_front = summary.value(&front_curvature_addr).unwrap();
+    let best_r_rear = summary.value(&rear_curvature_addr).unwrap();
+    let optimized_rms = MetricReader::read_metric(&doc, &spot_observable_addr)?;
+
+    // Prüfung der Kopplung: R2 muss exakt -R1 sein
+    assert!(
+        (best_r_rear - (-best_r_front)).abs() < 1e-12,
+        "Coupling violated: R_rear ({best_r_rear}) must equal -R_front (-{best_r_front})"
+    );
+
+    // Da der Abstand mit 45 mm kürzer ist als 58 mm, muss die Linse stärker brechen.
+    // Ein kleinerer Radius bedeutet stärkere Krümmung / kürzere Brennweite (ca. 70-85 mm statt 100 mm).
+    assert!(
+        best_r_front < 0.100,
+        "Front curvature radius should be smaller than initial 100 mm for shorter focal length: got {:.3} mm",
+        best_r_front * 1e3
+    );
+
+    // Der Spotradius muss signifikant fokussiert worden sein
+    assert!(
+        optimized_rms < 1.0e-3,
+        "Optimized RMS spot radius must be under 1 mm, got: {:.6} m",
+        optimized_rms
+    );
+
+    eprintln!("\n=== COUPLED CURVATURE OPTIMIZATION RESULT ===");
+    eprintln!("Iterations        : {}", summary.iterations);
+    eprintln!("Initial Cost      : {:.4}", summary.initial_cost);
+    eprintln!(
+        "Final Cost        : {:.4} (-{:.1}%)",
+        summary.final_cost,
+        summary.relative_improvement() * 100.0
+    );
+    eprintln!("Optimized R_front : {:8.3} mm", best_r_front * 1e3);
+    eprintln!(
+        "Optimized R_rear  : {:8.3} mm (R2 = -R1)",
+        best_r_rear * 1e3
+    );
+    eprintln!("Final RMS Spot    : {:8.2} µm", optimized_rms * 1e6);
+    eprintln!("==============================================\n");
+
+    Ok(())
+}
+#[test]
+fn test_optimize_kepler_best_form_lens() -> OpmResult<()> {
+    // 1. Setup with a fixed image distance of 45 mm
+    let fixed_image_distance = millimeter!(45.0);
+    let (mut doc, analyzer_id, lens2_id, spot_id) = build_kepler_setup(fixed_image_distance)?;
+
+    // Addresses for front and rear surfaces of lens2
+    let front_curvature_addr = ParameterAddress::NodeProperty {
+        node_id: lens2_id,
+        property_name: "front curvature".into(),
+    };
+    let rear_curvature_addr = ParameterAddress::NodeProperty {
+        node_id: lens2_id,
+        property_name: "rear curvature".into(),
+    };
+
+    let spot_observable_addr = ObservableAddress {
+        analyzer_id,
+        node_id: spot_id,
+        metric_name: "rms beam radius".into(),
+    };
+
+    // 2. High-level 2D optimization (both curvatures as independent free variables)
+    let summary = OpticOptimizer::new(&mut doc)
+        // Free variable 1: Front curvature (initial value ~100 mm from model)
+        .add_variable(
+            FreeVariable::new(front_curvature_addr.clone(), "lens2_front_curvature")
+                .with_bounds(BoxBounds::new(0.025, 0.250)?), // 25 mm to 250 mm
+        )?
+        // Free variable 2: Rear curvature (initial value ~ -100 mm from model)
+        .add_variable(
+            FreeVariable::new(rear_curvature_addr.clone(), "lens2_rear_curvature")
+                .with_bounds(BoxBounds::new(-0.250, -0.025)?), // -250 mm to -25 mm
+        )?
+        // Target: Minimize RMS spot radius
+        .add_operand(TargetValueOperand::new(
+            "minimize_rms_spot",
+            spot_observable_addr.clone(),
+            0.0,
+            1.0,
+            1.0e-3,
+        ))
+        .with_algorithm(
+            OptimizationAlgorithm::nelder_mead()
+                .with_max_iterations(150)
+                .with_sd_tolerance(1e-7),
+        )
+        .optimize()?;
+
+    // 3. Verification & Metrics
+    let best_r_front = summary.value(&front_curvature_addr).unwrap();
+    let best_r_rear = summary.value(&rear_curvature_addr).unwrap();
+    let optimized_rms = MetricReader::read_metric(&doc, &spot_observable_addr)?;
+
+    // Calculate Coddington shape factor q = (R2 + R1) / (R2 - R1)
+    let shape_factor_q = (best_r_rear + best_r_front) / (best_r_rear - best_r_front);
+
+    assert!(
+        optimized_rms < 1.0e-3,
+        "Optimized RMS spot radius must be under 1 mm, got: {:.6} m",
+        optimized_rms
+    );
+    assert!(
+        summary.final_cost < summary.initial_cost,
+        "Cost must improve: initial={}, final={}",
+        summary.initial_cost,
+        summary.final_cost
+    );
+
+    eprintln!("\n=== BEST-FORM LENS OPTIMIZATION RESULT ===");
+    eprintln!("Iterations        : {}", summary.iterations);
+    eprintln!("Initial Cost      : {:.4}", summary.initial_cost);
+    eprintln!(
+        "Final Cost        : {:.4} (-{:.1}%)",
+        summary.final_cost,
+        summary.relative_improvement() * 100.0
+    );
+    eprintln!("Optimized R_front : {:8.3} mm", best_r_front * 1e3);
+    eprintln!("Optimized R_rear  : {:8.3} mm", best_r_rear * 1e3);
+    eprintln!("Coddington Factor : {:8.3} (q)", shape_factor_q);
+    eprintln!("Final RMS Spot    : {:8.2} µm", optimized_rms * 1e6);
+    eprintln!("==========================================\n");
+
+    Ok(())
+}
+
+#[test]
+fn test_optimize_kepler_with_geometric_length_penalty() -> OpmResult<()> {
+    // 1. Setup: Source -> Lens1 (70 mm) -> Lens2 (125 mm) -> Spot (initial 45 mm)
+    let (mut doc, analyzer_id, lens2_id, spot_id) = build_kepler_setup(millimeter!(45.0))?;
+
+    // Adressen der beiden Abstände (Linse1 -> Linse2) und (Linse2 -> Spot)
+    // lens1_id ermitteln
+    let all_nodes = doc.scenery().collect_all_nodes_recursive()?;
+    let lens1_node = all_nodes
+        .iter()
+        .find(|n| n.name() == "75 mm lens")
+        .expect("Lens1 must exist");
+    let lens1_id = lens1_node.uuid();
+
+    let dist_lens1_to_lens2 = ParameterAddress::ConnectionDistance {
+        src_id: lens1_id,
+        src_port: "output_1".into(),
+    };
+    let dist_lens2_to_spot = ParameterAddress::ConnectionDistance {
+        src_id: lens2_id,
+        src_port: "output_1".into(),
+    };
+
+    let spot_observable_addr = ObservableAddress {
+        analyzer_id,
+        node_id: spot_id,
+        metric_name: "rms beam radius".into(),
+    };
+
+    // 2. Optimierung mit zwei freien Abständen und einer Längenbegrenzung
+    // Ziel: Fokussieren, aber die Summe (d12 + d2_spot) darf maximal 190 mm betragen
+    let summary = OpticOptimizer::new(&mut doc)
+        .add_variable(
+            FreeVariable::new(dist_lens1_to_lens2.clone(), "distance_lens1_lens2")
+                .with_bounds(BoxBounds::new(0.100, 0.150)?),
+        )?
+        .add_variable(
+            FreeVariable::new(dist_lens2_to_spot.clone(), "distance_lens2_spot")
+                .with_bounds(BoxBounds::new(0.030, 0.080)?),
+        )?
+        // Operanden 1: RMS Spot minimieren
+        .add_operand(TargetValueOperand::new(
+            "minimize_rms_spot",
+            spot_observable_addr.clone(),
+            0.0,
+            1.0,
+            1.0e-3,
+        ))
+        // Operanden 2: Geometrische Nebenbedingung (Summe beider Abstände <= 185 mm)
+        .add_operand(MaxTotalLengthOperand::new(
+            "compact_length_limit",
+            vec![dist_lens1_to_lens2.clone(), dist_lens2_to_spot.clone()],
+            0.185, // max 185 mm Gesamtlänge der Teilstrecken
+            50.0,  // Starke Strafe bei Überschreitung
+        ))
+        .optimize()?;
+
+    let d1 = summary.value(&dist_lens1_to_lens2).unwrap();
+    let d2 = summary.value(&dist_lens2_to_spot).unwrap();
+    let total_length = d1 + d2;
+    let optimized_rms = MetricReader::read_metric(&doc, &spot_observable_addr)?;
+
+    eprintln!("\n=== GEOMETRIC PENALTY OPTIMIZATION RESULT ===");
+    eprintln!("Iterations        : {}", summary.iterations);
+    eprintln!("Distance L1 -> L2 : {:8.3} mm", d1 * 1e3);
+    eprintln!("Distance L2 -> Det: {:8.3} mm", d2 * 1e3);
+    eprintln!(
+        "Total Length      : {:8.3} mm (Limit: 185.0 mm)",
+        total_length * 1e3
+    );
+    eprintln!("Final RMS Spot    : {:8.2} µm", optimized_rms * 1e6);
+    eprintln!("=============================================\n");
+
+    // Sicherstellen, dass das Limit von 185 mm (mit geringer numerischer Toleranz) eingehalten wurde
+    assert!(
+        total_length <= 0.186,
+        "Total length ({:.3} mm) should respect the 185 mm constraint",
+        total_length * 1e3
+    );
 
     Ok(())
 }

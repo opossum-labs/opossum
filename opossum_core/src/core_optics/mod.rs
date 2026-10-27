@@ -1,6 +1,7 @@
 pub mod hit_map;
 pub mod node_attr;
 pub mod node_attr_ext;
+pub mod observable;
 pub mod optic_node;
 pub mod optic_node_ext;
 pub mod optic_ports;
@@ -9,7 +10,6 @@ pub mod optic_surface;
 pub mod surface_config;
 pub mod surface_effect;
 pub mod volumetric;
-pub mod observable;
 
 pub use node_attr::NodeAttr;
 pub use node_attr_ext::NodeAttrExt;

@@ -7,7 +7,7 @@ use opossum_core::{
 pub struct MetricReader;
 
 impl MetricReader {
-    /// Reads a scalar metric directly from a node inside an OpmDocument.
+    /// Reads a scalar metric directly from a node inside an `OpmDocument`.
     pub fn read_metric(doc: &OpmDocument, address: &ObservableAddress) -> OpmResult<f64> {
         let (node_ref, _) = doc.scenery().node_recursive(address.node_id).map_err(|e| {
             OpossumError::Other(format!(

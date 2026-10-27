@@ -9,7 +9,7 @@ use opossum_core::{
 pub struct SchemaExtractor;
 
 impl SchemaExtractor {
-    /// Extracts all controllable variables and observable metrics from an OpmDocument.
+    /// Extracts all controllable variables and observable metrics from an `OpmDocument`.
     pub fn extract(doc: &OpmDocument) -> OpmResult<ModelOptimizationSchema> {
         let mut schema = ModelOptimizationSchema::default();
 
@@ -47,7 +47,7 @@ impl SchemaExtractor {
         Ok(schema)
     }
 
-    /// Recursively inspects a NodeGroup for controllable properties and connection distances.
+    /// Recursively inspects a `NodeGroup` for controllable properties and connection distances.
     fn extract_from_group(
         group: &NodeGroup,
         schema: &mut ModelOptimizationSchema,
@@ -72,16 +72,16 @@ impl SchemaExtractor {
             let node_name = node_ref.name().to_string();
             let attr = node_ref.node_attr();
 
-            for (prop_name, prop) in attr.properties().iter() {
+            for (prop_name, prop) in attr.properties() {
                 // Only consider properties that can be represented as an f64 scalar
                 if let Some(val) = prop.prop().as_f64() {
                     schema.controllable_variables.push(DiscoveredVariable {
                         address: ParameterAddress::NodeProperty {
                             node_id,
-                            property_name: prop_name.to_string(),
+                            property_name: prop_name.clone(),
                         },
                         node_name: node_name.clone(),
-                        display_name: prop_name.to_string(),
+                        display_name: prop_name.clone(),
                         initial_value: val,
                         is_read_only: prop.is_read_only(),
                     });
