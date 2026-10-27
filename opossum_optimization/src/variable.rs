@@ -1,28 +1,17 @@
-use serde::{Deserialize, Serialize};
-
 use crate::address::ParameterAddress;
 use opossum_core::error::{OpmResult, OpossumError};
+use serde::{Deserialize, Serialize};
 
-/// Default relative step size for finite differences (1e-4).
 pub const DEFAULT_DELTA_REL: f64 = 1e-4;
-
-/// Default minimum absolute step size for finite differences near zero (1e-7).
 pub const DEFAULT_DELTA_ABS_MIN: f64 = 1e-7;
 
-/// Box constraints defining valid parameter intervals [min, max].
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct BoxBounds {
-    /// Lower parameter bound (inclusive).
     pub min: f64,
-    /// Upper parameter bound (inclusive).
     pub max: f64,
 }
 
 impl BoxBounds {
-    /// Creates a new `BoxBounds` constraint.
-    ///
-    /// # Errors
-    /// Returns an error if `min` is greater than `max` or either bound is NaN.
     pub fn new(min: f64, max: f64) -> OpmResult<Self> {
         if min.is_nan() || max.is_nan() {
             return Err(OpossumError::Other("Box bounds cannot be NaN".to_string()));
@@ -35,20 +24,16 @@ impl BoxBounds {
         Ok(Self { min, max })
     }
 
-    /// Checks whether a given value lies within the bounds.
     #[must_use]
     pub fn contains(&self, value: f64) -> bool {
         value >= self.min && value <= self.max
     }
 
-    /// Clamps a value into the valid interval [min, max].
     #[must_use]
     pub fn clamp(&self, value: f64) -> f64 {
         value.clamp(self.min, self.max)
     }
 
-    /// Computes the quadratic penalty for bound violations[cite: 1].
-    /// Returns 0.0 if the value is within bounds.
     #[must_use]
     pub fn penalty(&self, value: f64) -> f64 {
         if value < self.min {
@@ -63,51 +48,48 @@ impl BoxBounds {
     }
 }
 
-/// A free parameter directly manipulated by the numerical solver[cite: 1].
+/// A free parameter directly manipulated by the numerical solver.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FreeVariable {
-    /// Target address within the optical document[cite: 1].
     pub address: ParameterAddress,
-    /// Human-readable label for debugging and logging.
     pub name: String,
-    /// Initial value in SI base units.
-    pub initial_value: f64,
-    /// Optional box constraints[cite: 1].
+    /// Initial value in SI base units. If None, derived automatically from the model.
+    pub initial_value: Option<f64>,
     pub bounds: Option<BoxBounds>,
-    /// Relative finite difference step size[cite: 1].
     pub delta_rel: f64,
-    /// Minimum absolute finite difference step size[cite: 1].
     pub delta_abs_min: f64,
 }
 
 impl FreeVariable {
-    /// Creates a new `FreeVariable` with default finite-difference step parameters[cite: 1].
-    pub fn new(address: ParameterAddress, name: impl Into<String>, initial_value: f64) -> Self {
+    /// Creates a new `FreeVariable` where the initial value is automatically read from the model[cite: 1].
+    pub fn new(address: ParameterAddress, name: impl Into<String>) -> Self {
         Self {
             address,
             name: name.into(),
-            initial_value,
+            initial_value: None,
             bounds: None,
             delta_rel: DEFAULT_DELTA_REL,
             delta_abs_min: DEFAULT_DELTA_ABS_MIN,
         }
     }
 
-    /// Attaches box bounds to the variable.
+    /// Explicitly overrides the initial parameter value.
+    pub fn with_initial_value(mut self, value: f64) -> Self {
+        self.initial_value = Some(value);
+        self
+    }
+
     pub fn with_bounds(mut self, bounds: BoxBounds) -> Self {
         self.bounds = Some(bounds);
         self
     }
 
-    /// Configures custom step sizes for finite differences.
     pub fn with_step_config(mut self, delta_rel: f64, delta_abs_min: f64) -> Self {
         self.delta_rel = delta_rel;
         self.delta_abs_min = delta_abs_min;
         self
     }
 
-    /// Computes the adaptive finite difference step for gradient calculations:
-    /// `Δx = max(δ_abs_min, δ_rel · |x|)`[cite: 1].
     #[must_use]
     pub fn finite_difference_step(&self, current_val: f64) -> f64 {
         let rel_step = self.delta_rel * current_val.abs();
@@ -143,7 +125,7 @@ mod tests {
             node_id: Uuid::new_v4(),
             property_name: "radius".into(),
         };
-        let var = FreeVariable::new(addr, "radius", 100.0);
+        let var = FreeVariable::new(addr, "radius");
 
         // Near zero: delta_abs_min dominates
         let step_at_zero = var.finite_difference_step(0.0);

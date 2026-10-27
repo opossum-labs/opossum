@@ -11,7 +11,7 @@ use opossum_optimization::{
     BoxBounds, FreeVariable, MetricReader, ObservableAddress, OpticOptimizer, ParameterAddress,
     SchemaExtractor, TargetValueOperand,
 };
-use uom::si::{f64::Length, length::meter};
+use uom::si::f64::Length;
 use uuid::Uuid;
 
 /// Constructs a Keplerian optical system based on workshop_04_kepler_imaging_point.
@@ -155,9 +155,8 @@ fn test_schema_discovery_on_kepler_model() -> OpmResult<()> {
 #[test]
 fn test_optimize_kepler_focal_position_compact() -> OpmResult<()> {
     // 1. Defocused setup: 45 mm instead of ~58 mm
-    let initial_dist_m = 0.045;
     let (mut doc, analyzer_id, lens2_id, spot_id) =
-        build_kepler_setup(Length::new::<meter>(initial_dist_m))?;
+        build_kepler_setup(millimeter!(45.0))?;
 
     let dist_address = ParameterAddress::ConnectionDistance {
         src_id: lens2_id,
@@ -171,11 +170,11 @@ fn test_optimize_kepler_focal_position_compact() -> OpmResult<()> {
     };
 
     // 2. High-level optimization in one concise block
-    let summary = OpticOptimizer::new()
+    let summary = OpticOptimizer::new(&mut doc)
         .add_variable(
-            FreeVariable::new(dist_address.clone(), "image_drift_distance", initial_dist_m)
+            FreeVariable::new(dist_address.clone(), "image_drift_distance")
                 .with_bounds(BoxBounds::new(0.030, 0.080)?),
-        )
+        )?
         .add_operand(TargetValueOperand::new(
             "minimize_rms_spot",
             spot_observable_addr.clone(),
@@ -183,8 +182,7 @@ fn test_optimize_kepler_focal_position_compact() -> OpmResult<()> {
             1.0,
             1.0e-3,
         ))
-        .with_max_iterations(40)
-        .optimize(&mut doc)?;
+        .optimize()?;
 
     // 3. Verification
     let best_distance = summary.value(&dist_address).unwrap();

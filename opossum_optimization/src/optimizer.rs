@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use crate::{
     algorithm::OptimizationAlgorithm, applier::ParameterApplier, coupling::ParameterCoupling,
-    merit::MeritFunction, operand::Operand, resolver::ParameterResolver,
+    merit::MeritFunction, operand::Operand, reader::MetricReader, resolver::ParameterResolver,
     summary::OptimizationSummary, variable::FreeVariable,
 };
 use opossum_core::{
@@ -12,39 +12,38 @@ use opossum_core::{
     opm_document::OpmDocument,
 };
 
-/// High-level optical system optimizer orchestrating variables, merit criteria, and solvers[cite: 1].
-pub struct OpticOptimizer {
+/// High-level optical system optimizer bound to an active OpmDocument[cite: 1, 2].
+pub struct OpticOptimizer<'a> {
+    doc: &'a mut OpmDocument,
     free_variables: Vec<FreeVariable>,
     couplings: Vec<ParameterCoupling>,
     operands: Vec<Arc<dyn Operand>>,
     algorithm: OptimizationAlgorithm,
-    max_iterations: u64,
     target_cost: f64,
 }
 
-impl Default for OpticOptimizer {
-    fn default() -> Self {
+impl<'a> OpticOptimizer<'a> {
+    /// Creates a new `OpticOptimizer` bound to the provided optical document[cite: 1, 2].
+    pub fn new(doc: &'a mut OpmDocument) -> Self {
         Self {
+            doc,
             free_variables: Vec::new(),
             couplings: Vec::new(),
             operands: Vec::new(),
             algorithm: OptimizationAlgorithm::default(),
-            max_iterations: 100,
             target_cost: 1e-8,
         }
     }
-}
 
-impl OpticOptimizer {
-    /// Creates a new `OpticOptimizer` builder with default configuration[cite: 1].
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Registers a free parameter to be manipulated by the solver[cite: 1].
-    pub fn add_variable(mut self, variable: FreeVariable) -> Self {
+    /// Registers a free parameter. If no initial value was set on the variable,
+    /// it is automatically read from the current state of the document[cite: 1].
+    pub fn add_variable(mut self, mut variable: FreeVariable) -> OpmResult<Self> {
+        if variable.initial_value.is_none() {
+            let current_val = MetricReader::read_parameter_value(self.doc, &variable.address)?;
+            variable.initial_value = Some(current_val);
+        }
         self.free_variables.push(variable);
-        self
+        Ok(self)
     }
 
     /// Registers a parameter coupling rule (e.g. Opposite, TotalLengthLock)[cite: 1].
@@ -59,31 +58,20 @@ impl OpticOptimizer {
         self
     }
 
-    /// Selects the mathematical optimization algorithm[cite: 1].
+    /// Selects the optimization algorithm and its solver-specific settings[cite: 1].
     pub fn with_algorithm(mut self, algorithm: OptimizationAlgorithm) -> Self {
         self.algorithm = algorithm;
         self
     }
 
-    /// Sets the maximum allowable iteration steps[cite: 1].
-    pub fn with_max_iterations(mut self, max_iterations: u64) -> Self {
-        self.max_iterations = max_iterations;
-        self
-    }
-
-    /// Sets the target merit function cost for early stopping[cite: 1].
+    /// Sets the target cost threshold for early stopping[cite: 1].
     pub fn with_target_cost(mut self, target_cost: f64) -> Self {
         self.target_cost = target_cost;
         self
     }
 
-    /// Executes the optimization process against the provided `OpmDocument`[cite: 1, 2].
-    ///
-    /// 1. Evaluates baseline cost[cite: 1].
-    /// 2. Executes numerical solver in headless mode[cite: 1, 12].
-    /// 3. Writes best found parameters back into the document[cite: 1, 8].
-    /// 4. Rebuilds optical surfaces and synchronizes detector states[cite: 1, 4, 8].
-    pub fn optimize(&self, doc: &mut OpmDocument) -> OpmResult<OptimizationSummary> {
+    /// Executes the optimization, updates the model in-place, and refreshes detector states[cite: 1, 8, 10].
+    pub fn optimize(self) -> OpmResult<OptimizationSummary> {
         if self.free_variables.is_empty() {
             return Err(OpossumError::Other(
                 "No free variables specified for optimization".to_string(),
@@ -95,12 +83,12 @@ impl OpticOptimizer {
             ));
         }
 
-        // Validate coupling integrity upfront[cite: 1]
+        // Validate coupling integrity[cite: 1]
         ParameterResolver::validate_configuration(&self.free_variables, &self.couplings)?;
 
-        // Build pristine MeritFunction[cite: 1]
+        // Build pristine MeritFunction from blueprint clone[cite: 1]
         let merit = MeritFunction::new(
-            doc.clone(),
+            self.doc.clone(),
             self.free_variables.clone(),
             self.couplings.clone(),
             self.operands.clone(),
@@ -110,13 +98,16 @@ impl OpticOptimizer {
         let initial_vector: Vec<f64> = self
             .free_variables
             .iter()
-            .map(|v| v.initial_value)
+            .map(|v| v.initial_value.unwrap())
             .collect();
         let initial_cost = merit.evaluate(&initial_vector);
 
-        // Dispatch solver according to selected algorithm[cite: 1]
+        // Execute solver according to chosen algorithm[cite: 1]
         let (best_params, final_cost, iterations, converged) = match self.algorithm {
-            OptimizationAlgorithm::NelderMead { sd_tolerance } => {
+            OptimizationAlgorithm::NelderMead {
+                max_iterations,
+                sd_tolerance,
+            } => {
                 let initial_simplex =
                     OptimizationAlgorithm::build_initial_simplex(&self.free_variables)?;
                 let solver = NelderMead::new(initial_simplex)
@@ -126,13 +117,11 @@ impl OpticOptimizer {
                 let res = Executor::new(merit, solver)
                     .configure(|state| {
                         state
-                            .max_iters(self.max_iterations)
+                            .max_iters(max_iterations)
                             .target_cost(self.target_cost)
                     })
                     .run()
-                    .map_err(|e| {
-                        OpossumError::Other(format!("Optimization execution failed: {e}"))
-                    })?;
+                    .map_err(|e| OpossumError::Other(format!("Optimization failed: {e}")))?;
 
                 let state = res.state();
                 let best_p = state.best_param.clone().ok_or_else(|| {
@@ -150,14 +139,14 @@ impl OpticOptimizer {
         let resolved_map =
             ParameterResolver::resolve(&self.free_variables, &self.couplings, &best_params)?;
 
-        // Apply optimized values to active document[cite: 1, 8]
+        // Apply optimal values directly into the active document[cite: 1, 8]
         for (address, value) in &resolved_map {
-            ParameterApplier::set_value(doc, address, *value)?;
+            ParameterApplier::set_value(self.doc, address, *value)?;
         }
-        ParameterApplier::finalize_update(doc)?;
+        ParameterApplier::finalize_update(self.doc)?;
 
-        // Execute headless simulation so detector nodes are populated with optimal state[cite: 10, 12]
-        doc.analyze_headless()?;
+        // Run headless simulation so detectors immediately hold the optimal results[cite: 10, 12]
+        self.doc.analyze_headless()?;
 
         Ok(OptimizationSummary {
             initial_cost,
