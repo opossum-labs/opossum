@@ -13,7 +13,6 @@ use crate::{
     core_optics::{
         Appearance, NodeAttrExt, OpticNodeExt, OpticPorts, SurfacePorts,
         node_attr::{HasNodeAttr, NodePositioning},
-        volumetric::Volumetric,
     },
     error::{OpmResult, OpossumError},
     geometry::{FaceIndex, Geometry},
@@ -105,20 +104,21 @@ pub trait OpticNode: VisualNode + HasNodeAttr + OpticNodeAny {
     /// Installs the node's surfaces anew from its **current** properties and placement, which also
     /// builds the body between them as the node's medium (see
     /// [`OpticNodeExt::install_geometry`](crate::core_optics::OpticNodeExt::install_geometry)), so
-    /// [`Volumetric::propagate_inside_medium`] (Phase B) reads the very surfaces rays are traced at.
-    /// If the operating point provides a gain model that reads the inversion, the
+    /// [`OpticNodeExt::pass_through_volume_generic`] (Phase B) reads the very surfaces rays are
+    /// traced at. If the operating point provides a gain model that reads the inversion, the
     /// [`InversionField`](crate::gain::InversionField) is built from the pump configuration and stored
-    /// in that medium; otherwise the inversion stays `None`. Non-volume nodes return immediately,
-    /// without installing surfaces or touching the medium.
+    /// in that medium; otherwise the inversion stays `None`. A node whose geometry encloses no volume
+    /// (see [`OpticNodeExt::encloses_volume`]) returns immediately, without installing surfaces or
+    /// touching the medium.
     ///
     /// [`NodeGroup`](crate::nodes::NodeGroup) overrides this to recurse into every child node.
     ///
     /// # Errors
     ///
-    /// Returns an error if the node's surfaces cannot be installed, if the node encloses no body, or
-    /// if building the inversion field fails.
+    /// Returns an error if the node's geometry cannot be derived, if its surfaces cannot be
+    /// installed, or if building the inversion field fails.
     fn prepare_volume(&mut self, strategy: &dyn PropagationStrategy) -> OpmResult<()> {
-        if self.as_volume().is_none() {
+        if !self.encloses_volume()? {
             return Ok(());
         }
         self.update_surfaces()?;
@@ -218,15 +218,6 @@ pub trait OpticNode: VisualNode + HasNodeAttr + OpticNodeAny {
     fn set_inverted(&mut self, inverted: bool) -> OpmResult<()> {
         self.node_attr_mut().set_inverted(inverted);
         Ok(())
-    }
-
-    /// Return this node as a [`Volumetric`] element, if it encloses a volume of material.
-    ///
-    /// # Returns
-    ///
-    /// `Some(&dyn Volumetric)` if the element represents a medium, or `None` otherwise.
-    fn as_volume(&self) -> Option<&dyn Volumetric> {
-        None
     }
 
     /// Return how this node is drawn in a 3D view.

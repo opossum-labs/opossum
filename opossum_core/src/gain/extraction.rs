@@ -68,9 +68,8 @@ pub trait Extraction {
     -> OpmResult<Option<Inversion>>;
     /// Gain exponent accumulated along the whole chord a ray travels through the medium.
     ///
-    /// [`volumetric::Volumetric::propagate_inside_medium`](crate::core_optics::volumetric::Volumetric)
-    /// calls this once per ray that passes through the medium and exponentiates the result to get
-    /// the gain factor: `factor = exp(path_exponent(…))`.
+    /// The medium's `propagate_inside` (see [`Body`]) calls this once per ray that passes through it
+    /// and exponentiates the result to get the gain factor: `factor = exp(path_exponent(…))`.
     ///
     /// Shaped-pump models implement this by walking the ray through the
     /// [`InversionField`](super::InversionField) cell by cell (Amanatides–Woo exact traversal) and

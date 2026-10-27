@@ -11,7 +11,7 @@ pub mod helper {
         coatings::{CoatingConstantR, CoatingType},
         core_optics::{
             NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, OpticPorts, OpticRef, PortType,
-            Volumetric, node_attr::NodePositioning, optic_surface::OpticSurface,
+            node_attr::NodePositioning, optic_surface::OpticSurface,
         },
         error::{OpmResult, OpossumError},
         geometry::{
@@ -599,7 +599,7 @@ pub mod helper {
     ///
     /// Panics if the node has no `center thickness` property, if the optical axis does not pass
     /// through the volume, or if the derived geometry does not match the property.
-    pub fn test_volume_body<T: Default + Volumetric>() -> OpmResult<()> {
+    pub fn test_volume_body<T: Default + OpticNode>() -> OpmResult<()> {
         let mut node = T::default();
         node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let center_thickness = center_thickness_of(&node);
@@ -640,7 +640,7 @@ pub mod helper {
     /// # Errors
     ///
     /// Returns an error if the body cannot be derived or if the ray does not pass through it.
-    pub fn path_length_through<T: Volumetric>(
+    pub fn path_length_through<T: OpticNode>(
         node: &T,
         position: Point3<Length>,
     ) -> OpmResult<Length> {
@@ -697,7 +697,7 @@ pub mod helper {
     ///
     /// Panics if the node has no `center thickness` property or if its extent does not follow the
     /// optic shape.
-    pub fn test_optic_shape<T: Default + Volumetric>(default_edge: Length) -> OpmResult<()> {
+    pub fn test_optic_shape<T: Default + OpticNode>(default_edge: Length) -> OpmResult<()> {
         let mut node = T::default();
         node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let mid_thickness = center_thickness_of(&node) * 0.5;

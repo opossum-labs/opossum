@@ -6,9 +6,9 @@ use super::{Analyzer, AnalyzerRegistration, AnalyzerType, RayTraceConfig};
 use crate::{
     analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
     core_optics::{NodeAttrExt, OpticNode, node_attr::HasNodeAttr},
-    error::OpmResult,
+    error::{OpmResult, OpossumError},
     gain::{ActiveScenario, PumpConfig, PumpScenario},
-    light::{LightResult, lightdata::ray_data_builder::RayDataBuilder},
+    light::{LightData, LightResult, lightdata::ray_data_builder::RayDataBuilder},
     nodes::NodeGroup,
     prelude::EnergyDataBuilder,
     refractive_index::RefrIndexConst,
@@ -159,8 +159,22 @@ impl Analyzer for EnergyAnalyzer {
 pub trait AnalysisEnergy: OpticNode {
     /// Analyze the energy flow of an [`OpticNode`].
     ///
+    /// A node whose geometry encloses a volume may be an amplifier in the operating point being
+    /// analyzed: its gain model then amplifies the spectrum (see
+    /// [`Extraction::amplify_spectrum`](crate::gain::Extraction::amplify_spectrum)), so no node type
+    /// has to know about gain to take part in it.
+    ///
+    /// # TODO — host-material absorption for the energy flow
+    ///
+    /// Unlike a ray trace, this does **not** yet apply the absorption of the material the medium is
+    /// filled with: an energy flow analysis has no beam and therefore no path length, which
+    /// Lambert-Beer absorption needs. A nominal length still has to be defined for it, for instance
+    /// the chord of a ray sent along the optic's local +z through its anchor point.
+    ///
     /// # Errors
-    /// This function will return an error if the concrete implementation of the [`OpticNode`] fails.
+    /// This function will return an error if the concrete implementation of the [`OpticNode`] fails,
+    /// if the medium of an amplifying node was not prepared, or if its gain model refuses an energy
+    /// analysis.
     fn analyze(
         &mut self,
         mut incoming_data: LightResult,
@@ -190,10 +204,23 @@ pub trait AnalysisEnergy: OpticNode {
         let Some(mut data) = incoming_data.remove(in_port) else {
             return Ok(LightResult::default());
         };
-        // A component with a medium may be an amplifier in the operating point being analyzed. It is
-        // the capability that decides, so no node type has to know about gain to take part in it.
-        if let Some(volume) = self.as_volume() {
-            volume.propagate_energy_inside_medium(&mut data, config)?;
+        // `gain_model` is bound so the model it hands out outlives the extraction borrowed from it.
+        let gain_model = config.pump_config(self.node_attr().uuid()).gain_model();
+        if let Some(extraction) = gain_model.as_extraction()
+            && let LightData::Energy(spectrum) = &mut data
+            && !config.is_positioning_run()
+        {
+            let geometry = self.node_attr().runtime_geometry().ok_or_else(|| {
+                OpossumError::Analysis(format!(
+                    "node '{}': medium was not prepared before amplification",
+                    self.name()
+                ))
+            })?;
+            if let Some(body) = geometry.kind().as_body() {
+                extraction
+                    .amplify_spectrum(body, spectrum)
+                    .map_err(|e| OpossumError::Analysis(format!("node '{}': {e}", self.name())))?;
+            }
         }
         self.set_light_data(Some(data.clone()));
         Ok(LightResult::from([(out_port.clone(), data)]))

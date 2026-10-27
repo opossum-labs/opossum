@@ -3,7 +3,7 @@
 
 use crate::{
     analyzers::energy::AnalysisEnergy,
-    core_optics::{Appearance, NodeAttr, OpticNode, OpticNodeExt, SurfacePorts, Volumetric},
+    core_optics::{Appearance, NodeAttr, OpticNode, OpticNodeExt, SurfacePorts},
     error::{OpmResult, OpossumError},
     geometry::{
         Geometry,
@@ -157,7 +157,6 @@ impl Lens {
     }
 }
 
-impl Volumetric for Lens {}
 impl OpticNode for Lens {
     fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         let (
@@ -187,9 +186,6 @@ impl OpticNode for Lens {
             cross_section,
             self.material()?,
         )?))
-    }
-    fn as_volume(&self) -> Option<&dyn Volumetric> {
-        Some(self)
     }
     fn appearance(&self) -> Option<Appearance> {
         Some(Appearance::glass())

@@ -9,7 +9,6 @@ pub mod optic_ref;
 pub mod optic_surface;
 pub mod surface_config;
 pub mod surface_effect;
-pub mod volumetric;
 pub use appearance::{Appearance, SurfaceFinish};
 pub use node_attr::NodeAttr;
 pub use node_attr_ext::NodeAttrExt;
@@ -20,4 +19,6 @@ pub use optic_node_ext::OpticNodeExt;
 pub use optic_ports::{OpticPorts, PortType, SurfacePorts};
 pub use optic_ref::OpticRef;
 pub use surface_config::SurfaceConfig;
-pub use volumetric::Volumetric;
+
+#[cfg(test)]
+mod medium_tests;

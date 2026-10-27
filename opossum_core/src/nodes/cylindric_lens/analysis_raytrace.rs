@@ -1,7 +1,7 @@
 use super::CylindricLens;
 use crate::{
     analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
-    core_optics::Volumetric,
+    core_optics::OpticNodeExt,
     error::OpmResult,
     light::LightResult,
 };

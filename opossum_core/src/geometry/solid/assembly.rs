@@ -403,6 +403,18 @@ mod test {
         assert_eq!(cube()?.material(), None);
         Ok(())
     }
+    /// Light is not propagated through an assembly as through one medium: it refuses, rather than
+    /// passing the rays through untouched.
+    #[test]
+    fn an_assembly_is_not_propagated_through_as_one_medium() -> OpmResult<()> {
+        let mut cube = cube()?;
+        let body: &mut dyn Body = &mut cube;
+        let error = body
+            .propagate_inside(None, &mut [])
+            .expect_err("an assembly was propagated through as one medium");
+        assert!(error.to_string().contains("no single material"), "{error}");
+        Ok(())
+    }
     /// The crown lens of a doublet at the origin, its rear face (R = -40 mm) 5 mm behind it.
     fn crown_part() -> OpmResult<Part> {
         part_of(

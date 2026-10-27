@@ -14,7 +14,7 @@ use crate::{
         FaceIndex, Geometry, SurfaceMesh,
         body::{OPTIC_SHAPE, default_optic_shape},
     },
-    light::{LightData, LightResult, Rays, rays::ReflectedPart},
+    light::{LightData, LightRays, LightResult, Rays, rays::ReflectedPart},
     material::{MATERIAL, Material},
     nodes::fluence_detector::Fluence,
     properties::{Proptype, proptype::AssetRef, validator::Validator},
@@ -251,6 +251,93 @@ pub trait OpticNodeExt {
         strategy: &dyn PropagationStrategy,
         optic_surf_name: &str,
     ) -> OpmResult<LightResult>;
+
+    /// Guides a ray bundle through the volume of a node: in through its entry surface, through the
+    /// medium, out through its exit surface.
+    ///
+    /// This is the counterpart of [`OpticNodeExt::pass_through_surface_generic`] for the nodes whose
+    /// geometry encloses a volume of material (lens, wedge, cylindric lens, ...). The rays are
+    /// refracted into the material at the entry surface and out into the ambient medium at the exit
+    /// surface; what is reflected there is a ghost. In between, the medium acts on them (see
+    /// [`Body::propagate_inside`](crate::geometry::body::Body)) with the gain model the operating
+    /// point runs this node with - except in a positioning run, which has no operating point.
+    ///
+    /// # Parameters
+    ///
+    /// * `entry_surf_name`: name of the surface the rays enter through (typically `"input_1"`).
+    /// * `exit_surf_name`: name of the surface the rays leave through (typically `"output_1"`).
+    /// * `rays_bundle`: the ray bundle, modified in place.
+    /// * `strategy`: the analyzer-specific [`PropagationStrategy`].
+    ///
+    /// # Errors
+    ///
+    /// This function errors if the node's medium is not prepared or holds no single
+    /// [`Material`], if one of the two surfaces cannot be found, or if the propagation through
+    /// either of them or through the medium fails.
+    fn pass_through_volume_generic(
+        &mut self,
+        entry_surf_name: &str,
+        exit_surf_name: &str,
+        rays_bundle: &mut Vec<Rays>,
+        strategy: &dyn PropagationStrategy,
+    ) -> OpmResult<()>;
+
+    /// A unified helper function to analyze optical nodes that enclose a volume of material.
+    ///
+    /// This is the volume counterpart of [`OpticNodeExt::unified_analyze_single_surface_node`]: it
+    /// resolves the node's single input and output port, unwraps the incoming ray data, guides it
+    /// through the volume via [`OpticNodeExt::pass_through_volume_generic`] and packs the result
+    /// back onto the output port.
+    ///
+    /// Unlike the single-surface helper this does **not** call `set_light_data`: volume nodes are
+    /// never detectors, and the hook would clone the whole ray bundle for nothing.
+    ///
+    /// # Parameters
+    ///
+    /// * `incoming_data`: the [`LightResult`] arriving at the node's input port.
+    /// * `strategy`: the analyzer-specific [`PropagationStrategy`].
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the node does not have exactly one input and one output
+    /// port, if the incoming data is not geometric ray data, or if the propagation through the
+    /// volume fails.
+    fn unified_analyze_volume_node(
+        &mut self,
+        incoming_data: LightResult,
+        strategy: &dyn PropagationStrategy,
+    ) -> OpmResult<LightResult>;
+
+    /// The ghost focus variant of [`OpticNodeExt::unified_analyze_volume_node`].
+    ///
+    /// It is a separate function rather than a branch of the ray trace variant because the two
+    /// differ in how they treat an unconnected input port: ray tracing yields no output at all,
+    /// while a ghost focus analysis still reports the (then empty) bundle on the output port.
+    ///
+    /// # Parameters
+    ///
+    /// * `incoming_data`: the [`LightRays`] arriving at the node's input port.
+    /// * `strategy`: the analyzer-specific [`PropagationStrategy`].
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the node does not have exactly one input and one output
+    /// port, or if the propagation through the volume fails.
+    fn unified_analyze_volume_node_ghost_focus(
+        &mut self,
+        incoming_data: LightRays,
+        strategy: &dyn PropagationStrategy,
+    ) -> OpmResult<LightRays>;
+
+    /// Return whether this node's geometry encloses a volume of material.
+    ///
+    /// The geometry is the one answer to that: a node that describes a solid is a volume node, one
+    /// that describes a single surface or no shape at all is not.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the node's geometry cannot be derived.
+    fn encloses_volume(&self) -> OpmResult<bool>;
 
     /// Cut copies of the ray bundles that passed a surface to what the surface records.
     ///
@@ -606,6 +693,110 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
             }
             LightData::Fourier => Ok(LightResult::default()),
         }
+    }
+
+    fn pass_through_volume_generic(
+        &mut self,
+        entry_surf_name: &str,
+        exit_surf_name: &str,
+        rays_bundle: &mut Vec<Rays>,
+        strategy: &dyn PropagationStrategy,
+    ) -> OpmResult<()> {
+        let node_name = self.name().to_owned();
+        // Behind the exit surface the node's ambient index applies, inside it the material's.
+        let index_inside = self
+            .node_attr()
+            .runtime_geometry()
+            .and_then(|geometry| geometry.kind().as_body()?.material())
+            .map(|material| material.refractive_index_type().clone())
+            .ok_or_else(|| {
+                OpossumError::Analysis(format!(
+                    "node '{node_name}': its medium holds no material to refract with"
+                ))
+            })?;
+        let backward = self.inverted();
+        self.pass_through_surface_generic(
+            entry_surf_name,
+            &Refraction(Some(&index_inside)),
+            rays_bundle,
+            strategy,
+            backward,
+            ReflectedPart::Ghost,
+        )?;
+        if !strategy.is_positioning_run() {
+            // `gain_model` is bound so the model it hands out outlives the extraction borrowed from it.
+            let gain_model = strategy.pump_config(self.node_attr().uuid()).gain_model();
+            let body = self
+                .node_attr_mut()
+                .runtime_geometry_mut()
+                .and_then(|geometry| geometry.kind_mut().as_body_mut())
+                .ok_or_else(|| {
+                    OpossumError::Analysis(format!(
+                        "node '{node_name}': medium was not prepared before propagation"
+                    ))
+                })?;
+            body.propagate_inside(gain_model.as_extraction(), rays_bundle)
+                .map_err(|e| OpossumError::Analysis(format!("node '{node_name}': {e}")))?;
+        }
+        self.pass_through_surface_generic(
+            exit_surf_name,
+            &Refraction(Some(&strategy.ambient_refractive_index())),
+            rays_bundle,
+            strategy,
+            backward,
+            ReflectedPart::Ghost,
+        )
+    }
+
+    fn unified_analyze_volume_node(
+        &mut self,
+        mut incoming_data: LightResult,
+        strategy: &dyn PropagationStrategy,
+    ) -> OpmResult<LightResult> {
+        let (in_port_name, out_port_name) = single_io_port_names(self)?;
+        let Some(data) = incoming_data.remove(&in_port_name) else {
+            return Ok(LightResult::default());
+        };
+        let LightData::Geometric(rays) = data else {
+            return Err(OpossumError::Analysis(
+                "expected ray data at input port".into(),
+            ));
+        };
+        let mut rays_bundle = vec![rays];
+        self.pass_through_volume_generic(
+            &in_port_name,
+            &out_port_name,
+            &mut rays_bundle,
+            strategy,
+        )?;
+        Ok(LightResult::from([(
+            out_port_name,
+            LightData::Geometric(rays_bundle.remove(0)),
+        )]))
+    }
+
+    fn unified_analyze_volume_node_ghost_focus(
+        &mut self,
+        incoming_data: LightRays,
+        strategy: &dyn PropagationStrategy,
+    ) -> OpmResult<LightRays> {
+        let (in_port_name, out_port_name) = single_io_port_names(self)?;
+        let mut rays_bundle = incoming_data
+            .get(&in_port_name)
+            .map_or_else(Vec::<Rays>::new, Clone::clone);
+        self.pass_through_volume_generic(
+            &in_port_name,
+            &out_port_name,
+            &mut rays_bundle,
+            strategy,
+        )?;
+        Ok(LightRays::from([(out_port_name, rays_bundle)]))
+    }
+
+    fn encloses_volume(&self) -> OpmResult<bool> {
+        Ok(self
+            .create_geometry()?
+            .is_some_and(|geometry| geometry.kind().as_body().is_some()))
     }
 
     fn record_within_window(

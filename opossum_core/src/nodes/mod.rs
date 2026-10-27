@@ -71,7 +71,7 @@ pub use wedge::Wedge;
 
 use crate::{
     analyzers::Analyzable,
-    core_optics::OpticRef,
+    core_optics::{OpticNodeExt, OpticRef},
     error::{OpmResult, OpossumError},
 };
 use std::{collections::HashSet, sync::LazyLock};
@@ -135,14 +135,16 @@ pub fn node_types() -> Vec<(&'static str, &'static str)> {
 }
 /// The node types that enclose a volume of material, derived from the node registry.
 ///
-/// Every registered type is instantiated once and asked whether it is
-/// [`Volumetric`](crate::core_optics::Volumetric). Doing that once is worth a `LazyLock`: it builds
-/// one node of every type in the program, while the answer cannot change at runtime.
+/// Every registered type is instantiated once and asked whether its geometry encloses a volume (see
+/// [`OpticNodeExt::encloses_volume`](crate::core_optics::OpticNodeExt::encloses_volume)). Doing that
+/// once is worth a `LazyLock`: it builds one node of every type in the program, while the answer
+/// cannot change at runtime.
 static VOLUME_NODE_TYPES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     node_types()
         .into_iter()
         .filter(|(node_type, _)| {
-            create_node_ref(node_type).is_ok_and(|optic_ref| optic_ref.as_volume().is_some())
+            create_node_ref(node_type)
+                .is_ok_and(|optic_ref| optic_ref.encloses_volume().unwrap_or(false))
         })
         .map(|(node_type, _)| node_type)
         .collect()
@@ -150,9 +152,10 @@ static VOLUME_NODE_TYPES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
 
 /// Return whether nodes of the given type enclose a volume of material.
 ///
-/// This is the question [`OpticNode::as_volume`](crate::core_optics::OpticNode::as_volume) answers,
-/// for a caller that has only a type name and no node: a user interface deciding whether to offer
-/// amplification for a component, for instance. It is derived from the very same capability, so the
+/// This is the question
+/// [`OpticNodeExt::encloses_volume`](crate::core_optics::OpticNodeExt::encloses_volume) answers, for
+/// a caller that has only a type name and no node: a user interface deciding whether to offer
+/// amplification for a component, for instance. It is derived from the very same geometry, so the
 /// two cannot drift apart.
 ///
 /// # Arguments
@@ -280,7 +283,7 @@ mod test {
     fn every_volume_body_is_recorded() -> OpmResult<()> {
         let mut actual = Vec::new();
         for (label, node) in placed_configurations()? {
-            if node.as_volume().is_some() {
+            if node.encloses_volume()? {
                 let frame = node.effective_node_iso().unwrap_or_else(Isometry::identity);
                 actual.push((
                     label,
