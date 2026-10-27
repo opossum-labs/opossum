@@ -249,3 +249,21 @@ impl Operand for StandardOperand {
         }
     }
 }
+
+impl From<TargetValueOperand> for StandardOperand {
+    fn from(op: TargetValueOperand) -> Self {
+        Self::Target(op)
+    }
+}
+
+impl From<ThresholdOperand> for StandardOperand {
+    fn from(op: ThresholdOperand) -> Self {
+        Self::Threshold(op)
+    }
+}
+
+impl From<MaxTotalLengthOperand> for StandardOperand {
+    fn from(op: MaxTotalLengthOperand) -> Self {
+        Self::MaxTotalLength(op)
+    }
+}

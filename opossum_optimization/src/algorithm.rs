@@ -1,19 +1,23 @@
-use crate::variable::FreeVariable;
+use crate::variable::{FiniteDifferenceMethod, FreeVariable};
 use opossum_core::error::{OpmResult, OpossumError};
 use serde::{Deserialize, Serialize};
 
 /// Supported numerical optimization algorithms and their solver-specific controls[cite: 1].
+/// Supported numerical optimization algorithms and their solver-specific controls.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum OptimizationAlgorithm {
-    /// Nelder-Mead simplex direct search method[cite: 1].
+    /// Nelder-Mead simplex direct search method (derivative-free).
     NelderMead {
-        /// Maximum number of simplex iterations.
         max_iterations: u64,
-        /// Standard deviation tolerance across simplex vertices for termination[cite: 1].
         sd_tolerance: f64,
     },
-    // Future: SimulatedAnnealing { max_steps: u64, initial_temp: f64, cooling_factor: f64 },
-    // Future: LBFGS { max_iterations: u64, gradient_tolerance: f64 },
+    /// Limited-memory Broyden-Fletcher-Goldfarb-Shanno (quasi-Newton method)[cite: 1].
+    LBFGS {
+        max_iterations: u64,
+        gradient_tolerance: f64,
+        history_size: usize,
+        gradient_method: FiniteDifferenceMethod,
+    },
 }
 
 impl Default for OptimizationAlgorithm {
@@ -31,10 +35,21 @@ impl OptimizationAlgorithm {
         }
     }
 
-    /// Sets the maximum iteration count for algorithms supporting it[cite: 1].
-    pub const fn with_max_iterations(mut self, iters: u64) -> Self {
+    /// Creates a default L-BFGS configuration with central differences[cite: 1].
+    pub fn lbfgs() -> Self {
+        Self::LBFGS {
+            max_iterations: 60,
+            gradient_tolerance: 1e-5,
+            history_size: 10,
+            gradient_method: FiniteDifferenceMethod::Central,
+        }
+    }
+
+    /// Sets the maximum iteration count.
+    pub fn with_max_iterations(mut self, iters: u64) -> Self {
         match &mut self {
             Self::NelderMead { max_iterations, .. } => *max_iterations = iters,
+            Self::LBFGS { max_iterations, .. } => *max_iterations = iters,
         }
         self
     }
@@ -43,6 +58,7 @@ impl OptimizationAlgorithm {
     pub const fn with_sd_tolerance(mut self, tol: f64) -> Self {
         match &mut self {
             Self::NelderMead { sd_tolerance, .. } => *sd_tolerance = tol,
+            Self::LBFGS { gradient_tolerance, .. } => *gradient_tolerance = tol,
         }
         self
     }

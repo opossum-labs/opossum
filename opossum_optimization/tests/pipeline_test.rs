@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use opossum_core::{
     apertures::CircleShape,
     core_optics::NodeAttrExt,
@@ -8,8 +10,7 @@ use opossum_core::{
     prelude::*,
 };
 use opossum_optimization::{
-    BoxBounds, FreeVariable, MaxTotalLengthOperand, MetricReader, ObservableAddress,
-    OpticOptimizer, OptimizationAlgorithm, ParameterAddress, SchemaExtractor, TargetValueOperand,
+    BoxBounds, FreeVariable, MaxTotalLengthOperand, MeritFunction, MetricReader, ObservableAddress, OpticOptimizer, OptimizationAlgorithm, ParameterAddress, SchemaExtractor, TargetValueOperand,
 };
 use uom::si::f64::Length;
 use uuid::Uuid;
@@ -459,6 +460,124 @@ fn test_optimize_kepler_with_geometric_length_penalty() -> OpmResult<()> {
         "Total length ({:.3} mm) should respect the 185 mm constraint",
         total_length * 1e3
     );
+
+    Ok(())
+}
+#[test]
+fn test_merit_gradient_calculation() -> OpmResult<()> {
+    let (doc, analyzer_id, lens2_id, spot_id) = build_kepler_setup(millimeter!(45.0))?;
+
+    let dist_addr = ParameterAddress::ConnectionDistance {
+        src_id: lens2_id,
+        src_port: "output_1".into(),
+    };
+    let spot_addr = ObservableAddress {
+        analyzer_id,
+        node_id: spot_id,
+        metric_name: "rms beam radius".into(),
+    };
+
+    let free_var = FreeVariable::new(dist_addr, "image_distance");
+    let operand = TargetValueOperand::new("spot", spot_addr, 0.0, 1.0, 1e-3);
+
+    let merit = MeritFunction::new(
+        doc,
+        vec![free_var],
+        vec![],
+        vec![Arc::new(operand)],
+    )?;
+
+    // 1. In defokussierter Lage (45 mm): Steigung dPhi/dd muss negativ sein (Kosten sinken bei Vergrößerung)
+    let grad_45 = merit.compute_gradient(&[0.045]);
+    assert!(
+        grad_45[0] < -50.0,
+        "Gradient at 45 mm should be strongly negative, got: {}",
+        grad_45[0]
+    );
+
+    // 2. Nahe dem Fokus (58 mm): Steigung dPhi/dd muss nahe Null sein (lokales Minimum)
+    let grad_58 = merit.compute_gradient(&[0.058]);
+    assert!(
+        grad_58[0].abs() < grad_45[0].abs() * 0.1,
+        "Gradient at focus (58 mm) must be much smaller than at 45 mm, got: {}",
+        grad_58[0]
+    );
+
+    eprintln!("\n=== GRADIENT VERIFICATION ===");
+    eprintln!("Gradient at 45 mm: {:10.2}", grad_45[0]);
+    eprintln!("Gradient at 58 mm: {:10.2}", grad_58[0]);
+    eprintln!("=============================\n");
+
+    Ok(())
+}
+#[test]
+fn test_optimize_kepler_focal_position_lbfgs() -> OpmResult<()> {
+    // 1. Defokussiertes Setup: Start bei 45 mm statt ~58 mm
+    let (mut doc, analyzer_id, lens2_id, spot_id) =
+        build_kepler_setup(millimeter!(45.0))?;
+
+    let dist_address = ParameterAddress::ConnectionDistance {
+        src_id: lens2_id,
+        src_port: "output_1".into(),
+    };
+
+    let spot_observable_addr = ObservableAddress {
+        analyzer_id,
+        node_id: spot_id,
+        metric_name: "rms beam radius".into(),
+    };
+
+    // 2. Optimierung mit L-BFGS (Quasi-Newton-Verfahren mit finiten Differenzen)
+    let summary = OpticOptimizer::new(&mut doc)
+        .add_variable(
+            FreeVariable::new(dist_address.clone(), "image_drift_distance")
+                .with_bounds(BoxBounds::new(0.030, 0.080)?),
+        )?
+        .add_operand(TargetValueOperand::new(
+            "minimize_rms_spot",
+            spot_observable_addr.clone(),
+            0.0,
+            1.0,
+            1.0e-3,
+        ))
+        .with_algorithm(
+            OptimizationAlgorithm::lbfgs()
+                .with_max_iterations(25)
+        )
+        .optimize()?;
+
+    // 3. Verifikation
+    let best_distance = summary.value(&dist_address).unwrap();
+    let optimized_rms = MetricReader::read_metric(&doc, &spot_observable_addr)?;
+
+    assert!(
+        (best_distance - 0.058).abs() < 0.005,
+        "Optimal distance should be near 58 mm, got: {:.4} m",
+        best_distance
+    );
+    assert!(
+        optimized_rms < 1.0e-3,
+        "Optimized RMS spot radius must be under 1 mm, got: {:.6} m",
+        optimized_rms
+    );
+    assert!(
+        summary.final_cost < summary.initial_cost,
+        "Cost must improve: initial={}, final={}",
+        summary.initial_cost,
+        summary.final_cost
+    );
+
+    eprintln!("\n=== L-BFGS OPTIMIZATION RESULT ===");
+    eprintln!("Iterations        : {}", summary.iterations);
+    eprintln!("Initial Cost      : {:.4}", summary.initial_cost);
+    eprintln!(
+        "Final Cost        : {:.4} (-{:.1}%)",
+        summary.final_cost,
+        summary.relative_improvement() * 100.0
+    );
+    eprintln!("Optimized Distance: {:8.3} mm", best_distance * 1e3);
+    eprintln!("Final RMS Spot    : {:8.2} µm", optimized_rms * 1e6);
+    eprintln!("==================================\n");
 
     Ok(())
 }

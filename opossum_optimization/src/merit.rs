@@ -1,12 +1,8 @@
-use argmin::core::{CostFunction, Error};
+use argmin::core::{CostFunction, Error, Gradient};
 use std::sync::Arc;
 
 use crate::{
-    applier::ParameterApplier,
-    coupling::ParameterCoupling,
-    operand::{EvaluationContext, Operand},
-    resolver::ParameterResolver,
-    variable::FreeVariable,
+    applier::ParameterApplier, coupling::ParameterCoupling, operand::{EvaluationContext, Operand}, resolver::ParameterResolver, variable::{FiniteDifferenceMethod, FreeVariable},
 };
 use opossum_core::{error::OpmResult, opm_document::OpmDocument};
 
@@ -25,6 +21,7 @@ pub struct MeritFunction {
     operands: Vec<Arc<dyn Operand>>,
     fatal_penalty: f64,
     bounds_penalty_weight: f64,
+    gradient_method: FiniteDifferenceMethod,
 }
 
 impl MeritFunction {
@@ -47,7 +44,14 @@ impl MeritFunction {
             operands,
             fatal_penalty: DEFAULT_FATAL_PENALTY,
             bounds_penalty_weight: DEFAULT_BOUNDS_PENALTY_WEIGHT,
+            gradient_method: FiniteDifferenceMethod::default(),
         })
+    }
+
+    /// Configures the finite difference approximation method for gradients.
+    pub fn with_gradient_method(mut self, method: FiniteDifferenceMethod) -> Self {
+        self.gradient_method = method;
+        self
     }
 
     /// Sets a custom penalty value for fatal simulation crashes[cite: 1].
@@ -78,60 +82,90 @@ impl MeritFunction {
     ///
     /// Adheres to the strict no-panic guarantee: any simulation failure or unresolvable
     /// metric is caught and converted into a large penalty cost[cite: 1].
+    /// Evaluates the scalar cost Phi(x).
     pub fn evaluate(&self, x: &[f64]) -> f64 {
-        // 1. Calculate continuous penalty for box-bound violations[cite: 1]
         let mut total_cost = 0.0;
         for (var, &val) in self.free_variables.iter().zip(x.iter()) {
             if let Some(bounds) = &var.bounds {
                 let violation = bounds.penalty(val);
                 if violation > 0.0 {
-                    total_cost = self.bounds_penalty_weight.mul_add(violation, total_cost);
+                    total_cost += self.bounds_penalty_weight * violation;
                 }
             }
         }
 
-        // 2. Clone pristine blueprint document (thread-isolated)[cite: 1]
         let mut working_doc = self.blueprint.clone();
 
-        // 3. Resolve solver parameters and couplings[cite: 1]
-        let parameter_map =
-            match ParameterResolver::resolve(&self.free_variables, &self.couplings, x) {
-                Ok(map) => map,
-                Err(_) => return self.fatal_penalty,
-            };
+        let parameter_map = match ParameterResolver::resolve(&self.free_variables, &self.couplings, x) {
+            Ok(map) => map,
+            Err(_) => return self.fatal_penalty,
+        };
 
-        // 4. Apply all parameters to the document[cite: 1]
         for (address, value) in parameter_map {
             if ParameterApplier::set_value(&mut working_doc, &address, value).is_err() {
                 return self.fatal_penalty;
             }
         }
 
-        // 5. Rebuild surfaces across modified nodes[cite: 1]
         if ParameterApplier::finalize_update(&mut working_doc).is_err() {
             return self.fatal_penalty;
         }
 
-        // 6. Run optical simulation across all configured analyzers[cite: 1, 2]
         if working_doc.analyze_headless().is_err() {
             return self.fatal_penalty;
         }
 
-        // 7. Evaluate all configured operands[cite: 1]
         let context = EvaluationContext::new(&working_doc);
         for operand in &self.operands {
             match operand.evaluate(&context) {
                 Ok(operand_cost) => {
                     total_cost += operand_cost;
                 }
-                Err(err) => {
-                    eprintln!("DEBUG: Operand '{}' failed with: {err:?}", operand.name());
-                    total_cost = self.fatal_penalty.mul_add(0.1, total_cost);
+                Err(_) => {
+                    total_cost += self.fatal_penalty * 0.1;
                 }
             }
         }
 
         total_cost
+    }
+    /// Computes the numerical gradient vector using adaptive finite differences.
+    pub fn compute_gradient(&self, x: &[f64]) -> Vec<f64> {
+        let n = self.free_variables.len();
+        let mut gradient = vec![0.0; n];
+
+        match self.gradient_method {
+            FiniteDifferenceMethod::Central => {
+                for i in 0..n {
+                    let h = self.free_variables[i].finite_difference_step(x[i]);
+                    
+                    let mut x_plus = x.to_vec();
+                    x_plus[i] += h;
+
+                    let mut x_minus = x.to_vec();
+                    x_minus[i] -= h;
+
+                    let f_plus = self.evaluate(&x_plus);
+                    let f_minus = self.evaluate(&x_minus);
+
+                    gradient[i] = (f_plus - f_minus) / (2.0 * h);
+                }
+            }
+            FiniteDifferenceMethod::Forward => {
+                let f_base = self.evaluate(x);
+                for i in 0..n {
+                    let h = self.free_variables[i].finite_difference_step(x[i]);
+                    
+                    let mut x_plus = x.to_vec();
+                    x_plus[i] += h;
+
+                    let f_plus = self.evaluate(&x_plus);
+                    gradient[i] = (f_plus - f_base) / h;
+                }
+            }
+        }
+
+        gradient
     }
 }
 
@@ -141,5 +175,14 @@ impl CostFunction for MeritFunction {
 
     fn cost(&self, param: &Self::Param) -> Result<Self::Output, Error> {
         Ok(self.evaluate(param))
+    }
+}
+
+impl Gradient for MeritFunction {
+    type Param = Vec<f64>;
+    type Gradient = Vec<f64>;
+
+    fn gradient(&self, param: &Self::Param) -> Result<Self::Gradient, Error> {
+        Ok(self.compute_gradient(param))
     }
 }
