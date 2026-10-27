@@ -27,7 +27,8 @@ and from what uses the result; the rest of this page explains each box.
    - The node derives its *geometry* from the shape (`create_geometry`), stated relative to the node. It is derived
      again whenever it is needed, so it cannot fall out of step with the properties. It holds the numbered *faces*,
      each with its *optic surface*, where each face ends sideways, and, for a solid, the *body* of material between
-     its faces. The body has no surfaces of its own; it is bounded by the very faces rays are traced at.
+     its faces, with the material it is filled with. The body has no surfaces of its own; it is bounded by the very
+     faces rays are traced at.
    - `effective_node_iso` states where the node sits and how it is turned: its position followed by its alignment.
    - Installing the geometry (`install_geometry`) moves it by the node's placement: every face and every rim moves,
      nothing else changes. Every face then takes the coating and the LIDT of its surface property, and every port
@@ -52,28 +53,29 @@ gain model acts in. They therefore cannot disagree.
 The first thing a geometry states is what kind of component it is:
 
 - A **surface** has no thickness: a thin mirror, a grating, a filter, a detector.
-- A **solid** encloses material between its faces: a lens, a wedge. There are three kinds of solid, see below.
+- A **solid** encloses material between its faces: a lens, a wedge. It holds the material it is filled with, which
+  the node takes from its material property when it derives the geometry. There are three kinds of solid, see below.
 
-Separate from its geometry, a node declares *capabilities*:
+Whether a node has a *medium* — a material, absorption and possibly gain — is therefore answered by its geometry
+alone (`OpticNodeExt::encloses_volume`): a node whose geometry is a solid has one, every other node has none.
 
-- **Volumetric**: the node has a medium, with a material, absorption and possibly gain, and is drawn as a body.
-- **Planar**: the node is drawn as a single surface of a given kind (reflective, transmissive, detector).
+Separate from its geometry, every node states its *appearance*: whether and how it is drawn in the 3D view
+(`OpticNode::appearance`). It only says what a component is drawn in and never affects a simulation. Some nodes are
+traced at a plane but state no appearance, so they are not drawn at all.
 
-The two answers go together but are not the same question. Some nodes are traced at a plane but are neither planar
-nor volumetric, so they are not drawn at all.
-
-| Group | Nodes | Geometry preset | Capability |
+| Group | Nodes | Geometry preset | Appearance |
 |---|---|---|---|
-| Volume components | lens, cylindric lens, wedge | `singlet`, `cylindrical_singlet`, `wedge` (all extruded solids) | Volumetric |
-| Surface components | mirror, parabolic mirror | `surface` | Planar |
-| | grating, beam splitter, ideal filter, paraxial surface | `plane` | Planar |
-| | energy meter, fluence detector, spectrometer, spot diagram, wavefront monitor | `detector` | Planar |
+| Volume components | lens, cylindric lens, wedge | `singlet`, `cylindrical_singlet`, `wedge` (all extruded solids) | glass |
+| Surface components | mirror, parabolic mirror | `surface` | mirror |
+| | beam splitter | `plane` | mirror |
+| | grating | `plane` | iridescent |
+| | ideal filter, paraxial surface | `plane` | transmissive |
+| | energy meter, fluence detector, spectrometer, spot diagram, wavefront monitor | `detector` | detector |
 | Traced, not drawn | source, dummy, ray propagation visualizer | `plane` | none |
 | No shape of its own | group, reference | none | none |
 
-Every node type has to state its geometry: the compiler forces it. Nothing ties the capability to the kind of
-geometry, though. A volumetric node has to describe a solid, otherwise preparing its medium fails at run time; a
-test checks this for every node type.
+Every node type has to state its geometry and its appearance: neither method has a default, so the compiler forces
+both. Glass takes its refractive index from the material of the solid, so only a solid can be drawn as glass.
 
 ### Three kinds of solid
 
@@ -95,7 +97,7 @@ test checks this for every node type.
 All kinds are moved the same way. Each says whether a point lies inside it, how far a ray travels through it and
 which side of each of its faces it lies on (the `Body`), and where its faces end sideways (`GeometryKind::includes`).
 No node type uses a parametric solid or an assembly so far; they are described already so that the data model is
-settled before the first component needs them. Three limits are stated, not hidden:
+settled before the first component needs them. Four limits are stated, not hidden:
 
 - The bounding box of a parametric solid or an assembly is not determined yet, so a gain grid over such a medium is
   refused.
@@ -103,6 +105,8 @@ settled before the first component needs them. Three limits are stated, not hidd
   closed surface, such as a ball, cannot be traced yet.
 - A parametric solid cannot be meshed yet: its faces end where they meet each other, which no outline states. The
   3D view lists such a node as skipped instead of drawing it.
+- An assembly is filled with the materials of its parts and names no single one, so light is not propagated through
+  it as one medium yet; this is refused.
 
 ### Faces, optic shape and rim
 
@@ -284,13 +288,13 @@ All paths are relative to `opossum_core/src` unless stated otherwise.
 | `GeometryKind` | `geometry/node_geometry.rs` | what every kind answers: the optic surfaces of its numbered faces (`surface`, `surface_mut`), the names of its faces (`face_name`), where they end (`includes`), the window of a detector, its body (`as_body`, `as_body_mut`), how it moves (`move_by`) and how it is drawn (`mesh`). It has no default methods, so a new kind has to answer every question |
 | `FaceIndex` | `geometry/face.rs` | the number of a face in its geometry |
 | `SurfaceGeometry`, `SurfaceExtent` | `geometry/node_geometry.rs` | a single surface: one face, and whether it is open, ends at an edge or records within a window |
-| `Extruded` | `geometry/solid/extruded.rs` | two faces capping a profile; holds a `Rim` |
+| `Extruded` | `geometry/solid/extruded.rs` | two faces capping a profile; holds a `Rim` and its material |
 | `ParametricSolid`, `Side` | `geometry/solid/parametric.rs`, `geometry/solid/mod.rs` | the intersection of the inner sides of several faces |
 | `Assembly`, `Part`, `Interface`, `FaceId` | `geometry/solid/assembly.rs` | several solids sharing interfaces |
 | `Face` | `geometry/face.rs` | one surface: its shape at the frame of its vertex. Intersects rays, tells which side of it a point lies on, moves |
 | `SurfaceShape`, `GeoSurface`, `Plane`, `Sphere`, `Cylinder`, `Parabola` | `geometry/surface/` | the shape of a surface and its math in the vertex frame; `SurfaceShape::as_geo_surface` hands out the math |
 | `Rim` | `geometry/rim.rs` | an outline at a frame: whether a point lies within it, whether a face reaches a point |
-| `Body`, `BoundingBox` | `geometry/body/mod.rs` | what a volume answers: is a point inside, how far a ray travels in it, which box encloses it, which side of a face it lies on, and the inversion a gain model built in it (`inversion`, `inversion_mut`). Each kind of solid implements it next to its definition |
+| `Body`, `BoundingBox` | `geometry/body/mod.rs` | what a volume answers: is a point inside, how far a ray travels in it, which box encloses it, which side of a face it lies on, the material it is filled with (`material`, none for an assembly or a reference not resolved yet) and the inversion a gain model built in it (`inversion`, `inversion_mut`). Each kind of solid implements it next to its definition. What the medium does to the rays passing it (`propagate_inside`: gain and absorption along the chord) is a method of `dyn Body`, the same for every kind |
 | `OpticShape`, `Outline`, `Bore` | `apertures/optic_shape.rs` | value of the `optic shape` property; the outline says whether a point lies within it |
 | `OutlineMesh` | `apertures/mesh.rs` | an outline triangulated in its plane (`Outline::triangulate`): where a face is sampled when it is drawn |
 | `SurfaceMesh` | `geometry/mesh.rs` | one drawn patch of surface: points, normals and triangles. A face laid over an outline mesh gives one (`Face::mesh_over`), and the lateral face of a solid is drawn between two (`SurfaceMesh::between`) |
@@ -301,7 +305,7 @@ All paths are relative to `opossum_core/src` unless stated otherwise.
 | `ReflectedPart` | `light/rays.rs` | which part of a split is the intended beam: the position history, bounce counter and bundle identity of both parts |
 | `OpticPorts` | `core_optics/optic_ports.rs` | the names of the input and output ports, graph logic only |
 | `SurfacePorts` | `core_optics/optic_ports.rs` | the ports a node declares, each with the face it sits on, and its splitting faces (`OpticNode::surface_ports`); `face_of` looks one up |
-| `Volumetric`, `Planar` | `core_optics/volumetric.rs`, `core_optics/planar.rs` | the capabilities |
+| `Appearance`, `SurfaceFinish` | `core_optics/appearance.rs` | how a node is drawn (`OpticNode::appearance`), with the presets `mirror`, `transmissive`, `detector` and `glass` |
 
 ### Example 1: a plano-convex lens
 
@@ -319,7 +323,9 @@ Light runs along +z.
 1. `Lens::create_geometry` (`nodes/lens/mod.rs`) reads the three properties.
 2. It asks `OpticNodeExt::cross_section` (`core_optics/optic_node_ext.rs`) for the outline of the optic shape. An
    open optic shape has none, and `Lens::create_geometry` refuses it, since the medium would be unbounded.
-3. It returns `Geometry::singlet(50 mm, ∞, 5 mm, circle)`.
+3. It asks `OpticNodeExt::material` for the material property as it is stored: embedded, or, while a document is
+   being loaded, still a reference that is resolved afterwards.
+4. It returns `Geometry::singlet(50 mm, ∞, 5 mm, circle, material)`.
 
 `Geometry::singlet` hands this on to `Geometry::two_faced` as:
 
@@ -328,7 +334,7 @@ Light runs along +z.
 - the rear vertex `Isometry::new_along_z(5 mm)`.
 
 `two_faced` builds `Extruded::new(axis = identity, front = Face(Sphere, identity), rear = Face(Plane, z = 5 mm),
-circle)` and returns it as `Geometry::Extruded`.
+circle, material)` and returns it as `Geometry::Extruded`.
 
 `Extruded::new` checks the reach of both faces: the circle reaches 12.5 mm from the axis, and the sphere reaches
 50 mm. A front curvature of 10 mm would be refused with "the front face does not reach the edge of its optic shape,
@@ -385,7 +391,7 @@ ports          = input_1 → face 0, output_1 → face 1
 The rim was moved together with the faces, so asking where a face ends needs no recomputation.
 
 **Step 4: the medium.** After the alignment run the analyzer calls `reset_data` and then `OpticNode::prepare_volume`.
-For a volume node, `prepare_volume` does the following:
+For a node whose geometry encloses a volume (`OpticNodeExt::encloses_volume`), `prepare_volume` does the following:
 
 1. It calls `update_surfaces` once more, which rebuilds the surfaces and the medium as in Step 3.
 2. If the gain model reads an inversion, it builds one and stores it in the body of the medium
@@ -397,17 +403,20 @@ face 1 under `output_1`, the plane. It knows no port names.
 
 **Step 5: trace.** `OpticGraph::analyze_raytrace` (`nodes/node_group/optic_graph/raytrace.rs`) walks the graph and
 hands each node the light that arrives at its ports. `Lens::analyze` (`nodes/lens/analysis_raytrace.rs`) calls
-`Volumetric::unified_analyze_volume_node`, which does two things:
+`OpticNodeExt::unified_analyze_volume_node`, the volume counterpart of `unified_analyze_single_surface_node`, which
+does two things:
 
 1. `single_io_port_names(self)` returns `("input_1", "output_1")`. It takes them from `self.ports()`, which accounts
    for inversion.
-2. `Volumetric::pass_through_volume_generic("input_1", "output_1", ..)` runs three steps:
+2. `OpticNodeExt::pass_through_volume_generic("input_1", "output_1", ..)` runs three steps:
    1. `pass_through_surface_generic("input_1", &Refraction(Some(index of the material)), .., ReflectedPart::Ghost)`
       finds the face under `input_1` (`face_of_port`, face 0), lets the runtime geometry of the lens act on the
       bundles and follows this chain: `Geometry::propagate_rays` → `Geometry::interact_with_rays` →
-      `Geometry::intersect(face 0, ray)` → `Refraction::act_at` → `Ray::refract_at(&hit, coating, n)`.
-   2. `propagate_inside_medium` applies gain and absorption along the chord through the body of the medium. It does
-      not move the rays.
+      `Geometry::intersect(face 0, ray)` → `Refraction::act_at` → `Ray::refract_at(&hit, coating, n)`. The index
+      is that of the material the body of the runtime geometry holds.
+   2. `Body::propagate_inside` applies gain and absorption along the chord through the body of the medium: the gain
+      model the operating point runs the node with, and the absorption of the body's material. It does not move the
+      rays, and a positioning run skips it.
    3. `pass_through_surface_generic("output_1", &Refraction(Some(ambient index)), ..)` runs the same chain at face 1,
       the rear plane.
 
@@ -436,8 +445,8 @@ Nothing else acts on a ray that misses: whatever a surface does happens in its e
   - The body stays the same.
 - *Changed property.* After `set_property("center thickness", ..)` the description changes at once. The runtime
   surfaces, and the medium with them, stay stale until the next rebuild: at the start of an analysis, or through an
-  explicit `update_surfaces`. Whatever builds the shape from `create_geometry()` directly, such as the 3D view, is
-  always current.
+  explicit `update_surfaces`. This holds for a changed material too, since the medium holds its own. Whatever builds
+  the shape from `create_geometry()` directly, such as the 3D view, is always current.
 
 ### Example 2: a flat mirror tilted by 45°
 
@@ -477,17 +486,23 @@ A ray that misses the mirror is lost in every analysis, because only reflected l
 the next node is placed along the reflected axis. If the axis misses the mirror, the run stops with an error that
 names the mirror.
 
-**Draw.** The 3D view (`for_each_drawable` in `opossum_backend/src/scene_export.rs`) asks each node `as_volume` and
-`as_surface`, meshes the node's geometry in the node's own frame (`OpticNodeExt::geometry_mesh`) and puts the mesh at
-the node's current placement (`effective_node_iso`), the same placement its surfaces are traced at. Every kind of
-geometry meshes itself (`GeometryKind::mesh`):
+**Draw.** The 3D view (`for_each_drawable` in `opossum_backend/src/scene_export.rs`) asks each node for its
+appearance (`OpticNode::appearance`) and passes over a node that states none. It meshes the node's geometry in the
+node's own frame (`OpticNodeExt::geometry_mesh`) and puts the mesh at the node's current placement
+(`effective_node_iso`), the same placement its surfaces are traced at. Every kind of geometry meshes itself
+(`GeometryKind::mesh`):
 
 - The mirror lays its face over the outline of its rim, measured along the axis of the rim. A surface without a rim
   is drawn over the default optic shape around its vertex.
 - A volume node lays both faces over the outline of its rim and closes the body with the lateral face between them.
 
+The patches of a solid form a closed shell and are drawn once. A single surface has no far side of its own, so each of
+its patches is drawn a second time, turned over. Glass takes its refractive index from the material of the solid and
+its thickness from the extent of the solid.
+
 Neither reads the runtime surfaces, so a property that was changed without a rebuild is drawn as it is now. The
-endpoint for a single component (`opossum_backend/src/document.rs`) therefore meshes the node without rebuilding it.
+endpoint for a single component (`opossum_backend/src/document.rs`) therefore meshes the node without rebuilding it,
+and answers "not found" for a node that is not drawn.
 
 ### Other components
 
@@ -498,7 +513,7 @@ endpoint for a single component (`opossum_backend/src/document.rs`) therefore me
 | Detectors | `Geometry::detector` gives the extent window. A window is no edge: the face reaches everywhere, so all light passes. `SurfaceHit::recorded` decides which hit points are recorded, and `record_within_window` cuts the recorded light to the window of the geometry. With an open optic shape there is no window, and everything is recorded. |
 | Ideal filter, paraxial surface | `Geometry::plane`. Their effects (`FilterType`, `ParaxialLens`) attenuate or deflect at the hit, so a ray or helper ray that misses is neither. The paraxial surface may be unbounded. |
 | Grating | `Geometry::plane`. Its effect, `Diffraction`, sends the whole energy into one order, and the diffracted part is the intended beam (`ReflectedPart::Main`), like the reflection of a mirror. |
-| Source, dummy, ray propagation visualizer | `Geometry::plane`. Source and visualizer are unbounded. A dummy is bounded only if it is given an optic shape, and then acts as an iris. None of them is planar, so none is drawn. A source declares only `output_1`. |
+| Source, dummy, ray propagation visualizer | `Geometry::plane`. Source and visualizer are unbounded. A dummy is bounded only if it is given an optic shape, and then acts as an iris. None of them states an appearance, so none is drawn. A source declares only `output_1`. |
 | Group, reference | `create_geometry()` returns `None`, the surface ports are `SurfacePorts::NONE`, and `update_surfaces` does nothing. The nodes inside a group have their own geometry. A reference is traced through the node it refers to. |
 
 ### One analysis run, in order
@@ -538,8 +553,10 @@ analysis's sources. Then the bounce passes follow:
   - In `Default`, declare the `OPTIC_SHAPE` property and the properties the geometry is derived from, then call
     `create_default_surface_properties` before anything installs the surfaces (`update_surfaces`, `set_positioning`,
     `set_coating`), as `ThinMirror::default` does.
-  - Declare the capability: `Volumetric` and `as_volume` for a solid with a material, or `Planar`, `as_surface` and
-    `surface_kind` for a surface that is drawn.
+  - Implement `OpticNode::appearance`: an `Appearance` preset, or `None` for a node that is not drawn. The method has
+    no default either.
+  - For a solid, pass the material (`OpticNodeExt::material`) to the preset. Whether the node has a medium follows
+    from its geometry; a volume node analyzes through `unified_analyze_volume_node` and its ghost focus variant.
 - **A new preset**, such as another kind of lens: add a constructor on `Geometry` next to `singlet` that builds an
   `Extruded` or a `SurfaceGeometry`. Nothing downstream changes.
 - **A new effect at a surface.** Implement `SurfaceEffect` next to the type that defines it, as the filter and the
