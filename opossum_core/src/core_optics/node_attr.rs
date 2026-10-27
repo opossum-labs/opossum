@@ -469,6 +469,7 @@ mod test {
         apertures::{CircleShape, Outline},
         core_optics::PortType,
         geometry::Geometry,
+        material::Material,
         millimeter,
     };
 
@@ -479,6 +480,7 @@ mod test {
             millimeter!(f64::INFINITY),
             millimeter!(10.0),
             Outline::new(CircleShape::new(millimeter!(5.0))?, Vec::new())?,
+            Material::default(),
         )
     }
 

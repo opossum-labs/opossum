@@ -31,6 +31,8 @@ use crate::{
         body::Body,
     },
     light::{Ray, Rays, rays::ReflectedPart},
+    material::Material,
+    properties::proptype::AssetRef,
     utils::geom_transformation::Isometry,
 };
 
@@ -56,6 +58,7 @@ impl Geometry {
     /// * `rear_radius` - radius of curvature of the rear face; infinite for a flat face.
     /// * `center_thickness` - distance between the two vertices.
     /// * `outline` - the transversal extent (optic shape).
+    /// * `material` - the material of the lens, embedded or still referenced.
     ///
     /// # Errors
     ///
@@ -66,12 +69,14 @@ impl Geometry {
         rear_radius: Length,
         center_thickness: Length,
         outline: Outline,
+        material: impl Into<AssetRef<Material>>,
     ) -> OpmResult<Self> {
         Self::two_faced(
             SurfaceShape::spherical(front_radius)?,
             SurfaceShape::spherical(rear_radius)?,
             Isometry::new_along_z(center_thickness)?,
             outline,
+            material.into(),
         )
     }
     /// A cylindrical singlet lens: two cylindrical (or flat) faces a center thickness apart.
@@ -82,6 +87,7 @@ impl Geometry {
     /// * `rear_radius` - radius of curvature of the rear face; infinite for a flat face.
     /// * `center_thickness` - distance between the two vertices.
     /// * `outline` - the transversal extent (optic shape).
+    /// * `material` - the material of the lens, embedded or still referenced.
     ///
     /// # Errors
     ///
@@ -92,12 +98,14 @@ impl Geometry {
         rear_radius: Length,
         center_thickness: Length,
         outline: Outline,
+        material: impl Into<AssetRef<Material>>,
     ) -> OpmResult<Self> {
         Self::two_faced(
             SurfaceShape::cylindrical(front_radius)?,
             SurfaceShape::cylindrical(rear_radius)?,
             Isometry::new_along_z(center_thickness)?,
             outline,
+            material.into(),
         )
     }
     /// A wedge: two flat faces, the rear one tilted about the local x axis.
@@ -107,6 +115,7 @@ impl Geometry {
     /// * `center_thickness` - distance between the two faces on the axis.
     /// * `wedge_angle` - tilt of the rear face.
     /// * `outline` - the transversal extent (optic shape).
+    /// * `material` - the material of the wedge, embedded or still referenced.
     ///
     /// # Errors
     ///
@@ -115,6 +124,7 @@ impl Geometry {
         center_thickness: Length,
         wedge_angle: Angle,
         outline: Outline,
+        material: impl Into<AssetRef<Material>>,
     ) -> OpmResult<Self> {
         let tilt = Isometry::new(
             Point3::origin(),
@@ -125,6 +135,7 @@ impl Geometry {
             SurfaceShape::Plane,
             Isometry::new_along_z(center_thickness)?.append(&tilt),
             outline,
+            material.into(),
         )
     }
     /// A single surface.
@@ -199,6 +210,7 @@ impl Geometry {
     /// * `rear` - the shape of the rear face.
     /// * `rear_vertex` - position and orientation of the rear face's vertex relative to the node.
     /// * `outline` - the transversal extent (optic shape).
+    /// * `material` - the material between the two faces.
     ///
     /// # Errors
     ///
@@ -208,12 +220,14 @@ impl Geometry {
         rear: SurfaceShape,
         rear_vertex: Isometry,
         outline: Outline,
+        material: AssetRef<Material>,
     ) -> OpmResult<Self> {
         Ok(Self::Extruded(Box::new(Extruded::new(
             Isometry::identity(),
             Face::new(front, Isometry::identity()),
             Face::new(rear, rear_vertex),
             outline,
+            material,
         )?)))
     }
     /// Move this geometry by an isometry, such as the placement of its node.
@@ -706,13 +720,9 @@ mod test {
         distributions::{fluence::general_gaussian::General2DGaussian, position::Hexapolar},
         gain::Inversion,
         geometry::{Parabola, Part, Side, Sphere},
-        joule,
-        material::Material,
-        meter, millimeter, nanometer,
+        joule, meter, millimeter, nanometer,
         nodes::ideal_filter::{EdgeFilter, EdgeFilterType, SpectralFilterBuilder},
-        percent,
-        properties::proptype::AssetRef,
-        radian,
+        percent, radian,
         refractive_index::{RefrIndexConst, refr_index_vaccuum},
         utils::test_helper::helper::check_logs,
     };
@@ -751,6 +761,7 @@ mod test {
             millimeter!(f64::INFINITY),
             millimeter!(5.0),
             circle()?,
+            Material::default(),
         )?;
         assert_eq!(geometry.kind().face_count(), 2);
         assert_abs_diff_eq!(
@@ -771,7 +782,12 @@ mod test {
     }
     #[test]
     fn a_wedge_tilts_its_rear_face() -> OpmResult<()> {
-        let geometry = Geometry::wedge(millimeter!(10.0), degree!(5.0), circle()?)?;
+        let geometry = Geometry::wedge(
+            millimeter!(10.0),
+            degree!(5.0),
+            circle()?,
+            Material::default(),
+        )?;
         let normal =
             frame_of(&geometry, Extruded::REAR)?.transform_vector_f64(&nalgebra::Vector3::z());
         assert_abs_diff_eq!(normal.y, -(5.0_f64.to_radians().sin()), epsilon = 1e-12);
@@ -790,6 +806,7 @@ mod test {
                 millimeter!(-80.0),
                 millimeter!(5.0),
                 circle()?,
+                Material::default(),
             )?,
             Geometry::surface(axis, SurfaceShape::Plane, vertex, Some(circle()?))?,
         ];
@@ -818,12 +835,14 @@ mod test {
     /// moves its faces along; a single surface encloses none.
     #[test]
     fn every_kind_of_solid_numbers_its_faces_and_encloses_a_volume() -> OpmResult<()> {
-        let parametric = Geometry::Parametric(ParametricSolid::new(vec![(
-            Face::new(SurfaceShape::Plane, Isometry::identity()),
-            Side::Behind,
-        )])?);
-        let glass = AssetRef::Inline(Material::from(&RefrIndexConst::new(1.5)?));
-        let part = Part::new(&Isometry::identity(), parametric.clone(), glass)?;
+        let parametric = Geometry::Parametric(ParametricSolid::new(
+            vec![(
+                Face::new(SurfaceShape::Plane, Isometry::identity()),
+                Side::Behind,
+            )],
+            Material::from(&RefrIndexConst::new(1.5)?),
+        )?);
+        let part = Part::new(&Isometry::identity(), parametric.clone())?;
         let assembly = Geometry::Assembly(Assembly::new(vec![part], vec![])?);
         let frame = Isometry::new(millimeter!(1.0, -2.0, 30.0), degree!(10.0, 5.0, 0.0))?;
         for mut geometry in [parametric, assembly] {
@@ -869,12 +888,25 @@ mod test {
         for radius in [10.0, -10.0] {
             let curved = millimeter!(radius);
             for (front, rear) in [(curved, flat), (flat, curved)] {
-                let error = Geometry::singlet(front, rear, millimeter!(5.0), circle()?)
-                    .expect_err("a curvature tighter than the outline was accepted");
+                let error = Geometry::singlet(
+                    front,
+                    rear,
+                    millimeter!(5.0),
+                    circle()?,
+                    Material::default(),
+                )
+                .expect_err("a curvature tighter than the outline was accepted");
                 assert!(error.to_string().contains("does not reach"), "{error}");
             }
             assert!(
-                Geometry::cylindrical_singlet(curved, flat, millimeter!(5.0), circle()?).is_err()
+                Geometry::cylindrical_singlet(
+                    curved,
+                    flat,
+                    millimeter!(5.0),
+                    circle()?,
+                    Material::default()
+                )
+                .is_err()
             );
             let mirror = |outline| {
                 Geometry::surface(
@@ -888,7 +920,16 @@ mod test {
             // An unbounded surface has no edge to reach.
             assert!(mirror(None).is_ok());
         }
-        assert!(Geometry::singlet(millimeter!(12.5), flat, millimeter!(5.0), circle()?).is_ok());
+        assert!(
+            Geometry::singlet(
+                millimeter!(12.5),
+                flat,
+                millimeter!(5.0),
+                circle()?,
+                Material::default()
+            )
+            .is_ok()
+        );
         // A parabola opens without end, so even a short focal length reaches any edge.
         let parabola = SurfaceShape::Parabola(Parabola::new(millimeter!(1.0))?);
         assert!(
@@ -1002,6 +1043,7 @@ mod test {
                 Isometry::new_along_z(millimeter!(20.0))?,
             ),
             circle()?,
+            Material::default(),
         )?));
         // Extruded along the node's x axis, the profile reaches around it in y and z; the front face
         // lies at x = 3 mm.
@@ -1090,20 +1132,23 @@ mod test {
     #[test]
     fn a_face_of_a_parametric_solid_is_hit_up_to_the_other_faces() -> OpmResult<()> {
         let side = Isometry::new(millimeter!(5.0, 0.0, 5.0), degree!(0.0, 90.0, 0.0))?;
-        let solid = Geometry::Parametric(ParametricSolid::new(vec![
-            (
-                Face::new(SurfaceShape::Plane, Isometry::identity()),
-                Side::Behind,
-            ),
-            (
-                Face::new(
-                    SurfaceShape::Plane,
-                    Isometry::new_along_z(millimeter!(10.0))?,
+        let solid = Geometry::Parametric(ParametricSolid::new(
+            vec![
+                (
+                    Face::new(SurfaceShape::Plane, Isometry::identity()),
+                    Side::Behind,
                 ),
-                Side::InFront,
-            ),
-            (Face::new(SurfaceShape::Plane, side), Side::InFront),
-        ])?);
+                (
+                    Face::new(
+                        SurfaceShape::Plane,
+                        Isometry::new_along_z(millimeter!(10.0))?,
+                    ),
+                    Side::InFront,
+                ),
+                (Face::new(SurfaceShape::Plane, side), Side::InFront),
+            ],
+            Material::default(),
+        )?);
         assert!(
             solid
                 .intersect(FaceIndex::new(0), &ray_along_z(4.9, 0.0)?)
@@ -1654,6 +1699,7 @@ mod test {
             millimeter!(f64::INFINITY),
             millimeter!(10.0),
             Outline::new(CircleShape::new(millimeter!(5.0))?, Vec::new())?,
+            Material::default(),
         )?;
         let mut bundles = vec![Rays::from(ray_at(0.0)?)];
         propagate(

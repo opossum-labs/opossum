@@ -546,6 +546,7 @@ mod test {
         core_optics::{OpticNode, node_attr::NodePositioning},
         degree,
         geometry::{Extruded, Face, GeometryKind, SurfaceShape},
+        material::Material,
         millimeter,
         nodes::{
             Lens,
@@ -564,6 +565,7 @@ mod test {
             Face::new(SurfaceShape::Plane, Isometry::identity()),
             Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
             Outline::new(CircleShape::new(radius)?, Vec::new())?,
+            Material::default(),
         )?;
         disk.move_by(&placement);
         Ok(disk)

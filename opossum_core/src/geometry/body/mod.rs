@@ -29,6 +29,7 @@ use crate::{
     gain::Inversion,
     geometry::{FaceIndex, Side},
     light::Ray,
+    material::Material,
     millimeter, nanometer,
     utils::{geom_transformation::Isometry, math_utils::distance_3d_point},
 };
@@ -211,6 +212,14 @@ pub trait Body: Debug + Send + Sync {
     ///
     /// The side of the face the body lies on, or `None` if there is no such face.
     fn side(&self, face: FaceIndex) -> Option<Side>;
+    /// Return the [`Material`] this [`Body`] is filled with.
+    ///
+    /// # Returns
+    ///
+    /// The material, or `None` if the body holds only a reference to it that is not resolved yet
+    /// (while a document is loaded), or if it is filled with several (an
+    /// [`Assembly`](crate::geometry::Assembly), whose parts each have their own).
+    fn material(&self) -> Option<&Material>;
     /// Return the inversion a gain model built in this [`Body`], or `None` if there is none.
     fn inversion(&self) -> Option<&Inversion>;
     /// Return the inversion of this [`Body`], to be built, depleted or cleared.

@@ -798,29 +798,38 @@ impl Fnv1a {
 ///
 /// # Errors
 ///
-/// This function returns an error if the component states no material, if its geometry encloses no
-/// volume, or if that volume has no extent to measure a thickness from.
+/// This function returns an error if the component's geometry encloses no volume, if that volume
+/// holds no single material, or if it has no extent to measure a thickness from.
 // A refractive index and a thickness in millimetres are nowhere near the range of an f32.
 #[allow(clippy::cast_possible_truncation)]
 fn glass_of(node: &dyn Volumetric, wavelength: Length) -> OpmResult<Material> {
-    let material = node.material()?;
-    let ior = material.refractive_index(wavelength).unwrap_or_else(|e| {
-        warn!(
-            "'{}' states no refractive index at this wavelength ({e}), drawing it as plain glass",
-            node.name()
-        );
-        FALLBACK_REFRACTIVE_INDEX
-    });
     let geometry = node.create_geometry()?;
     let body = geometry
         .as_ref()
         .and_then(|geometry| geometry.kind().as_body())
         .ok_or_else(|| {
             OpossumError::Other(format!(
-                "'{}' encloses no volume to measure a thickness from",
+                "'{}' encloses no volume to draw as glass",
                 node.name()
             ))
         })?;
+    let ior = body
+        .material()
+        .ok_or_else(|| {
+            OpossumError::Other(format!(
+                "'{}' is filled with no single material to draw as glass",
+                node.name()
+            ))
+        })?
+        .refractive_index(wavelength)
+        .unwrap_or_else(|e| {
+            warn!(
+                "'{}' states no refractive index at this wavelength ({e}), drawing it as plain \
+                 glass",
+                node.name()
+            );
+            FALLBACK_REFRACTIVE_INDEX
+        });
     let thickness = body.bounding_box()?.z_range();
     Ok(Material::Glass {
         color: node.glass_color(),

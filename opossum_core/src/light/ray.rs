@@ -1199,6 +1199,7 @@ mod test {
         use crate::{
             apertures::{CircleShape, Outline},
             geometry::{Extruded, Geometry},
+            material::Material,
         };
         let node_frame = Isometry::new(millimeter!(1.0, -2.0, 30.0), degree!(10.0, 5.0, 0.0))?;
         let mut lens = Geometry::singlet(
@@ -1206,6 +1207,7 @@ mod test {
             millimeter!(f64::INFINITY),
             millimeter!(5.0),
             Outline::new(CircleShape::new(millimeter!(10.0))?, Vec::new())?,
+            Material::default(),
         )?;
         let mut ray = Ray::new(
             node_frame.transform_point(&millimeter!(3.0, -4.0, -20.0)),

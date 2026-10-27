@@ -15,8 +15,9 @@ use crate::{
         body::{OPTIC_SHAPE, default_optic_shape},
     },
     light::{LightData, LightResult, Rays, rays::ReflectedPart},
+    material::{MATERIAL, Material},
     nodes::fluence_detector::Fluence,
-    properties::{Proptype, validator::Validator},
+    properties::{Proptype, proptype::AssetRef, validator::Validator},
     utils::geom_transformation::Isometry,
 };
 
@@ -51,6 +52,18 @@ pub trait OpticNodeExt {
     ///
     /// This function returns an error if the node does not declare an optic shape at all.
     fn cross_section(&self) -> OpmResult<Option<Outline>>;
+
+    /// Return the material this node's volume is filled with, read from its [`MATERIAL`] property.
+    ///
+    /// It is handed out as stored: embedded, or still referenced while a document is being loaded.
+    /// The node puts it into the solid it describes (see [`OpticNode::create_geometry`]); whoever
+    /// works with the volume asks that solid (see
+    /// [`Body::material`](crate::geometry::body::Body::material)).
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the node has no [`MATERIAL`] property holding a material.
+    fn material(&self) -> OpmResult<AssetRef<Material>>;
 
     /// Return triangle meshes of this node's geometry, to draw it (see
     /// [`GeometryKind::mesh`](crate::geometry::GeometryKind::mesh)).
@@ -353,6 +366,16 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
             )));
         };
         Ok(optic_shape.outline().cloned())
+    }
+
+    fn material(&self) -> OpmResult<AssetRef<Material>> {
+        let Ok(Proptype::Material(material)) = self.node_attr().get_property(MATERIAL) else {
+            return Err(OpossumError::Analysis(format!(
+                "node '{}' has no '{MATERIAL}' property",
+                self.name()
+            )));
+        };
+        Ok(material.clone())
     }
 
     fn geometry_mesh(&self, segments: usize) -> OpmResult<Vec<SurfaceMesh>> {

@@ -24,8 +24,6 @@ use crate::{
     gain::Extraction,
     geometry::body::Body,
     light::{LightData, LightRays, LightResult, Rays, rays::ReflectedPart},
-    material::{MATERIAL, Material},
-    properties::{Proptype, proptype::AssetRef},
 };
 
 /// An [`OpticNode`] that encloses a volume of material between two of its surfaces.
@@ -41,33 +39,6 @@ use crate::{
 /// are meaningful only where there is a volume, and now the compiler says so instead of a runtime
 /// error on a node that never had one.
 pub trait Volumetric: OpticNode {
-    /// Return the [`Material`] this node's volume is filled with.
-    ///
-    /// The whole material is handed out, not just its refractive index model: a caller that only
-    /// refracts takes the index out of it, while later stages (thermal lensing, stress
-    /// birefringence, gain) need the other material data from the very same object.
-    ///
-    /// What a component is made of belongs to the component, not to the analysis looking at it,
-    /// which is why this sits on the capability: every analysis entering the volume asks for the
-    /// same material, and none of them has to know which property carries it.
-    ///
-    /// # Returns
-    ///
-    /// A clone of the node's material.
-    ///
-    /// # Errors
-    ///
-    /// This function errors if the node does not carry an embedded [`Material`] under the
-    /// [`MATERIAL`] property.
-    fn material(&self) -> OpmResult<Material> {
-        let Ok(Proptype::Material(AssetRef::Inline(material))) =
-            self.node_attr().get_property(MATERIAL)
-        else {
-            return Err(OpossumError::Analysis("cannot read material".into()));
-        };
-        Ok(material.clone())
-    }
-
     /// The base RGB colour used when rendering the glass body of this volume node.
     ///
     /// Returns a linear RGB triple (components in \[0, 1\]) that represents a neutral,
@@ -103,8 +74,9 @@ pub trait Volumetric: OpticNode {
     ///
     /// # Errors
     ///
-    /// This function errors if the node's [`Material`] cannot be read, if one of the two surfaces
-    /// cannot be found or if the geometric propagation through either of them fails.
+    /// This function errors if the node's medium is not prepared or holds no single
+    /// [`Material`](crate::material::Material), if one of the two surfaces cannot be found or if the
+    /// geometric propagation through either of them fails.
     fn pass_through_volume_generic(
         &mut self,
         entry_surf_name: &str,
@@ -112,17 +84,24 @@ pub trait Volumetric: OpticNode {
         rays_bundle: &mut Vec<Rays>,
         strategy: &dyn PropagationStrategy,
     ) -> OpmResult<()> {
-        // Behind the exit surface the node's ambient index applies, inside it the material's. The
-        // whole material is read rather than just its refractive index because what happens
-        // *inside* the volume depends on more than refraction — absorption, thermal and stress
-        // data, and potentially gain.
-        let material_inside = self.material()?;
+        // Behind the exit surface the node's ambient index applies, inside it the material's.
+        let index_inside = self
+            .node_attr()
+            .runtime_geometry()
+            .and_then(|geometry| geometry.kind().as_body()?.material())
+            .map(|material| material.refractive_index_type().clone())
+            .ok_or_else(|| {
+                OpossumError::Analysis(format!(
+                    "node '{}': its medium holds no material to refract with",
+                    self.name()
+                ))
+            })?;
         let backward = self.inverted();
         // The rays are meant to be refracted at both surfaces of the volume, not just traced to
         // them; what is reflected there is a ghost. Refraction is governed by the index alone.
         self.pass_through_surface_generic(
             entry_surf_name,
-            &Refraction(Some(material_inside.refractive_index_type())),
+            &Refraction(Some(&index_inside)),
             rays_bundle,
             strategy,
             backward,
@@ -150,15 +129,12 @@ pub trait Volumetric: OpticNode {
     ///
     /// * **Dopant gain** — a property of the operating point. Queried from the gain model of
     ///   [`PropagationStrategy::pump_config`] and amplifies along the chord through the medium.
-    /// * **Host-material absorption** — a property of the component's own [`Material`]. Applied
-    ///   whenever that material carries an [`AbsorptionModel`] other than
+    /// * **Host-material absorption** — a property of the material the medium is filled with.
+    ///   Applied whenever that material carries an [`AbsorptionModel`] other than
     ///   [`AbsorptionModel::None`], attenuating along the same chord.
     ///
-    /// A node that neither amplifies nor absorbs returns immediately without touching the rays.
-    ///
-    /// Returns immediately if [`PropagationStrategy::is_positioning_run`] is `true` — no medium
-    /// has been prepared yet and the step is skipped entirely. After the positioning run, a missing
-    /// medium on an active node is a programming error and causes an [`OpossumError::Analysis`].
+    /// A node that neither amplifies nor absorbs returns immediately without touching the rays, and
+    /// so does a [`PropagationStrategy::is_positioning_run`].
     ///
     /// # Parameters
     ///
@@ -167,8 +143,8 @@ pub trait Volumetric: OpticNode {
     ///
     /// # Errors
     ///
-    /// This function errors if the medium was not prepared before this call on an active node
-    /// (outside a positioning run), or if the resulting ray energies would not be finite.
+    /// This function errors if the medium was not prepared before this call or holds no single
+    /// material, or if the resulting ray energies would not be finite.
     fn propagate_inside_medium(
         &mut self,
         rays_bundle: &mut [Rays],
@@ -179,20 +155,6 @@ pub trait Volumetric: OpticNode {
         // bound so the model it hands out outlives the `extraction` borrowed from it.
         let gain_model = config.gain_model();
         let extraction = gain_model.as_extraction();
-        // The host-material absorption is a property of the component itself, so it is read from the
-        // node rather than from the scenario. `material()` returns an owned clone, so this borrow of
-        // `self` ends immediately and does not clash with the `&mut self` taken for the medium below.
-        // A material without an absorption model (`None`) leaves the rays untouched.
-        let material = self.material()?;
-        let absorption = (material.optical.absorption != AbsorptionModel::None)
-            .then_some(&material.optical.absorption);
-        // A node that neither amplifies nor absorbs leaves the rays untouched.
-        if extraction.is_none() && absorption.is_none() {
-            return Ok(());
-        }
-        if strategy.is_positioning_run() {
-            return Ok(());
-        }
         // Capture the name before the mutable borrow of `self` through `node_attr_mut`.
         let node_name = self.name().to_owned();
         let Some(body) = self
@@ -204,6 +166,22 @@ pub trait Volumetric: OpticNode {
                 "node '{node_name}': medium was not prepared before propagation"
             )));
         };
+        // The host-material absorption is a property of the medium itself, not of the scenario.
+        // It is cloned so the body can be walked mutably below.
+        let absorption = body
+            .material()
+            .ok_or_else(|| {
+                OpossumError::Analysis(format!(
+                    "node '{node_name}': its medium holds no single material to absorb in"
+                ))
+            })?
+            .optical
+            .absorption
+            .clone();
+        let absorption = (absorption != AbsorptionModel::None).then_some(&absorption);
+        if (extraction.is_none() && absorption.is_none()) || strategy.is_positioning_run() {
+            return Ok(());
+        }
         march_medium_along_chords(&node_name, body, extraction, absorption, rays_bundle)
     }
     /// Amplify the spectral energy passing through this node's medium.
@@ -451,6 +429,7 @@ mod test {
             lightdata::energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
             spectrum_helper::create_he_ne_spec,
         },
+        material::{MATERIAL, Material},
         micrometer, millimeter, nanometer,
         nodes::test_helper::helper::{
             assert_ray_bundle_snapshot, placed_geometry, ray_bundle_snapshot,
@@ -459,12 +438,14 @@ mod test {
             EnergyMeter, Lens, NodeGroup, NodeReference, SourcePort, SpotDiagram, ThinMirror,
             create_node_ref, node_types, round_collimated_ray_builder,
         },
-        percent, reciprocal_centimeter,
+        percent,
+        properties::{Proptype, proptype::AssetRef},
+        reciprocal_centimeter,
         refractive_index::RefrIndexConst,
         utils::{geom_transformation::Isometry, test_helper::helper::metered_energy},
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
-    use nalgebra::Point3;
+    use nalgebra::{Point3, Vector3};
     use uom::si::{
         f64::{Length, LinearNumberDensity, ReciprocalLength},
         linear_number_density::per_meter,
@@ -595,6 +576,68 @@ mod test {
     fn traced_energy_ratio(lens: &mut Lens, config: &RayTraceConfig) -> OpmResult<f64> {
         lens.prepare_volume(config)?;
         retraced_energy_value(lens, config)
+    }
+    /// A material set after the lens was placed is the one the next analysis refracts with: once its
+    /// medium is prepared, as every analyzer does first, the lens bends the rays exactly like one
+    /// built with that material from the start, and no longer like before.
+    #[test]
+    fn a_changed_material_takes_effect_in_the_next_analysis() -> OpmResult<()> {
+        let config = RayTraceConfig::default();
+        let lens_of = |index: f64| -> OpmResult<Lens> {
+            let mut lens = Lens::new(
+                "lens",
+                millimeter!(100.0),
+                millimeter!(-100.0),
+                millimeter!(5.0),
+                RefrIndexConst::new(index)?,
+            )?;
+            lens.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+            Ok(lens)
+        };
+        let directions = |lens: &mut Lens| -> OpmResult<Vec<Vector3<f64>>> {
+            lens.prepare_volume(&config)?;
+            let rays = Rays::new_uniform_collimated(
+                nanometer!(1053.0),
+                joule!(1.0),
+                &crate::distributions::position::Hexapolar::new(millimeter!(5.0), 1)?,
+            )?;
+            let incoming = LightResult::from([("input_1".into(), LightData::Geometric(rays))]);
+            let outgoing = AnalysisRayTrace::analyze(lens, incoming, &config)?;
+            let Some(LightData::Geometric(rays)) = outgoing.get("output_1") else {
+                return Err(OpossumError::Analysis(
+                    "expected ray data at the output port".into(),
+                ));
+            };
+            Ok(rays.iter().map(Ray::direction).collect())
+        };
+        let mut changed = lens_of(1.5)?;
+        let before = directions(&mut changed)?;
+        changed.set_property(MATERIAL, Material::from(RefrIndexConst::new(2.0)?).into())?;
+        let after = directions(&mut changed)?;
+        assert_eq!(after, directions(&mut lens_of(2.0)?)?);
+        assert_ne!(
+            after, before,
+            "the new material has to bend the rays differently"
+        );
+        Ok(())
+    }
+    /// A lens whose material is only referred to, and never resolved, refuses to refract rather
+    /// than refracting with some other index.
+    #[test]
+    fn an_unresolved_material_is_refused_rather_than_refracted_with() -> OpmResult<()> {
+        let mut lens = placed_lens()?;
+        lens.set_property(MATERIAL, Proptype::Material(AssetRef::Id(Uuid::new_v4())))?;
+        lens.update_surfaces()?;
+        let rays = Rays::new_uniform_collimated(
+            nanometer!(1053.0),
+            joule!(1.0),
+            &crate::distributions::position::Hexapolar::new(millimeter!(1.0), 1)?,
+        )?;
+        let incoming = LightResult::from([("input_1".into(), LightData::Geometric(rays))]);
+        let error = AnalysisRayTrace::analyze(&mut lens, incoming, &RayTraceConfig::default())
+            .expect_err("a lens without a resolved material refracted");
+        assert!(error.to_string().contains("no material"), "{error}");
+        Ok(())
     }
     /// The point of the whole exercise: a component amplifies because the operating point says so.
     #[test]

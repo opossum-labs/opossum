@@ -16,15 +16,14 @@ use crate::{
     },
     light::Ray,
     material::Material,
-    properties::proptype::AssetRef,
     utils::geom_transformation::Isometry,
 };
 
-/// One solid of an [`Assembly`], placed where it sits in the assembly, with its material.
+/// One solid of an [`Assembly`], placed where it sits in the assembly. The solid carries its own
+/// material.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Part {
     geometry: Geometry,
-    material: AssetRef<Material>,
 }
 
 impl Part {
@@ -34,17 +33,12 @@ impl Part {
     ///
     /// * `placement` - where the solid sits relative to the node.
     /// * `geometry` - the solid itself.
-    /// * `material` - the material the solid is made of.
     ///
     /// # Errors
     ///
     /// This function returns an error if the geometry encloses no volume or is an assembly itself;
     /// the parts of an inner assembly are added directly instead.
-    pub fn new(
-        placement: &Isometry,
-        mut geometry: Geometry,
-        material: AssetRef<Material>,
-    ) -> OpmResult<Self> {
+    pub fn new(placement: &Isometry, mut geometry: Geometry) -> OpmResult<Self> {
         if geometry.kind().as_body().is_none() {
             return Err(OpossumError::Other(
                 "a part of an assembly has to enclose a volume".into(),
@@ -57,7 +51,7 @@ impl Part {
             ));
         }
         geometry.move_by(placement);
-        Ok(Self { geometry, material })
+        Ok(Self { geometry })
     }
 }
 
@@ -310,6 +304,10 @@ impl Body for Assembly {
             .as_body()?
             .side(own_face)
     }
+    /// An assembly is filled with the materials of its parts, not with one.
+    fn material(&self) -> Option<&Material> {
+        None
+    }
     /// The inversion of the assembly as one medium, as a gain model sees its body.
     fn inversion(&self) -> Option<&Inversion> {
         self.inversion.as_ref()
@@ -342,14 +340,13 @@ mod test {
     fn circle() -> OpmResult<Outline> {
         Outline::new(CircleShape::new(millimeter!(12.5))?, Vec::new())
     }
-    /// The given geometry as a part made of glass with a refractive index of 1.5, at the given
-    /// placement.
+    /// Glass with a refractive index of 1.5, the material of every part below.
+    fn glass() -> OpmResult<Material> {
+        Ok(Material::from(&RefrIndexConst::new(1.5)?))
+    }
+    /// The given geometry as a part, at the given placement.
     fn part_of(geometry: Geometry, placement: Isometry) -> OpmResult<Part> {
-        Part::new(
-            &placement,
-            geometry,
-            AssetRef::Inline(Material::from(&RefrIndexConst::new(1.5)?)),
-        )
+        Part::new(&placement, geometry)
     }
     /// The diagonal of a beam splitter cube: tilted by 45° about x, 10 mm along z.
     fn diagonal() -> OpmResult<Face> {
@@ -361,27 +358,33 @@ mod test {
     /// The front prism of a beam splitter cube: behind its entrance face, in front of the
     /// diagonal (face 1).
     fn prism_part() -> OpmResult<Part> {
-        let solid = Geometry::Parametric(ParametricSolid::new(vec![
-            (
-                Face::new(SurfaceShape::Plane, Isometry::identity()),
-                Side::Behind,
-            ),
-            (diagonal()?, Side::InFront),
-        ])?);
+        let solid = Geometry::Parametric(ParametricSolid::new(
+            vec![
+                (
+                    Face::new(SurfaceShape::Plane, Isometry::identity()),
+                    Side::Behind,
+                ),
+                (diagonal()?, Side::InFront),
+            ],
+            glass()?,
+        )?);
         part_of(solid, Isometry::identity())
     }
     /// The rear prism of the same cube: behind the diagonal (face 0), in front of its exit face.
     fn opposite_prism_part() -> OpmResult<Part> {
-        let solid = Geometry::Parametric(ParametricSolid::new(vec![
-            (diagonal()?, Side::Behind),
-            (
-                Face::new(
-                    SurfaceShape::Plane,
-                    Isometry::new_along_z(millimeter!(20.0))?,
+        let solid = Geometry::Parametric(ParametricSolid::new(
+            vec![
+                (diagonal()?, Side::Behind),
+                (
+                    Face::new(
+                        SurfaceShape::Plane,
+                        Isometry::new_along_z(millimeter!(20.0))?,
+                    ),
+                    Side::InFront,
                 ),
-                Side::InFront,
-            ),
-        ])?);
+            ],
+            glass()?,
+        )?);
         part_of(solid, Isometry::identity())
     }
     /// A beam splitter cube: both prisms cemented along the diagonal.
@@ -394,6 +397,12 @@ mod test {
             )],
         )
     }
+    /// An assembly is filled with the materials of its parts, so it names none for itself.
+    #[test]
+    fn an_assembly_names_no_single_material() -> OpmResult<()> {
+        assert_eq!(cube()?.material(), None);
+        Ok(())
+    }
     /// The crown lens of a doublet at the origin, its rear face (R = -40 mm) 5 mm behind it.
     fn crown_part() -> OpmResult<Part> {
         part_of(
@@ -402,6 +411,7 @@ mod test {
                 millimeter!(-40.0),
                 millimeter!(5.0),
                 circle()?,
+                glass()?,
             )?,
             Isometry::identity(),
         )
@@ -414,6 +424,7 @@ mod test {
                 millimeter!(f64::INFINITY),
                 millimeter!(5.0),
                 circle()?,
+                glass()?,
             )?,
             placement,
         )
@@ -547,6 +558,7 @@ mod test {
                     millimeter!(-40.0),
                     millimeter!(5.0),
                     circle()?,
+                    glass()?,
                 )?,
                 Isometry::identity(),
             )
@@ -558,6 +570,7 @@ mod test {
                     millimeter!(f64::INFINITY),
                     millimeter!(5.0),
                     circle()?,
+                    glass()?,
                 )?,
                 Isometry::new(
                     millimeter!(0.0, 0.0, 5.0),

@@ -157,6 +157,7 @@ impl OpticNode for Wedge {
             *center_thickness,
             *wedge_angle,
             cross_section,
+            self.material()?,
         )?))
     }
     fn as_volume(&self) -> Option<&dyn Volumetric> {

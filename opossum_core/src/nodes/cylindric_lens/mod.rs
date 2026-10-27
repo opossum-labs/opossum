@@ -182,6 +182,7 @@ impl OpticNode for CylindricLens {
             *rear_curvature,
             *center_thickness,
             cross_section,
+            self.material()?,
         )?))
     }
     fn as_volume(&self) -> Option<&dyn Volumetric> {

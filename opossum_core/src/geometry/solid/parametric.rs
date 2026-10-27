@@ -15,17 +15,21 @@ use crate::{
         body::{Body, BoundingBox},
     },
     light::Ray,
+    material::Material,
+    properties::proptype::AssetRef,
     utils::geom_transformation::Isometry,
 };
 
 /// A solid bounded by several faces: the intersection of the inner sides of all of them.
 ///
 /// Built from flat faces only, such a solid is always convex (prisms, corner cubes, roof prisms);
-/// curved faces with their outside as inner side also allow concave shapes.
+/// curved faces with their outside as inner side also allow concave shapes. The solid is filled with
+/// its material.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParametricSolid {
     frame: Isometry,
     faces: Vec<(OpticSurface, Side)>,
+    material: AssetRef<Material>,
     inversion: Option<Inversion>,
 }
 
@@ -35,11 +39,15 @@ impl ParametricSolid {
     /// # Arguments
     ///
     /// * `faces` - every bounding face, stated relative to the node, with the side that is inside.
+    /// * `material` - the material the solid is filled with, embedded or still referenced.
     ///
     /// # Errors
     ///
     /// This function returns an error if no face is given.
-    pub fn new(faces: Vec<(Face, Side)>) -> OpmResult<Self> {
+    pub fn new(
+        faces: Vec<(Face, Side)>,
+        material: impl Into<AssetRef<Material>>,
+    ) -> OpmResult<Self> {
         if faces.is_empty() {
             return Err(OpossumError::Other(
                 "a parametric solid needs at least one bounding face".into(),
@@ -51,6 +59,7 @@ impl ParametricSolid {
                 .into_iter()
                 .map(|(face, side)| (face.into(), side))
                 .collect(),
+            material: material.into(),
             inversion: None,
         })
     }
@@ -153,6 +162,9 @@ impl Body for ParametricSolid {
     fn side(&self, face: FaceIndex) -> Option<Side> {
         self.faces.get(usize::from(face)).map(|(_, side)| *side)
     }
+    fn material(&self) -> Option<&Material> {
+        self.material.as_inline()
+    }
     fn inversion(&self) -> Option<&Inversion> {
         self.inversion.as_ref()
     }
@@ -182,32 +194,35 @@ mod test {
         let plane = |x: f64, y: f64, z: f64, about_x: f64, about_y: f64| {
             Isometry::new(millimeter!(x, y, z), degree!(about_x, about_y, 0.0))
         };
-        ParametricSolid::new(vec![
-            (
-                Face::new(SurfaceShape::Plane, plane(0.0, 0.0, 0.0, 0.0, 0.0)?),
-                Side::Behind,
-            ),
-            (
-                Face::new(SurfaceShape::Plane, plane(0.0, 0.0, 10.0, 0.0, 0.0)?),
-                Side::InFront,
-            ),
-            (
-                Face::new(SurfaceShape::Plane, plane(-5.0, 0.0, 5.0, 0.0, 90.0)?),
-                Side::Behind,
-            ),
-            (
-                Face::new(SurfaceShape::Plane, plane(5.0, 0.0, 5.0, 0.0, 90.0)?),
-                Side::InFront,
-            ),
-            (
-                Face::new(SurfaceShape::Plane, plane(0.0, -5.0, 5.0, -90.0, 0.0)?),
-                Side::Behind,
-            ),
-            (
-                Face::new(SurfaceShape::Plane, plane(0.0, 5.0, 5.0, -90.0, 0.0)?),
-                Side::InFront,
-            ),
-        ])
+        ParametricSolid::new(
+            vec![
+                (
+                    Face::new(SurfaceShape::Plane, plane(0.0, 0.0, 0.0, 0.0, 0.0)?),
+                    Side::Behind,
+                ),
+                (
+                    Face::new(SurfaceShape::Plane, plane(0.0, 0.0, 10.0, 0.0, 0.0)?),
+                    Side::InFront,
+                ),
+                (
+                    Face::new(SurfaceShape::Plane, plane(-5.0, 0.0, 5.0, 0.0, 90.0)?),
+                    Side::Behind,
+                ),
+                (
+                    Face::new(SurfaceShape::Plane, plane(5.0, 0.0, 5.0, 0.0, 90.0)?),
+                    Side::InFront,
+                ),
+                (
+                    Face::new(SurfaceShape::Plane, plane(0.0, -5.0, 5.0, -90.0, 0.0)?),
+                    Side::Behind,
+                ),
+                (
+                    Face::new(SurfaceShape::Plane, plane(0.0, 5.0, 5.0, -90.0, 0.0)?),
+                    Side::InFront,
+                ),
+            ],
+            Material::default(),
+        )
     }
     /// The block placed at the given node frame.
     fn placed_block(node_frame: &Isometry) -> OpmResult<ParametricSolid> {
@@ -228,24 +243,27 @@ mod test {
 
     #[test]
     fn a_parametric_solid_needs_a_face() {
-        assert!(ParametricSolid::new(vec![]).is_err());
+        assert!(ParametricSolid::new(vec![], Material::default()).is_err());
     }
     /// A parametric solid numbers its faces in the order they were given and has no rim: its faces
     /// bound it by themselves. Moved, every face moves along.
     #[test]
     fn a_parametric_solid_numbers_its_faces_as_given() -> OpmResult<()> {
         let at = |z: f64| Isometry::new_along_z(millimeter!(z));
-        let solid = ParametricSolid::new(vec![
-            (Face::new(SurfaceShape::Plane, at(0.0)?), Side::Behind),
-            (Face::new(SurfaceShape::Plane, at(10.0)?), Side::InFront),
-            (
-                Face::new(
-                    SurfaceShape::Sphere(Sphere::new(millimeter!(40.0))?),
-                    at(2.0)?,
+        let solid = ParametricSolid::new(
+            vec![
+                (Face::new(SurfaceShape::Plane, at(0.0)?), Side::Behind),
+                (Face::new(SurfaceShape::Plane, at(10.0)?), Side::InFront),
+                (
+                    Face::new(
+                        SurfaceShape::Sphere(Sphere::new(millimeter!(40.0))?),
+                        at(2.0)?,
+                    ),
+                    Side::Behind,
                 ),
-                Side::Behind,
-            ),
-        ])?;
+            ],
+            Material::default(),
+        )?;
         let frame = Isometry::new_along_z(millimeter!(100.0))?;
         let mut moved = solid.clone();
         moved.move_by(&frame);
@@ -407,7 +425,10 @@ mod test {
                 SurfaceShape::Sphere(Sphere::new(millimeter!(40.0))?),
                 Isometry::identity(),
             );
-            ParametricSolid::new(vec![(sphere, Side::Behind), (other, side)])
+            ParametricSolid::new(
+                vec![(sphere, Side::Behind), (other, side)],
+                Material::default(),
+            )
         };
         let on_sphere = |x: f64| 40.0 - 40.0_f64.mul_add(40.0, -(x * x)).sqrt();
         // A rear face at z = 20 mm cuts the cap at 34.6 mm off the axis.

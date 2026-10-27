@@ -294,6 +294,7 @@ mod test {
         geometry::{Extruded, Face, Sphere, SurfaceShape},
         joule,
         light::Ray,
+        material::Material,
         millimeter, nanometer, reciprocal_centimeter,
         utils::{geom_transformation::Isometry, super_gaussian::SuperGaussianShape},
     };
@@ -314,6 +315,7 @@ mod test {
             Face::new(SurfaceShape::Plane, Isometry::identity()),
             Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
             Outline::new(CircleShape::new(radius)?, Vec::new())?,
+            Material::default(),
         )
     }
     /// The disk every physics test below is performed on: 10 mm thick, 5 mm in radius.
@@ -935,6 +937,7 @@ mod test {
             entrance,
             exit,
             Outline::new(CircleShape::new(millimeter!(aperture_mm))?, Vec::new())?,
+            Material::default(),
         )?;
 
         // At x = R·√3/2 the chord equals R/2 exactly: √(R² − 3R²/4) = R/2.
@@ -998,6 +1001,7 @@ mod test {
             entrance,
             exit,
             Outline::new(CircleShape::new(millimeter!(aperture_mm))?, Vec::new())?,
+            Material::default(),
         )?;
 
         // At x = R·√3/2 the entrance is at z = R/2, giving chord R − R/2 = R/2 exactly.

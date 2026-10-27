@@ -514,6 +514,7 @@ mod test {
         error::OpossumError,
         gain::inversion_field::CellIndex,
         geometry::{Extruded, Face, SurfaceShape},
+        material::Material,
         millimeter,
         utils::geom_transformation::Isometry,
     };
@@ -528,6 +529,7 @@ mod test {
             Face::new(SurfaceShape::Plane, Isometry::identity()),
             Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
             Outline::new(CircleShape::new(radius)?, Vec::new())?,
+            Material::default(),
         )
     }
     /// The disk every field below is laid over: 10 mm thick, 5 mm in radius, sitting at the origin.

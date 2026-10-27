@@ -21,6 +21,8 @@ use crate::{
         face::SurfacePlacement,
     },
     light::Ray,
+    material::Material,
+    properties::proptype::AssetRef,
     utils::geom_transformation::Isometry,
 };
 
@@ -28,12 +30,14 @@ use crate::{
 ///
 /// The profile is the outline of the [`Rim`], stated in the plane perpendicular to the rim's axis;
 /// it is the component's optic shape. The center thickness is not stored separately: it is where
-/// the rear face's vertex sits, together with any tilt of that face.
+/// the rear face's vertex sits, together with any tilt of that face. The solid is filled with its
+/// material.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Extruded {
     rim: Rim,
     front: OpticSurface,
     rear: OpticSurface,
+    material: AssetRef<Material>,
     inversion: Option<Inversion>,
 }
 
@@ -47,6 +51,7 @@ impl Extruded {
     /// * `front` - the face capping the profile towards -z, stated in the `axis` frame.
     /// * `rear` - the face capping the profile towards +z, stated in the `axis` frame.
     /// * `outline` - the profile, in the xy plane of the `axis` frame.
+    /// * `material` - the material the solid is filled with, embedded or still referenced.
     ///
     /// # Errors
     ///
@@ -57,6 +62,7 @@ impl Extruded {
         mut front: Face,
         mut rear: Face,
         outline: Outline,
+        material: impl Into<AssetRef<Material>>,
     ) -> OpmResult<Self> {
         let reach = outline.transversal_reach();
         front.check_reach(reach, "front face")?;
@@ -67,6 +73,7 @@ impl Extruded {
             rim: Rim::new(outline, axis),
             front: front.into(),
             rear: rear.into(),
+            material: material.into(),
             inversion: None,
         })
     }
@@ -318,6 +325,9 @@ impl Body for Extruded {
     fn side(&self, face: FaceIndex) -> Option<Side> {
         self.surface_and_side(face).map(|(_, side)| side)
     }
+    fn material(&self) -> Option<&Material> {
+        self.material.as_inline()
+    }
     fn inversion(&self) -> Option<&Inversion> {
         self.inversion.as_ref()
     }
@@ -385,7 +395,13 @@ mod test {
         outline: Outline,
         node_frame: Isometry,
     ) -> OpmResult<Extruded> {
-        let mut body = Extruded::new(Isometry::identity(), front, rear, outline)?;
+        let mut body = Extruded::new(
+            Isometry::identity(),
+            front,
+            rear,
+            outline,
+            Material::default(),
+        )?;
         body.move_by(&node_frame);
         Ok(body)
     }
@@ -407,6 +423,25 @@ mod test {
     fn path_length(body: &Extruded, ray: &Ray) -> OpmResult<Length> {
         body.path_length_inside(ray)
             .ok_or_else(|| crate::error::OpossumError::Other("ray missed the body".into()))
+    }
+    /// A solid answers with the material it is filled with, but not with one it only refers to
+    /// while a document is still being loaded.
+    #[test]
+    fn a_solid_answers_only_with_an_embedded_material() -> OpmResult<()> {
+        let solid = |material: AssetRef<Material>| -> OpmResult<Extruded> {
+            let (front, rear) = plate_faces(millimeter!(5.0))?;
+            Extruded::new(
+                Isometry::identity(),
+                front,
+                rear,
+                circular_cross_section(millimeter!(12.5))?,
+                material,
+            )
+        };
+        let glass = Material::default();
+        assert_eq!(solid(glass.clone().into())?.material(), Some(&glass));
+        assert_eq!(solid(AssetRef::Id(glass.id()))?.material(), None);
+        Ok(())
     }
     /// Both faces end at the rim of the profile; a closed surface also only on the sheet through its
     /// vertex, not on the far side of its equator.
@@ -877,6 +912,7 @@ mod test {
                 Isometry::new_along_z(millimeter!(20.0))?,
             ),
             circular_cross_section(millimeter!(12.5))?,
+            Material::default(),
         )?;
         let frame = |index: FaceIndex| {
             extruded
@@ -902,6 +938,7 @@ mod test {
                 Isometry::new_along_z(millimeter!(20.0))?,
             ),
             circular_cross_section(millimeter!(12.5))?,
+            Material::default(),
         )?;
         let node_frame = Isometry::new(millimeter!(0.0, 5.0, 0.0), degree!(0.0, 0.0, 0.0))?;
         body.move_by(&node_frame);
@@ -926,6 +963,7 @@ mod test {
                 Isometry::new_along_z(millimeter!(20.0))?,
             ),
             circular_cross_section(millimeter!(12.5))?,
+            Material::default(),
         )?;
         let node_frame = Isometry::new(millimeter!(0.0, 5.0, 0.0), degree!(0.0, 0.0, 0.0))?;
         body.move_by(&node_frame);
