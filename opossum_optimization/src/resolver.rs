@@ -91,10 +91,15 @@ impl ParameterResolver {
                 let resolved_val = match &coupling.rule {
                     CouplingType::Identical { source } => values.get(source).copied(),
                     CouplingType::Opposite { source } => values.get(source).map(|&v| -v),
-                    CouplingType::Affine { source, factor, offset } => {
-                        values.get(source).map(|&v| v * factor + offset)
-                    }
-                    CouplingType::TotalLengthLock { total_length, other_segments } => {
+                    CouplingType::Affine {
+                        source,
+                        factor,
+                        offset,
+                    } => values.get(source).map(|&v| v * factor + offset),
+                    CouplingType::TotalLengthLock {
+                        total_length,
+                        other_segments,
+                    } => {
                         let all_present = other_segments.iter().all(|seg| values.contains_key(seg));
                         if all_present {
                             let sum: f64 = other_segments
@@ -149,12 +154,10 @@ mod tests {
             property_name: "radius_2".into(),
         };
         let addr_d1 = ParameterAddress::ConnectionDistance {
-            parent_group_id: n2,
             src_id: n1,
             src_port: "out".into(),
         };
         let addr_d2 = ParameterAddress::ConnectionDistance {
-            parent_group_id: n2,
             src_id: n2,
             src_port: "out".into(),
         };

@@ -1,11 +1,6 @@
-use std::sync::Arc;
-
-use argmin::core::Executor;
-use argmin::solver::neldermead::NelderMead;
-
 use opossum_core::{
     apertures::CircleShape,
-    core_optics::{NodeAttrExt, node_attr::HasNodeAttr},
+    core_optics::NodeAttrExt,
     distributions::{energy::UniformDist, position::Hexapolar, spectral::LaserLines},
     error::OpmResult,
     geometry::body::OPTIC_SHAPE,
@@ -13,8 +8,8 @@ use opossum_core::{
     prelude::*,
 };
 use opossum_optimization::{
-    BoxBounds, FreeVariable, MeritFunction, MetricReader, ObservableAddress, Operand,
-    ParameterAddress, ParameterApplier, SchemaExtractor, TargetValueOperand,
+    BoxBounds, FreeVariable, MetricReader, ObservableAddress, OpticOptimizer, ParameterAddress,
+    SchemaExtractor, TargetValueOperand,
 };
 use uom::si::{f64::Length, length::meter};
 use uuid::Uuid;
@@ -158,107 +153,57 @@ fn test_schema_discovery_on_kepler_model() -> OpmResult<()> {
 }
 
 #[test]
-fn test_optimize_kepler_focal_position() -> OpmResult<()> {
-    // 1. Initial defocused state: 45 mm instead of ~58 mm
+fn test_optimize_kepler_focal_position_compact() -> OpmResult<()> {
+    // 1. Defocused setup: 45 mm instead of ~58 mm
     let initial_dist_m = 0.045;
     let (mut doc, analyzer_id, lens2_id, spot_id) =
         build_kepler_setup(Length::new::<meter>(initial_dist_m))?;
 
-    let root_group_id = doc.scenery().node_attr().uuid();
-
-    // 2. Formulate free parameter: drift distance from lens2 to spot detector
     let dist_address = ParameterAddress::ConnectionDistance {
-        parent_group_id: root_group_id,
         src_id: lens2_id,
         src_port: "output_1".into(),
     };
 
-    let free_var = FreeVariable::new(dist_address.clone(), "image_drift_distance", initial_dist_m)
-        .with_bounds(BoxBounds::new(0.030, 0.080)?); // 30 mm to 80 mm
-
-    // 3. Formulate operand: target RMS beam radius = 0.0 m
     let spot_observable_addr = ObservableAddress {
         analyzer_id,
         node_id: spot_id,
         metric_name: "rms beam radius".into(),
     };
 
-    let operand = TargetValueOperand::new(
-        "minimize_rms_spot",
-        spot_observable_addr.clone(),
-        0.0,    // Target: 0 µm spot
-        1.0,    // Weight
-        1.0e-3, // Scale: 1 mm
-    );
+    // 2. High-level optimization in one concise block
+    let summary = OpticOptimizer::new()
+        .add_variable(
+            FreeVariable::new(dist_address.clone(), "image_drift_distance", initial_dist_m)
+                .with_bounds(BoxBounds::new(0.030, 0.080)?),
+        )
+        .add_operand(TargetValueOperand::new(
+            "minimize_rms_spot",
+            spot_observable_addr.clone(),
+            0.0,
+            1.0,
+            1.0e-3,
+        ))
+        .with_max_iterations(40)
+        .optimize(&mut doc)?;
 
-    let free_vars = vec![free_var];
-    let couplings = vec![];
-    let operands: Vec<Arc<dyn Operand>> = vec![Arc::new(operand)];
-
-    // 4. Create MeritFunction
-    let merit = MeritFunction::new(doc.clone(), free_vars, couplings, operands)?;
-
-    // Measure initial defocused cost
-    let initial_cost = merit.evaluate(&[initial_dist_m]);
-    assert!(
-        initial_cost > 0.0,
-        "Initial defocused configuration must yield non-zero cost"
-    );
-    // 5. Optimize using Nelder-Mead simplex solver
-    // Initial simplex around 45 mm and 50 mm
-    let initial_simplex = vec![vec![0.045], vec![0.050]];
-    let solver = NelderMead::new(initial_simplex)
-        .with_sd_tolerance(1e-6)
-        .map_err(|e| OpossumError::Analysis(format!("optimization failed: {e}")))?;
-
-    let res = Executor::new(merit, solver)
-        .configure(|state| state.max_iters(40).target_cost(1e-8))
-        .run();
-
-    assert!(res.is_ok(), "Nelder-Mead solver execution failed");
-    let result = res.unwrap();
-
-    let best_distance = result.state().best_param.as_ref().unwrap()[0];
-    let final_cost = result.state().best_cost;
-
-    // The optimal image distance for this Kepler configuration is close to 58 mm
-    assert!(
-        (best_distance - 0.058).abs() < 0.005,
-        "Optimal distance should be near 58 mm (0.058 m), got: {:.4} m",
-        best_distance
-    );
-    assert!(
-        final_cost < initial_cost,
-        "Optimization must significantly improve initial cost: initial={}, final={}",
-        initial_cost,
-        final_cost
-    );
-
-    // 6. Apply optimized parameter back into the primary document
-    ParameterApplier::set_value(&mut doc, &dist_address, best_distance)?;
-    ParameterApplier::finalize_update(&mut doc)?;
-
-    // 7. Verify simulation on modified model
-    doc.analyze_headless()?;
-
-    // Read initial and optimized metrics for comparison
+    // 3. Verification
+    let best_distance = summary.value(&dist_address).unwrap();
     let optimized_rms = MetricReader::read_metric(&doc, &spot_observable_addr)?;
 
-    eprintln!("\n================ OPTIMIZATION RESULT ================");
-    eprintln!("Initial image distance : {:8.3} mm", initial_dist_m * 1e3);
-    eprintln!("Optimized image distance: {:8.3} mm", best_distance * 1e3);
-    eprintln!("Initial merit cost      : {:8.4}", initial_cost);
-    eprintln!("Final merit cost        : {:8.4}", final_cost);
-    eprintln!("Final RMS spot radius   : {:8.2} µm ({:.6} mm)", optimized_rms * 1e6, optimized_rms * 1e3);
-    eprintln!("=====================================================\n");
-  
-    // Verify directly with MetricReader that the spot radius decreased
-    let optimized_rms = MetricReader::read_metric(&doc, &spot_observable_addr)?;
-    assert!(
-        optimized_rms < 1.0e-3,
-        "Optimized RMS spot radius must be under 1 mm, got: {:.6} m",
-        optimized_rms
+    assert!((best_distance - 0.058).abs() < 0.005);
+    assert!(optimized_rms < 1.0e-3);
+
+    eprintln!("\n=== COMPACT OPTIMIZATION RESULT ===");
+    eprintln!("Iterations: {}", summary.iterations);
+    eprintln!("Distance  : {:.3} mm", best_distance * 1e3);
+    eprintln!("RMS Spot  : {:.2} µm", optimized_rms * 1e6);
+    eprintln!(
+        "Cost      : {:.4} -> {:.4} (-{:.1}%)",
+        summary.initial_cost,
+        summary.final_cost,
+        summary.relative_improvement() * 100.0
     );
+    eprintln!("===================================\n");
 
     Ok(())
 }

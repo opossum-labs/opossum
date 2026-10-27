@@ -2,7 +2,7 @@
 
 use super::OpmDocument;
 use crate::{
-    analyzers::{Analyzer, AnalyzerRegistration, AnalyzerType},
+    analyzers::{AnalyzerRegistration, AnalyzerType},
     core_optics::OpticNode,
     error::{OpmResult, OpossumError},
     reporting::analysis_report::AnalysisReport,

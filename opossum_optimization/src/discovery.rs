@@ -1,6 +1,6 @@
+use super::address::{ObservableAddress, ParameterAddress};
 use opossum_core::core_optics::observable::ObservableDescriptor;
 use serde::{Deserialize, Serialize};
-use super::address::{ObservableAddress, ParameterAddress};
 
 /// Discovered variable parameter candidate available for optimization.
 #[derive(Debug, Clone, Serialize, Deserialize)]

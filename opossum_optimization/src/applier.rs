@@ -1,9 +1,6 @@
-use opossum_core::{
-    opm_document::OpmDocument,
-    error::OpmResult,
-};
-use uom::si::{f64::Length, length::meter};
 use super::address::ParameterAddress;
+use opossum_core::{error::OpmResult, opm_document::OpmDocument};
+use uom::si::{f64::Length, length::meter};
 
 pub struct ParameterApplier;
 
@@ -18,22 +15,21 @@ impl ParameterApplier {
             ParameterAddress::NodeProperty {
                 node_id,
                 property_name,
-            } => {
-                doc.scenery_mut().with_node_attr_mut(*node_id, |attr| {
-                    attr.properties_mut().set_internal_f64(property_name, value)
-                })?
-            }
-            ParameterAddress::ConnectionDistance {
-                parent_group_id,
-                src_id,
-                src_port,
-            } => {
+            } => doc.scenery_mut().with_node_attr_mut(*node_id, |attr| {
+                attr.properties_mut().set_internal_f64(property_name, value)
+            })?,
+            ParameterAddress::ConnectionDistance { src_id, src_port } => {
                 let distance = Length::new::<meter>(value);
-                doc.scenery_mut().with_group_node_mut(*parent_group_id, |group| {
-                    group
-                        .update_connection_distance(*src_id, src_port, distance)
-                        .map(|_| ())
-                })?
+
+                // Resolve parent group containing the source node
+                let (_, parent_group_id) = doc.scenery().node_recursive(*src_id)?;
+
+                doc.scenery_mut()
+                    .with_group_node_mut(parent_group_id, |group| {
+                        group
+                            .update_connection_distance(*src_id, src_port, distance)
+                            .map(|_| ())
+                    })?
             }
         }
     }

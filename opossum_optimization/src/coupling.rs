@@ -7,13 +7,9 @@ use opossum_core::error::{OpmResult, OpossumError};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CouplingType {
     /// Target = Source (e.g., identical air spacings in symmetric setups)[cite: 1].
-    Identical {
-        source: ParameterAddress,
-    },
+    Identical { source: ParameterAddress },
     /// Target = -Source (e.g., symmetric biconvex lenses with R2 = -R1)[cite: 1].
-    Opposite {
-        source: ParameterAddress,
-    },
+    Opposite { source: ParameterAddress },
     /// Target = Source * factor + offset[cite: 1].
     Affine {
         source: ParameterAddress,
@@ -55,7 +51,12 @@ impl ParameterCoupling {
     }
 
     /// Creates an affine coupling (Target = factor * Source + offset)[cite: 1].
-    pub fn affine(target: ParameterAddress, source: ParameterAddress, factor: f64, offset: f64) -> Self {
+    pub fn affine(
+        target: ParameterAddress,
+        source: ParameterAddress,
+        factor: f64,
+        offset: f64,
+    ) -> Self {
         Self {
             target,
             rule: CouplingType::Affine {

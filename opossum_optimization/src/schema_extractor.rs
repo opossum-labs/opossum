@@ -3,10 +3,7 @@ use super::{
     discovery::{DiscoveredObservable, DiscoveredVariable, ModelOptimizationSchema},
 };
 use opossum_core::{
-    core_optics::{NodeAttrExt, node_attr::HasNodeAttr},
-    error::OpmResult,
-    nodes::NodeGroup,
-    opm_document::OpmDocument,
+    core_optics::NodeAttrExt, error::OpmResult, nodes::NodeGroup, opm_document::OpmDocument,
 };
 
 pub struct SchemaExtractor;
@@ -55,13 +52,10 @@ impl SchemaExtractor {
         group: &NodeGroup,
         schema: &mut ModelOptimizationSchema,
     ) -> OpmResult<()> {
-        let group_id = group.node_attr().uuid();
-
         // Collect edge connection distances inside this group
         for conn in group.connections() {
             schema.controllable_variables.push(DiscoveredVariable {
                 address: ParameterAddress::ConnectionDistance {
-                    parent_group_id: group_id,
                     src_id: conn.src_id,
                     src_port: conn.src_port.clone(),
                 },

@@ -25,9 +25,7 @@ impl BoxBounds {
     /// Returns an error if `min` is greater than `max` or either bound is NaN.
     pub fn new(min: f64, max: f64) -> OpmResult<Self> {
         if min.is_nan() || max.is_nan() {
-            return Err(OpossumError::Other(
-                "Box bounds cannot be NaN".to_string(),
-            ));
+            return Err(OpossumError::Other("Box bounds cannot be NaN".to_string()));
         }
         if min > max {
             return Err(OpossumError::Other(format!(

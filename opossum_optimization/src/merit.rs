@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use argmin::core::{CostFunction, Error};
+use std::sync::Arc;
 
 use crate::{
     applier::ParameterApplier,
@@ -8,7 +8,7 @@ use crate::{
     resolver::ParameterResolver,
     variable::FreeVariable,
 };
-use opossum_core::{opm_document::OpmDocument, error::OpmResult};
+use opossum_core::{error::OpmResult, opm_document::OpmDocument};
 
 /// Default penalty applied for fatal simulation failures (e.g., ray tracing errors)[cite: 1].
 pub const DEFAULT_FATAL_PENALTY: f64 = 1.0e12;
@@ -92,10 +92,11 @@ impl MeritFunction {
         let mut working_doc = self.blueprint.clone();
 
         // 3. Resolve solver parameters and couplings[cite: 1]
-        let parameter_map = match ParameterResolver::resolve(&self.free_variables, &self.couplings, x) {
-            Ok(map) => map,
-            Err(_) => return self.fatal_penalty,
-        };
+        let parameter_map =
+            match ParameterResolver::resolve(&self.free_variables, &self.couplings, x) {
+                Ok(map) => map,
+                Err(_) => return self.fatal_penalty,
+            };
 
         // 4. Apply all parameters to the document[cite: 1]
         for (address, value) in parameter_map {
