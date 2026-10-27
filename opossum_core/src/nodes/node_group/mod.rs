@@ -14,7 +14,7 @@ mod undo;
 use crate::{
     analyzers::{AnalyzerKind, propagation_strategy::PropagationStrategy},
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticPorts, OpticRef, PortType, SurfacePorts,
+        Appearance, NodeAttr, NodeAttrExt, OpticNode, OpticPorts, OpticRef, PortType, SurfacePorts,
         node_attr::HasNodeAttr,
     },
     error::{OpmResult, OpossumError},
@@ -762,6 +762,10 @@ impl NodeGroup {
 impl OpticNode for NodeGroup {
     fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(None)
+    }
+    /// A group is the nodes it contains, each drawn on its own.
+    fn appearance(&self) -> Option<Appearance> {
+        None
     }
     fn ports(&self) -> OpticPorts {
         let mut ports = OpticPorts::new();

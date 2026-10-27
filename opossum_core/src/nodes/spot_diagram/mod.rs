@@ -12,8 +12,8 @@ use crate::{
         raytrace::AnalysisRayTrace,
     },
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, Planar, PortType, SurfaceKind,
-        SurfacePorts, optic_node::APERTURE_LIMIT_NOTE,
+        Appearance, NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, SurfacePorts,
+        optic_node::APERTURE_LIMIT_NOTE,
     },
     error::OpmResult,
     geometry::{
@@ -102,11 +102,6 @@ impl SpotDiagram {
         Ok(sd)
     }
 }
-impl Planar for SpotDiagram {
-    fn surface_kind(&self) -> SurfaceKind {
-        SurfaceKind::Detector
-    }
-}
 impl OpticNode for SpotDiagram {
     fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::detector(
@@ -114,8 +109,8 @@ impl OpticNode for SpotDiagram {
             self.cross_section()?,
         )?))
     }
-    fn as_surface(&self) -> Option<&dyn Planar> {
-        Some(self)
+    fn appearance(&self) -> Option<Appearance> {
+        Some(Appearance::detector())
     }
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;

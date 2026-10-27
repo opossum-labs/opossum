@@ -3,7 +3,7 @@ use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
     helper_functions::{analyzer_mut_or_404, parent_group_id_or_self},
-    scene_export::{AXIS_COLOR, glb_of_node, glb_of_surface_node, manifest_of, rays_glb, scene_of},
+    scene_export::{AXIS_COLOR, glb_of_node, manifest_of, rays_glb, scene_of},
     sse_logger::SENDER,
     undo::{Command, PatchNode, RepositionAnalyzer, SetViewport, capture_old_node_request},
 };
@@ -213,7 +213,7 @@ async fn get_scene_manifest(
     responses(
         (status = 200, description = "glTF binary of the component", body = Vec<u8>,
             content_type = GLB_MEDIA_TYPE),
-        (status = 404, description = "no component of that uuid encloses a volume or is one optical surface", body = ErrorResponse),
+        (status = 404, description = "no component of that uuid is drawn", body = ErrorResponse),
         (status = 400, description = "the component could not be drawn", body = ErrorResponse)
     )
 )]
@@ -232,13 +232,8 @@ async fn get_scene_node(
             .map_err(|_| BackEndErrorResponse::not_found())?
             .0
     };
-    let glb = if let Some(volume) = node.as_volume() {
-        glb_of_node(volume, default_reference_wavelength())?
-    } else if let Some(surface) = node.as_surface() {
-        glb_of_surface_node(surface)?
-    } else {
-        return Err(BackEndErrorResponse::not_found());
-    };
+    let glb = glb_of_node(&*node, default_reference_wavelength())?
+        .ok_or_else(BackEndErrorResponse::not_found)?;
     Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
 }
 

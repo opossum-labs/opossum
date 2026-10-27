@@ -8,7 +8,7 @@ use crate::{
     analyzers::{AnalyzerType, propagation_strategy::MissedSurfaceStrategy},
     coatings::{CoatingType, SplittingConfig, SplittingConfigBuilder},
     core_optics::{
-        NodeAttr, OpticNode, OpticNodeExt, Planar, PortType, SurfaceKind, SurfacePorts,
+        Appearance, NodeAttr, OpticNode, OpticNodeExt, PortType, SurfacePorts,
         node_attr::HasNodeAttr, surface_effect::Refraction,
     },
     error::{OpmResult, OpossumError},
@@ -253,17 +253,12 @@ impl BeamSplitter {
         ))
     }
 }
-impl Planar for BeamSplitter {
-    fn surface_kind(&self) -> SurfaceKind {
-        SurfaceKind::Reflective
-    }
-}
 impl OpticNode for BeamSplitter {
     fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::plane(self.cross_section()?)))
     }
-    fn as_surface(&self) -> Option<&dyn Planar> {
-        Some(self)
+    fn appearance(&self) -> Option<Appearance> {
+        Some(Appearance::mirror())
     }
     fn surface_ports(&self) -> SurfacePorts {
         SurfacePorts {

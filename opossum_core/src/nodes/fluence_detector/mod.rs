@@ -8,7 +8,7 @@ use crate::{
         raytrace::AnalysisRayTrace,
     },
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, Planar, SurfaceKind, SurfacePorts,
+        Appearance, NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, SurfacePorts,
         hit_map::fluence_estimator::FluenceEstimator, optic_node::APERTURE_LIMIT_NOTE,
         optic_surface::OpticSurface,
     },
@@ -99,11 +99,6 @@ impl FluenceDetector {
         fld
     }
 }
-impl Planar for FluenceDetector {
-    fn surface_kind(&self) -> SurfaceKind {
-        SurfaceKind::Detector
-    }
-}
 impl OpticNode for FluenceDetector {
     fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::detector(
@@ -111,8 +106,8 @@ impl OpticNode for FluenceDetector {
             self.cross_section()?,
         )?))
     }
-    fn as_surface(&self) -> Option<&dyn Planar> {
-        Some(self)
+    fn appearance(&self) -> Option<Appearance> {
+        Some(Appearance::detector())
     }
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;

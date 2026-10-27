@@ -13,7 +13,7 @@ use crate::{
         raytrace::AnalysisRayTrace,
     },
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, Planar, SurfaceKind, SurfacePorts,
+        Appearance, NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, SurfacePorts,
         node_attr::HasNodeAttr, optic_node::APERTURE_LIMIT_NOTE,
     },
     error::OpmResult,
@@ -198,11 +198,6 @@ impl EnergyMeter {
     }
 }
 
-impl Planar for EnergyMeter {
-    fn surface_kind(&self) -> SurfaceKind {
-        SurfaceKind::Detector
-    }
-}
 impl OpticNode for EnergyMeter {
     fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::detector(
@@ -210,8 +205,8 @@ impl OpticNode for EnergyMeter {
             self.cross_section()?,
         )?))
     }
-    fn as_surface(&self) -> Option<&dyn Planar> {
-        Some(self)
+    fn appearance(&self) -> Option<Appearance> {
+        Some(Appearance::detector())
     }
     fn surface_ports(&self) -> SurfacePorts {
         SurfacePorts::SINGLE_SURFACE

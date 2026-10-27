@@ -39,20 +39,6 @@ use crate::{
 /// are meaningful only where there is a volume, and now the compiler says so instead of a runtime
 /// error on a node that never had one.
 pub trait Volumetric: OpticNode {
-    /// The base RGB colour used when rendering the glass body of this volume node.
-    ///
-    /// Returns a linear RGB triple (components in \[0, 1\]) that represents a neutral,
-    /// slightly blue-tinted glass tint. This is the cosmetic default for all volume nodes and
-    /// corresponds to the `GLASS_COLOUR` constant that the renderer uses; a node type may
-    /// override it to signal a differently tinted medium (e.g. a coloured filter glass or a
-    /// rare-earth-doped crystal).
-    ///
-    /// # Returns
-    ///
-    /// A `[f32; 3]` linear RGB colour triple.
-    fn glass_color(&self) -> [f32; 3] {
-        [0.3, 0.3, 0.3]
-    }
     /// Guides a ray bundle through the volume of a node: in through its entry surface, out through
     /// its exit surface.
     ///
@@ -1672,8 +1658,8 @@ mod test {
         }
         Ok(())
     }
-    /// Every node that presents itself as [`Volumetric`] or [`Planar`] can be drawn in its default
-    /// state: its geometry can be meshed, and every patch holds triangles.
+    /// Every node that states an appearance can be drawn in its default state: its geometry can be
+    /// meshed, and every patch holds triangles.
     ///
     /// A node type is registered once and then shows up in the 3D view without anything being added
     /// for it, so whether its default geometry can actually be meshed has to be settled here rather
@@ -1682,7 +1668,7 @@ mod test {
     fn every_drawn_node_can_be_meshed_in_its_default_state() -> OpmResult<()> {
         for (node_type, _) in node_types() {
             let optic_ref = create_node_ref(node_type)?;
-            if optic_ref.as_volume().is_none() && optic_ref.as_surface().is_none() {
+            if optic_ref.appearance().is_none() {
                 continue;
             }
             let meshes = optic_ref.geometry_mesh(32).map_err(|e| {
@@ -2040,19 +2026,5 @@ mod test {
             epsilon = 1e-12
         );
         Ok(())
-    }
-
-    /// The default `glass_color` for a `Lens` is the neutral glass tint [0.9, 0.95, 1.0].
-    ///
-    /// This pins the value that the renderer's `GLASS_COLOUR` constant previously hard-coded; any
-    /// future change to the default must update this test consciously.
-    #[test]
-    fn glass_color_returns_neutral_glass_tint() {
-        let lens = Lens::default();
-        assert_eq!(
-            lens.glass_color(),
-            [0.3_f32, 0.3, 0.3],
-            "default glass_color must be the neutral glass tint [0.9, 0.95, 1.0]"
-        );
     }
 }

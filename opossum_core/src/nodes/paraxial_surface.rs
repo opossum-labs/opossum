@@ -7,7 +7,7 @@ use crate::{
     },
     coatings::Coating,
     core_optics::{
-        NodeAttr, OpticNode, OpticNodeExt, Planar, PortType, SurfaceKind, SurfacePorts,
+        Appearance, NodeAttr, OpticNode, OpticNodeExt, PortType, SurfacePorts,
         hit_map::rays_hit_map::HitPoint,
         surface_effect::{Refraction, SurfaceEffect},
     },
@@ -141,17 +141,12 @@ impl SurfaceEffect for ParaxialLens {
         Ok(split)
     }
 }
-impl Planar for ParaxialSurface {
-    fn surface_kind(&self) -> SurfaceKind {
-        SurfaceKind::Transmissive
-    }
-}
 impl OpticNode for ParaxialSurface {
     fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::plane(self.cross_section()?)))
     }
-    fn as_surface(&self) -> Option<&dyn Planar> {
-        Some(self)
+    fn appearance(&self) -> Option<Appearance> {
+        Some(Appearance::transmissive())
     }
     fn surface_ports(&self) -> SurfacePorts {
         SurfacePorts::SINGLE_SURFACE

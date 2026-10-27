@@ -10,9 +10,8 @@ use crate::{
     },
     coatings::Coating,
     core_optics::{
-        Appearance, NodeAttr, OpticNode, OpticNodeExt, Planar, PortType, SurfaceFinish,
-        SurfaceKind, SurfacePorts, hit_map::rays_hit_map::HitPoint, node_attr::HasNodeAttr,
-        surface_effect::SurfaceEffect,
+        Appearance, NodeAttr, OpticNode, OpticNodeExt, PortType, SurfaceFinish, SurfacePorts,
+        hit_map::rays_hit_map::HitPoint, node_attr::HasNodeAttr, surface_effect::SurfaceEffect,
     },
     error::{OpmResult, OpossumError},
     geometry::{
@@ -367,26 +366,6 @@ impl AnalysisRayTrace for ReflectiveGrating {
     }
 }
 
-impl Planar for ReflectiveGrating {
-    fn surface_kind(&self) -> SurfaceKind {
-        SurfaceKind::Reflective
-    }
-
-    /// Override the default appearance to show iridescent diffraction colours.
-    ///
-    /// A grating is physically [`SurfaceKind::Reflective`] (it redirects light), but its
-    /// distinctive look — the rainbow pattern caused by its periodic structure — is captured by
-    /// [`SurfaceFinish::Iridescent`]. The two are independent: changing `appearance` here does not
-    /// affect any ray-tracing result; it only changes how the grating is drawn in the 3-D view.
-    fn appearance(&self) -> Appearance {
-        Appearance {
-            color: [0.85, 0.85, 0.9, 1.0],
-            roughness: 0.15,
-            finish: SurfaceFinish::Iridescent,
-        }
-    }
-}
-
 /// Diffraction into one order of a grating (see [`Ray::diffract_at`]). The whole energy goes into
 /// the order, so the coating of the surface is not used, and the surface records no hit.
 struct Diffraction {
@@ -414,8 +393,13 @@ impl OpticNode for ReflectiveGrating {
     fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::plane(self.cross_section()?)))
     }
-    fn as_surface(&self) -> Option<&dyn Planar> {
-        Some(self)
+    /// A grating reflects, but it is drawn iridescent: the rainbow its periodic structure shows.
+    fn appearance(&self) -> Option<Appearance> {
+        Some(Appearance {
+            color: [0.85, 0.85, 0.9, 1.0],
+            roughness: 0.15,
+            finish: SurfaceFinish::Iridescent,
+        })
     }
     fn surface_ports(&self) -> SurfacePorts {
         SurfacePorts::SINGLE_SURFACE
@@ -669,23 +653,15 @@ mod test {
         Ok(())
     }
 
-    /// A `ReflectiveGrating` overrides the default appearance with an iridescent finish.
-    ///
-    /// The grating is physically reflective (its `surface_kind()` is `Reflective`) but the
-    /// visual finish is `Iridescent`, reflecting its diffraction-colour appearance.
+    /// A grating reflects, but it is drawn iridescent rather than as a mirror.
     #[test]
     fn grating_appearance_is_iridescent() {
-        let grating = ReflectiveGrating::default();
         assert_eq!(
-            grating.appearance().finish,
-            SurfaceFinish::Iridescent,
-            "a ReflectiveGrating must report SurfaceFinish::Iridescent"
-        );
-        // Physics (surface_kind) must remain Reflective regardless of the cosmetic override.
-        assert_eq!(
-            grating.surface_kind(),
-            SurfaceKind::Reflective,
-            "the physical surface_kind must still be Reflective"
+            ReflectiveGrating::default()
+                .appearance()
+                .map(|appearance| appearance.finish),
+            Some(SurfaceFinish::Iridescent),
+            "a ReflectiveGrating must be drawn iridescent"
         );
     }
     /// Trace one ray of 1 J at 1000 nm from 10 mm in front of a grating along z.

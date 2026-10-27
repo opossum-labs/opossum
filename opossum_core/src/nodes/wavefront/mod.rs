@@ -11,8 +11,8 @@ use crate::{
         raytrace::AnalysisRayTrace,
     },
     core_optics::{
-        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, Planar, PortType, SurfaceKind,
-        SurfacePorts, optic_node::APERTURE_LIMIT_NOTE,
+        Appearance, NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, SurfacePorts,
+        optic_node::APERTURE_LIMIT_NOTE,
     },
     error::{OpmResult, OpossumError},
     geometry::{
@@ -183,11 +183,6 @@ impl WaveFront {
     }
 }
 
-impl Planar for WaveFront {
-    fn surface_kind(&self) -> SurfaceKind {
-        SurfaceKind::Detector
-    }
-}
 impl OpticNode for WaveFront {
     /// The surface wavefronts are measured on: the reference surface, or a plane if none is set,
     /// within the recording window.
@@ -199,8 +194,8 @@ impl OpticNode for WaveFront {
             self.cross_section()?,
         )?))
     }
-    fn as_surface(&self) -> Option<&dyn Planar> {
-        Some(self)
+    fn appearance(&self) -> Option<Appearance> {
+        Some(Appearance::detector())
     }
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;

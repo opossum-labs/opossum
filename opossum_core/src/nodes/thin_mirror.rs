@@ -10,7 +10,7 @@ use crate::{
     },
     coatings::CoatingConstantR,
     core_optics::{
-        NodeAttr, OpticNode, OpticNodeExt, Planar, PortType, SurfaceKind, SurfacePorts,
+        Appearance, NodeAttr, OpticNode, OpticNodeExt, PortType, SurfacePorts,
         node_attr::HasNodeAttr, surface_effect::Refraction,
     },
     error::{OpmResult, OpossumError},
@@ -115,11 +115,6 @@ impl ThinMirror {
         Ok(self)
     }
 }
-impl Planar for ThinMirror {
-    fn surface_kind(&self) -> SurfaceKind {
-        SurfaceKind::Reflective
-    }
-}
 impl OpticNode for ThinMirror {
     fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         let Ok(Proptype::Curvature(curvature)) = self.node_attr.get_property("curvature") else {
@@ -132,8 +127,8 @@ impl OpticNode for ThinMirror {
             self.cross_section()?,
         )?))
     }
-    fn as_surface(&self) -> Option<&dyn Planar> {
-        Some(self)
+    fn appearance(&self) -> Option<Appearance> {
+        Some(Appearance::mirror())
     }
     fn surface_ports(&self) -> SurfacePorts {
         SurfacePorts::SINGLE_SURFACE

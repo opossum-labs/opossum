@@ -11,9 +11,8 @@ use uuid::Uuid;
 use crate::{
     analyzers::{Analyzable, AnalyzerKind, propagation_strategy::PropagationStrategy},
     core_optics::{
-        NodeAttrExt, OpticNodeExt, OpticPorts, SurfacePorts,
+        Appearance, NodeAttrExt, OpticNodeExt, OpticPorts, SurfacePorts,
         node_attr::{HasNodeAttr, NodePositioning},
-        planar::Planar,
         volumetric::Volumetric,
     },
     error::{OpmResult, OpossumError},
@@ -230,15 +229,18 @@ pub trait OpticNode: VisualNode + HasNodeAttr + OpticNodeAny {
         None
     }
 
-    /// Return this node as a [`Planar`] element, if it is one optical surface rather than a body of
-    /// material.
+    /// Return how this node is drawn in a 3D view.
+    ///
+    /// Every node type answers this itself, so a new one has to decide whether and how it is seen.
+    /// What is drawn is the node's geometry (see
+    /// [`OpticNodeExt::geometry_mesh`](crate::core_optics::OpticNodeExt::geometry_mesh)); the
+    /// appearance only says in what. It never affects a simulation.
     ///
     /// # Returns
     ///
-    /// `Some(&dyn Planar)` if the element is a single surface, or `None` otherwise.
-    fn as_surface(&self) -> Option<&dyn Planar> {
-        None
-    }
+    /// The [`Appearance`], or `None` for a node that is not drawn: one without a shape of its own,
+    /// such as a group or a reference, or one that is only traced at, such as a source.
+    fn appearance(&self) -> Option<Appearance>;
 
     /// Return [`NodeReportResult`] of the current state of this [`OpticNode`].
     ///
