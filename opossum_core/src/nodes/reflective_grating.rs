@@ -398,6 +398,7 @@ impl OpticNode for ReflectiveGrating {
         Some(Appearance {
             color: [0.85, 0.85, 0.9, 1.0],
             roughness: 0.15,
+            metallic: 1.0,
             finish: SurfaceFinish::Iridescent,
         })
     }
