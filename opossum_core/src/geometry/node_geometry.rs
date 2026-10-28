@@ -44,9 +44,9 @@ pub enum Geometry {
     /// Two faces capping a profile extruded along an axis: lens, cylindric lens, wedge, plate.
     Extruded(Box<Extruded>),
     /// A solid bounded by several faces: the intersection of the inner sides of all of them.
-    Parametric(ParametricSolid),
+    Parametric(Box<ParametricSolid>),
     /// Several solids, each with its own material, sharing interfaces.
-    Assembly(Assembly),
+    Assembly(Box<Assembly>),
 }
 
 impl Geometry {
@@ -246,8 +246,8 @@ impl Geometry {
         match self {
             Self::Surface(surface) => &**surface,
             Self::Extruded(extruded) => &**extruded,
-            Self::Parametric(parametric) => parametric,
-            Self::Assembly(assembly) => assembly,
+            Self::Parametric(parametric) => &**parametric,
+            Self::Assembly(assembly) => &**assembly,
         }
     }
     /// Return the kind of geometry this is, as [`Geometry::kind`] does, mutably.
@@ -255,8 +255,8 @@ impl Geometry {
         match self {
             Self::Surface(surface) => &mut **surface,
             Self::Extruded(extruded) => &mut **extruded,
-            Self::Parametric(parametric) => parametric,
-            Self::Assembly(assembly) => assembly,
+            Self::Parametric(parametric) => &mut **parametric,
+            Self::Assembly(assembly) => &mut **assembly,
         }
     }
     /// Return the face with the given number (see [`GeometryKind::surface`]).
@@ -835,15 +835,15 @@ mod test {
     /// moves its faces along; a single surface encloses none.
     #[test]
     fn every_kind_of_solid_numbers_its_faces_and_encloses_a_volume() -> OpmResult<()> {
-        let parametric = Geometry::Parametric(ParametricSolid::new(
+        let parametric = Geometry::Parametric(Box::new(ParametricSolid::new(
             vec![(
                 Face::new(SurfaceShape::Plane, Isometry::identity()),
                 Side::Behind,
             )],
             Material::from(&RefrIndexConst::new(1.5)?),
-        )?);
+        )?));
         let part = Part::new(&Isometry::identity(), parametric.clone())?;
-        let assembly = Geometry::Assembly(Assembly::new(vec![part], vec![])?);
+        let assembly = Geometry::Assembly(Box::new(Assembly::new(vec![part], vec![])?));
         let frame = Isometry::new(millimeter!(1.0, -2.0, 30.0), degree!(10.0, 5.0, 0.0))?;
         for mut geometry in [parametric, assembly] {
             assert_eq!(geometry.kind().face_count(), 1);
@@ -1132,7 +1132,7 @@ mod test {
     #[test]
     fn a_face_of_a_parametric_solid_is_hit_up_to_the_other_faces() -> OpmResult<()> {
         let side = Isometry::new(millimeter!(5.0, 0.0, 5.0), degree!(0.0, 90.0, 0.0))?;
-        let solid = Geometry::Parametric(ParametricSolid::new(
+        let solid = Geometry::Parametric(Box::new(ParametricSolid::new(
             vec![
                 (
                     Face::new(SurfaceShape::Plane, Isometry::identity()),
@@ -1148,7 +1148,7 @@ mod test {
                 (Face::new(SurfaceShape::Plane, side), Side::InFront),
             ],
             Material::default(),
-        )?);
+        )?));
         assert!(
             solid
                 .intersect(FaceIndex::new(0), &ray_along_z(4.9, 0.0)?)

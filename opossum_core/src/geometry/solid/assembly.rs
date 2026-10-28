@@ -358,7 +358,7 @@ mod test {
     /// The front prism of a beam splitter cube: behind its entrance face, in front of the
     /// diagonal (face 1).
     fn prism_part() -> OpmResult<Part> {
-        let solid = Geometry::Parametric(ParametricSolid::new(
+        let solid = Geometry::Parametric(Box::new(ParametricSolid::new(
             vec![
                 (
                     Face::new(SurfaceShape::Plane, Isometry::identity()),
@@ -367,12 +367,12 @@ mod test {
                 (diagonal()?, Side::InFront),
             ],
             glass()?,
-        )?);
+        )?));
         part_of(solid, Isometry::identity())
     }
     /// The rear prism of the same cube: behind the diagonal (face 0), in front of its exit face.
     fn opposite_prism_part() -> OpmResult<Part> {
-        let solid = Geometry::Parametric(ParametricSolid::new(
+        let solid = Geometry::Parametric(Box::new(ParametricSolid::new(
             vec![
                 (diagonal()?, Side::Behind),
                 (
@@ -384,7 +384,7 @@ mod test {
                 ),
             ],
             glass()?,
-        )?);
+        )?));
         part_of(solid, Isometry::identity())
     }
     /// A beam splitter cube: both prisms cemented along the diagonal.
@@ -841,7 +841,8 @@ mod test {
     #[test]
     fn a_part_is_a_solid_but_not_an_assembly() -> OpmResult<()> {
         let inner = Assembly::new(vec![prism_part()?], vec![])?;
-        let nested = part_of(Geometry::Assembly(inner), Isometry::identity()).unwrap_err();
+        let nested =
+            part_of(Geometry::Assembly(Box::new(inner)), Isometry::identity()).unwrap_err();
         assert!(nested.to_string().contains("assembly itself"), "{nested}");
         let surface = part_of(Geometry::plane(None), Isometry::identity()).unwrap_err();
         assert!(
