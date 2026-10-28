@@ -102,8 +102,14 @@ pub fn SceneView() -> Element {
 
     let mut options = use_signal(|| ViewerOptions {
         // Without this, every lens renders black: glass refracts its surroundings, and an empty
-        // scene has none. See `dioxus_glb_viewer`'s `Environment`.
-        environment: Environment::Room,
+        // scene has none. See `dioxus_glb_viewer`'s `Environment`. Both tones are darker than
+        // the background and the table, so a mirror stands out against them instead of vanishing.
+        environment: Environment::Horizon {
+            above: "#667079".into(),
+            below: "#46474a".into(),
+        },
+        // Twice as strong, so mirrors read as mirrors against the calm horizon.
+        environment_intensity: 2.0,
         background: "#435d7a".into(),
         // The model is metres across and sits near the origin, while the default grid is twenty
         // units wide - it would swamp the setup rather than give it a floor.
