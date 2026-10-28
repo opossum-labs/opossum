@@ -36,6 +36,13 @@ const RIM_SEGMENTS: usize = 64;
 /// Drawing the component in plain glass says more than leaving it out of the scene.
 const FALLBACK_REFRACTIVE_INDEX: f64 = 1.5;
 
+/// How opaque glass is drawn where nothing mirrors it.
+///
+/// A renderer such as three.js shows only opaque objects through transmissive glass, so a lens
+/// behind another lens would vanish; drawn slightly see-through, it shows through instead (see the
+/// handbook's chapter on the 3D view).
+const GLASS_OPACITY: f32 = 0.7;
+
 /// Build a 3D scene of every component of a model that states an appearance.
 ///
 /// Every node that states how it looks (see
@@ -82,19 +89,20 @@ fn placement_of(node: &(impl OpticNodeExt + ?Sized)) -> Isometry3<f64> {
         .get_transform()
 }
 
-/// A component as it is drawn: its patches and the material they are drawn in.
+/// A component as it is drawn: its patches, each in the material of the face it lies on.
 struct Drawn<'a> {
     /// The component.
     node: &'a dyn Analyzable,
-    /// The material the component is drawn in.
-    material: Material,
-    /// The component's patches, meshed in its own frame and ready to draw.
-    patches: Vec<SurfaceMesh>,
+    /// The component's patches, meshed in its own frame and ready to draw, with their materials.
+    patches: Vec<(SurfaceMesh, Material)>,
 }
 
 impl<'a> Drawn<'a> {
-    /// Derive how a component is drawn: its geometry, meshed, in the material its appearance asks
-    /// for.
+    /// Derive how a component is drawn: its geometry, meshed, every patch in the material its
+    /// appearance asks for under the coating of the face it lies on (see [`Appearance::coated`]).
+    ///
+    /// The lateral face of a solid has no coating and is drawn as the appearance asks. So is a face
+    /// whose coating cannot be evaluated, with a warning: drawing it says more than leaving it out.
     ///
     /// The patches of a solid form a closed shell, so one of them always faces the camera. A single
     /// surface has no far side of its own: every patch of it is drawn twice, the second turned over
@@ -105,40 +113,46 @@ impl<'a> Drawn<'a> {
     ///
     /// - `node`: the component
     /// - `appearance`: what the component asks to be drawn in
-    /// - `wavelength`: the wavelength glass is given its refractive index at
+    /// - `wavelength`: the wavelength glass is given its refractive index and coatings are
+    ///   evaluated at
     ///
     /// # Errors
     ///
-    /// This function returns an error if the component cannot be meshed, or if its material cannot
-    /// be described (see [`material_of`]).
+    /// This function returns an error if the component cannot be meshed, if the medium of its solid
+    /// cannot be told (see [`refractive_index_of`]), or if a material cannot be described (see
+    /// [`material_of`]).
     fn new(
         node: &'a dyn Analyzable,
         appearance: Appearance,
         wavelength: Length,
     ) -> OpmResult<Self> {
-        let patches: Vec<SurfaceMesh> = node
-            .geometry_mesh(RIM_SEGMENTS)?
-            .into_iter()
-            .map(|patch| patch.mesh)
-            .collect();
         let geometry = node.create_geometry()?;
-        let body = geometry
-            .as_ref()
-            .and_then(|geometry| geometry.kind().as_body());
-        let material = material_of(node, appearance, body, wavelength)?;
-        let patches = if body.is_some() {
-            patches
-        } else {
-            patches
-                .into_iter()
-                .flat_map(|patch| [patch.clone(), patch.flipped()])
-                .collect()
+        let kind = geometry.as_ref().map(|geometry| geometry.kind());
+        let body = kind.and_then(|kind| kind.as_body());
+        // Behind a face lies the medium of the solid, or vacuum behind a single surface.
+        let ior = body.map_or(Ok(1.0), |body| refractive_index_of(node, body, wavelength))?;
+        let coated = |face| -> OpmResult<Appearance> {
+            let name = kind
+                .and_then(|kind| kind.face_name(face))
+                .ok_or_else(|| OpossumError::Other(format!("there is no face {face}")))?;
+            appearance.coated(node.surface_config(&name)?.coating(), wavelength, ior)
         };
-        Ok(Self {
-            node,
-            material,
-            patches,
-        })
+        let mut patches = Vec::new();
+        for patch in node.geometry_mesh(RIM_SEGMENTS)? {
+            let look = patch.face.map_or(appearance, |face| {
+                coated(face).unwrap_or_else(|e| {
+                    warn!("a face of '{}' is drawn uncoated: {e}", node.name());
+                    appearance
+                })
+            });
+            let material = || material_of(node, look, body, ior);
+            let turned_over = body.is_none().then(|| patch.mesh.clone().flipped());
+            patches.push((patch.mesh, material()?));
+            if let Some(turned_over) = turned_over {
+                patches.push((turned_over, material()?));
+            }
+        }
+        Ok(Self { node, patches })
     }
 }
 
@@ -220,21 +234,16 @@ where
 ///
 /// This function returns an error if `optoscene` rejects the resulting geometry.
 fn add_at(scene: &mut Scene, drawn: Drawn<'_>, placement: Isometry3<f64>) -> OpmResult<()> {
-    let node = drawn.node;
-    let material = scene.add_material(drawn.material);
-    let mesh_id = scene
-        .add_mesh(TriMesh {
-            // One patch per face rather than one for all, so that the hard edge where the faces
-            // meet stays hard: patches do not share vertices.
-            patches: drawn
-                .patches
-                .iter()
-                .map(|patch| patch_of(patch, material))
-                .collect(),
-        })
-        .map_err(|e| {
-            OpossumError::Other(format!("the mesh of '{}' was rejected: {e}", node.name()))
-        })?;
+    let Drawn { node, patches } = drawn;
+    // One patch per face rather than one for all, so that the hard edge where the faces meet stays
+    // hard: patches do not share vertices. Equal materials are registered once.
+    let patches = patches
+        .into_iter()
+        .map(|(mesh, material)| patch_of(&mesh, scene.add_material(material)))
+        .collect();
+    let mesh_id = scene.add_mesh(TriMesh { patches }).map_err(|e| {
+        OpossumError::Other(format!("the mesh of '{}' was rejected: {e}", node.name()))
+    })?;
     scene
         .add_node(SceneNode {
             uid: node.node_attr().uuid().to_string(),
@@ -250,21 +259,23 @@ fn add_at(scene: &mut Scene, drawn: Drawn<'_>, placement: Isometry3<f64>) -> Opm
     Ok(())
 }
 
-/// Map a component's [`Appearance`] to the closest [`optoscene::Material`] preset.
+/// Map the [`Appearance`] of one face of a component to the closest [`optoscene::Material`]
+/// preset.
 ///
-/// Glass is the one material that needs more than the appearance, which only gives its tint: see
-/// [`glass_of`].
+/// Glass is the one material that needs more than the appearance, which only gives its tint and
+/// how mirrored it is: see [`glass_of`].
 ///
 /// # Arguments
 ///
 /// - `node`: the component, named in errors
-/// - `appearance`: what the component asks to be drawn in
+/// - `appearance`: what the face asks to be drawn in
 /// - `body`: the volume the component's geometry encloses, if any
-/// - `wavelength`: the wavelength glass is given its refractive index at
+/// - `ior`: the refractive index of the medium that volume is filled with, which glass is drawn
+///   with
 ///
 /// # Returns
 ///
-/// The [`Material`] a renderer should draw the component in.
+/// The [`Material`] a renderer should draw the face in.
 ///
 /// # Errors
 ///
@@ -274,23 +285,23 @@ fn material_of(
     node: &dyn Analyzable,
     appearance: Appearance,
     body: Option<&dyn Body>,
-    wavelength: Length,
+    ior: f64,
 ) -> OpmResult<Material> {
-    let c = appearance.color;
-    let rgb = [c[0], c[1], c[2]];
+    let [red, green, blue, alpha] = appearance.color;
+    let rgb = [red, green, blue];
     Ok(match appearance.finish {
         SurfaceFinish::Reflective => Material::Mirror {
             color: rgb,
             roughness: appearance.roughness,
-            metallic: 1.0,
-            opacity: 1.0,
+            metallic: appearance.metallic,
+            opacity: alpha,
         },
         SurfaceFinish::Transmissive => Material::Translucent {
             color: appearance.color,
         },
         SurfaceFinish::Opaque => Material::Opaque {
             color: appearance.color,
-            metallic: 0.0,
+            metallic: appearance.metallic,
             roughness: appearance.roughness,
         },
         // `Appearance` is renderer-agnostic and carries no thin-film parameters, so the
@@ -303,7 +314,7 @@ fn material_of(
             iridescence_thickness_min: 100.0,
             iridescence_thickness_max: 400.0,
         },
-        SurfaceFinish::Glass => glass_of(node, rgb, body, wavelength)?,
+        SurfaceFinish::Glass => glass_of(node, appearance, body, ior)?,
     })
 }
 
@@ -556,13 +567,13 @@ pub fn manifest_of(placed: &NodeGroup, wavelength: Length) -> OpmResult<SceneMan
 ///
 /// # Returns
 ///
-/// A hexadecimal digest of the component's patches and material.
+/// A hexadecimal digest of the component's patches and their materials.
 fn geometry_of(drawn: &Drawn<'_>) -> String {
     let mut hash = Fnv1a::new();
-    for patch in &drawn.patches {
-        hash.write_mesh(patch);
+    for (mesh, material) in &drawn.patches {
+        hash.write_mesh(mesh);
+        hash.write_material(material);
     }
-    hash.write_material(&drawn.material);
     hash.finish()
 }
 
@@ -697,37 +708,25 @@ impl Fnv1a {
     }
 }
 
-/// Describe the glass a component is made of, as far as a renderer needs it.
+/// Return the refractive index of the medium a component's solid is filled with.
 ///
-/// Its refractive index is that of the material the component's solid is filled with, its
-/// thickness the extent of that solid along its axis.
+/// A medium that states no index at the wavelength is drawn as plain glass, with a warning.
 ///
 /// # Arguments
 ///
 /// - `node`: the component, named in errors and warnings
-/// - `tint`: the color of the glass
-/// - `body`: the volume the component's geometry encloses, if any
+/// - `body`: the volume the component's geometry encloses
 /// - `wavelength`: the wavelength to evaluate the refractive index at
 ///
 /// # Errors
 ///
-/// This function returns an error if the component's geometry encloses no volume, if that volume
-/// holds no single material, or if it has no extent to measure a thickness from.
-// A refractive index and a thickness in millimeters are nowhere near the range of an f32.
-#[allow(clippy::cast_possible_truncation)]
-fn glass_of(
+/// This function returns an error if the volume holds no single material.
+fn refractive_index_of(
     node: &dyn Analyzable,
-    tint: [f32; 3],
-    body: Option<&dyn Body>,
+    body: &dyn Body,
     wavelength: Length,
-) -> OpmResult<Material> {
-    let body = body.ok_or_else(|| {
-        OpossumError::Other(format!(
-            "'{}' encloses no volume to draw as glass",
-            node.name()
-        ))
-    })?;
-    let ior = body
+) -> OpmResult<f64> {
+    Ok(body
         .material()
         .ok_or_else(|| {
             OpossumError::Other(format!(
@@ -743,14 +742,47 @@ fn glass_of(
                 node.name()
             );
             FALLBACK_REFRACTIVE_INDEX
-        });
+        }))
+}
+
+/// Describe the glass one face of a component is drawn in, as far as a renderer needs it.
+///
+/// Its thickness is the extent of the component's solid along its axis. Where nothing mirrors the
+/// face, it is drawn at [`GLASS_OPACITY`]; the more it is mirrored, the more opaque it gets.
+///
+/// # Arguments
+///
+/// - `node`: the component, named in errors
+/// - `appearance`: the tint of the glass and how mirrored the face is
+/// - `body`: the volume the component's geometry encloses, if any
+/// - `ior`: the refractive index of the medium that volume is filled with
+///
+/// # Errors
+///
+/// This function returns an error if the component's geometry encloses no volume, or if that
+/// volume has no extent to measure a thickness from.
+// A refractive index and a thickness in millimeters are nowhere near the range of an f32.
+#[allow(clippy::cast_possible_truncation)]
+fn glass_of(
+    node: &dyn Analyzable,
+    appearance: Appearance,
+    body: Option<&dyn Body>,
+    ior: f64,
+) -> OpmResult<Material> {
+    let body = body.ok_or_else(|| {
+        OpossumError::Other(format!(
+            "'{}' encloses no volume to draw as glass",
+            node.name()
+        ))
+    })?;
     let thickness = body.bounding_box()?.z_range();
+    let [red, green, blue, _] = appearance.color;
     Ok(Material::Glass {
-        color: tint,
+        color: [red, green, blue],
         ior: ior as f32,
         thickness: (thickness.end - thickness.start).value as f32,
-        metallic: 0.0,
-        opacity: 1.0,
+        metallic: appearance.metallic,
+        opacity: (1.0 - GLASS_OPACITY).mul_add(appearance.metallic, GLASS_OPACITY),
     })
 }
 
@@ -776,18 +808,20 @@ mod test {
     use opossum_core::{
         analyzers::{AnalyzerType, RayTraceConfig},
         apertures::{Bore, CircleShape, OpticShape, Outline},
+        coatings::{CoatingConstantR, CoatingType},
         core_optics::{OpticNode, node_attr::NodePositioning},
         degree,
-        geometry::body::OPTIC_SHAPE,
+        geometry::{Extruded, SurfaceGeometry, body::OPTIC_SHAPE},
         joule,
         light::{Ray, lightdata::ray_data_builder::RayDataBuilder},
         material::default_reference_wavelength,
         millimeter, nanometer,
         nodes::{
-            CylindricLens, EnergyMeter, IdealFilter, Lens, NodeReference, ReflectiveGrating,
-            SourcePort, ThinMirror, Wedge, round_collimated_ray_builder,
+            BeamSplitter, CylindricLens, EnergyMeter, IdealFilter, Lens, NodeReference,
+            ReflectiveGrating, SourcePort, ThinMirror, Wedge, round_collimated_ray_builder,
         },
         opm_document::OpmDocument,
+        percent,
         properties::Proptype,
     };
     use uuid::Uuid;
@@ -1028,6 +1062,107 @@ mod test {
             .as_array()
             .expect("a mesh has primitives");
         assert_eq!(primitives.len(), 3);
+        Ok(())
+    }
+    /// The materials a component's own file draws its patches in, patch by patch.
+    fn patch_materials(node: &dyn Analyzable) -> OpmResult<Vec<serde_json::Value>> {
+        let glb = glb_of_node(node, default_reference_wavelength())?
+            .ok_or_else(|| OpossumError::Other("the component is not drawn".into()))?;
+        let scene = glb_json(&glb);
+        let mesh_index = drawn_components(&scene)[0]["mesh"]
+            .as_u64()
+            .expect("a drawn component has a mesh");
+        Ok(scene["meshes"][mesh_index as usize]["primitives"]
+            .as_array()
+            .expect("a mesh has primitives")
+            .iter()
+            .map(|primitive| {
+                let index = primitive["material"]
+                    .as_u64()
+                    .expect("a patch has a material");
+                scene["materials"][index as usize].clone()
+            })
+            .collect())
+    }
+    /// How metallic and how opaque a material is drawn; one without an alpha mode is opaque.
+    fn metallic_and_opacity(material: &serde_json::Value) -> (f64, f64) {
+        let pbr = &material["pbrMetallicRoughness"];
+        let metallic = pbr["metallicFactor"].as_f64().expect("a metallic factor");
+        let opacity = material.get("alphaMode").map_or(1.0, |mode| {
+            assert_eq!(mode, "BLEND");
+            pbr["baseColorFactor"][3].as_f64().expect("an alpha")
+        });
+        (metallic, opacity)
+    }
+    /// Check that a material is drawn as metallic and as opaque as expected.
+    fn assert_drawn_as(material: &serde_json::Value, metallic: f64, opacity: f64) {
+        let (drawn_metallic, drawn_opacity) = metallic_and_opacity(material);
+        assert!(
+            (drawn_metallic - metallic).abs() < 1e-6 && (drawn_opacity - opacity).abs() < 1e-6,
+            "drawn {drawn_metallic} metallic and {drawn_opacity} opaque instead of {metallic} and \
+             {opacity}: {material}"
+        );
+    }
+    /// A mirror is drawn as mirrored as its coating makes it: an opaque mirror by default, the pale
+    /// pane it is without a coating that reflects.
+    #[test]
+    fn a_mirror_is_drawn_as_mirrored_as_its_coating_makes_it() -> OpmResult<()> {
+        let mut mirror = ThinMirror::default();
+        mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+        for material in patch_materials(&mirror)? {
+            assert_drawn_as(&material, 1.0, 1.0);
+        }
+        mirror.set_coating(SurfaceGeometry::FACE, &CoatingType::IdealAR)?;
+        for material in patch_materials(&mirror)? {
+            assert_drawn_as(&material, 0.0, 0.3);
+        }
+        Ok(())
+    }
+    /// A beam splitter reflects half of the light, so it is drawn half mirrored.
+    #[test]
+    fn a_beam_splitter_is_drawn_half_mirrored() -> OpmResult<()> {
+        let mut splitter = BeamSplitter::default();
+        splitter.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+        for material in patch_materials(&splitter)? {
+            assert_drawn_as(&material, 0.5, 0.65);
+        }
+        Ok(())
+    }
+    /// Every face of a lens is drawn as slightly see-through glass, so that what lies behind it
+    /// stays visible; a coating that mirrors one of its faces mirrors that face alone.
+    #[test]
+    fn a_mirror_coating_on_a_lens_mirrors_only_its_own_face() -> OpmResult<()> {
+        let mut lens = Lens::default();
+        lens.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+        let materials = patch_materials(&lens)?;
+        assert_eq!(materials.len(), 3);
+        for material in &materials {
+            assert_eq!(material["name"], "glass");
+            assert_drawn_as(material, 0.0, 0.7);
+        }
+        lens.set_coating(
+            Extruded::REAR,
+            &CoatingConstantR::new(percent!(100.0))?.into(),
+        )?;
+        // An uncoated face reflects by the index of the lens behind it: 4 % for n = 1.5.
+        lens.set_coating(Extruded::FRONT, &CoatingType::Fresnel)?;
+        let materials = patch_materials(&lens)?;
+        // front, rear, lateral face
+        assert_drawn_as(&materials[0], 0.04, 0.712);
+        assert_drawn_as(&materials[1], 1.0, 1.0);
+        assert_drawn_as(&materials[2], 0.0, 0.7);
+        Ok(())
+    }
+    /// A changed coating changes how a component looks, so the viewer has to fetch it again.
+    #[test]
+    fn changing_a_coating_changes_the_geometry() -> OpmResult<()> {
+        let mut mirror = ThinMirror::default();
+        let wavelength = default_reference_wavelength();
+        let appearance = mirror.appearance().expect("a mirror is drawn");
+        let before = geometry_of(&Drawn::new(&mirror, appearance, wavelength)?);
+        mirror.set_coating(SurfaceGeometry::FACE, &CoatingType::IdealAR)?;
+        let after = geometry_of(&Drawn::new(&mirror, appearance, wavelength)?);
+        assert_ne!(before, after);
         Ok(())
     }
 
