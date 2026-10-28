@@ -148,12 +148,13 @@ impl Serialize for ViewerOptions {
             initial_camera,
             initial_target,
             environment,
+            environment_intensity,
             fov_degrees,
             orientation_gizmo,
             ground,
             line_width,
         } = self;
-        let mut st = s.serialize_struct("ViewerOptions", 13)?;
+        let mut st = s.serialize_struct("ViewerOptions", 14)?;
         st.serialize_field("background", background)?;
         st.serialize_field("grid", grid)?;
         st.serialize_field("ambient_intensity", ambient_intensity)?;
@@ -163,6 +164,7 @@ impl Serialize for ViewerOptions {
         st.serialize_field("initial_camera", initial_camera)?;
         st.serialize_field("initial_target", initial_target)?;
         st.serialize_field("environment", environment)?;
+        st.serialize_field("environment_intensity", environment_intensity)?;
         st.serialize_field("fov_degrees", fov_degrees)?;
         st.serialize_field("orientation_gizmo", orientation_gizmo)?;
         st.serialize_field("ground", ground)?;
@@ -213,6 +215,7 @@ mod tests {
                 "background",
                 "directional_intensity",
                 "environment",
+                "environment_intensity",
                 "fit_on_first_load",
                 "fov_degrees",
                 "grid",
@@ -224,6 +227,20 @@ mod tests {
                 "selection_color",
             ]
         );
+    }
+
+    /// `viewer.js` hands the strength straight to three.js, so the default has to arrive as `1.0` -
+    /// the environment as it is - and a chosen one unchanged.
+    #[test]
+    fn environment_intensity_reaches_the_wire() {
+        let json = serde_json::to_value(ViewerOptions::default()).expect("options serialise");
+        assert_eq!(json["environment_intensity"], 1.0);
+        let opts = ViewerOptions {
+            environment_intensity: 2.0,
+            ..ViewerOptions::default()
+        };
+        let json = serde_json::to_value(opts).expect("options serialise");
+        assert_eq!(json["environment_intensity"], 2.0);
     }
 
     /// `viewer.js` widens lines only above one pixel, so the default must arrive as exactly that.
@@ -286,8 +303,8 @@ mod tests {
         assert!((ground["tile_size"].as_f64().expect("a number") - 0.025).abs() < 1e-6);
     }
 
-    /// `viewer.js` switches on these exact strings, so renaming a variant silently turns the
-    /// environment off rather than failing.
+    /// `viewer.js` switches on these exact strings and names, so renaming a variant or a field
+    /// silently turns the environment off rather than failing.
     #[test]
     fn environment_serialises_as_the_names_the_renderer_switches_on() {
         assert_eq!(
@@ -297,6 +314,14 @@ mod tests {
         assert_eq!(
             serde_json::to_value(Environment::Room).expect("serialises"),
             "room"
+        );
+        let horizon = Environment::Horizon {
+            above: "#667079".into(),
+            below: "#46474a".into(),
+        };
+        assert_eq!(
+            serde_json::to_value(horizon).expect("serialises"),
+            serde_json::json!({ "horizon": { "above": "#667079", "below": "#46474a" } })
         );
     }
 }

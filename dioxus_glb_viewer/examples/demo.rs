@@ -161,9 +161,10 @@ fn App() -> Element {
                             // Without an environment, transmissive glass renders black - toggle
                             // this on a model with a glass material to see the difference.
                             let mut opts = options.write();
-                            opts.environment = match opts.environment {
-                                Environment::None => Environment::Room,
-                                Environment::Room => Environment::None,
+                            opts.environment = if opts.environment == Environment::None {
+                                Environment::Room
+                            } else {
+                                Environment::None
                             };
                         },
                         "Toggle environment"

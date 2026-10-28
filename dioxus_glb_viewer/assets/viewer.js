@@ -841,28 +841,82 @@ export async function createViewer(canvasId, options, send, threeBase) {
     // nothing around the scene there is nothing to refract and the material comes out black. The
     // map is built only when one is asked for: a viewer that never wants it pays neither the
     // import nor the render-to-cubemap.
-    let environmentKind = 'none';
-    let environmentMap  = null;
+    //
+    // An environment is "none", "room" or { horizon: { above, below } } (see `Environment` in
+    // model.rs). It is compared by its JSON, so a horizon with other colours builds a new map.
+    let environmentKey = JSON.stringify('none');
+    let environmentMap = null;
 
-    async function applyEnvironment(kind) {
-        if (kind === environmentKind) return;
-        environmentKind = kind;
+    /**
+     * Draws a horizon as an equirectangular panorama: `above` over eye level, `below` under it,
+     * blending across a narrow band at the horizon. It lightens towards the zenith and darkens
+     * towards the nadir, so a curved mirror still shows which way is up.
+     *
+     * @param {{above: string, below: string}} colours - CSS colours of the two halves.
+     * @returns {HTMLCanvasElement}
+     */
+    function horizonPanorama({ above, below }) {
+        const image = document.createElement('canvas');
+        image.width  = 1024;
+        image.height = 512;
+        const g = image.getContext('2d');
+        const shade = (colour, toward, amount) =>
+            new THREE.Color(colour).lerp(new THREE.Color(toward), amount).getStyle();
+        const gradient = g.createLinearGradient(0, 0, 0, image.height);
+        gradient.addColorStop(0,    shade(above, '#ffffff', 0.3));
+        gradient.addColorStop(0.47, above);
+        gradient.addColorStop(0.53, below);
+        gradient.addColorStop(1,    shade(below, '#000000', 0.5));
+        g.fillStyle = gradient;
+        g.fillRect(0, 0, image.width, image.height);
+        return image;
+    }
+
+    /**
+     * Builds the environment map an environment asks for.
+     *
+     * @param {string|object} spec - the environment, as `applyEnvironment` takes it.
+     * @returns {Promise<THREE.Texture|null>} the map, or null for no environment.
+     */
+    async function environmentMapOf(spec) {
+        if (spec === 'room') {
+            const { RoomEnvironment } =
+                await import(threeBase + '/examples/jsm/environments/RoomEnvironment.js');
+            const pmrem = new THREE.PMREMGenerator(renderer);
+            const room  = new RoomEnvironment();
+            const map   = pmrem.fromScene(room).texture;
+            // Generator and room were scaffolding; only the cube texture outlives this call.
+            pmrem.dispose();
+            room.dispose();
+            return map;
+        }
+        if (spec && spec.horizon) {
+            const pmrem   = new THREE.PMREMGenerator(renderer);
+            const texture = new THREE.CanvasTexture(horizonPanorama(spec.horizon));
+            texture.colorSpace = THREE.SRGBColorSpace;
+            texture.mapping    = THREE.EquirectangularReflectionMapping;
+            const map = pmrem.fromEquirectangular(texture).texture;
+            // As above: only the filtered map outlives this call.
+            pmrem.dispose();
+            texture.dispose();
+            return map;
+        }
+        return null;
+    }
+
+    async function applyEnvironment(spec) {
+        const key = JSON.stringify(spec);
+        if (key === environmentKey) return;
+        environmentKey = key;
 
         if (environmentMap) { environmentMap.dispose(); environmentMap = null; }
-        if (kind !== 'room') { scene.environment = null; return; }
+        scene.environment = null;
+        const map = await environmentMapOf(spec);
+        if (!map) return;
 
-        const { RoomEnvironment } =
-            await import(threeBase + '/examples/jsm/environments/RoomEnvironment.js');
-        const pmrem = new THREE.PMREMGenerator(renderer);
-        const room  = new RoomEnvironment();
-        const map   = pmrem.fromScene(room).texture;
-        // Generator and room were scaffolding; only the cube texture outlives this call.
-        pmrem.dispose();
-        room.dispose();
-
-        // The import was awaited, so the viewer may have been torn down in the meantime - and a
-        // second call may have overtaken this one. Either way this map is no longer the wanted one.
-        if (disposed || environmentKind !== kind) { map.dispose(); return; }
+        // The room's import is awaited, so the viewer may have been torn down in the meantime - and
+        // a second call may have overtaken this one. Either way this map is no longer the wanted one.
+        if (disposed || environmentKey !== key) { map.dispose(); return; }
         environmentMap = map;
         scene.environment = map;
     }
@@ -870,6 +924,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
     // ── Options ───────────────────────────────────────────────────────────────
     let currentOptions = options;
     void applyEnvironment(options.environment);
+    scene.environmentIntensity = options.environment_intensity;
     void ensureGizmo(options.orientation_gizmo);
     applyGround(options.ground);
 
@@ -885,6 +940,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
         ambient.intensity = opts.ambient_intensity;
         sun.intensity     = opts.directional_intensity;
         void applyEnvironment(opts.environment);
+        scene.environmentIntensity = opts.environment_intensity;
         // Grid: add/remove based on flag
         if (opts.grid && !grid) {
             grid = new THREE.GridHelper(20, 20);

@@ -193,7 +193,7 @@ fn euler_xyz_of(rotation: [f32; 4]) -> [f32; 3] {
 ///
 /// Mirrors and other metallic materials have the same problem in a milder form: without an
 /// environment they reflect nothing and read as flat grey.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Environment {
     /// No environment map. Transmissive and metallic materials render black.
@@ -207,6 +207,17 @@ pub enum Environment {
     /// Grey walls with a few bright panels — enough for glass to refract something and for metal to
     /// have highlights, without tinting the model any particular colour.
     Room,
+    /// A horizon: one color above eye level, another below, blending softly into each other.
+    ///
+    /// Calm enough that a mirror reads as a mirror without showing a room that is not there. Both
+    /// colors should differ from the scene's background and floor, or a mirror reflecting them
+    /// vanishes against what lies behind it.
+    Horizon {
+        /// CSS color of the upper half, e.g. `"#667079"`.
+        above: String,
+        /// CSS color of the lower half.
+        below: String,
+    },
 }
 // ─── Ground ──────────────────────────────────────────────────────────────────
 
@@ -260,6 +271,10 @@ pub struct ViewerOptions {
     /// Needed for refractive and metallic materials to render as anything but black; see
     /// [`Environment`].
     pub environment: Environment,
+    /// How strongly materials reflect and are lit by the [`environment`](Self::environment):
+    /// `1.0` as the environment is, more for brighter reflections (three.js'
+    /// `scene.environmentIntensity`).
+    pub environment_intensity: f32,
     /// Vertical field of view in degrees.
     pub fov_degrees: f32,
     /// Whether a corner orientation gizmo (`ViewHelper`) is shown.
@@ -291,6 +306,7 @@ impl Default for ViewerOptions {
             initial_camera: [-0.3, 0.3, 0.0],
             initial_target: [0.0, 0.0, 0.0],
             environment: Environment::default(),
+            environment_intensity: 1.0,
             fov_degrees: 50.0,
             orientation_gizmo: false,
             ground: None,
