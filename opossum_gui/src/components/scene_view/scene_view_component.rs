@@ -115,8 +115,6 @@ pub fn SceneView() -> Element {
         ground: SCENE_VIEW_CONTROLS.peek().table.then(table_ground),
         // Drawn light - the optical axis - is a line; at one pixel it disappears against the table.
         line_width: 3.0,
-        // Mirrors reflect the setup itself, not only the environment's empty room.
-        reflections: true,
         ..ViewerOptions::default()
     });
 

@@ -152,9 +152,8 @@ impl Serialize for ViewerOptions {
             orientation_gizmo,
             ground,
             line_width,
-            reflections,
         } = self;
-        let mut st = s.serialize_struct("ViewerOptions", 14)?;
+        let mut st = s.serialize_struct("ViewerOptions", 13)?;
         st.serialize_field("background", background)?;
         st.serialize_field("grid", grid)?;
         st.serialize_field("ambient_intensity", ambient_intensity)?;
@@ -168,7 +167,6 @@ impl Serialize for ViewerOptions {
         st.serialize_field("orientation_gizmo", orientation_gizmo)?;
         st.serialize_field("ground", ground)?;
         st.serialize_field("line_width", line_width)?;
-        st.serialize_field("reflections", reflections)?;
         st.end()
     }
 }
@@ -223,24 +221,9 @@ mod tests {
                 "initial_target",
                 "line_width",
                 "orientation_gizmo",
-                "reflections",
                 "selection_color",
             ]
         );
-    }
-
-    /// Reflection probes cost memory and renders, so a viewer only gets them when it asks; asked
-    /// for, the option has to arrive as exactly `true`.
-    #[test]
-    fn reflections_are_off_unless_asked_for() {
-        let json = serde_json::to_value(ViewerOptions::default()).expect("options serialise");
-        assert_eq!(json["reflections"], false);
-        let opts = ViewerOptions {
-            reflections: true,
-            ..ViewerOptions::default()
-        };
-        let json = serde_json::to_value(opts).expect("options serialise");
-        assert_eq!(json["reflections"], true);
     }
 
     /// `viewer.js` widens lines only above one pixel, so the default must arrive as exactly that.

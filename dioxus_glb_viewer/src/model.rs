@@ -277,17 +277,6 @@ pub struct ViewerOptions {
     /// redrawn as three.js fat lines, which keep their pixel width at any zoom. At the default
     /// `1.0` lines are drawn exactly as the file holds them and the add-on is never loaded.
     pub line_width: f32,
-    /// Whether metallic models reflect the scene itself rather than only the
-    /// [`environment`](Self::environment).
-    ///
-    /// Every model with a strongly metallic material gets a reflection probe: the scene is rendered
-    /// from the model's center in all six directions, and the result becomes the model's
-    /// environment map. It is taken again after every change of the scene, and only for models on
-    /// screen. It is an approximation: taken from one point, it shows nearby models slightly out of
-    /// place in a flat mirror, and they do not move with the camera. Annotation overlays such as
-    /// lines are left out. Defaults to `false`: every probe costs a few megabytes and six extra
-    /// renders after each change.
-    pub reflections: bool,
 }
 
 impl Default for ViewerOptions {
@@ -306,7 +295,6 @@ impl Default for ViewerOptions {
             orientation_gizmo: false,
             ground: None,
             line_width: 1.0,
-            reflections: false,
         }
     }
 }
