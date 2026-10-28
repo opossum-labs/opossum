@@ -18,10 +18,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         color: [0.9, 0.95, 1.0],
         ior: 1.5,
         thickness: 0.01,
+        metallic: 0.0,
+        opacity: 1.0,
     });
     let mirror = scene.add_material(Material::Mirror {
         color: [0.9, 0.9, 0.9],
         roughness: 0.05,
+        metallic: 1.0,
+        opacity: 1.0,
     });
     let opaque = scene.add_material(Material::Opaque {
         color: [0.8, 0.3, 0.2, 1.0],

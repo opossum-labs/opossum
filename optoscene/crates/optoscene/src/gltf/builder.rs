@@ -499,6 +499,8 @@ fn map_material(
             color,
             ior,
             thickness,
+            metallic,
+            opacity,
         } => {
             used.transmission = true;
             used.ior = true;
@@ -506,11 +508,12 @@ fn map_material(
             let material = schema::Material {
                 name: Some("glass".to_string()),
                 pbr_metallic_roughness: Some(schema::PbrMetallicRoughness {
-                    base_color_factor: Some(rgb_opaque(*color)),
-                    metallic_factor: Some(0.0),
+                    base_color_factor: Some(rgb_with_alpha(*color, *opacity)),
+                    metallic_factor: Some(*metallic),
                     roughness_factor: Some(0.05),
                     ..schema::PbrMetallicRoughness::default()
                 }),
+                alpha_mode: alpha_blend_if_transparent(*opacity),
                 extensions: Some(schema::MaterialExtensions {
                     transmission: Some(schema::Transmission {
                         transmission_factor: 1.0,
@@ -526,15 +529,21 @@ fn map_material(
             };
             (material, None)
         }
-        Material::Mirror { color, roughness } => {
+        Material::Mirror {
+            color,
+            roughness,
+            metallic,
+            opacity,
+        } => {
             let material = schema::Material {
                 name: Some("mirror".to_string()),
                 pbr_metallic_roughness: Some(schema::PbrMetallicRoughness {
-                    base_color_factor: Some(rgb_opaque(*color)),
-                    metallic_factor: Some(1.0),
+                    base_color_factor: Some(rgb_with_alpha(*color, *opacity)),
+                    metallic_factor: Some(*metallic),
                     roughness_factor: Some(*roughness),
                     ..schema::PbrMetallicRoughness::default()
                 }),
+                alpha_mode: alpha_blend_if_transparent(*opacity),
                 ..schema::Material::default()
             };
             (material, None)
@@ -602,7 +611,7 @@ fn map_material(
                 // A reflective (metallic) base so the thin-film colour shift reads as a sheen on
                 // a mirror-like surface rather than as a tint on a matte one.
                 pbr_metallic_roughness: Some(schema::PbrMetallicRoughness {
-                    base_color_factor: Some(rgb_opaque(*color)),
+                    base_color_factor: Some(rgb_with_alpha(*color, 1.0)),
                     metallic_factor: Some(1.0),
                     roughness_factor: Some(*roughness),
                     ..schema::PbrMetallicRoughness::default()
@@ -655,9 +664,9 @@ fn alpha_blend_if_transparent(alpha: f32) -> Option<String> {
     }
 }
 
-/// Extends an RGB color with an opaque alpha channel.
-const fn rgb_opaque(color: [f32; 3]) -> [f32; 4] {
-    [color[0], color[1], color[2], 1.0]
+/// Extends an RGB color with the given alpha channel.
+const fn rgb_with_alpha(color: [f32; 3], alpha: f32) -> [f32; 4] {
+    [color[0], color[1], color[2], alpha]
 }
 
 /// Converts a unit quaternion to a glTF `[x, y, z, w]` array in `f32`.

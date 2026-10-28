@@ -633,16 +633,27 @@ fn material_hash(material: &Material) -> u64 {
             color,
             ior,
             thickness,
+            metallic,
+            opacity,
         } => {
             hasher.write_u8(0);
             hash_f32_slice(&mut hasher, color);
             hasher.write_u32(ior.to_bits());
             hasher.write_u32(thickness.to_bits());
+            hasher.write_u32(metallic.to_bits());
+            hasher.write_u32(opacity.to_bits());
         }
-        Material::Mirror { color, roughness } => {
+        Material::Mirror {
+            color,
+            roughness,
+            metallic,
+            opacity,
+        } => {
             hasher.write_u8(1);
             hash_f32_slice(&mut hasher, color);
             hasher.write_u32(roughness.to_bits());
+            hasher.write_u32(metallic.to_bits());
+            hasher.write_u32(opacity.to_bits());
         }
         Material::Opaque {
             color,

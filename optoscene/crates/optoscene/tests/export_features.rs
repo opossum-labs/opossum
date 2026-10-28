@@ -62,6 +62,8 @@ fn glass_material_has_all_extensions() {
         color: [0.9, 0.95, 1.0],
         ior: 1.5,
         thickness: 0.01,
+        metallic: 0.0,
+        opacity: 1.0,
     });
     let mesh = scene.add_mesh(centered_quad(glass)).unwrap();
     add_optics_node(&mut scene, "glass", mesh);
@@ -85,6 +87,73 @@ fn glass_material_has_all_extensions() {
 
     // Fallback loading in other viewers must stay possible.
     assert!(json.get("extensionsRequired").is_none());
+}
+
+/// Exports a scene holding one quad in the given material and returns that material's glTF.
+fn exported_material(material: Material) -> Value {
+    let mut scene = Scene::new(SceneOptions::default());
+    let id = scene.add_material(material);
+    let mesh = scene.add_mesh(centered_quad(id)).unwrap();
+    add_optics_node(&mut scene, "quad", mesh);
+    glb_json(&scene.to_glb().unwrap())["materials"][0].clone()
+}
+
+#[test]
+fn partly_mirrored_glass_is_metallic_and_blended() {
+    let glass = exported_material(Material::Glass {
+        color: [0.9, 0.95, 1.0],
+        ior: 1.5,
+        thickness: 0.01,
+        metallic: 0.25,
+        opacity: 0.75,
+    });
+    assert_eq!(glass["pbrMetallicRoughness"]["metallicFactor"], 0.25);
+    assert_eq!(glass["pbrMetallicRoughness"]["baseColorFactor"][3], 0.75);
+    assert_eq!(glass["alphaMode"], "BLEND");
+}
+
+#[test]
+fn materials_that_differ_only_in_metallic_or_opacity_stay_apart() {
+    let mut scene = Scene::new(SceneOptions::default());
+    let glass = |metallic, opacity| Material::Glass {
+        color: [0.9, 0.95, 1.0],
+        ior: 1.5,
+        thickness: 0.01,
+        metallic,
+        opacity,
+    };
+    let mirror = |metallic, opacity| Material::Mirror {
+        color: [0.9, 0.9, 0.9],
+        roughness: 0.05,
+        metallic,
+        opacity,
+    };
+    let clear = scene.add_material(glass(0.0, 1.0));
+    assert_eq!(scene.add_material(glass(0.0, 1.0)), clear);
+    assert_ne!(scene.add_material(glass(1.0, 1.0)), clear);
+    assert_ne!(scene.add_material(glass(0.0, 0.5)), clear);
+    let solid = scene.add_material(mirror(1.0, 1.0));
+    assert_ne!(scene.add_material(mirror(0.0, 1.0)), solid);
+    assert_ne!(scene.add_material(mirror(1.0, 0.5)), solid);
+}
+
+#[test]
+fn a_mirror_is_opaque_unless_its_opacity_says_otherwise() {
+    let mirror = |metallic, opacity| {
+        exported_material(Material::Mirror {
+            color: [0.9, 0.9, 0.9],
+            roughness: 0.05,
+            metallic,
+            opacity,
+        })
+    };
+    let solid = mirror(1.0, 1.0);
+    assert_eq!(solid["pbrMetallicRoughness"]["metallicFactor"], 1.0);
+    assert!(solid.get("alphaMode").is_none());
+    let pane = mirror(0.0, 0.25);
+    assert_eq!(pane["pbrMetallicRoughness"]["metallicFactor"], 0.0);
+    assert_eq!(pane["pbrMetallicRoughness"]["baseColorFactor"][3], 0.25);
+    assert_eq!(pane["alphaMode"], "BLEND");
 }
 
 #[test]

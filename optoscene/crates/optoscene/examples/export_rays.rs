@@ -21,6 +21,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         color: [0.9, 0.95, 1.0],
         ior: 1.5,
         thickness: 0.01,
+        metallic: 0.0,
+        opacity: 1.0,
     });
     let lens = scene.add_mesh(fixtures::biconvex_lens(0.05, 0.01, 0.1, 0.1, 48, glass))?;
     scene.add_node(SceneNode {

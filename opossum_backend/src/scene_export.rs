@@ -282,6 +282,8 @@ fn material_of(
         SurfaceFinish::Reflective => Material::Mirror {
             color: rgb,
             roughness: appearance.roughness,
+            metallic: 1.0,
+            opacity: 1.0,
         },
         SurfaceFinish::Transmissive => Material::Translucent {
             color: appearance.color,
@@ -658,20 +660,27 @@ impl Fnv1a {
             }
             return;
         }
-        let (tag, color, numbers): (u8, &[f32], [f32; 2]) = match material {
+        let (tag, color, numbers): (u8, &[f32], [f32; 4]) = match material {
             Material::Glass {
                 color,
                 ior,
                 thickness,
-            } => (0, color, [*ior, *thickness]),
-            Material::Mirror { color, roughness } => (1, color, [*roughness, 0.0]),
+                metallic,
+                opacity,
+            } => (0, color, [*ior, *thickness, *metallic, *opacity]),
+            Material::Mirror {
+                color,
+                roughness,
+                metallic,
+                opacity,
+            } => (1, color, [*roughness, *metallic, *opacity, 0.0]),
             Material::Opaque {
                 color,
                 metallic,
                 roughness,
-            } => (2, color, [*metallic, *roughness]),
-            Material::Unlit { color } => (3, color, [0.0; 2]),
-            Material::Translucent { color } => (4, color, [0.0; 2]),
+            } => (2, color, [*metallic, *roughness, 0.0, 0.0]),
+            Material::Unlit { color } => (3, color, [0.0; 4]),
+            Material::Translucent { color } => (4, color, [0.0; 4]),
             // Handled above by the early returns; these arms keep the match exhaustive, so a future
             // material variant still fails to compile here rather than colliding hashes.
             Material::Iridescent { .. } | Material::Textured { .. } => return,
@@ -740,6 +749,8 @@ fn glass_of(
         color: tint,
         ior: ior as f32,
         thickness: (thickness.end - thickness.start).value as f32,
+        metallic: 0.0,
+        opacity: 1.0,
     })
 }
 

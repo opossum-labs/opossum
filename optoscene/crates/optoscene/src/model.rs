@@ -110,6 +110,11 @@ pub enum Material {
         ior: f32,
         /// Typical thickness in meters.
         thickness: f32,
+        /// Metallic factor in `[0, 1]`: the share of the surface that reflects like a mirror
+        /// coating rather than transmits.
+        metallic: f32,
+        /// Opacity in `[0, 1]`; below 1 the surface is blended over what lies behind it.
+        opacity: f32,
     },
     /// Reflective material.
     Mirror {
@@ -117,6 +122,10 @@ pub enum Material {
         color: [f32; 3],
         /// Surface roughness in `[0, 1]`.
         roughness: f32,
+        /// Metallic factor in `[0, 1]`.
+        metallic: f32,
+        /// Opacity in `[0, 1]`; below 1 the surface is blended over what lies behind it.
+        opacity: f32,
     },
     /// Opaque PBR material.
     Opaque {
