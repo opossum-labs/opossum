@@ -1,4 +1,5 @@
 use argmin::solver::quasinewton::LBFGS;
+use argmin::solver::simulatedannealing::{SATempFunc, SimulatedAnnealing};
 use argmin::{core::Executor, solver::linesearch::MoreThuenteLineSearch};
 use argmin::solver::neldermead::NelderMead;
 use std::sync::Arc;
@@ -184,6 +185,46 @@ impl<'a> OpticOptimizer<'a> {
                     .best_param
                     .clone()
                     .ok_or_else(|| OpossumError::Other("L-BFGS produced no solution".to_string()))?;
+                let cost = state.best_cost;
+                let iters = state.iter;
+                let reached_target = cost <= self.target_cost;
+
+                (best_p, cost, iters, reached_target)
+            }
+            OptimizationAlgorithm::SimulatedAnnealing {
+                initial_temperature,
+                stall_best,
+                stall_accepted,
+                reannealing_fixed,
+                ..
+            } => {
+                // Initialisierung mit Starttemperatur und exponentiellem Abkühlplan (z. B. T_next = 0.95 * T)
+                let mut solver = SimulatedAnnealing::new(initial_temperature)
+                    .map_err(|e| OpossumError::Other(format!("Failed to init Simulated Annealing: {e}")))?
+                    .with_temp_func(SATempFunc::Exponential(0.95))
+                    .with_stall_best(stall_best)
+                    .with_stall_accepted(stall_accepted);
+
+                if let Some(reanneal_steps) = reannealing_fixed {
+                    solver = solver
+                        .with_reannealing_fixed(reanneal_steps);
+                }
+
+                let res = Executor::new(merit, solver)
+                    .configure(|state| {
+                        state
+                            .param(initial_vector)
+                            .max_iters(1000) // Höhere Iterationszahl für stochastische Suche
+                            .target_cost(self.target_cost)
+                    })
+                    .run()
+                    .map_err(|e| OpossumError::Other(format!("Simulated Annealing failed: {e}")))?;
+
+                let state = res.state();
+                let best_p = state
+                    .best_param
+                    .clone()
+                    .ok_or_else(|| OpossumError::Other("Solver produced no solution".to_string()))?;
                 let cost = state.best_cost;
                 let iters = state.iter;
                 let reached_target = cost <= self.target_cost;

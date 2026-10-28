@@ -1,4 +1,5 @@
-use argmin::core::{CostFunction, Error, Gradient};
+use argmin::{core::{CostFunction, Error, Gradient}, solver::simulatedannealing::Anneal};
+use rand::RngExt;
 use std::sync::Arc;
 
 use crate::{
@@ -184,5 +185,43 @@ impl Gradient for MeritFunction {
 
     fn gradient(&self, param: &Self::Param) -> Result<Self::Gradient, Error> {
         Ok(self.compute_gradient(param))
+    }
+}
+
+impl Anneal for MeritFunction {
+    type Param = Vec<f64>;
+    type Output = Vec<f64>;
+    type Float = f64;
+
+    fn anneal(&self, param: &Self::Param, temp: Self::Float) -> Result<Self::Output, Error> {
+        let mut rng = rand::rng();
+        let mut next_param = param.clone();
+
+        // Skalierung über die Temperatur
+        let temp_factor = temp.min(1.0).max(1e-4);
+
+        for (i, var) in self.free_variables.iter().enumerate() {
+            let range = if let Some(bounds) = &var.bounds {
+                bounds.max - bounds.min
+            } else if param[i].abs() > 1e-7 {
+                param[i].abs() * 0.5
+            } else {
+                1e-2
+            };
+
+            // Gleichverteilte Auslenkung im Intervall [-1.0, 1.0]
+            let offset = rng.random_range(-1.0..=1.0);
+            let step = offset * range * temp_factor;
+            let mut candidate = param[i] + step;
+
+            // Box-Bounds strikt einhalten
+            if let Some(bounds) = &var.bounds {
+                candidate = bounds.clamp(candidate);
+            }
+
+            next_param[i] = candidate;
+        }
+
+        Ok(next_param)
     }
 }

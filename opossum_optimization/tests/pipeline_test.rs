@@ -581,3 +581,69 @@ fn test_optimize_kepler_focal_position_lbfgs() -> OpmResult<()> {
 
     Ok(())
 }
+#[test]
+fn test_optimize_kepler_focal_position_simulated_annealing() -> OpmResult<()> {
+    // 1. Weit defokussierter Startzustand: 35 mm (Ziel ist ~58 mm)
+    let (mut doc, analyzer_id, lens2_id, spot_id) =
+        build_kepler_setup(millimeter!(35.0))?;
+
+    let dist_address = ParameterAddress::ConnectionDistance {
+        src_id: lens2_id,
+        src_port: "output_1".into(),
+    };
+
+    let spot_observable_addr = ObservableAddress {
+        analyzer_id,
+        node_id: spot_id,
+        metric_name: "rms beam radius".into(),
+    };
+
+    // 2. Globaler Suchlauf mit Simulated Annealing
+    let summary = OpticOptimizer::new(&mut doc)
+        .add_variable(
+            FreeVariable::new(dist_address.clone(), "image_drift_distance")
+                .with_bounds(BoxBounds::new(0.030, 0.080)?), // Suchraum 30 mm bis 80 mm
+        )?
+        .add_operand(TargetValueOperand::new(
+            "minimize_rms_spot",
+            spot_observable_addr.clone(),
+            0.0,
+            1.0,
+            1.0e-3,
+        ))
+        .with_algorithm(
+            OptimizationAlgorithm::simulated_annealing()
+                .with_temperature(20.0),
+        )
+        .optimize()?;
+
+    // 3. Verifikation
+    let best_distance = summary.value(&dist_address).unwrap();
+    let optimized_rms = MetricReader::read_metric(&doc, &spot_observable_addr)?;
+
+    // SA findet das globale Minimum um 58 mm
+    assert!(
+        (best_distance - 0.058).abs() < 0.006,
+        "Optimal distance should be near 58 mm, got: {:.4} m",
+        best_distance
+    );
+    assert!(
+        optimized_rms < 1.0e-3,
+        "Optimized RMS spot radius must be under 1 mm, got: {:.6} m",
+        optimized_rms
+    );
+
+    eprintln!("\n=== SIMULATED ANNEALING RESULT ===");
+    eprintln!("Iterations        : {}", summary.iterations);
+    eprintln!("Initial Cost      : {:.4}", summary.initial_cost);
+    eprintln!(
+        "Final Cost        : {:.4} (-{:.1}%)",
+        summary.final_cost,
+        summary.relative_improvement() * 100.0
+    );
+    eprintln!("Optimized Distance: {:8.3} mm", best_distance * 1e3);
+    eprintln!("Final RMS Spot    : {:8.2} µm", optimized_rms * 1e6);
+    eprintln!("==================================\n");
+
+    Ok(())
+}

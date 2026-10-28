@@ -18,6 +18,17 @@ pub enum OptimizationAlgorithm {
         history_size: usize,
         gradient_method: FiniteDifferenceMethod,
     },
+    /// Simulated Annealing global stochastic optimization.
+    SimulatedAnnealing {
+        /// Initial temperature[cite: 1].
+        initial_temperature: f64,
+        /// Maximum iterations without global best improvement[cite: 1].
+        stall_best: u64,
+        /// Maximum iterations without any accepted move[cite: 1].
+        stall_accepted: u64,
+        /// Periodic reannealing interval (steps). If None, no reannealing occurs.
+        reannealing_fixed: Option<u64>,
+    },
 }
 
 impl Default for OptimizationAlgorithm {
@@ -45,11 +56,30 @@ impl OptimizationAlgorithm {
         }
     }
 
+    /// Creates a default Simulated Annealing configuration with robust defaults[cite: 1].
+    pub fn simulated_annealing() -> Self {
+        Self::SimulatedAnnealing {
+            initial_temperature: 15.0,
+            stall_best: 60,
+            stall_accepted: 120,
+            reannealing_fixed: None,
+        }
+    }
+
+    /// Sets the initial temperature for Simulated Annealing[cite: 1].
+    pub fn with_temperature(mut self, temp: f64) -> Self {
+        if let Self::SimulatedAnnealing { initial_temperature, .. } = &mut self {
+            *initial_temperature = temp;
+        }
+        self
+    }
+
     /// Sets the maximum iteration count.
     pub fn with_max_iterations(mut self, iters: u64) -> Self {
         match &mut self {
             Self::NelderMead { max_iterations, .. } => *max_iterations = iters,
             Self::LBFGS { max_iterations, .. } => *max_iterations = iters,
+            _ => {}
         }
         self
     }
@@ -59,6 +89,7 @@ impl OptimizationAlgorithm {
         match &mut self {
             Self::NelderMead { sd_tolerance, .. } => *sd_tolerance = tol,
             Self::LBFGS { gradient_tolerance, .. } => *gradient_tolerance = tol,
+            _ => {}
         }
         self
     }
