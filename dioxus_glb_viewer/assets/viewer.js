@@ -86,7 +86,8 @@ export async function createViewer(canvasId, options, send, threeBase) {
     const raycaster = new THREE.Raycaster();
 
     // ── Instance state ──────────────────────────────────────────────────────
-    /** id -> { root: THREE.Group, helper: THREE.LineSegments|null } — see `setSelected` */
+    /** id -> { root: THREE.Group, helper: THREE.LineSegments|null, overlay: boolean } — see
+     *  `setSelected` and `setOverlay` */
     const objects      = new Map();
     /** id -> generation counter (prevents stale load callbacks) */
     const generations  = new Map();
@@ -100,6 +101,19 @@ export async function createViewer(canvasId, options, send, threeBase) {
     // refit the sun's shadow frustum. A flag (not a per-frame recompute) keeps the Box3 pass off
     // the hot path when nothing moved.
     let shadowCameraDirty = true;
+
+    // ── Reflection probe state (see "Reflection probes" below) ───────────────
+    /** Edge length of one face of a probe's cube map, in pixels: a few megabytes per probe. */
+    const PROBE_SIZE = 256;
+    /** How metallic a material must be for its model to get a probe: mirrors, not plain glass. */
+    const PROBE_METALNESS = 0.5;
+    /** Probes taken per frame at most, so a change spreads its cost over a few frames instead of
+     *  stalling one. Each probe is six renders. */
+    const PROBE_UPDATES_PER_FRAME = 2;
+    /** id -> { target: THREE.WebGLCubeRenderTarget, camera: THREE.CubeCamera, rendered, stale } */
+    const probes = new Map();
+    const frustum = new THREE.Frustum();
+    const viewProjection = new THREE.Matrix4();
 
     // ── Orientation gizmo (ViewHelper) ───────────────────────────────────────
     const clock = new THREE.Clock();
@@ -333,6 +347,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
         controls.update(); // needed for enableDamping
         updateGround();
         if (shadowCameraDirty) { updateShadowCamera(); shadowCameraDirty = false; }
+        updateProbes();
         renderer.render(scene, camera);
         // Overlay the orientation gizmo after the main scene is rendered.
         // autoClear must be false so the gizmo's internal renderer.render() does not
@@ -540,6 +555,8 @@ export async function createViewer(canvasId, options, send, threeBase) {
     function removeObject(id) {
         const entry = objects.get(id);
         if (!entry) return;
+        removeProbe(id);
+        staleProbes(); // the others no longer see it
         if (entry.helper) {
             scene.remove(entry.helper);
             entry.helper.geometry.dispose();
@@ -806,7 +823,10 @@ export async function createViewer(canvasId, options, send, threeBase) {
             setOverlay(root, op.overlay ?? false);
             setOpacity(root, op.opacity);
             scene.add(root);
-            objects.set(op.id, { root, helper: null });
+            const entry = { root, helper: null, overlay: op.overlay ?? false };
+            objects.set(op.id, entry);
+            addProbe(op.id, entry);
+            staleProbes(); // the others have not seen it yet
             if (op.selected) setSelected(op.id, true);
             shadowCameraDirty = true; // a new model changes the scene bounds
             send({ event: 'loaded', id: op.id });
@@ -849,7 +869,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
         environmentKind = kind;
 
         if (environmentMap) { environmentMap.dispose(); environmentMap = null; }
-        if (kind !== 'room') { scene.environment = null; return; }
+        if (kind !== 'room') { scene.environment = null; staleProbes(); return; }
 
         const { RoomEnvironment } =
             await import(threeBase + '/examples/jsm/environments/RoomEnvironment.js');
@@ -865,6 +885,111 @@ export async function createViewer(canvasId, options, send, threeBase) {
         if (disposed || environmentKind !== kind) { map.dispose(); return; }
         environmentMap = map;
         scene.environment = map;
+        staleProbes(); // the room arrives after the probes may have been taken without it
+    }
+
+    // ── Reflection probes ─────────────────────────────────────────────────────
+    // With `reflections` on, every strongly metallic model reflects the scene itself rather than
+    // only the environment: a CubeCamera renders the scene from the model's center into a cube map
+    // that becomes the model's envMap. It is an approximation - one point of view, no parallax -
+    // but shows the setup, and costs nothing while the scene stands still.
+
+    /** All materials of a model. */
+    function materialsOf(root) {
+        const materials = [];
+        root.traverse((o) => {
+            if (o.material) materials.push(...(Array.isArray(o.material) ? o.material : [o.material]));
+        });
+        return materials;
+    }
+
+    /** Points every material of a model at `map`, or back at the scene's environment for `null`. */
+    function setEnvMap(root, map) {
+        for (const m of materialsOf(root)) {
+            if (m.envMap === map) continue;
+            m.envMap = map;
+            m.needsUpdate = true;
+        }
+    }
+
+    /**
+     * Gives a model a probe if reflections are on and it has a strongly metallic material. An
+     * overlay annotates the scene and gets none. The model keeps reflecting the environment until
+     * the probe is first taken, so no mirror shows black meanwhile - in itself or in another one.
+     */
+    function addProbe(id, entry) {
+        if (!currentOptions.reflections || entry.overlay || probes.has(id)) return;
+        if (!materialsOf(entry.root).some((m) => (m.metalness ?? 0) >= PROBE_METALNESS)) return;
+        const target = new THREE.WebGLCubeRenderTarget(PROBE_SIZE, { type: THREE.HalfFloatType });
+        probes.set(id, {
+            target,
+            camera: new THREE.CubeCamera(camera.near, camera.far, target),
+            rendered: false,
+            stale: true,
+        });
+    }
+
+    /** Releases a model's probe and lets the model reflect the environment again. */
+    function removeProbe(id) {
+        const probe = probes.get(id);
+        if (!probe) return;
+        const entry = objects.get(id);
+        if (entry) setEnvMap(entry.root, null);
+        probe.target.dispose();
+        probes.delete(id);
+    }
+
+    /** Marks every probe as showing a scene that has changed since it was taken. */
+    function staleProbes() {
+        for (const probe of probes.values()) probe.stale = true;
+    }
+
+    /**
+     * Takes up to `PROBE_UPDATES_PER_FRAME` stale probes whose model is on screen. A probe off
+     * screen stays stale until its model comes into view: until then nobody looks at it.
+     */
+    function updateProbes() {
+        if (probes.size === 0) return;
+        camera.updateMatrixWorld();
+        viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+        frustum.setFromProjectionMatrix(viewProjection);
+        let budget = PROBE_UPDATES_PER_FRAME;
+        for (const [id, probe] of probes) {
+            if (budget === 0) return;
+            const entry = objects.get(id);
+            if (!probe.stale || !entry || !entry.root.visible) continue;
+            const box = new THREE.Box3().setFromObject(entry.root);
+            if (box.isEmpty() || !frustum.intersectsBox(box)) continue;
+            takeProbe(entry, probe, box.getCenter(new THREE.Vector3()));
+            budget -= 1;
+        }
+    }
+
+    /**
+     * Renders the scene into a probe from `center`. The model itself is hidden meanwhile - drawn
+     * from both sides, a mirror would block its own view - and so are overlays and selection
+     * outlines, which annotate the scene rather than belong to it. Shadows are not recomputed for
+     * the six extra renders.
+     */
+    function takeProbe(entry, probe, center) {
+        const hidden = [entry.root];
+        for (const other of objects.values()) {
+            if (other.overlay && other.root.visible) hidden.push(other.root);
+            if (other.helper && other.helper.visible) hidden.push(other.helper);
+        }
+        for (const o of hidden) o.visible = false;
+        const shadowAutoUpdate = renderer.shadowMap.autoUpdate;
+        renderer.shadowMap.autoUpdate = false;
+        probe.camera.position.copy(center);
+        probe.camera.updateMatrixWorld();
+        probe.camera.update(renderer, scene);
+        renderer.shadowMap.autoUpdate = shadowAutoUpdate;
+        for (const o of hidden) o.visible = true;
+        if (!probe.rendered) {
+            setEnvMap(entry.root, probe.target.texture);
+            probe.rendered = true;
+        }
+        probe.stale = false;
     }
 
     // ── Options ───────────────────────────────────────────────────────────────
@@ -898,6 +1023,13 @@ export async function createViewer(canvasId, options, send, threeBase) {
         // Orientation gizmo: create/destroy live when the option is toggled.
         void ensureGizmo(opts.orientation_gizmo);
         applyGround(opts.ground);
+        // Reflections: a probe for every metallic model while on, none while off.
+        if (opts.reflections) {
+            for (const [id, entry] of objects) addProbe(id, entry);
+        } else {
+            for (const id of [...probes.keys()]) removeProbe(id);
+        }
+        staleProbes(); // background, lights and ground may all have changed
         // Selection colour: update existing helpers
         for (const entry of objects.values()) {
             if (entry.helper) {
@@ -933,6 +1065,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
                         entry.helper.matrix.copy(entry.root.matrixWorld);
                     }
                     shadowCameraDirty = true; // a moved model changes the scene bounds
+                    staleProbes();
                 }
                 break;
             }
@@ -941,6 +1074,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
                 if (entry) {
                     entry.root.visible = op.visible;
                     shadowCameraDirty = true; // (un)hiding a model changes the visible bounds
+                    staleProbes();
                 }
                 break;
             }
@@ -949,7 +1083,10 @@ export async function createViewer(canvasId, options, send, threeBase) {
                 break;
             case 'set_opacity': {
                 const entry = objects.get(op.id);
-                if (entry) setOpacity(entry.root, op.opacity);
+                if (entry) {
+                    setOpacity(entry.root, op.opacity);
+                    staleProbes();
+                }
                 break;
             }
             case 'set_options':
