@@ -39,8 +39,7 @@ pub enum SurfaceFinish {
 /// not affect any simulation result.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Appearance {
-    /// Linear RGBA base color, with each component in \[0, 1\]. For glass, its tint; for a thin
-    /// reflecting surface, its alpha is how see-through the bare surface is.
+    /// Linear RGBA base color, with each component in \[0, 1\]. For glass, its tint.
     pub color: [f32; 4],
     /// Surface roughness in \[0, 1\]; 0 is perfectly smooth (mirror-like), 1 is fully rough
     /// (diffuse/matte).
@@ -51,13 +50,17 @@ pub struct Appearance {
     pub finish: SurfaceFinish,
 }
 
+/// How opaque a thin reflecting surface is drawn where its coating reflects nothing: faint, but
+/// still there to be seen and clicked.
+const UNCOATED_ALPHA: f32 = 0.3;
+
 impl Appearance {
-    /// A thin reflecting surface, such as a mirror: a pale, see-through pane that its coating
-    /// mirrors (see [`Appearance::coated`]).
+    /// A mirror: a shiny, light grey surface, as it looks fully mirrored. How much of that a face
+    /// shows, its coating says (see [`Appearance::coated`]).
     #[must_use]
     pub const fn mirror() -> Self {
         Self {
-            color: [0.0, 0.9, 0.0, 0.3],
+            color: [0.9, 0.9, 0.92, 1.0],
             roughness: 0.05,
             metallic: 1.0,
             finish: SurfaceFinish::Reflective,
@@ -97,9 +100,11 @@ impl Appearance {
     /// Return how one face of a component looks with the given coating on it.
     ///
     /// The reflectivity of the coating at normal incidence is the share of the face drawn as a
-    /// mirror: it raises the metallic share of glass and of a reflecting surface, and the opacity of
-    /// the latter. Any other finish keeps its look: a grating diffracts regardless of its coating,
-    /// and a detector or a filter acts by its own model.
+    /// mirror. On glass, the coating lays a mirror over the glass: the metallic share rises towards
+    /// 1 with it. A reflecting surface shows its appearance as far as its coating reflects: its
+    /// metallic share and its opacity rise from a bare surface, not metallic and drawn faint but
+    /// still visible, to the appearance's own. Any other finish keeps its look: a grating diffracts regardless of its
+    /// coating, and a detector or a filter acts by its own model.
     ///
     /// # Arguments
     ///
@@ -127,12 +132,12 @@ impl Appearance {
             )?;
             Ok(reflectivity.value as f32)
         };
-        let toward_one = |value: f32, share: f32| (1.0 - value).mul_add(share, value);
+        let from_to = |from: f32, to: f32, share: f32| (to - from).mul_add(share, from);
         Ok(match self.finish {
             SurfaceFinish::Glass => {
                 let share = reflectivity()?;
                 Self {
-                    metallic: toward_one(self.metallic, share),
+                    metallic: from_to(self.metallic, 1.0, share),
                     ..*self
                 }
             }
@@ -140,8 +145,8 @@ impl Appearance {
                 let share = reflectivity()?;
                 let [red, green, blue, alpha] = self.color;
                 Self {
-                    color: [red, green, blue, toward_one(alpha, share)],
-                    metallic: toward_one(self.metallic, share),
+                    color: [red, green, blue, from_to(UNCOATED_ALPHA, alpha, share)],
+                    metallic: from_to(0.0, self.metallic, share),
                     ..*self
                 }
             }
@@ -164,22 +169,23 @@ mod test {
     };
     use approx::assert_abs_diff_eq;
 
-    /// A mirror is drawn reflective: a pale pane, until its coating mirrors it.
+    /// A mirror is drawn reflective: as it looks fully mirrored, metallic and opaque.
     #[test]
     fn a_mirror_looks_reflective() {
         let appearance = ThinMirror::default().appearance();
         assert_eq!(appearance, Some(Appearance::mirror()));
         assert_eq!(
             appearance.map(|appearance| appearance.color),
-            Some([0.9, 0.9, 0.92, 0.3_f32])
+            Some([0.9, 0.9, 0.92, 1.0_f32])
         );
+        assert_eq!(appearance.map(|appearance| appearance.metallic), Some(1.0));
     }
     /// The wavelength the coatings below are evaluated at.
     fn green() -> Length {
         nanometer!(532.0)
     }
-    /// A fully reflecting coating turns a reflecting surface into an opaque mirror, a half
-    /// reflecting one into a half mirrored pane, and one that reflects nothing leaves the pane.
+    /// A fully reflecting coating shows a mirror as it is, a half reflecting one as a half
+    /// mirrored pane, and one that reflects nothing as a faint, bare surface.
     #[test]
     fn a_reflecting_surface_is_as_mirrored_as_its_coating() -> OpmResult<()> {
         let full = Appearance::mirror().coated(
@@ -187,8 +193,7 @@ mod test {
             green(),
             1.0,
         )?;
-        assert_abs_diff_eq!(full.metallic, 1.0);
-        assert_abs_diff_eq!(full.color[3], 1.0);
+        assert_eq!(full, Appearance::mirror());
         let half = Appearance::mirror().coated(
             &CoatingType::Separator(SplittingConfigBuilder::FixedRatio(0.5)),
             green(),
@@ -197,7 +202,9 @@ mod test {
         assert_abs_diff_eq!(half.metallic, 0.5);
         assert_abs_diff_eq!(half.color[3], 0.65);
         let none = Appearance::mirror().coated(&CoatingType::IdealAR, green(), 1.0)?;
-        assert_eq!(none, Appearance::mirror());
+        assert_abs_diff_eq!(none.metallic, 0.0);
+        assert_abs_diff_eq!(none.color[3], UNCOATED_ALPHA);
+        assert_eq!(none.color[..3], Appearance::mirror().color[..3]);
         Ok(())
     }
     /// An uncoated glass face reflects by the index behind it: about 4 % for n = 1.5.
