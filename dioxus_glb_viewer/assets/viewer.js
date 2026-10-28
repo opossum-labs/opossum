@@ -347,7 +347,6 @@ export async function createViewer(canvasId, options, send, threeBase) {
         controls.update(); // needed for enableDamping
         updateGround();
         if (shadowCameraDirty) { updateShadowCamera(); shadowCameraDirty = false; }
-        updateProbes();
         renderer.render(scene, camera);
         // Overlay the orientation gizmo after the main scene is rendered.
         // autoClear must be false so the gizmo's internal renderer.render() does not
@@ -359,6 +358,9 @@ export async function createViewer(canvasId, options, send, threeBase) {
             viewHelper.render(renderer);
             renderer.autoClear = true;
         }
+        // After the main render: its shadow map matches a sun frustum refitted this frame, and
+        // the probes reuse that map instead of recomputing it (see takeProbe).
+        updateProbes();
     });
 
     // ── Picking ───────────────────────────────────────────────────────────────
@@ -969,21 +971,32 @@ export async function createViewer(canvasId, options, send, threeBase) {
      * Renders the scene into a probe from `center`. The model itself is hidden meanwhile - drawn
      * from both sides, a mirror would block its own view - and so are overlays and selection
      * outlines, which annotate the scene rather than belong to it. Shadows are not recomputed for
-     * the six extra renders.
+     * the six extra renders: they are those of the main render just before, so a probe must never
+     * be taken between a refit of the sun's frustum and the next main render.
+     *
+     * Glass is drawn without transmission meanwhile - tinted and see-through, but not refracting.
+     * three.js r174 binds cube face 0 again after its glass pre-pass (`renderTransmissionPass`
+     * calls `setRenderTarget` without the face), which wrecks every other face a lens is seen in.
      */
     function takeProbe(entry, probe, center) {
         const hidden = [entry.root];
+        const transmissive = [];
         for (const other of objects.values()) {
             if (other.overlay && other.root.visible) hidden.push(other.root);
             if (other.helper && other.helper.visible) hidden.push(other.helper);
+            for (const m of materialsOf(other.root)) {
+                if (m.transmission > 0) transmissive.push([m, m.transmission]);
+            }
         }
         for (const o of hidden) o.visible = false;
+        for (const [m] of transmissive) m.transmission = 0;
         const shadowAutoUpdate = renderer.shadowMap.autoUpdate;
         renderer.shadowMap.autoUpdate = false;
         probe.camera.position.copy(center);
         probe.camera.updateMatrixWorld();
         probe.camera.update(renderer, scene);
         renderer.shadowMap.autoUpdate = shadowAutoUpdate;
+        for (const [m, transmission] of transmissive) m.transmission = transmission;
         for (const o of hidden) o.visible = true;
         if (!probe.rendered) {
             setEnvMap(entry.root, probe.target.texture);
