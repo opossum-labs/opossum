@@ -647,3 +647,78 @@ fn test_optimize_kepler_focal_position_simulated_annealing() -> OpmResult<()> {
 
     Ok(())
 }
+#[test]
+fn test_parallel_gradient_thread_execution() -> OpmResult<()> {
+    // Kepler-Setup mit mehreren freien Variablen erstellen, damit Arbeit anfällt
+    let (doc, analyzer_id, lens2_id, spot_id) = build_kepler_setup(millimeter!(45.0))?;
+
+    let all_nodes = doc.scenery().collect_all_nodes_recursive()?;
+    let lens1 = all_nodes.iter().find(|n| n.name() == "75 mm lens").unwrap();
+    let lens1_id = lens1.uuid();
+
+    // 4 freie Variablen definieren (erfordert 8 Auswertungen bei zentralen Differenzen)
+    let dist1 = FreeVariable::new(
+        ParameterAddress::ConnectionDistance {
+            src_id: lens1_id,
+            src_port: "output_1".into(),
+        },
+        "d1",
+    );
+    let dist2 = FreeVariable::new(
+        ParameterAddress::ConnectionDistance {
+            src_id: lens2_id,
+            src_port: "output_1".into(),
+        },
+        "d2",
+    );
+    let r1 = FreeVariable::new(
+        ParameterAddress::NodeProperty {
+            node_id: lens2_id,
+            property_name: "front curvature".into(),
+        },
+        "r1",
+    );
+    let r2 = FreeVariable::new(
+        ParameterAddress::NodeProperty {
+            node_id: lens2_id,
+            property_name: "rear curvature".into(),
+        },
+        "r2",
+    );
+
+    let spot_observable = ObservableAddress {
+        analyzer_id,
+        node_id: spot_id,
+        metric_name: "rms beam radius".into(),
+    };
+
+    let operand = TargetValueOperand::new("spot", spot_observable, 0.0, 1.0, 1e-3);
+
+    let merit = MeritFunction::new(
+        doc,
+        vec![dist1, dist2, r1, r2],
+        vec![],
+        vec![Arc::new(operand)],
+    )?;
+
+    // Startvektor aus dem Modell
+    let x0 = vec![0.125, 0.045, 0.100, -0.100];
+
+    // Zeitmessung für parallele Berechnung
+    let start_time = std::time::Instant::now();
+    let grad = merit.compute_gradient(&x0);
+    let elapsed = start_time.elapsed();
+
+    eprintln!("\n=== PARALLEL GRADIENT VERIFICATION ===");
+    eprintln!("Computed 4D gradient in: {:?}", elapsed);
+    for (i, g) in grad.iter().enumerate() {
+        eprintln!("  dPhi/dx[{i}] = {:12.4}", g);
+    }
+    eprintln!("Rayon thread pool size: {}", rayon::current_num_threads());
+    eprintln!("======================================\n");
+
+    assert_eq!(grad.len(), 4);
+    assert!(grad.iter().all(|g| !g.is_nan()));
+
+    Ok(())
+}

@@ -5909,6 +5909,7 @@ dependencies = [
  "argmin-math",
  "opossum_core",
  "rand 0.10.3",
+ "rayon",
  "serde",
  "uom",
  "uuid",

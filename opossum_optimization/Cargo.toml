@@ -18,3 +18,4 @@ uom.workspace = true
 argmin = { version = "0.11.0" }
 argmin-math = { version = "0.5.1", features = ["vec", "primitives"] }
 rand = { version = "0.10" }
+rayon = "1.10"

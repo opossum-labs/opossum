@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 /// Marker trait for an optical node that can be analyzed
 pub trait Analyzable:
-    OpticNode + AnalysisEnergy + AnalysisRayTrace + AnalysisGhostFocus + Send
+    OpticNode + AnalysisEnergy + AnalysisRayTrace + AnalysisGhostFocus + Send + Sync
 {
     /// Function necessary for generating clones of boxed trait objects.
     /// This function is normally automatically implemented by the `OpmNode` derive macro.

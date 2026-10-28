@@ -6,7 +6,7 @@ use crate::{
     applier::ParameterApplier, coupling::ParameterCoupling, operand::{EvaluationContext, Operand}, resolver::ParameterResolver, variable::{FiniteDifferenceMethod, FreeVariable},
 };
 use opossum_core::{error::OpmResult, opm_document::OpmDocument};
-
+use rayon::prelude::*;
 /// Default penalty applied for fatal simulation failures (e.g., ray tracing errors)[cite: 1].
 pub const DEFAULT_FATAL_PENALTY: f64 = 1.0e12;
 
@@ -131,42 +131,47 @@ impl MeritFunction {
         total_cost
     }
     /// Computes the numerical gradient vector using adaptive finite differences.
+    ///
+    /// Evaluates parameter perturbations in parallel across available CPU cores via Rayon.
     pub fn compute_gradient(&self, x: &[f64]) -> Vec<f64> {
         let n = self.free_variables.len();
-        let mut gradient = vec![0.0; n];
 
         match self.gradient_method {
             FiniteDifferenceMethod::Central => {
-                for i in 0..n {
-                    let h = self.free_variables[i].finite_difference_step(x[i]);
-                    
-                    let mut x_plus = x.to_vec();
-                    x_plus[i] += h;
+                (0..n)
+                    .into_par_iter()
+                    .map(|i| {
+                        let h = self.free_variables[i].finite_difference_step(x[i]);
 
-                    let mut x_minus = x.to_vec();
-                    x_minus[i] -= h;
+                        let mut x_plus = x.to_vec();
+                        x_plus[i] += h;
 
-                    let f_plus = self.evaluate(&x_plus);
-                    let f_minus = self.evaluate(&x_minus);
+                        let mut x_minus = x.to_vec();
+                        x_minus[i] -= h;
 
-                    gradient[i] = (f_plus - f_minus) / (2.0 * h);
-                }
+                        let f_plus = self.evaluate(&x_plus);
+                        let f_minus = self.evaluate(&x_minus);
+
+                        (f_plus - f_minus) / (2.0 * h)
+                    })
+                    .collect()
             }
             FiniteDifferenceMethod::Forward => {
                 let f_base = self.evaluate(x);
-                for i in 0..n {
-                    let h = self.free_variables[i].finite_difference_step(x[i]);
-                    
-                    let mut x_plus = x.to_vec();
-                    x_plus[i] += h;
+                (0..n)
+                    .into_par_iter()
+                    .map(|i| {
+                        let h = self.free_variables[i].finite_difference_step(x[i]);
 
-                    let f_plus = self.evaluate(&x_plus);
-                    gradient[i] = (f_plus - f_base) / h;
-                }
+                        let mut x_plus = x.to_vec();
+                        x_plus[i] += h;
+
+                        let f_plus = self.evaluate(&x_plus);
+                        (f_plus - f_base) / h
+                    })
+                    .collect()
             }
         }
-
-        gradient
     }
 }
 
