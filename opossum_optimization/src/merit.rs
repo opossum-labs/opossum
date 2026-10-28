@@ -1,9 +1,16 @@
-use argmin::{core::{CostFunction, Error, Gradient}, solver::simulatedannealing::Anneal};
+use argmin::{
+    core::{CostFunction, Error, Gradient},
+    solver::simulatedannealing::Anneal,
+};
 use rand::RngExt;
 use std::sync::Arc;
 
 use crate::{
-    applier::ParameterApplier, coupling::ParameterCoupling, operand::{EvaluationContext, Operand}, resolver::ParameterResolver, variable::{FiniteDifferenceMethod, FreeVariable},
+    applier::ParameterApplier,
+    coupling::ParameterCoupling,
+    operand::{EvaluationContext, Operand},
+    resolver::ParameterResolver,
+    variable::{FiniteDifferenceMethod, FreeVariable},
 };
 use opossum_core::{error::OpmResult, opm_document::OpmDocument};
 use rayon::prelude::*;
@@ -97,10 +104,11 @@ impl MeritFunction {
 
         let mut working_doc = self.blueprint.clone();
 
-        let parameter_map = match ParameterResolver::resolve(&self.free_variables, &self.couplings, x) {
-            Ok(map) => map,
-            Err(_) => return self.fatal_penalty,
-        };
+        let parameter_map =
+            match ParameterResolver::resolve(&self.free_variables, &self.couplings, x) {
+                Ok(map) => map,
+                Err(_) => return self.fatal_penalty,
+            };
 
         for (address, value) in parameter_map {
             if ParameterApplier::set_value(&mut working_doc, &address, value).is_err() {
@@ -137,25 +145,23 @@ impl MeritFunction {
         let n = self.free_variables.len();
 
         match self.gradient_method {
-            FiniteDifferenceMethod::Central => {
-                (0..n)
-                    .into_par_iter()
-                    .map(|i| {
-                        let h = self.free_variables[i].finite_difference_step(x[i]);
+            FiniteDifferenceMethod::Central => (0..n)
+                .into_par_iter()
+                .map(|i| {
+                    let h = self.free_variables[i].finite_difference_step(x[i]);
 
-                        let mut x_plus = x.to_vec();
-                        x_plus[i] += h;
+                    let mut x_plus = x.to_vec();
+                    x_plus[i] += h;
 
-                        let mut x_minus = x.to_vec();
-                        x_minus[i] -= h;
+                    let mut x_minus = x.to_vec();
+                    x_minus[i] -= h;
 
-                        let f_plus = self.evaluate(&x_plus);
-                        let f_minus = self.evaluate(&x_minus);
+                    let f_plus = self.evaluate(&x_plus);
+                    let f_minus = self.evaluate(&x_minus);
 
-                        (f_plus - f_minus) / (2.0 * h)
-                    })
-                    .collect()
-            }
+                    (f_plus - f_minus) / (2.0 * h)
+                })
+                .collect(),
             FiniteDifferenceMethod::Forward => {
                 let f_base = self.evaluate(x);
                 (0..n)

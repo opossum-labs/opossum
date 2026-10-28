@@ -346,14 +346,13 @@ impl OpticNode for WaveFront {
 
             if let Ok(wf_data) =
                 wavefront_data::WaveFrontData::from_rays(rays, true, false, &iso, remove_tilt)
+                && let Some(map) = wf_data.wavefront_error_maps.first()
             {
-                if let Some(map) = wf_data.wavefront_error_maps.first() {
-                    return match metric_name {
-                        "Wavefront RMS" => Some(map.rms()),
-                        "Wavefront PtV" => Some(map.ptv()),
-                        _ => None,
-                    };
-                }
+                return match metric_name {
+                    "Wavefront RMS" => Some(map.rms()),
+                    "Wavefront PtV" => Some(map.ptv()),
+                    _ => None,
+                };
             }
         }
         None

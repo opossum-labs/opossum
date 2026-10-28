@@ -2,7 +2,10 @@
 
 use super::OpmDocument;
 use crate::{
-    analyzers::{AnalyzerKind, AnalyzerRegistration, AnalyzerType}, core_optics::OpticNode, error::{OpmResult, OpossumError}, reporting::analysis_report::AnalysisReport,
+    analyzers::{AnalyzerKind, AnalyzerRegistration, AnalyzerType},
+    core_optics::OpticNode,
+    error::{OpmResult, OpossumError},
+    reporting::analysis_report::AnalysisReport,
 };
 use log::info;
 use uuid::Uuid;
@@ -64,10 +67,8 @@ impl OpmDocument {
                 let node_id = node.uuid();
                 for desc in node.observable_metrics(analyzer_kind) {
                     if let Some(val) = node.read_observable(&desc.name) {
-                        self.metric_store.insert(
-                            (analyzer_id, node_id, desc.name.clone()),
-                            val,
-                        );
+                        self.metric_store
+                            .insert((analyzer_id, node_id, desc.name.clone()), val);
                     }
                 }
             }

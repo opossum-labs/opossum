@@ -68,7 +68,11 @@ impl OptimizationAlgorithm {
 
     /// Sets the initial temperature for Simulated Annealing[cite: 1].
     pub fn with_temperature(mut self, temp: f64) -> Self {
-        if let Self::SimulatedAnnealing { initial_temperature, .. } = &mut self {
+        if let Self::SimulatedAnnealing {
+            initial_temperature,
+            ..
+        } = &mut self
+        {
             *initial_temperature = temp;
         }
         self
@@ -88,7 +92,9 @@ impl OptimizationAlgorithm {
     pub const fn with_sd_tolerance(mut self, tol: f64) -> Self {
         match &mut self {
             Self::NelderMead { sd_tolerance, .. } => *sd_tolerance = tol,
-            Self::LBFGS { gradient_tolerance, .. } => *gradient_tolerance = tol,
+            Self::LBFGS {
+                gradient_tolerance, ..
+            } => *gradient_tolerance = tol,
             _ => {}
         }
         self

@@ -30,8 +30,9 @@ use uuid::Uuid;
 /// Current version of the .opm file format schema.
 pub const CURRENT_OPM_FILE_VERSION: u32 = 0;
 
-/// Key identifying a cached scalar detector metric: (analyzer_id, node_id, metric_name)
+/// Key identifying a cached scalar detector metric: `(analyzer_id, node_id, metric_name)`
 pub type MetricStoreKey = (Uuid, Uuid, String);
+/// Map for storing analyzer-sepecifc detector metric
 pub type MetricStore = HashMap<MetricStoreKey, f64>;
 
 /// The main structure of an OPOSSUM model.
@@ -256,7 +257,7 @@ impl OpmDocument {
 
     /// Returns the cached scalar metrics from the last headless analysis run.
     #[must_use]
-    pub fn metric_store(&self) -> &MetricStore {
+    pub const fn metric_store(&self) -> &MetricStore {
         &self.metric_store
     }
 }

@@ -6,8 +6,7 @@ use opossum_core::{
     distributions::{energy::UniformDist, position::Hexapolar, spectral::LaserLines},
     error::OpmResult,
     geometry::body::OPTIC_SHAPE,
-    joule,
-    millimeter, nanometer,
+    joule, millimeter, nanometer,
     prelude::*,
 };
 use opossum_optimization::{
@@ -715,35 +714,13 @@ fn test_parallel_gradient_thread_execution() -> OpmResult<()> {
 /// Assembles a Kepler telescope setup with two distinct analyzers:
 /// 1. Collimated beam -> Wavefront evaluation
 /// 2. Point source -> Spot diagram evaluation
-fn build_dual_analyzer_kepler_setup() -> OpmResult<(OpmDocument, Uuid, Uuid, Uuid, Uuid, Uuid, Uuid)> {
+fn build_dual_analyzer_kepler_setup() -> OpmResult<(OpmDocument, Uuid, Uuid, Uuid, Uuid, Uuid)> {
     let mut scenery = NodeGroup::default();
-
-    let refr_index_hzf52 = RefrIndexSchott::new(
-        3.267_600_58,
-        -2.053_845_66e-2,
-        3.515_076_72e-2,
-        7.701_513_48e-3,
-        -9.081_398_17e-4,
-        7.526_495_55e-5,
-        nanometer!(300.0)..nanometer!(2000.0),
-    )?;
 
     // 1. Optische Komponenten anlegen
     let source_id = scenery.add_node(SourcePort::default())?;
-    let lens1_id = scenery.add_node(Lens::new(
-        "lens1",
-        millimeter!(130.0),
-        millimeter!(-130.0),
-        millimeter!(10.0),
-        &refr_index_hzf52
-    )?)?;
-    let lens2_id = scenery.add_node(Lens::new(
-        "lens2",
-        millimeter!(100.0),
-        millimeter!(-100.0),
-        millimeter!(10.0),
-        &refr_index_hzf52
-    )?)?;
+    let lens1_id = scenery.add_node(ParaxialSurface::new("lens1", millimeter!(100.0))?)?;
+    let lens2_id = scenery.add_node(ParaxialSurface::new("lens2", millimeter!(50.0))?)?;
     let wf_id = scenery.add_node(WaveFront::new("wf_monitor")?)?;
     let spot_id = scenery.add_node(SpotDiagram::new("spot_detector")?)?;
 
@@ -760,11 +737,11 @@ fn build_dual_analyzer_kepler_setup() -> OpmResult<(OpmDocument, Uuid, Uuid, Uui
         "output_1",
         lens2_id,
         "input_1",
-        millimeter!(125.0),
+        millimeter!(150.0),
     )?;
-    
+
     scenery.connect_nodes(lens2_id, "output_1", wf_id, "input_1", millimeter!(1.0))?;
-    scenery.connect_nodes(wf_id, "output_1", spot_id, "input_1", millimeter!(58.0))?;
+    scenery.connect_nodes(wf_id, "output_1", spot_id, "input_1", millimeter!(59.0))?;
 
     let mut doc = OpmDocument::new(scenery);
 
@@ -798,32 +775,23 @@ fn build_dual_analyzer_kepler_setup() -> OpmResult<(OpmDocument, Uuid, Uuid, Uui
         analyzer_wf_id,
         analyzer_spot_id,
         lens1_id,
-        lens2_id,
         wf_id,
         spot_id,
     ))
 }
 #[test]
 fn test_optimize_kepler_multi_analyzer() -> OpmResult<()> {
-    let (mut doc, analyzer_wf_id, analyzer_spot_id, lens1_id, lens2_id, wf_id, spot_id) =
+    let (mut doc, analyzer_wf_id, analyzer_spot_id, lens1_id, wf_id, spot_id) =
         build_dual_analyzer_kepler_setup()?;
 
     // Parameteradressen für Linsenkrümmungen
-    let l1_front = ParameterAddress::NodeProperty {
-        node_id: lens1_id,
-        property_name: "front curvature".into(),
+    let distance_1 = ParameterAddress::ConnectionDistance {
+        src_id: lens1_id,
+        src_port: "output_1".into(),
     };
-    let l1_rear = ParameterAddress::NodeProperty {
-        node_id: lens1_id,
-        property_name: "rear curvature".into(),
-    };
-    let l2_front = ParameterAddress::NodeProperty {
-        node_id: lens2_id,
-        property_name: "front curvature".into(),
-    };
-    let l2_rear = ParameterAddress::NodeProperty {
-        node_id: lens2_id,
-        property_name: "rear curvature".into(),
+    let distance_2 = ParameterAddress::ConnectionDistance {
+        src_id: wf_id,
+        src_port: "output_1".into(),
     };
 
     // Observablen: Analyzer 1 liest Wellenfront, Analyzer 2 liest Spot-Größe
@@ -832,29 +800,21 @@ fn test_optimize_kepler_multi_analyzer() -> OpmResult<()> {
         node_id: wf_id,
         metric_name: "Wavefront RMS".into(),
     };
-    // let spot_rms_addr = ObservableAddress {
-    //     analyzer_id: analyzer_spot_id,
-    //     node_id: spot_id,
-    //     metric_name: "rms beam radius".into(),
-    // };
+    let spot_rms_addr = ObservableAddress {
+        analyzer_id: analyzer_spot_id,
+        node_id: spot_id,
+        metric_name: "rms beam radius".into(),
+    };
 
     // Optimierungslauf: L-BFGS mit finiten Differenzen (parallel via Rayon)
     let summary = OpticOptimizer::new(&mut doc)
         .add_variable(
-            FreeVariable::new(l1_front.clone(), "l1_front")
-                .with_bounds(BoxBounds::new(0.02, 0.25)?),
+            FreeVariable::new(distance_1.clone(), "l1 <-> l2")
+                .with_bounds(BoxBounds::new(0.02, 0.3)?),
         )?
         .add_variable(
-            FreeVariable::new(l1_rear.clone(), "l1_rear")
-                .with_bounds(BoxBounds::new(-0.25, -0.02)?),
-        )?
-        .add_variable(
-            FreeVariable::new(l2_front.clone(), "l2_front")
-                .with_bounds(BoxBounds::new(0.02, 0.25)?),
-        )?
-        .add_variable(
-            FreeVariable::new(l2_rear.clone(), "l2_rear")
-                .with_bounds(BoxBounds::new(-0.25, -0.02)?),
+            FreeVariable::new(distance_2.clone(), "wf <-> sd")
+                .with_bounds(BoxBounds::new(0.02, 0.3)?),
         )?
         // Kriterium 1 (Analyzer 1): Wellenfront-RMS minimieren
         // Ziel: 0.0 Waves, Gewicht: 1.0, Skalierung: 0.02 Waves (λ/50)
@@ -862,27 +822,24 @@ fn test_optimize_kepler_multi_analyzer() -> OpmResult<()> {
             "minimize_wavefront_rms",
             wf_rms_addr.clone(),
             0.0,
-            1.0,   // w_wf
+            1.0, // w_wf
             0.02,
         ))
         // Kriterium 2 (Analyzer 2): Spot-Radius minimieren
         // Ziel: 0.0 m, Gewicht: 1.0, Skalierung: 50 µm
-        // .add_operand(TargetValueOperand::new(
-        //     "minimize_spot_radius",
-        //     spot_rms_addr.clone(),
-        //     0.0,
-        //     1.0,   // w_spot
-        //     5.0e-5,
-        // ))
-        .with_algorithm(
-            OptimizationAlgorithm::lbfgs()
-                .with_max_iterations(30)
-        )
+        .add_operand(TargetValueOperand::new(
+            "minimize_spot_radius",
+            spot_rms_addr.clone(),
+            0.0,
+            1.0, // w_spot
+            5.0e-5,
+        ))
+        .with_algorithm(OptimizationAlgorithm::lbfgs().with_max_iterations(30))
         .optimize()?;
 
     // Ergebnisse aus dem MetricStore abrufen
     let final_wf_rms = MetricReader::read_metric(&doc, &wf_rms_addr)?;
-    // let final_spot_rms = MetricReader::read_metric(&doc, &spot_rms_addr)?;
+    let final_spot_rms = MetricReader::read_metric(&doc, &spot_rms_addr)?;
 
     eprintln!("\n=== DUAL-ANALYZER MULTI-OBJECTIVE RESULT ===");
     eprintln!("Iterations           : {}", summary.iterations);
@@ -892,16 +849,23 @@ fn test_optimize_kepler_multi_analyzer() -> OpmResult<()> {
         summary.final_cost,
         summary.relative_improvement() * 100.0
     );
-    eprintln!("Optimized L1 Front R : {:8.3} mm", summary.value(&l1_front).unwrap() * 1e3);
-    eprintln!("Optimized L1 Rear R  : {:8.3} mm", summary.value(&l1_rear).unwrap() * 1e3);
-    eprintln!("Optimized L2 Front R : {:8.3} mm", summary.value(&l2_front).unwrap() * 1e3);
-    eprintln!("Optimized L2 Rear R  : {:8.3} mm", summary.value(&l2_rear).unwrap() * 1e3);
+    eprintln!(
+        "Optimized L1 <-> L2 : {:8.3} mm",
+        summary.value(&distance_1).unwrap() * 1e3
+    );
+    eprintln!(
+        "Optimized wf <-> sd  : {:8.3} mm",
+        summary.value(&distance_2).unwrap() * 1e3
+    );
     eprintln!("Final Wavefront RMS  : {:8.4} λ", final_wf_rms);
-    // eprintln!("Final Spot RMS Radius: {:8.2} µm", final_spot_rms * 1e6);
+    eprintln!("Final Spot RMS Radius: {:8.2} µm", final_spot_rms * 1e6);
     eprintln!("============================================\n");
 
     assert!(summary.final_cost < summary.initial_cost);
-    assert!(final_wf_rms < 0.25, "Wavefront RMS should improve significantly");
+    assert!(
+        final_wf_rms < 0.25,
+        "Wavefront RMS should improve significantly"
+    );
     // assert!(final_spot_rms < 1.0e-3, "Spot radius should remain well focused");
 
     Ok(())
