@@ -2,16 +2,15 @@
 
 use super::OpmDocument;
 use crate::{
-    analyzers::{AnalyzerRegistration, AnalyzerType},
-    core_optics::OpticNode,
-    error::{OpmResult, OpossumError},
-    reporting::analysis_report::AnalysisReport,
+    analyzers::{AnalyzerKind, AnalyzerRegistration, AnalyzerType}, core_optics::OpticNode, error::{OpmResult, OpossumError}, reporting::analysis_report::AnalysisReport,
 };
 use log::info;
+use uuid::Uuid;
 
 /// Internal description of a single planned analysis run.
 #[derive(Debug, Clone)]
 struct AnalysisRun {
+    analyzer_id: Uuid,
     analyzer_nr: usize,
     analyzer_type: AnalyzerType,
     scenario_name: Option<String>,
@@ -33,9 +32,17 @@ impl OpmDocument {
             return Ok(());
         }
 
+        self.metric_store.clear();
+
         let runs = self.analysis_runs()?;
 
-        for AnalysisRun { analyzer_type, .. } in runs {
+        for AnalysisRun {
+            analyzer_id,
+            analyzer_type,
+            ..
+        } in runs
+        {
+            let analyzer_kind: AnalyzerKind = analyzer_type.kind();
             let analyzer_box = inventory::iter::<AnalyzerRegistration>
                 .into_iter()
                 .find_map(|reg| (reg.builder)(&analyzer_type))
@@ -45,8 +52,25 @@ impl OpmDocument {
                     ))
                 })?;
 
-            // Execute raw physics/raytracing directly on the scenery
+            // 1. Vorherige Strahlengänge aus dem Graphen entfernen
+            self.scenery.clear_edges();
+
+            // 2. Raw physics/raytracing direkt auf der Scenery ausführen
             analyzer_box.analyze(&mut self.scenery)?;
+
+            // 3. Observablen aller Detektorknoten für diesen Run einsammeln
+            let nodes = self.scenery.collect_all_nodes_recursive()?;
+            for node in nodes {
+                let node_id = node.uuid();
+                for desc in node.observable_metrics(analyzer_kind) {
+                    if let Some(val) = node.read_observable(&desc.name) {
+                        self.metric_store.insert(
+                            (analyzer_id, node_id, desc.name.clone()),
+                            val,
+                        );
+                    }
+                }
+            }
         }
 
         Ok(())
@@ -71,6 +95,7 @@ impl OpmDocument {
         let mut reports = Vec::new();
 
         for AnalysisRun {
+            analyzer_id: _,
             analyzer_nr,
             analyzer_type,
             scenario_name,
@@ -116,11 +141,12 @@ impl OpmDocument {
     fn analysis_runs(&self) -> OpmResult<Vec<AnalysisRun>> {
         let mut runs = Vec::new();
 
-        for (analyzer_nr, (_, analyzer_info)) in self.analyzers.iter().enumerate() {
+        for (analyzer_nr, (&analyzer_id, analyzer_info)) in self.analyzers.iter().enumerate() {
             let analyzer_name = analyzer_info.name().map(ToString::to_string);
 
             if analyzer_info.pump_scenarios().is_empty() {
                 runs.push(AnalysisRun {
+                    analyzer_id,
                     analyzer_nr,
                     analyzer_type: analyzer_info.analyzer_type().clone(),
                     scenario_name: None,
@@ -141,6 +167,7 @@ impl OpmDocument {
                 analyzer_type.set_active_pump_scenario(Some(scenario.clone()));
 
                 runs.push(AnalysisRun {
+                    analyzer_id,
                     analyzer_nr,
                     analyzer_type,
                     scenario_name: Some(scenario.name().to_string()),

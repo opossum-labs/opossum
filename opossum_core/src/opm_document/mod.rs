@@ -24,11 +24,15 @@ use crate::{
 };
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 /// Current version of the .opm file format schema.
 pub const CURRENT_OPM_FILE_VERSION: u32 = 0;
+
+/// Key identifying a cached scalar detector metric: (analyzer_id, node_id, metric_name)
+pub type MetricStoreKey = (Uuid, Uuid, String);
+pub type MetricStore = HashMap<MetricStoreKey, f64>;
 
 /// The main structure of an OPOSSUM model.
 /// It contains the [`NodeGroup`] representing the optical model, a list of analyzers, and a global configuration.
@@ -46,6 +50,8 @@ pub struct OpmDocument {
     pub(crate) amplifier_nodes: HashSet<Uuid>,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     pub(crate) embedded_materials: IndexMap<Uuid, Material>,
+    #[serde(skip)]
+    metric_store: MetricStore,
 }
 
 impl Default for OpmDocument {
@@ -57,6 +63,7 @@ impl Default for OpmDocument {
             pump_scenarios: IndexMap::default(),
             amplifier_nodes: HashSet::default(),
             embedded_materials: IndexMap::default(),
+            metric_store: HashMap::new(),
         }
     }
 }
@@ -245,5 +252,11 @@ impl OpmDocument {
     /// Replaces the whole amplifier candidate set at once (e.g. for undo/redo).
     pub fn set_amplifier_nodes(&mut self, nodes: HashSet<Uuid>) {
         self.amplifier_nodes = nodes;
+    }
+
+    /// Returns the cached scalar metrics from the last headless analysis run.
+    #[must_use]
+    pub fn metric_store(&self) -> &MetricStore {
+        &self.metric_store
     }
 }

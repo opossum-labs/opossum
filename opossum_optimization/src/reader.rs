@@ -8,7 +8,19 @@ pub struct MetricReader;
 
 impl MetricReader {
     /// Reads a scalar metric directly from a node inside an `OpmDocument`.
+    /// Reads a scalar metric produced by a specific analyzer on a detector node.
     pub fn read_metric(doc: &OpmDocument, address: &ObservableAddress) -> OpmResult<f64> {
+        // 1. Primär: Schneller Lookup im MetricStore nach (analyzer_id, node_id, metric_name)
+        let key = (
+            address.analyzer_id,
+            address.node_id,
+            address.metric_name.clone(),
+        );
+        if let Some(&val) = doc.metric_store().get(&key) {
+            return Ok(val);
+        }
+
+        // 2. Fallback: Direktes Auslesen vom Knoten im Scenery-Graphen
         let (node_ref, _) = doc.scenery().node_recursive(address.node_id).map_err(|e| {
             OpossumError::Other(format!(
                 "Failed to find detector node {}: {}",
@@ -20,14 +32,17 @@ impl MetricReader {
             .read_observable(&address.metric_name)
             .ok_or_else(|| {
                 OpossumError::Other(format!(
-                    "Metric '{}' produced no data on node {}",
-                    address.metric_name, address.node_id
+                    "Metric '{}' produced no data on node {} for analyzer {}",
+                    address.metric_name, address.node_id, address.analyzer_id
                 ))
             })
     }
 
-    /// Reads the current scalar value of any parameter address from the document[cite: 4, 8, 9].
-    pub fn read_parameter_value(doc: &OpmDocument, address: &ParameterAddress) -> OpmResult<f64> {
+    //// Reads the current scalar value of any parameter address from the document.
+    pub fn read_parameter_value(
+        doc: &OpmDocument,
+        address: &crate::address::ParameterAddress,
+    ) -> OpmResult<f64> {
         match address {
             ParameterAddress::NodeProperty {
                 node_id,

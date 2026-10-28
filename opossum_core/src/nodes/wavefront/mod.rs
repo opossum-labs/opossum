@@ -12,6 +12,7 @@ use crate::{
     },
     core_optics::{
         NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, SurfacePorts,
+        observable::{MetricDimension, ObservableDescriptor},
         optic_node::APERTURE_LIMIT_NOTE,
     },
     error::{OpmResult, OpossumError},
@@ -305,6 +306,57 @@ impl OpticNode for WaveFront {
     }
     fn set_light_data(&mut self, ld: Option<LightData>) {
         self.light_data = ld;
+    }
+    fn observable_metrics(&self, analyzer: AnalyzerKind) -> Vec<ObservableDescriptor> {
+        match analyzer {
+            AnalyzerKind::RayTrace | AnalyzerKind::GhostFocus => vec![
+                ObservableDescriptor::new(
+                    "Wavefront RMS",
+                    "Wavefront root mean square error relative to chief ray in waves",
+                    MetricDimension::Dimensionless,
+                )
+                .with_default_target(0.0),
+                ObservableDescriptor::new(
+                    "Wavefront PtV",
+                    "Wavefront peak-to-valley error in waves",
+                    MetricDimension::Dimensionless,
+                )
+                .with_default_target(0.0),
+            ],
+            AnalyzerKind::Energy => Vec::new(),
+        }
+    }
+
+    fn read_observable(&self, metric_name: &str) -> Option<f64> {
+        if let Some(LightData::Geometric(rays)) = &self.light_data {
+            let iso = self
+                .effective_surface_iso("input_1")
+                .unwrap_or_else(|_| Isometry::identity());
+
+            // Tilt-Flag aus Properties lesen (Default: false)
+            let remove_tilt = self
+                .node_attr
+                .get_property("remove tilt")
+                .ok()
+                .and_then(|p| match p {
+                    Proptype::Bool(b) => Some(*b),
+                    _ => None,
+                })
+                .unwrap_or(false);
+
+            if let Ok(wf_data) =
+                wavefront_data::WaveFrontData::from_rays(rays, true, false, &iso, remove_tilt)
+            {
+                if let Some(map) = wf_data.wavefront_error_maps.first() {
+                    return match metric_name {
+                        "Wavefront RMS" => Some(map.rms()),
+                        "Wavefront PtV" => Some(map.ptv()),
+                        _ => None,
+                    };
+                }
+            }
+        }
+        None
     }
 }
 impl From<WaveFrontMap> for Proptype {
