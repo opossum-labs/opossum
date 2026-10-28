@@ -116,7 +116,11 @@ impl<'a> Drawn<'a> {
         appearance: Appearance,
         wavelength: Length,
     ) -> OpmResult<Self> {
-        let patches = node.geometry_mesh(RIM_SEGMENTS)?;
+        let patches: Vec<SurfaceMesh> = node
+            .geometry_mesh(RIM_SEGMENTS)?
+            .into_iter()
+            .map(|patch| patch.mesh)
+            .collect();
         let geometry = node.create_geometry()?;
         let body = geometry
             .as_ref()

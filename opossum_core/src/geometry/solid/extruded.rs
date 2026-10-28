@@ -16,7 +16,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     gain::Inversion,
     geometry::{
-        Face, FaceIndex, GeometryKind, Rim, SurfaceMesh,
+        Face, FaceIndex, FacePatch, GeometryKind, Rim, SurfaceMesh,
         body::{Body, BoundingBox},
         face::SurfacePlacement,
     },
@@ -146,7 +146,7 @@ impl GeometryKind for Extruded {
     /// This function returns an error if the profile cannot be triangulated, if either face cannot
     /// be laid over it (see [`Face::mesh_over`]), or if the two faces cross within the profile, so
     /// that there is no body between them.
-    fn mesh(&self, segments: usize, _unbounded: &Outline) -> OpmResult<Vec<SurfaceMesh>> {
+    fn mesh(&self, segments: usize, _unbounded: &Outline) -> OpmResult<Vec<FacePatch>> {
         let outline_mesh = self.rim.outline().triangulate(segments)?;
         let frame = self.isometry();
         let front = self.front.face().mesh_over(&outline_mesh, &frame)?;
@@ -166,10 +166,17 @@ impl GeometryKind for Extruded {
         }
         let edge = SurfaceMesh::between(&outline_mesh, &front, &rear)?;
         // Light enters through the front face, so the outside is the side it comes from.
-        Ok([front.flipped(), rear, edge]
-            .into_iter()
-            .map(|mesh| mesh.transformed(&frame))
-            .collect())
+        Ok([
+            (Some(Self::FRONT), front.flipped()),
+            (Some(Self::REAR), rear),
+            (None, edge),
+        ]
+        .into_iter()
+        .map(|(face, mesh)| FacePatch {
+            face,
+            mesh: mesh.transformed(&frame),
+        })
+        .collect())
     }
 }
 
@@ -1016,8 +1023,32 @@ mod test {
     const STEP: f64 = 1e-6;
 
     /// Mesh the given body; a solid is bounded all around, so the unbounded outline goes unused.
-    fn mesh_of(body: &Extruded) -> OpmResult<Vec<SurfaceMesh>> {
+    fn patches_of(body: &Extruded) -> OpmResult<Vec<FacePatch>> {
         GeometryKind::mesh(body, SEGMENTS, body.rim().outline())
+    }
+    /// The meshes of the given body's patches, without the faces they lie on.
+    fn mesh_of(body: &Extruded) -> OpmResult<Vec<SurfaceMesh>> {
+        Ok(patches_of(body)?
+            .into_iter()
+            .map(|patch| patch.mesh)
+            .collect())
+    }
+    /// A body is drawn as its front face, its rear face and the lateral face between them, which
+    /// is no face of its own.
+    #[test]
+    fn every_patch_of_a_body_lies_on_its_face() -> OpmResult<()> {
+        for (name, body) in volumes(&Isometry::identity())? {
+            let faces: Vec<_> = patches_of(&body)?
+                .into_iter()
+                .map(|patch| patch.face)
+                .collect();
+            assert_eq!(
+                faces,
+                [Some(Extruded::FRONT), Some(Extruded::REAR), None],
+                "the patches of the {name} lie on the wrong faces"
+            );
+        }
+        Ok(())
     }
     /// How many points of the mesh of an outline lie on its rims; they lead the points.
     fn rim_points(outline: &Outline) -> OpmResult<usize> {

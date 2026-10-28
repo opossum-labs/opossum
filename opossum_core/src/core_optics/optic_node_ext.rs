@@ -11,7 +11,7 @@ use crate::{
     },
     error::{OpmResult, OpossumError},
     geometry::{
-        FaceIndex, Geometry, SurfaceMesh,
+        FaceIndex, FacePatch, Geometry,
         body::{OPTIC_SHAPE, default_optic_shape},
     },
     light::{LightData, LightRays, LightResult, Rays, rays::ReflectedPart},
@@ -65,8 +65,8 @@ pub trait OpticNodeExt {
     /// This function returns an error if the node has no [`MATERIAL`] property holding a material.
     fn material(&self) -> OpmResult<AssetRef<Material>>;
 
-    /// Return triangle meshes of this node's geometry, to draw it (see
-    /// [`GeometryKind::mesh`](crate::geometry::GeometryKind::mesh)).
+    /// Return triangle meshes of this node's geometry, each with the face it lies on, to draw it
+    /// (see [`GeometryKind::mesh`](crate::geometry::GeometryKind::mesh)).
     ///
     /// The geometry is derived from the node's properties as they are now, so the meshes follow a
     /// changed property even if the node's surfaces have not been rebuilt since. They are stated
@@ -81,7 +81,7 @@ pub trait OpticNodeExt {
     ///
     /// This function returns an error if the node has no geometry, if it cannot be derived or if it
     /// cannot be meshed.
-    fn geometry_mesh(&self, segments: usize) -> OpmResult<Vec<SurfaceMesh>>;
+    fn geometry_mesh(&self, segments: usize) -> OpmResult<Vec<FacePatch>>;
 
     /// Set local alignment (decenter, tilt) of an optical node and update its optical surfaces.
     ///
@@ -465,7 +465,7 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         Ok(material.clone())
     }
 
-    fn geometry_mesh(&self, segments: usize) -> OpmResult<Vec<SurfaceMesh>> {
+    fn geometry_mesh(&self, segments: usize) -> OpmResult<Vec<FacePatch>> {
         let Some(geometry) = self.create_geometry()? else {
             return Err(OpossumError::Other(format!(
                 "node '{}' has no geometry to draw",
@@ -862,7 +862,7 @@ mod test {
             optic_node::LIDT,
         },
         degree,
-        geometry::{Extruded, SurfaceGeometry},
+        geometry::{Extruded, SurfaceGeometry, SurfaceMesh},
         joule,
         light::Ray,
         millimeter, nanometer,
@@ -1122,7 +1122,9 @@ mod test {
         assert!(error.to_string().contains("no geometry"), "{error}");
         let meshes = Dummy::default().geometry_mesh(16)?;
         assert_eq!(meshes.len(), 1);
+        assert_eq!(meshes[0].face, Some(SurfaceGeometry::FACE));
         let farthest = meshes[0]
+            .mesh
             .points()
             .iter()
             .map(|point| point.x.value.hypot(point.y.value))
@@ -1140,6 +1142,7 @@ mod test {
         assert_eq!(meshes.len(), 1, "a surface is drawn as one patch");
         meshes
             .pop()
+            .map(|patch| patch.mesh)
             .ok_or_else(|| OpossumError::Other("the surface was not meshed".into()))
     }
     /// A node in its default state — a flat mirror over the default optic shape — can be meshed at

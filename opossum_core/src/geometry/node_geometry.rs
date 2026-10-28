@@ -27,7 +27,7 @@ use crate::{
     core_optics::{optic_surface::OpticSurface, surface_effect::SurfaceEffect},
     error::{OpmResult, OpossumError},
     geometry::{
-        Assembly, Extruded, Face, FaceIndex, ParametricSolid, Rim, SurfaceMesh, SurfaceShape,
+        Assembly, Extruded, Face, FaceIndex, FacePatch, ParametricSolid, Rim, SurfaceShape,
         body::Body,
     },
     light::{Ray, Rays, rays::ReflectedPart},
@@ -563,9 +563,10 @@ pub trait GeometryKind {
     /// Return triangle meshes of the surfaces that bound this geometry, to draw it.
     ///
     /// Each mesh is one patch of surface: a face laid over the outline it ends at, or the lateral
-    /// face closing a body between two faces. Patches do not share points, so the hard edge where
-    /// two of them meet stays hard. Every patch faces out of a body; a single surface faces along
-    /// the +z of its face.
+    /// face closing a body between two faces. Every patch carries the number of the face it lies
+    /// on; the lateral face has none. Patches do not share points, so the hard edge where two of
+    /// them meet stays hard. Every patch faces out of a body; a single surface faces along the +z
+    /// of its face.
     ///
     /// # Arguments
     ///
@@ -581,7 +582,7 @@ pub trait GeometryKind {
     ///
     /// This function returns an error if an outline cannot be triangulated, if a face cannot be
     /// laid over it or if this kind of geometry cannot be meshed yet.
-    fn mesh(&self, segments: usize, unbounded: &Outline) -> OpmResult<Vec<SurfaceMesh>>;
+    fn mesh(&self, segments: usize, unbounded: &Outline) -> OpmResult<Vec<FacePatch>>;
 }
 
 /// A single surface without thickness.
@@ -695,7 +696,7 @@ impl GeometryKind for SurfaceGeometry {
     }
     /// The face is laid over the outline of its rim, measured along the axis of the rim; an open
     /// surface has no rim and is drawn over the given outline around its own vertex.
-    fn mesh(&self, segments: usize, unbounded: &Outline) -> OpmResult<Vec<SurfaceMesh>> {
+    fn mesh(&self, segments: usize, unbounded: &Outline) -> OpmResult<Vec<FacePatch>> {
         let (outline, frame) = match &self.extent {
             SurfaceExtent::Edge(rim) | SurfaceExtent::Window(rim) => (rim.outline(), *rim.frame()),
             SurfaceExtent::Open => (unbounded, *self.surface.face().frame()),
@@ -704,7 +705,10 @@ impl GeometryKind for SurfaceGeometry {
             .surface
             .face()
             .mesh_over(&outline.triangulate(segments)?, &frame)?;
-        Ok(vec![mesh.transformed(&frame)])
+        Ok(vec![FacePatch {
+            face: Some(Self::FACE),
+            mesh: mesh.transformed(&frame),
+        }])
     }
 }
 
@@ -1274,16 +1278,21 @@ mod test {
     /// the z axis of `frame` and no further, and facing along the +z of its face.
     fn check_drawn(
         geometry: &Geometry,
-        meshes: &[SurfaceMesh],
+        meshes: &[FacePatch],
         frame: &Isometry,
         reach: f64,
     ) -> OpmResult<()> {
-        let [mesh] = meshes else {
+        let [FacePatch { face, mesh }] = meshes else {
             return Err(OpossumError::Other(format!(
                 "a surface was drawn as {} patches",
                 meshes.len()
             )));
         };
+        assert_eq!(
+            *face,
+            Some(SurfaceGeometry::FACE),
+            "the patch of a surface lies on its one face"
+        );
         let face = geometry
             .face(SurfaceGeometry::FACE)
             .ok_or_else(|| OpossumError::Other("the surface has no face".into()))?;

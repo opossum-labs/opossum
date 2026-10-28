@@ -1280,9 +1280,9 @@ fn every_drawn_node_can_be_meshed_in_its_default_state() -> OpmResult<()> {
             !meshes.is_empty(),
             "node type '{node_type}' came out without a patch"
         );
-        for mesh in &meshes {
+        for patch in &meshes {
             assert!(
-                !mesh.triangles().is_empty(),
+                !patch.mesh.triangles().is_empty(),
                 "a patch of node type '{node_type}' came out without any triangles"
             );
         }

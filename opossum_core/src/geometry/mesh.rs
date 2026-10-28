@@ -3,11 +3,24 @@
 use crate::{
     apertures::OutlineMesh,
     error::{OpmResult, OpossumError},
+    geometry::FaceIndex,
     utils::geom_transformation::Isometry,
 };
 use nalgebra::{Point3, Vector3};
 use std::ops::Range;
 use uom::si::f64::Length;
+
+/// One meshed patch of a geometry, together with the face it lies on.
+///
+/// Knowing the face is what lets each face of a component be drawn in a material of its own. The
+/// lateral face closing a body between two faces is no face of the geometry and has none.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FacePatch {
+    /// The face the patch lies on, or `None` for the lateral face of a body.
+    pub face: Option<FaceIndex>,
+    /// The meshed patch.
+    pub mesh: SurfaceMesh,
+}
 
 /// A triangle mesh of one piece of surface, with a normal at every point.
 ///

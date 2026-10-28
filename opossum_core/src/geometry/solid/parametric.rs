@@ -11,7 +11,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     gain::Inversion,
     geometry::{
-        Face, FaceIndex, GeometryKind, Rim, SurfaceMesh,
+        Face, FaceIndex, FacePatch, GeometryKind, Rim,
         body::{Body, BoundingBox},
     },
     light::Ray,
@@ -127,7 +127,7 @@ impl GeometryKind for ParametricSolid {
     /// # Errors
     ///
     /// This function always returns an error.
-    fn mesh(&self, _segments: usize, _unbounded: &Outline) -> OpmResult<Vec<SurfaceMesh>> {
+    fn mesh(&self, _segments: usize, _unbounded: &Outline) -> OpmResult<Vec<FacePatch>> {
         Err(OpossumError::Other(
             "a parametric solid cannot be meshed yet".into(),
         ))
