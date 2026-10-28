@@ -301,7 +301,6 @@ impl Default for ViewerOptions {
 
 #[cfg(test)]
 mod tests {
-    use core::f32;
 
     use super::*;
 

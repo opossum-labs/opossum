@@ -136,9 +136,8 @@ pub fn node_types() -> Vec<(&'static str, &'static str)> {
 /// The node types that enclose a volume of material, derived from the node registry.
 ///
 /// Every registered type is instantiated once and asked whether its geometry encloses a volume (see
-/// [`OpticNodeExt::encloses_volume`](crate::core_optics::OpticNodeExt::encloses_volume)). Doing that
-/// once is worth a `LazyLock`: it builds one node of every type in the program, while the answer
-/// cannot change at runtime.
+/// [`OpticNodeExt::encloses_volume`]). Doing that once is worth a `LazyLock`: it builds one node of
+/// every type in the program, while the answer cannot change at runtime.
 static VOLUME_NODE_TYPES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     node_types()
         .into_iter()
@@ -152,11 +151,9 @@ static VOLUME_NODE_TYPES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
 
 /// Return whether nodes of the given type enclose a volume of material.
 ///
-/// This is the question
-/// [`OpticNodeExt::encloses_volume`](crate::core_optics::OpticNodeExt::encloses_volume) answers, for
-/// a caller that has only a type name and no node: a user interface deciding whether to offer
-/// amplification for a component, for instance. It is derived from the very same geometry, so the
-/// two cannot drift apart.
+/// This is the question [`OpticNodeExt::encloses_volume`] answers, for a caller that has only a type
+/// name and no node: a user interface deciding whether to offer amplification for a component, for
+/// instance. It is derived from the very same geometry, so the two cannot drift apart.
 ///
 /// # Arguments
 ///
