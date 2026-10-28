@@ -298,6 +298,7 @@ All paths are relative to `opossum_core/src` unless stated otherwise.
 | `OpticShape`, `Outline`, `Bore` | `apertures/optic_shape.rs` | value of the `optic shape` property; the outline says whether a point lies within it |
 | `OutlineMesh` | `apertures/mesh.rs` | an outline triangulated in its plane (`Outline::triangulate`): where a face is sampled when it is drawn |
 | `SurfaceMesh` | `geometry/mesh.rs` | one drawn patch of surface: points, normals and triangles. A face laid over an outline mesh gives one (`Face::mesh_over`), and the lateral face of a solid is drawn between two (`SurfaceMesh::between`) |
+| `FacePatch` | `geometry/mesh.rs` | a `SurfaceMesh` with the face it lies on, as `GeometryKind::mesh` returns it; the lateral face of a solid lies on none |
 | `OpticSurface` | `core_optics/optic_surface.rs` | the surface of one face: the face, coating, LIDT, caches and hit map |
 | `SurfaceConfig` | `core_optics/surface_config.rs` | value of a surface property: the coating and the LIDT of one face |
 | `NodeAttr` | `core_optics/node_attr.rs` | keeps the runtime geometry (`runtime_geometry`, `set_runtime_geometry`), `#[serde(skip)]` |
@@ -305,7 +306,7 @@ All paths are relative to `opossum_core/src` unless stated otherwise.
 | `ReflectedPart` | `light/rays.rs` | which part of a split is the intended beam: the position history, bounce counter and bundle identity of both parts |
 | `OpticPorts` | `core_optics/optic_ports.rs` | the names of the input and output ports, graph logic only |
 | `SurfacePorts` | `core_optics/optic_ports.rs` | the ports a node declares, each with the face it sits on, and its splitting faces (`OpticNode::surface_ports`); `face_of` looks one up |
-| `Appearance`, `SurfaceFinish` | `core_optics/appearance.rs` | how a node is drawn (`OpticNode::appearance`), with the presets `mirror`, `transmissive`, `detector` and `glass` |
+| `Appearance`, `SurfaceFinish` | `core_optics/appearance.rs` | how a node is drawn (`OpticNode::appearance`), with the presets `mirror`, `transmissive`, `detector` and `glass`, and how a coating mirrors one of its faces (`Appearance::coated`) |
 
 ### Example 1: a plano-convex lens
 
@@ -499,6 +500,14 @@ node's own frame (`OpticNodeExt::geometry_mesh`) and puts the mesh at the node's
 The patches of a solid form a closed shell and are drawn once. A single surface has no far side of its own, so each of
 its patches is drawn a second time, turned over. Glass takes its refractive index from the material of the solid and
 its thickness from the extent of the solid.
+
+Every patch carries the face it lies on (`FacePatch`) and is drawn in the node's appearance under the coating of that
+face (`Appearance::coated`, read from the face's `SurfaceConfig`). The share the coating reflects at normal incidence
+makes a glass or a reflecting face that much metallic, and a reflecting one that much opaque; a mirror's bare surface
+is a pale pane. Other finishes keep their look, because those nodes do not act through their coating. The lateral face
+of a solid has no coating and is drawn as the appearance asks. Glass is drawn at an opacity of 0.7 (`GLASS_OPACITY` in
+the backend), rising to 1 the more its face is mirrored, because three.js shows only opaque objects through
+transmissive glass (see the 3D view reference).
 
 Neither reads the runtime surfaces, so a property that was changed without a rebuild is drawn as it is now. The
 endpoint for a single component (`opossum_backend/src/document.rs`) therefore meshes the node without rebuilding it,

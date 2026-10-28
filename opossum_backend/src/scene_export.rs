@@ -10,7 +10,7 @@ use opossum_core::{
     analyzers::Analyzable,
     core_optics::{Appearance, NodeAttrExt, OpticNodeExt, SurfaceFinish},
     error::{OpmResult, OpossumError},
-    geometry::{SurfaceMesh, body::Body},
+    geometry::{Geometry, SurfaceMesh, body::Body},
     light::Rays,
     nanometer,
     nodes::NodeGroup,
@@ -127,7 +127,7 @@ impl<'a> Drawn<'a> {
         wavelength: Length,
     ) -> OpmResult<Self> {
         let geometry = node.create_geometry()?;
-        let kind = geometry.as_ref().map(|geometry| geometry.kind());
+        let kind = geometry.as_ref().map(Geometry::kind);
         let body = kind.and_then(|kind| kind.as_body());
         // Behind a face lies the medium of the solid, or vacuum behind a single surface.
         let ior = body.map_or(Ok(1.0), |body| refractive_index_of(node, body, wavelength))?;

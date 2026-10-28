@@ -273,22 +273,33 @@ index the component's material reports.
 That index is always taken at **1053 nm**, the design wavelength of the laser systems OPOSSUM is
 built around. A drawing has to pick some colour of light to render glass at, and this one does not
 follow the analyzer or the default wavelength in the settings. A material that cannot state an index
-at 1053 nm is drawn as plain glass, and the substitution is noted in the log.
+at 1053 nm is drawn as plain glass, and the substitution is noted in the log. The coatings that decide
+how mirrored a surface looks (see below) are evaluated at the same wavelength.
 
-A mirror and a beam splitter are drawn reflective; a grating is drawn with an iridescent,
-diffraction-coloured sheen that marks it at a glance as the component that spreads light by wavelength. A filter or a paraxial surface is
-drawn as a faint, translucent plane. A detector is drawn as a plain, matte surface, deliberately
-distinct from glass and from a mirror, so a setup reads at a glance which components measure the
-light rather than shape or redirect it.
+How mirrored a surface looks follows its **coating**: the share of light the coating reflects at
+normal incidence is the share of the surface drawn as a mirror. A mirror with its default 100 %
+coating is drawn as a solid mirror, a beam splitter that reflects half of the light as a half-mirrored
+pane, and a mirror whose coating reflects nothing as a pale, see-through pane, so that it stays
+visible and can still be clicked. Each face of a lens or a wedge follows its own coating: give one
+face a highly reflective coating and only that face is drawn mirrored, while the other face and the
+rim stay glass. An uncoated face reflects a few percent and looks almost like plain glass. A coating
+that cannot be evaluated leaves its face drawn uncoated, and this is noted in the log.
+
+A grating is drawn with an iridescent, diffraction-colored sheen that marks it at a glance as the
+component that spreads light by wavelength. A filter or a paraxial surface is drawn as a faint,
+translucent plane. A detector is drawn as a plain, matte surface, deliberately distinct from glass
+and from a mirror, so a setup reads at a glance which components measure the light rather than shape
+or redirect it. None of these acts on the light through its coating — a grating diffracts regardless
+of it — so their coating does not change how they look either.
 
 Unlike a lens or a wedge, these components have no second surface of their own to keep facing the
 camera, so each is drawn from both sides at once and stays visible however far you orbit around it.
 
-Every component is drawn slightly see-through, so a component sitting behind another optic stays
-visible rather than being hidden by it. This is deliberate: glass shows only solid surroundings
-through it — another lens in front would otherwise blot out whatever is behind — so drawing the
-components a little transparent lets them show through one another and keeps the whole setup
-readable from any angle.
+Glass is drawn slightly see-through, so a lens sitting behind another lens stays visible rather
+than being hidden by it. This is deliberate: glass shows only solid surroundings through it, and
+another lens is not solid, so the lens in front would otherwise blot it out. The more a glass face is
+mirrored by its coating, the more solid it is drawn. Solid components — a mirror, a grating, a
+detector — are drawn fully opaque and are seen through a lens in front of them as they are.
 
 ## The optical table and orientation
 
