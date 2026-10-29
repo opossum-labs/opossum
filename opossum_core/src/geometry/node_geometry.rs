@@ -1791,6 +1791,59 @@ mod test {
         );
         Ok(())
     }
+    /// A bore tilted by 45° about y runs through a 6 mm plate along its own axis: a ray along that
+    /// axis meets both faces in the bore, while one along the axis of the plate meets the front
+    /// face in the bore and the rear face on the material, 6 mm beside where the bore comes out.
+    #[test]
+    fn a_tilted_bore_runs_through_a_plate_along_its_own_axis() -> OpmResult<()> {
+        let plate = Geometry::singlet(
+            millimeter!(f64::INFINITY),
+            millimeter!(f64::INFINITY),
+            millimeter!(6.0),
+            Outline::new(
+                CircleShape::new(millimeter!(12.5))?,
+                Some(
+                    Bore::new(
+                        CircleShape::new(millimeter!(1.0))?,
+                        millimeter!(0.0, 0.0),
+                        degree!(0.0),
+                    )
+                    .with_tilt(degree!(0.0), degree!(45.0)),
+                ),
+            )?,
+            Material::from(&RefrIndexConst::new(1.5)?),
+        )?;
+        let along = vector![-1.0, 0.0, 1.0].normalize();
+        let along_the_bore = Ray::new(
+            millimeter!(10.0, 0.0, -10.0),
+            along,
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?;
+        let along_the_plate = ray_at(0.0)?;
+        let on_material = |face, ray: &Ray| {
+            plate
+                .intersect(face, ray)
+                .map(|hit| (hit.point(), hit.on_material()))
+        };
+        assert_eq!(
+            on_material(Extruded::FRONT, &along_the_bore),
+            Some((millimeter!(0.0, 0.0, 0.0), false))
+        );
+        let rear = on_material(Extruded::REAR, &along_the_bore)
+            .ok_or_else(|| OpossumError::Other("the ray missed the rear face".into()))?;
+        assert_abs_diff_eq!(rear.0.x.value, -0.006, epsilon = 1e-12);
+        assert!(!rear.1, "the ray along the bore leaves through it");
+        assert_eq!(
+            on_material(Extruded::FRONT, &along_the_plate).map(|(_, material)| material),
+            Some(false)
+        );
+        assert_eq!(
+            on_material(Extruded::REAR, &along_the_plate).map(|(_, material)| material),
+            Some(true)
+        );
+        Ok(())
+    }
     /// The neutral split that places the optical axis brings its own coating, so the axis sees
     /// the edge only: in the bore it is split as on the material.
     #[test]

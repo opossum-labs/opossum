@@ -17,7 +17,7 @@ use crate::{
     properties::Proptype,
     utils::{default_from_name::DefaultFromName, math_utils::to_f64},
 };
-use nalgebra::{Point2, Point3};
+use nalgebra::{Point2, Point3, Rotation3, Vector3};
 use num_traits::Zero;
 use serde::{Deserialize, Serialize};
 use std::{f64::consts::TAU, fmt::Display};
@@ -147,29 +147,63 @@ impl OutlineShape {
     }
 }
 
-/// A bore through a component: the region of a shape, shifted off the axis and turned about it,
-/// that holds no material.
+/// A bore through a component: the region of a shape, shifted off the axis, turned about its
+/// center and possibly tilted against the axis, that holds no material.
+///
+/// The bore is a prism: its shape is the cross-section across the axis of the bore, as a drill
+/// leaves it, and it runs along that axis through the whole component. Its center is where the
+/// axis of the bore crosses the plane of the outline. Untilted, it runs along the axis of the
+/// component.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Bore {
     shape: OutlineShape,
     center: Point2<Length>,
     rotation: Angle,
+    #[serde(default = "upright", skip_serializing_if = "is_upright")]
+    tilt: (Angle, Angle),
+}
+
+/// The tilt of a bore that runs along the axis of its component.
+fn upright() -> (Angle, Angle) {
+    (Angle::zero(), Angle::zero())
+}
+
+/// Whether a bore with the given tilt runs along the axis of its component.
+fn is_upright(tilt: &(Angle, Angle)) -> bool {
+    tilt.0.is_zero() && tilt.1.is_zero()
 }
 
 impl Bore {
-    /// Create a new [`Bore`].
+    /// Create a new [`Bore`] along the axis of the component.
     ///
     /// # Arguments
     ///
-    /// * `shape` - the shape of the bore, around its own centre.
-    /// * `center` - where the centre of the bore lies, relative to the axis of the component.
-    /// * `rotation` - how far the bore is turned about its centre.
+    /// * `shape` - the shape of the bore, around its own center.
+    /// * `center` - where the center of the bore lies, relative to the axis of the component.
+    /// * `rotation` - how far the bore is turned about its center.
     pub fn new(shape: impl Into<OutlineShape>, center: Point2<Length>, rotation: Angle) -> Self {
         Self {
             shape: shape.into(),
             center,
             rotation,
+            tilt: upright(),
         }
+    }
+    /// Tilt this [`Bore`] against the axis of the component.
+    ///
+    /// The angles turn the bore about the x and the y axis as the alignment of a node turns the
+    /// node, but the other way round: a bore tilted by the angles a node is aligned by runs along
+    /// the axis the light arrives on. Whether the tilt is less than 90° is checked when the bore is
+    /// put into an [`Outline`].
+    ///
+    /// # Arguments
+    ///
+    /// * `about_x` - how far the bore is tilted about the x axis.
+    /// * `about_y` - how far the bore is tilted about the y axis.
+    #[must_use]
+    pub const fn with_tilt(mut self, about_x: Angle, about_y: Angle) -> Self {
+        self.tilt = (about_x, about_y);
+        self
     }
     /// Returns the shape of this [`Bore`].
     #[must_use]
@@ -186,6 +220,26 @@ impl Bore {
     pub const fn rotation(&self) -> Angle {
         self.rotation
     }
+    /// Returns how far this [`Bore`] is tilted about the x and the y axis (see [`Bore::with_tilt`]).
+    #[must_use]
+    pub const fn tilt(&self) -> (Angle, Angle) {
+        self.tilt
+    }
+    /// The tilt of this bore as a turn, which turns the axis of the bore onto the axis of the
+    /// component.
+    fn tilting(&self) -> Rotation3<f64> {
+        Rotation3::from_euler_angles(self.tilt.0.value, self.tilt.1.value, 0.0)
+    }
+    /// The turn from the bore's own frame into the frame of the outline: about the axis of the
+    /// bore by its rotation, then tilted.
+    fn turn(&self) -> Rotation3<f64> {
+        self.tilting().inverse()
+            * Rotation3::from_axis_angle(&Vector3::z_axis(), self.rotation.value)
+    }
+    /// The direction the bore runs along, in the frame of the outline.
+    pub(crate) fn axis(&self) -> Vector3<f64> {
+        self.tilting().inverse() * Vector3::z()
+    }
     /// The region of this bore as an [`Aperture`] of the given type, placed where the bore is.
     fn aperture(&self, aperture_type: ApertureType) -> OpmResult<Aperture> {
         Aperture::new(
@@ -195,26 +249,16 @@ impl Bore {
             Some(self.rotation),
         )
     }
-    /// Move a point of the bore's own frame to where the bore is: turned about its centre, then
-    /// shifted off the axis.
+    /// Move a point of the bore's own cross-section to where the bore crosses the plane of the
+    /// outline: turned and tilted, then along the axis of the bore onto the plane, shifted off the
+    /// axis of the component.
     fn placed(&self, point: Point2<Length>) -> Point2<Length> {
-        let (sin, cos) = self.rotation.value.sin_cos();
-        let (x, y) = (point.x.value, point.y.value);
+        let across = self.turn() * Vector3::new(point.x.value, point.y.value, 0.0);
+        let axis = self.axis();
+        let onto_plane = across - axis * (across.z / axis.z);
         Point2::new(
-            meter!(x.mul_add(cos, (-y).mul_add(sin, self.center.x.value))),
-            meter!(x.mul_add(sin, y.mul_add(cos, self.center.y.value))),
-        )
-    }
-    /// Move a point of the plane into the bore's own frame; the inverse of [`Self::placed`].
-    fn unplaced(&self, point: Point2<Length>) -> Point2<Length> {
-        let (sin, cos) = self.rotation.value.sin_cos();
-        let (x, y) = (
-            point.x.value - self.center.x.value,
-            point.y.value - self.center.y.value,
-        );
-        Point2::new(
-            meter!(x.mul_add(cos, y * sin)),
-            meter!(y.mul_add(cos, -x * sin)),
+            meter!(self.center.x.value + onto_plane.x),
+            meter!(self.center.y.value + onto_plane.y),
         )
     }
     /// The corners of the edge of this bore, placed where the bore is.
@@ -227,7 +271,24 @@ impl Bore {
     }
     /// Return whether a point of the plane lies on or within this bore.
     fn contains(&self, point: Point2<Length>) -> bool {
-        self.shape.contains(self.unplaced(point))
+        self.contains_at(Point3::new(point.x, point.y, Length::zero()))
+    }
+    /// Return whether a point lies on or within this bore: across the axis of the bore, it lies
+    /// within its shape.
+    ///
+    /// # Arguments
+    ///
+    /// * `point` - the point, in the frame of the outline: its plane at z = 0, the axis of the
+    ///   component along z.
+    fn contains_at(&self, point: Point3<Length>) -> bool {
+        let from_center = Vector3::new(
+            point.x.value - self.center.x.value,
+            point.y.value - self.center.y.value,
+            point.z.value,
+        );
+        let own = self.turn().inverse() * from_center;
+        self.shape
+            .contains(Point2::new(meter!(own.x), meter!(own.y)))
     }
     /// The edge of this bore as a closed, counter-clockwise polygon, placed where the bore is (see
     /// [`OutlineShape::outline_points`]).
@@ -329,6 +390,19 @@ impl Outline {
     pub(crate) fn in_bore(&self, point: Point2<Length>) -> bool {
         self.bore.as_ref().is_some_and(|bore| bore.contains(point))
     }
+    /// Return whether a point lies on or within the bore, if there is one, at whatever depth
+    /// along the axis of the component: the bore runs along its own axis (see [`Bore`]).
+    ///
+    /// # Arguments
+    ///
+    /// * `point` - the point, in the frame of the outline: its plane at z = 0, the axis of the
+    ///   component along z.
+    #[must_use]
+    pub(crate) fn in_bore_at(&self, point: Point3<Length>) -> bool {
+        self.bore
+            .as_ref()
+            .is_some_and(|bore| bore.contains_at(point))
+    }
     /// Return the points the component reaches farthest in, in the plane of the outline.
     ///
     /// They are the extreme points of the edge (see [`OutlineShape::extreme_points`]): the bore
@@ -378,8 +452,8 @@ impl Outline {
         }
         OutlineMesh::from_rims(&rims, |point| self.contains(point))
     }
-    /// Check that the edge and the bore bound a region, and that the bore lies within the edge
-    /// without touching it.
+    /// Check that the edge and the bore bound a region, that the bore is tilted by less than 90°
+    /// and that it crosses the plane of the outline within the edge without touching it.
     ///
     /// A shape bounds a region if its edge neither crosses nor touches itself. A bore within the
     /// edge has edges that do not meet the edge of the component and a corner inside it.
@@ -393,6 +467,12 @@ impl Outline {
         let Some(bore) = &self.bore else {
             return Ok(());
         };
+        let along_axis = bore.axis().z;
+        if !along_axis.is_finite() || along_axis <= f64::EPSILON {
+            return Err(OpossumError::Properties(
+                "the bore must be tilted by less than 90° against the axis of the component".into(),
+            ));
+        }
         let ring = bore.corners();
         if ring_meets_itself(&ring) {
             return Err(OpossumError::Properties(
@@ -424,7 +504,7 @@ fn ring_edges(ring: &[Point2<Length>]) -> Vec<(Point2<f64>, Point2<f64>)> {
 }
 
 /// The region of an outline as an [`Aperture`], to be plotted: its edge as a hole, and its bore
-/// as an obstruction in it.
+/// as an obstruction in it, by its cross-section and without its tilt.
 ///
 /// # Errors
 ///
@@ -769,6 +849,71 @@ mod test {
             reach_and_bounds(triangle([(-3.0, -4.0), (6.0, 0.0), (0.0, 2.0)])?.into())?;
         assert_relative_eq!(reach, 0.006, max_relative = 1e-15);
         assert_eq!(bounds, [-0.003, 0.006, -0.004, 0.002]);
+        Ok(())
+    }
+    /// A bore tilted by 45° about y runs along its own axis, (−sin 45°, 0, cos 45°): its circle of
+    /// 1 mm radius is the cross-section across that axis, so it crosses the plane of the outline
+    /// in an ellipse reaching 1/cos 45° = 1.414 mm along x and 1 mm along y, and 6 mm deeper its
+    /// center lies 6 mm further towards −x, the bore reaching from −7.414 mm to −4.586 mm there.
+    #[test]
+    fn a_tilted_bore_runs_along_its_own_axis() -> OpmResult<()> {
+        let tilted = Outline::new(
+            rectangle(20.0, 20.0)?,
+            Some(bore(circle(1.0)?, 0.0, 0.0, 0.0).with_tilt(degree!(0.0), degree!(45.0))),
+        )?;
+        for ((x, y), inside) in [
+            ((1.3, 0.0), true),
+            ((-1.3, 0.0), true),
+            ((1.5, 0.0), false),
+            ((0.0, 0.9), true),
+            ((0.0, 1.1), false),
+        ] {
+            assert_eq!(tilted.in_bore(millimeter!(x, y)), inside, "({x}, {y}) mm");
+        }
+        for (x, inside) in [
+            (-6.0, true),
+            (-4.7, true),
+            (-7.3, true),
+            (-4.4, false),
+            (0.0, false),
+        ] {
+            assert_eq!(
+                tilted.in_bore_at(millimeter!(x, 0.0, 6.0)),
+                inside,
+                "({x}, 0, 6) mm"
+            );
+        }
+        Ok(())
+    }
+    /// A bore tilted by 90° or more would run along the plane of the outline or out of it again:
+    /// it is refused.
+    #[test]
+    fn a_bore_tilted_by_90_degrees_or_more_is_refused() -> OpmResult<()> {
+        for (about_x, about_y) in [(90.0, 0.0), (0.0, 90.0), (0.0, 120.0), (-95.0, 0.0)] {
+            let tilted =
+                bore(circle(1.0)?, 0.0, 0.0, 0.0).with_tilt(degree!(about_x), degree!(about_y));
+            let error = Outline::new(rectangle(20.0, 20.0)?, Some(tilted))
+                .expect_err("a bore tilted that far was accepted")
+                .to_string();
+            assert!(error.contains("90°"), "({about_x}°, {about_y}°): {error}");
+        }
+        Ok(())
+    }
+    /// An untilted bore is written without a tilt, as before bores could be tilted; a tilted one
+    /// keeps its tilt through a file.
+    #[test]
+    fn a_bore_states_its_tilt_only_if_it_has_one() -> OpmResult<()> {
+        let written = |bore: Bore| -> OpmResult<(Outline, String)> {
+            let outline = Outline::new(rectangle(20.0, 20.0)?, Some(bore))?;
+            let file = ron::to_string(&outline).map_err(|e| OpossumError::Other(e.to_string()))?;
+            Ok((outline, file))
+        };
+        let (_, file) = written(bore(circle(1.0)?, 0.0, 0.0, 0.0))?;
+        assert!(!file.contains("tilt"), "{file}");
+        let (tilted, file) =
+            written(bore(circle(1.0)?, 0.0, 0.0, 0.0).with_tilt(degree!(10.0), degree!(-20.0)))?;
+        assert!(file.contains("tilt"), "{file}");
+        assert_eq!(ron::from_str::<Outline>(&file).ok(), Some(tilted));
         Ok(())
     }
     /// The bore lies within the edge without touching it. A bore 1 µm from the edge lies within.

@@ -17,12 +17,15 @@ use opossum_core::{
 use strum::EnumIter;
 use uom::si::angle::degree;
 
-/// Where a bore lies: its offset from the axis and its rotation about its center.
+/// Where a bore lies: its offset from the axis, its rotation about its center and its tilt
+/// against the axis.
 #[derive(Clone, Copy, PartialEq, Debug, Eq, EnumIter)]
 enum BoreParam {
     X,
     Y,
     Rotation,
+    TiltX,
+    TiltY,
 }
 
 impl From<BoreParam> for InputParam {
@@ -31,6 +34,8 @@ impl From<BoreParam> for InputParam {
             BoreParam::X => Self::SIUnit("Offset x".into(), "m".into()),
             BoreParam::Y => Self::SIUnit("Offset y".into(), "m".into()),
             BoreParam::Rotation => Self::SIUnit("Rotation".into(), "°".into()),
+            BoreParam::TiltX => Self::SIUnit("Tilt x".into(), "°".into()),
+            BoreParam::TiltY => Self::SIUnit("Tilt y".into(), "°".into()),
         }
     }
 }
@@ -45,6 +50,8 @@ impl IntoInputDataStrings<Bore> for BoreParam {
             Self::X => format!("{}", bore.center().x.value),
             Self::Y => format!("{}", bore.center().y.value),
             Self::Rotation => format!("{}", bore.rotation().get::<degree>()),
+            Self::TiltX => format!("{}", bore.tilt().0.get::<degree>()),
+            Self::TiltY => format!("{}", bore.tilt().1.get::<degree>()),
         }
     }
 }
@@ -53,13 +60,16 @@ impl IntoInputData<f64, Bore, Bore> for BoreParam {
     fn setter_from_obj(&self) -> impl FnMut(&mut Bore, f64) {
         let param = *self;
         move |bore: &mut Bore, value: f64| {
-            let (mut center, mut rotation) = (bore.center(), bore.rotation());
+            let (mut center, mut rotation, mut tilt) =
+                (bore.center(), bore.rotation(), bore.tilt());
             match param {
                 Self::X => center.x = meter!(value),
                 Self::Y => center.y = meter!(value),
                 Self::Rotation => rotation = degree!(value),
+                Self::TiltX => tilt.0 = degree!(value),
+                Self::TiltY => tilt.1 = degree!(value),
             }
-            *bore = Bore::new(bore.shape().clone(), center, rotation);
+            *bore = Bore::new(bore.shape().clone(), center, rotation).with_tilt(tilt.0, tilt.1);
         }
     }
 }
@@ -89,8 +99,11 @@ pub fn BoreEditor(
 
     let on_draft_change = EventHandler::new(move |bore: Bore| draft.set(bore));
     let on_draft_shape_change = EventHandler::new(move |shape: OutlineShape| {
-        let (center, rotation) = (draft.read().center(), draft.read().rotation());
-        draft.set(Bore::new(shape, center, rotation));
+        let (center, rotation, tilt) = {
+            let bore = draft.read();
+            (bore.center(), bore.rotation(), bore.tilt())
+        };
+        draft.set(Bore::new(shape, center, rotation).with_tilt(tilt.0, tilt.1));
     });
 
     let draft_bore = draft.read().clone();
@@ -155,28 +168,29 @@ mod test {
     use nalgebra::Point2;
     use opossum_core::apertures::CircleShape;
 
-    /// A bore is shifted in meters and turned in degrees, each input leaving the shape and the
-    /// other values of the bore as they were; the inputs show the values back in those units.
+    /// A bore is shifted in meters, turned and tilted in degrees, each input leaving the shape and
+    /// the other values of the bore as they were; the inputs show the values back in those units.
     #[test]
-    fn a_bore_is_placed_by_its_offset_and_rotation() {
+    fn a_bore_is_placed_by_its_offset_rotation_and_tilt() {
         let shape = OutlineShape::from(CircleShape::default());
         let mut bore = Bore::new(shape.clone(), Point2::origin(), degree!(0.0));
-        for (param, value) in [
+        let values = [
             (BoreParam::X, 0.004),
             (BoreParam::Y, -0.003),
             (BoreParam::Rotation, 30.0),
-        ] {
+            (BoreParam::TiltX, -10.0),
+            (BoreParam::TiltY, 45.0),
+        ];
+        for (param, value) in values {
             let mut set = param.setter_from_obj();
             set(&mut bore, value);
         }
         assert_eq!(bore.shape(), &shape);
         assert_eq!(bore.center(), meter!(0.004, -0.003));
         assert_relative_eq!(bore.rotation().get::<degree>(), 30.0, max_relative = 1e-12);
-        for (param, shown) in [
-            (BoreParam::X, 0.004),
-            (BoreParam::Y, -0.003),
-            (BoreParam::Rotation, 30.0),
-        ] {
+        assert_relative_eq!(bore.tilt().0.get::<degree>(), -10.0, max_relative = 1e-12);
+        assert_relative_eq!(bore.tilt().1.get::<degree>(), 45.0, max_relative = 1e-12);
+        for (param, shown) in values {
             let value = param.create_value_string(&bore).parse::<f64>().unwrap();
             assert_relative_eq!(value, shown, max_relative = 1e-12);
         }

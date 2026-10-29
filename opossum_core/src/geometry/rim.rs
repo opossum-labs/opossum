@@ -64,10 +64,11 @@ impl Rim {
     ///
     /// # Returns
     ///
-    /// `true` if the point's projection along the axis lies within the outline.
+    /// `true` if the point's projection along the axis lies within the edge of the outline and
+    /// the point lies outside the bore, which runs along its own axis.
     #[must_use]
     pub fn contains(&self, point: &Point3<Length>) -> bool {
-        self.outline.contains(self.projected(point))
+        self.outline.within_edge(self.projected(point)) && !self.in_bore(point)
     }
     /// Return whether a point on an unbounded surface is part of the component this [`Rim`] bounds.
     ///
@@ -94,14 +95,16 @@ impl Rim {
     pub fn reaches(&self, face: &Face, point: &Point3<Length>) -> bool {
         self.outline.within_edge(self.projected(point)) && face.is_on_vertex_sheet(point)
     }
-    /// Return whether the projection of a point along the axis lies in the bore of the outline.
+    /// Return whether a point lies in the bore of the outline, which runs along its own axis
+    /// through the component (see [`Bore`](crate::apertures::Bore)).
     ///
     /// # Arguments
     ///
     /// * `point` - the point to be tested, in the frame this rim is stated in.
     #[must_use]
     pub fn in_bore(&self, point: &Point3<Length>) -> bool {
-        self.outline.in_bore(self.projected(point))
+        self.outline
+            .in_bore_at(self.frame.inverse_transform_point(point))
     }
     /// Return the center of the bore of the outline, in the plane of the outline.
     ///
