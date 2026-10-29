@@ -8,7 +8,7 @@ use crate::{
         ghostfocus::{AnalysisGhostFocus, GhostFocusAnalyzer},
         raytrace::{AnalysisRayTrace, RayTracingAnalyzer},
     },
-    apertures::{CircleShape, OpticShape, RectangleShape},
+    apertures::{Bore, CircleShape, OpticShape, Outline, RectangleShape},
     coatings::CoatingConstantR,
     core_optics::{
         Alignable,
@@ -1361,11 +1361,20 @@ fn only_detectors_ideal_surfaces_and_the_dummy_may_be_open() -> OpmResult<()> {
     Ok(())
 }
 /// Every node type with an optic shape starts out with the one stated for it: round optics in
-/// the usual 1 inch mount, the cylindric lens as a rectangle 20 mm across its curvature and
-/// 30 mm along its cylinder axis, gratings and detectors as a 25 mm square, the dummy open.
+/// the usual 1 inch mount, the bored mirror with a bore of 5 mm through its center, the cylindric
+/// lens as a rectangle 20 mm across its curvature and 30 mm along its cylinder axis, gratings and
+/// detectors as a 25 mm square, the dummy open.
 #[test]
 fn every_node_type_starts_with_its_default_optic_shape() -> OpmResult<()> {
     let round = OpticShape::from(CircleShape::new(millimeter!(12.5))?);
+    let bored = OpticShape::from(Outline::new(
+        CircleShape::new(millimeter!(12.5))?,
+        Some(Bore::new(
+            CircleShape::new(millimeter!(2.5))?,
+            millimeter!(0.0, 0.0),
+            degree!(0.0),
+        )),
+    )?);
     let square = OpticShape::from(RectangleShape::new(millimeter!(25.0), millimeter!(25.0))?);
     let cylindric = OpticShape::from(RectangleShape::new(millimeter!(20.0), millimeter!(30.0))?);
     let mut actual = Vec::new();
@@ -1382,6 +1391,7 @@ fn every_node_type_starts_with_its_default_optic_shape() -> OpmResult<()> {
         actual,
         [
             ("beam splitter", round.clone()),
+            ("bored mirror", bored),
             ("cylindric lens", cylindric),
             ("dummy", OpticShape::Open),
             ("energy meter", square.clone()),

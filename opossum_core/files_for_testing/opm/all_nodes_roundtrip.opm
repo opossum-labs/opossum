@@ -356,6 +356,36 @@
                         ),
                     },
                 },
+                {
+                    "node_type": "bored mirror",
+                    "name": "bored mirror",
+                    "uuid": "fe5c76ce-7d3f-4c1e-bf3f-4cdcc3c3eea0",
+                    "props": {
+                        "curvature": Curvature(inf),
+                        "center thickness": Length(0.006),
+                        "Material": Material(Id("40614e64-d18d-4bf5-a14a-3d02f28010be")),
+                        "optic shape": OpticShape(Bounded(
+                            shape: Circle(
+                                radius: 0.0125,
+                            ),
+                            bore: Some(
+                                shape: Circle(
+                                    radius: 0.0025,
+                                ),
+                                center: (0.0, 0.0),
+                                rotation: 0.0,
+                            ),
+                        )),
+                        "front surface": SurfaceConfig(
+                            coating: ConstantR(
+                                reflectivity: 1.0,
+                            ),
+                        ),
+                        "rear surface": SurfaceConfig(
+                            coating: IdealAR,
+                        ),
+                    },
+                },
             ],
             edges: [
                 (
@@ -477,6 +507,13 @@
                     target_port: "input_1",
                     distance: 0.05,
                 ),
+                (
+                    src_id: "7317ebcd-97d9-410b-a881-ecb4cdff68cf",
+                    src_port: "output_1",
+                    target_id: "fe5c76ce-7d3f-4c1e-bf3f-4cdcc3c3eea0",
+                    target_port: "input_1",
+                    distance: 0.05,
+                ),
             ],
         ),
     },
@@ -592,6 +629,17 @@
             "id": "87d8701f-3f35-4d28-8a02-b806a99cb050",
             "version": 0,
             "name": "lens material",
+            "optical": (
+                refractive_index: Const(
+                    refractive_index: 1.5,
+                ),
+            ),
+        },
+        "40614e64-d18d-4bf5-a14a-3d02f28010be": {
+            "schema_version": 1,
+            "id": "40614e64-d18d-4bf5-a14a-3d02f28010be",
+            "version": 0,
+            "name": "mirror substrate",
             "optical": (
                 refractive_index: Const(
                     refractive_index: 1.5,

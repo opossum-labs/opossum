@@ -1,8 +1,12 @@
 #![warn(missing_docs)]
-//! What the nodes have in common that split the light of two inputs on one surface into two
-//! outputs, such as the [`BeamSplitter`](crate::nodes::BeamSplitter).
+//! What the nodes have in common that split the light of two inputs into two outputs, such as the
+//! [`BeamSplitter`](crate::nodes::BeamSplitter) and the
+//! [`BoredMirror`](crate::nodes::BoredMirror).
 
+use log::warn;
 use nalgebra::{Rotation3, Vector3, vector};
+use num_traits::Zero;
+use uom::si::energy::joule;
 
 use crate::{
     analyzers::{
@@ -13,19 +17,21 @@ use crate::{
     core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, PortType, surface_effect::Refraction},
     error::{OpmResult, OpossumError},
     geometry::Rim,
+    joule,
     light::{LightData, LightRays, LightResult, Rays, rays::ReflectedPart},
     meter,
     utils::geom_transformation::Isometry,
 };
 
-/// A node that splits the light of two inputs on one surface into two outputs.
+/// A node that splits the light of two inputs into two outputs.
 ///
-/// Its ports are `input_1`, `input_2`, `out1_trans1_refl2` and `out2_trans2_refl1`, all on the
-/// one face of its geometry. The part of the light the surface transmits keeps its way, the part
-/// it reflects leaves through the other output: `out1_trans1_refl2` collects what `input_1`
-/// transmits and `input_2` reflects, `out2_trans2_refl1` the rest. An inverted node swaps inputs
-/// and outputs. How the surface splits the light is up to its geometry and coating; this trait
-/// only routes it.
+/// Its ports are `input_1`, `input_2`, `out1_trans1_refl2` and `out2_trans2_refl1`. Light arriving
+/// at an input is split at the face of that input (see [`OpticNode::surface_ports`]). The part the
+/// face transmits keeps its way, the part it reflects leaves through the other output:
+/// `out1_trans1_refl2` collects what `input_1` transmits and `input_2` reflects,
+/// `out2_trans2_refl1` the rest. An inverted node swaps inputs and outputs. How the light is
+/// split is up to the geometry and the coatings; this trait only routes it. Light entering the
+/// body of a node is not traced through it yet: only light passing a bore gets through a body.
 pub(crate) trait Splitter: OpticNode {
     /// Split the rays arriving at both inputs on the surface and merge them per output, as a ray
     /// trace does (see [`AnalysisRayTrace::analyze`](crate::analyzers::raytrace::AnalysisRayTrace::analyze)).
@@ -130,13 +136,13 @@ pub(crate) trait Splitter: OpticNode {
         // input feeds (out_1, out_2) with its (transmitted, reflected) rays; the second input, whose
         // transmission continues into out_2, feeds them in swapped order.
         let light_result = if let Some(input) = incoming_data.get(input_1) {
-            let (transmitted, reflected) = self.split_axis_rays(input, input_1, config)?;
+            let (transmitted, reflected) = self.split_axis_rays(input, input_1, out_1, config)?;
             LightResult::from([
                 (out_1.into(), LightData::Geometric(transmitted)),
                 (out_2.into(), LightData::Geometric(reflected)),
             ])
         } else if let Some(input) = incoming_data.get(input_2) {
-            let (transmitted, reflected) = self.split_axis_rays(input, input_2, config)?;
+            let (transmitted, reflected) = self.split_axis_rays(input, input_2, out_2, config)?;
             LightResult::from([
                 (out_2.into(), LightData::Geometric(transmitted)),
                 (out_1.into(), LightData::Geometric(reflected)),
@@ -153,10 +159,12 @@ pub(crate) trait Splitter: OpticNode {
     /// [`AnalysisRayTrace::axis_entrance_frame`](crate::analyzers::raytrace::AnalysisRayTrace::axis_entrance_frame)).
     ///
     /// The first input keeps the default (identity) frame: its axis enters along local +z through
-    /// the local origin. The second input arrives on the same surface from the direction of the
-    /// beam that leaves the second output, i.e. mirrored on the plane of the surface, so its frame
-    /// is the mirror image of the identity frame. See `doc/book` (geometry: beam combiners) for the
-    /// convention. The second input is `input_2`, or `out2_trans2_refl1` when inverted.
+    /// the local origin. The second input arrives from the direction of the beam that leaves the
+    /// second output, i.e. mirrored on the plane of the node, where its splitting or mirroring
+    /// face lies, so its frame is the mirror image of the identity frame. On a body that is the
+    /// front face: what the second input sends through a bore then runs on along what the front
+    /// face reflects of the first. See `doc/book` (geometry: beam combiners) for the convention.
+    /// The second input is `input_2`, or `out2_trans2_refl1` when inverted.
     ///
     /// # Arguments
     ///
@@ -323,9 +331,10 @@ pub(crate) trait Splitter: OpticNode {
             Some(LightData::Geometric(main_rays2)),
         ))
     }
-    /// Split the rays arriving at a single input port on the surface, by its coating: the
+    /// Split the rays arriving at a single input port at the face of the port, by its coating: the
     /// transmitted part keeps its direction, the reflected part is mirrored about the surface
-    /// normal.
+    /// normal. On a body, the part transmitted into its material is not traced through it yet: it
+    /// stops at the face, with a warning if it carries energy.
     ///
     /// # Arguments
     ///
@@ -359,11 +368,22 @@ pub(crate) trait Splitter: OpticNode {
         };
         let mut rays = rays.clone();
         let face = self.face_of_port(port_name)?;
+        let name = self.node_attr().name().to_string();
         let Some(geometry) = self.node_attr_mut().runtime_geometry_mut() else {
             return Err(OpossumError::OpticPort(format!(
                 "Input optic surface not found for port '{port_name}'"
             )));
         };
+        let into_body = rays
+            .iter()
+            .map(|ray| {
+                geometry.kind().as_body().is_some()
+                    && ray.valid()
+                    && geometry
+                        .intersect(face, ray)
+                        .is_some_and(|hit| hit.on_material())
+            })
+            .collect::<Vec<_>>();
         let reflected = geometry.interact_with_rays(
             face,
             &mut rays,
@@ -371,6 +391,22 @@ pub(crate) trait Splitter: OpticNode {
             ReflectedPart::Branch,
             missed_surface_strategy,
         )?;
+        let mut stopped = joule!(0.0);
+        for (ray, _) in rays
+            .iter_mut()
+            .zip(into_body)
+            .filter(|(_, into_body)| *into_body)
+        {
+            stopped += ray.energy();
+            ray.set_invalid();
+        }
+        if stopped.is_sign_positive() && !stopped.is_zero() {
+            warn!(
+                "{:.3e} J of the light reaching '{name}' at port '{port_name}' enters its body, \
+                 which is not traced yet: that light is lost",
+                stopped.get::<joule>()
+            );
+        }
         Ok((rays, reflected))
     }
     /// Splits the axis rays arriving at `port_name` on the surface for a positioning run.
@@ -379,14 +415,16 @@ pub(crate) trait Splitter: OpticNode {
     /// neither is invalidated by an energy threshold downstream, and no alignment wavelength has to
     /// lie inside a splitting spectrum. The reflected axis leaves where the axis meets the surface,
     /// as if there were no bore. If the surface has a bore, the transmitted axis starts anew at its
-    /// center instead, parallel to the arriving axis: the light the bore lets pass is centered
-    /// there, and the way to the surface is drawn along the reflected axis. Without a bore the
-    /// transmitted axis runs on where the axis meets the surface.
+    /// center instead, parallel to the arriving axis, where that line leaves the node through the
+    /// face of the transmitted output: the light the bore lets pass is centered there, and the way
+    /// to the node is drawn along the reflected axis. Without a bore the transmitted axis runs on
+    /// where the axis meets the surface.
     ///
     /// # Arguments
     ///
     /// * `input` - the axis rays arriving at the port.
     /// * `port_name` - the input port (and its surface).
+    /// * `exit_port` - the output port the transmitted part leaves through.
     /// * `config` - the ray tracing configuration (for the missed-surface strategy).
     ///
     /// # Returns
@@ -402,6 +440,7 @@ pub(crate) trait Splitter: OpticNode {
         &mut self,
         input: &LightData,
         port_name: &str,
+        exit_port: &str,
         config: &RayTraceConfig,
     ) -> OpmResult<(Rays, Rays)> {
         let LightData::Geometric(rays) = input else {
@@ -411,6 +450,7 @@ pub(crate) trait Splitter: OpticNode {
         };
         let mut transmitted = rays.clone();
         let face = self.face_of_port(port_name)?;
+        let exit_face = self.face_of_port(exit_port)?;
         let Some(geometry) = self.node_attr_mut().runtime_geometry_mut() else {
             return Err(OpossumError::OpticPort(
                 "input optic surface not found".into(),
@@ -425,8 +465,8 @@ pub(crate) trait Splitter: OpticNode {
         )?;
         if let Some(center) = geometry.kind().bored_rim(face).and_then(Rim::bore_center) {
             let surface = geometry
-                .face(face)
-                .ok_or_else(|| OpossumError::OpticPort("input optic surface not found".into()))?;
+                .face(exit_face)
+                .ok_or_else(|| OpossumError::OpticPort("output optic surface not found".into()))?;
             for (axis, passed) in rays.iter().zip(transmitted.iter_mut()) {
                 if !passed.valid() {
                     continue;

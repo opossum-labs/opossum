@@ -191,10 +191,10 @@ mod tests {
         material::{MATERIAL, Material},
         millimeter, nanometer,
         nodes::{
-            BeamSplitter, CylindricLens, Dummy, EnergyMeter, FluenceDetector, IdealFilter, Lens,
-            NodeGroup, ParabolicMirror, ParaxialSurface, RayPropagationVisualizer,
-            ReflectiveGrating, SourcePort, Spectrometer, SpotDiagram, ThinMirror, WaveFront, Wedge,
-            collimated_line_ray_builder,
+            BeamSplitter, BoredMirror, CylindricLens, Dummy, EnergyMeter, FluenceDetector,
+            IdealFilter, Lens, NodeGroup, ParabolicMirror, ParaxialSurface,
+            RayPropagationVisualizer, ReflectiveGrating, SourcePort, Spectrometer, SpotDiagram,
+            ThinMirror, WaveFront, Wedge, collimated_line_ray_builder,
             ideal_filter::{EdgeFilter, EdgeFilterType, SpectralFilterBuilder},
             round_collimated_ray_builder,
         },
@@ -938,6 +938,7 @@ mod tests {
             ReflectiveGrating::default().with_rot_from_littrow(nanometer!(1000.0), degree!(0.0))?,
         )?;
         let i_16 = scenery.add_node(ThinMirror::default())?;
+        let i_17 = scenery.add_node(BoredMirror::default())?;
 
         scenery.connect_nodes(i_0, "output_1", i_1, "input_1", millimeter!(5.0))?;
         scenery.connect_nodes(i_1, "out1_trans1_refl2", i_2, "input_1", millimeter!(5.0))?;
@@ -955,8 +956,11 @@ mod tests {
         scenery.connect_nodes(i_13, "output_1", i_14, "input_1", millimeter!(5.0))?;
         scenery.connect_nodes(i_14, "output_1", i_15, "input_1", millimeter!(50.0))?;
         scenery.connect_nodes(i_15, "output_1", i_16, "input_1", millimeter!(50.0))?;
+        scenery.connect_nodes(i_16, "output_1", i_17, "input_1", millimeter!(50.0))?;
 
-        let ray_builder = round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 1)?;
+        // Three rings, so that the light the bored mirror reflects around its bore still covers an
+        // area whose fluence can be estimated, not just a single ring.
+        let ray_builder = round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 3)?;
         let mut config = RayTraceConfig::default();
         config.map_source(i_0, ray_builder.clone());
 

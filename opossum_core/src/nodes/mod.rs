@@ -23,6 +23,7 @@
 //! }
 //! ```
 mod beam_splitter;
+mod bored_mirror;
 mod cylindric_lens;
 mod dummy;
 mod energy_meter;
@@ -45,6 +46,7 @@ mod thin_mirror;
 mod wavefront;
 mod wedge;
 pub use beam_splitter::BeamSplitter;
+pub use bored_mirror::BoredMirror;
 pub use cylindric_lens::CylindricLens;
 pub use dummy::Dummy;
 pub use energy_meter::{EnergyMeter, Metertype};
@@ -314,6 +316,26 @@ mod test {
                     ],
                 ),
                 (
+                    "bored mirror",
+                    &[
+                        "frame t=(10.406345, -17.828447, 30.345311) x=(0.964207, 0.204382, 0.168918) z=(-0.136689, -0.162745, 0.977154)",
+                        "box x=[-12.500000, 12.500000] y=[-12.500000, 12.500000] z=[0.000000, 6.000000]",
+                        "chord from (0, 0) at 0 deg: none",
+                        "chord from (0, 0) at 10 deg: 6.092560",
+                        "chord from (5, 0) at 0 deg: 6.000000",
+                        "chord from (5, 0) at 10 deg: 6.092560",
+                        "chord from (0, 5) at 0 deg: 6.000000",
+                        "chord from (0, 5) at 10 deg: none",
+                        "chord from (-8, 3) at 0 deg: 6.000000",
+                        "chord from (-8, 3) at 10 deg: none",
+                        "chord from (12.4, 0) at 0 deg: 6.000000",
+                        "chord from (12.4, 0) at 10 deg: none",
+                        "chord from (12.6, 0) at 0 deg: none",
+                        "chord from (12.6, 0) at 10 deg: none",
+                        "inside: ...............####.................####...####...####...####.......................",
+                    ],
+                ),
+                (
                     "cylindric lens",
                     &[
                         "frame t=(10.406345, -17.828447, 30.345311) x=(0.964207, 0.204382, 0.168918) z=(-0.136689, -0.162745, 0.977154)",
@@ -489,6 +511,35 @@ mod test {
                         "out out1_trans1_refl2 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
                         "out out1_trans1_refl2 from (12.6, 0) at 0 deg: miss",
                         "out out2_trans2_refl1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out out2_trans2_refl1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out out2_trans2_refl1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out out2_trans2_refl1 from (0, 5) at 10 deg: miss",
+                        "out out2_trans2_refl1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out out2_trans2_refl1 from (12.6, 0) at 0 deg: miss",
+                    ],
+                ),
+                (
+                    "bored mirror",
+                    &[
+                        "in input_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) not recorded",
+                        "in input_1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (0, 5) at 10 deg: miss",
+                        "in input_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (12.6, 0) at 0 deg: miss",
+                        "in input_2 from (0, 0) at 0 deg: (0.000000, 0.000000, 6.000000) n=(0.000000, 0.000000, -1.000000) not recorded",
+                        "in input_2 from (5, 0) at 10 deg: (5.000000, 9.874311, 6.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_2 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 6.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_2 from (0, 5) at 10 deg: miss",
+                        "in input_2 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 6.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_2 from (12.6, 0) at 0 deg: miss",
+                        "out out1_trans1_refl2 from (0, 0) at 0 deg: (0.000000, 0.000000, 6.000000) n=(0.000000, 0.000000, -1.000000) not recorded",
+                        "out out1_trans1_refl2 from (5, 0) at 10 deg: (5.000000, 9.874311, 6.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out out1_trans1_refl2 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 6.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out out1_trans1_refl2 from (0, 5) at 10 deg: miss",
+                        "out out1_trans1_refl2 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 6.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out out1_trans1_refl2 from (12.6, 0) at 0 deg: miss",
+                        "out out2_trans2_refl1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) not recorded",
                         "out out2_trans2_refl1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
                         "out out2_trans2_refl1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
                         "out out2_trans2_refl1 from (0, 5) at 10 deg: miss",
@@ -952,6 +1003,15 @@ mod test {
                         "in input_1: plane t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=0",
                         "in input_2: plane t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=0",
                         "out out1_trans1_refl2: plane t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=0",
+                        "out out2_trans2_refl1: plane t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=0",
+                    ],
+                ),
+                (
+                    "bored mirror",
+                    &[
+                        "in input_1: plane t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=0",
+                        "in input_2: plane t=(0.000000, 0.000000, 6.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=1",
+                        "out out1_trans1_refl2: plane t=(0.000000, 0.000000, 6.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=1",
                         "out out2_trans2_refl1: plane t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=0",
                     ],
                 ),
