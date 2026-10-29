@@ -469,6 +469,36 @@ mod test {
         assert_abs_diff_eq!(reflected_dir, -Vector3::x(), epsilon = 1e-9);
         Ok(())
     }
+    /// Behind the bore, the optical axis starts where it meets the plate, in the bore on the side
+    /// it arrives from, and runs through the bore to the rear face: the drawn axis leaves no gap
+    /// across the plate.
+    #[test]
+    fn the_axis_runs_through_the_bore_from_where_it_meets_the_plate() -> OpmResult<()> {
+        let mut mirror = placed_at_origin::<BoredMirror>()?;
+        let axis = rays_along_z_from(&[millimeter!(0.0, 0.0, -10.0)], nanometer!(1000.0))?;
+        let output = AnalysisRayTrace::calc_node_positions(
+            &mut mirror,
+            LightResult::from([("input_1".into(), LightData::Geometric(axis))]),
+            &RayTraceConfig::default(),
+        )?;
+        let Some(LightData::Geometric(behind)) = output.get("out1_trans1_refl2") else {
+            panic!("expected the axis behind the plate");
+        };
+        let path = behind
+            .iter()
+            .next()
+            .expect("one axis ray")
+            .position_history_with_current();
+        assert_eq!(path.nrows(), 2, "{path:?}");
+        for (row, z) in [(0, 0.0), (1, 6.0)] {
+            assert_eq!(
+                (path[(row, 0)], path[(row, 1)], path[(row, 2)]),
+                (millimeter!(0.0), millimeter!(0.0), millimeter!(z)),
+                "point {row}"
+            );
+        }
+        Ok(())
+    }
     /// An energy analysis cannot split the light at the bore, so it refuses light reaching the
     /// mirror and names it; without light there is nothing to refuse.
     #[test]

@@ -414,11 +414,12 @@ pub(crate) trait Splitter: OpticNode {
     /// Positioning is purely geometric: a fixed 50:50 split leaves energy in both branches, so
     /// neither is invalidated by an energy threshold downstream, and no alignment wavelength has to
     /// lie inside a splitting spectrum. The reflected axis leaves where the axis meets the surface,
-    /// as if there were no bore. If the surface has a bore, the transmitted axis starts anew at its
-    /// center instead, parallel to the arriving axis, where that line leaves the node through the
-    /// face of the transmitted output: the light the bore lets pass is centered there, and the way
-    /// to the node is drawn along the reflected axis. Without a bore the transmitted axis runs on
-    /// where the axis meets the surface.
+    /// as if there were no bore. If the surface has a bore, the transmitted axis runs on the line
+    /// through its center instead, parallel to the arriving axis: the light the bore lets pass is
+    /// centered there. It starts anew where that line meets the surface, so the way to the node is
+    /// drawn along the reflected axis, and through a body it runs along the line to where it
+    /// leaves through the face of the transmitted output. Without a bore the transmitted axis runs
+    /// on where the axis meets the surface.
     ///
     /// # Arguments
     ///
@@ -435,7 +436,7 @@ pub(crate) trait Splitter: OpticNode {
     ///
     /// This function returns an error if `input` is not [`LightData::Geometric`], the surface
     /// cannot be found, the split fails, or the line through the center of the bore misses the
-    /// surface.
+    /// face it enters or leaves through.
     fn split_axis_rays(
         &mut self,
         input: &LightData,
@@ -464,9 +465,15 @@ pub(crate) trait Splitter: OpticNode {
             *config.missed_surface_strategy(),
         )?;
         if let Some(center) = geometry.kind().bored_rim(face).and_then(Rim::bore_center) {
-            let surface = geometry
-                .face(exit_face)
-                .ok_or_else(|| OpossumError::OpticPort("output optic surface not found".into()))?;
+            let missed = || {
+                OpossumError::Analysis(
+                    "the optical axis through the center of the bore misses the node".into(),
+                )
+            };
+            let (entry, exit) = (
+                geometry.face(face).ok_or_else(missed)?,
+                geometry.face(exit_face).ok_or_else(missed)?,
+            );
             for (axis, passed) in rays.iter().zip(transmitted.iter_mut()) {
                 if !passed.valid() {
                     continue;
@@ -480,12 +487,15 @@ pub(crate) trait Splitter: OpticNode {
                     axis.position() + to_center
                         - vector![ahead * along.x, ahead * along.y, ahead * along.z],
                 );
-                let (point, _) = surface.intersect(&line).ok_or_else(|| {
-                    OpossumError::Analysis(
-                        "the optical axis through the center of the bore misses the surface".into(),
-                    )
-                })?;
-                passed.restart_at(point);
+                let (start, _) = entry.intersect(&line).ok_or_else(missed)?;
+                passed.restart_at(start);
+                if exit_face != face {
+                    let (end, _) = exit.intersect(&line).ok_or_else(missed)?;
+                    let through = end - start;
+                    passed.propagate(
+                        through.x * along.x + through.y * along.y + through.z * along.z,
+                    )?;
+                }
             }
         }
         Ok((transmitted, reflected))
