@@ -423,16 +423,20 @@ mod test {
             iso.transform_vector_f64(&Vector3::z()),
         ))
     }
-    /// A default bored mirror with its bore moved to the given x in mm of its own plane.
-    fn bored_at(x: f64) -> OpmResult<BoredMirror> {
+    /// A default bored mirror with its bore moved to the given x in mm of its own plane and
+    /// tilted by the given angle in degrees about y.
+    fn bored_at(x: f64, tilt_y: f64) -> OpmResult<BoredMirror> {
         let mut mirror = BoredMirror::default();
         let outline = Outline::new(
             CircleShape::new(millimeter!(12.5))?,
-            Some(Bore::new(
-                CircleShape::new(millimeter!(2.5))?,
-                millimeter!(x, 0.0),
-                degree!(0.0),
-            )),
+            Some(
+                Bore::new(
+                    CircleShape::new(millimeter!(2.5))?,
+                    millimeter!(x, 0.0),
+                    degree!(0.0),
+                )
+                .with_tilt(degree!(0.0), degree!(tilt_y)),
+            ),
         )?;
         mirror.set_property(OPTIC_SHAPE, OpticShape::from(outline).into())?;
         Ok(mirror)
@@ -509,7 +513,7 @@ mod test {
     #[test]
     fn the_axis_behind_the_plate_runs_through_a_bore_beside_it() -> OpmResult<()> {
         let ((behind_pos, behind_dir), (reflected_pos, reflected_dir)) =
-            behind_a_tilted(bored_at(5.0)?)?;
+            behind_a_tilted(bored_at(5.0, 0.0)?)?;
         let (side, rear) = (
             5.0 * std::f64::consts::FRAC_1_SQRT_2,
             6.0 / std::f64::consts::FRAC_1_SQRT_2,
@@ -530,7 +534,7 @@ mod test {
     /// it.
     #[test]
     fn the_axis_runs_through_the_bore_from_where_it_meets_the_plate() -> OpmResult<()> {
-        let mut mirror = bored_at(5.0)?;
+        let mut mirror = bored_at(5.0, 0.0)?;
         mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let axis = rays_along_z_from(&[millimeter!(0.0, 0.0, -10.0)], nanometer!(1000.0))?;
         let output = AnalysisRayTrace::calc_node_positions(
@@ -553,6 +557,71 @@ mod test {
                 (millimeter!(5.0), millimeter!(0.0), millimeter!(z)),
                 "point {row}"
             );
+        }
+        Ok(())
+    }
+    /// Light in a bore tilted against it may hit the wall of the bore before it leaves the plate:
+    /// that light is lost, with a warning. The bore of 2.5 mm radius is tilted by 30° about y, so
+    /// on the rear face, 6 mm deep, its axis lies 6 mm · tan 30° = 3.464 mm towards −x. A ray along
+    /// z through the center of the bore on the front face lies 3.464 mm · cos 30° = 3.0 mm from that
+    /// axis there and hits the wall; one 1.5 mm towards −x stays 1.70 mm from it and passes; one
+    /// 6 mm towards +x meets the mirror and is reflected.
+    #[test]
+    fn light_that_hits_the_wall_of_the_bore_is_lost_with_a_warning() -> OpmResult<()> {
+        let mut mirror = bored_at(0.0, 30.0)?;
+        mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+        let rays = rays_along_z_from(
+            &[
+                millimeter!(0.0, 0.0, -10.0),
+                millimeter!(-1.5, 0.0, -10.0),
+                millimeter!(6.0, 0.0, -10.0),
+            ],
+            nanometer!(1000.0),
+        )?;
+        testing_logger::setup();
+        let (behind, in_front) = ray_trace(&mut mirror, "input_1", rays)?;
+        assert_warning("hits the wall of the bore", true);
+        assert_valid_energies(
+            &behind,
+            &[1.0],
+            "only the ray that stays in the bore passes",
+        );
+        assert_valid_energies(&in_front, &[1.0], "the ray on the mirror is reflected");
+        let through = behind.iter().find(|ray| ray.valid()).expect("one ray");
+        assert_eq!(through.position(), millimeter!(-1.5, 0.0, -10.0));
+        Ok(())
+    }
+    /// Arriving from behind, the axis passes a tilted bore from where the axis of the bore meets
+    /// the rear face, 6 mm · tan 30° = 3.464 mm towards −x for a bore tilted by 30° about y, and runs
+    /// on along the arriving axis to the front face.
+    #[test]
+    fn from_behind_the_axis_passes_the_bore_from_its_center_on_the_rear_face() -> OpmResult<()> {
+        let mut mirror = bored_at(0.0, 30.0)?;
+        mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+        let axis = Rays::from(Ray::new(
+            millimeter!(0.0, 0.0, 20.0),
+            -Vector3::z(),
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?);
+        let output = AnalysisRayTrace::calc_node_positions(
+            &mut mirror,
+            LightResult::from([("input_2".into(), LightData::Geometric(axis))]),
+            &RayTraceConfig::default(),
+        )?;
+        let Some(LightData::Geometric(in_front)) = output.get("out2_trans2_refl1") else {
+            panic!("expected the axis in front of the plate");
+        };
+        let path = in_front
+            .iter()
+            .next()
+            .expect("one axis ray")
+            .position_history_with_current();
+        assert_eq!(path.nrows(), 2, "{path:?}");
+        let side = -6.0 * 30.0_f64.to_radians().tan();
+        for (row, z) in [(0, 6.0), (1, 0.0)] {
+            assert_abs_diff_eq!(path[(row, 0)].value, side / 1000.0, epsilon = 1e-12);
+            assert_abs_diff_eq!(path[(row, 2)].value, z / 1000.0, epsilon = 1e-12);
         }
         Ok(())
     }

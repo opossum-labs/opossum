@@ -9,11 +9,15 @@
 //! [`Outline`].
 
 use nalgebra::{Point2, Point3};
-use num_traits::Zero;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
-use crate::{apertures::Outline, geometry::Face, utils::geom_transformation::Isometry};
+use crate::{
+    apertures::Outline,
+    error::OpmResult,
+    geometry::{Face, face::SurfacePlacement},
+    utils::geom_transformation::Isometry,
+};
 
 /// The lateral boundary of a component: its outline, extruded along an axis.
 ///
@@ -107,18 +111,32 @@ impl Rim {
         self.outline
             .in_bore_at(self.frame.inverse_transform_point(point))
     }
-    /// Return the center of the bore of the outline, in the plane of the outline.
+    /// Return the center of the bore of the outline on a face: where the axis of the bore, which
+    /// may be tilted against the axis of the rim (see [`Bore`](crate::apertures::Bore)), meets the
+    /// face.
+    ///
+    /// # Arguments
+    ///
+    /// * `face` - the face, in the frame this rim is stated in.
     ///
     /// # Returns
     ///
-    /// The center, in the frame this rim is stated in; `None` if the outline has no bore.
-    #[must_use]
-    pub fn bore_center(&self) -> Option<Point3<Length>> {
-        self.outline.bore().map(|bore| {
-            let center = bore.center();
-            self.frame
-                .transform_point(&Point3::new(center.x, center.y, Length::zero()))
-        })
+    /// The center on the face, in the frame this rim is stated in; `None` if the outline has no
+    /// bore.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the face cannot be measured along the axis of this rim,
+    /// or if the axis of the bore does not settle on it.
+    pub fn bore_center_on(&self, face: &Face) -> OpmResult<Option<Point3<Length>>> {
+        let Some(bore) = self.outline.bore() else {
+            return Ok(None);
+        };
+        let at = SurfacePlacement::new(face, &self.frame)?;
+        let below = bore.meeting(bore.center(), &|position: Point2<Length>| {
+            Ok(at.above(&position)?.0.z)
+        })?;
+        Ok(Some(self.frame.transform_point(&at.above(&below)?.0)))
     }
     /// The projection of a point along the axis onto the plane of the outline.
     fn projected(&self, point: &Point3<Length>) -> Point2<Length> {

@@ -56,7 +56,7 @@ impl Extruded {
     /// # Errors
     ///
     /// This function returns an error if a face is curved too tightly to reach the edge of the
-    /// profile.
+    /// profile, or if a tilted bore meets a face on or beyond the edge.
     pub fn new(
         axis: Isometry,
         mut front: Face,
@@ -67,6 +67,14 @@ impl Extruded {
         let reach = outline.transversal_reach();
         front.check_reach(reach, "front face")?;
         rear.check_reach(reach, "rear face")?;
+        for (face, name) in [(&front, "front face"), (&rear, "rear face")] {
+            outline
+                .check_bore_on(|position| {
+                    let at = SurfacePlacement::new(face, &Isometry::identity())?;
+                    Ok(at.above(&position)?.0.z)
+                })
+                .map_err(|error| OpossumError::Properties(format!("{error}, at its {name}")))?;
+        }
         front.move_by(&axis);
         rear.move_by(&axis);
         Ok(Self {
@@ -466,6 +474,30 @@ mod test {
             0.01,
             epsilon = 1e-12
         );
+        Ok(())
+    }
+    /// A tilted bore has to lie within the edge where it meets either face, not only where it
+    /// crosses the plane of the outline: one 9 mm off the axis of a plate of 12.5 mm, tilted by 30°
+    /// about y, lies within the edge on the front face but reaches 6 mm · tan 30° = 3.464 mm further
+    /// out on the rear face, 6 mm deep, beyond the edge.
+    #[test]
+    fn a_tilted_bore_that_leaves_the_edge_on_the_rear_face_is_refused() -> OpmResult<()> {
+        let (front, rear) = plate_faces(millimeter!(6.0))?;
+        let outline = Outline::new(
+            CircleShape::new(millimeter!(12.5))?,
+            Some(
+                Bore::new(
+                    CircleShape::new(millimeter!(2.0))?,
+                    millimeter!(-9.0, 0.0),
+                    Angle::zero(),
+                )
+                .with_tilt(Angle::zero(), degree!(30.0)),
+            ),
+        )?;
+        let error = body_between(front, rear, outline, Isometry::identity())
+            .expect_err("a bore leaving the edge was accepted")
+            .to_string();
+        assert!(error.contains("rear face"), "{error}");
         Ok(())
     }
     /// Trace the given ray through the given body and require it to pass through.

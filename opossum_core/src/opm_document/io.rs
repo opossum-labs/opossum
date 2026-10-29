@@ -956,7 +956,9 @@ mod tests {
         scenery.connect_nodes(i_13, "output_1", i_14, "input_1", millimeter!(5.0))?;
         scenery.connect_nodes(i_14, "output_1", i_15, "input_1", millimeter!(50.0))?;
         scenery.connect_nodes(i_15, "output_1", i_16, "input_1", millimeter!(50.0))?;
-        scenery.connect_nodes(i_16, "output_1", i_17, "input_1", millimeter!(50.0))?;
+        // The bored mirror gets the collimated light the splitter reflects, which runs along its
+        // bore; the converging light at the end of the chain would partly hit the wall of the bore.
+        scenery.connect_nodes(i_1, "out2_trans2_refl1", i_17, "input_1", millimeter!(50.0))?;
 
         // Three rings, so that the light the bored mirror reflects around its bore still covers an
         // area whose fluence can be estimated, not just a single ring.

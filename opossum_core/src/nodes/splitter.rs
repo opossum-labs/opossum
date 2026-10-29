@@ -4,8 +4,7 @@
 //! [`BoredMirror`](crate::nodes::BoredMirror).
 
 use log::warn;
-use nalgebra::{Rotation3, Vector3, vector};
-use num_traits::Zero;
+use nalgebra::{Rotation3, Vector3};
 use uom::si::energy::joule;
 
 use crate::{
@@ -16,7 +15,6 @@ use crate::{
     coatings::SplittingConfig,
     core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, PortType, surface_effect::Refraction},
     error::{OpmResult, OpossumError},
-    geometry::Rim,
     joule,
     light::{LightData, LightRays, LightResult, Rays, rays::ReflectedPart},
     meter,
@@ -307,6 +305,7 @@ pub(crate) trait Splitter: OpticNode {
             return Ok((None, None));
         }
         let (in1_port_name, in2_port_name) = self.port_pair(&PortType::Input)?;
+        let (out1_port_name, out2_port_name) = self.port_pair(&PortType::Output)?;
 
         let missed_surface_strategy = match analyzer_type {
             AnalyzerType::Energy(_) => &MissedSurfaceStrategy::Stop,
@@ -314,10 +313,20 @@ pub(crate) trait Splitter: OpticNode {
             AnalyzerType::GhostFocus(_) => &MissedSurfaceStrategy::Ignore,
         };
 
-        let (mut main_rays1, split_rays1) =
-            self.split_at_input(in1, &in1_port_name, *missed_surface_strategy)?;
-        let (mut main_rays2, split_rays2) =
-            self.split_at_input(in2, &in2_port_name, *missed_surface_strategy)?;
+        // What the first input transmits leaves the first output, what the second transmits the
+        // second.
+        let (mut main_rays1, split_rays1) = self.split_at_input(
+            in1,
+            &in1_port_name,
+            &out1_port_name,
+            *missed_surface_strategy,
+        )?;
+        let (mut main_rays2, split_rays2) = self.split_at_input(
+            in2,
+            &in2_port_name,
+            &out2_port_name,
+            *missed_surface_strategy,
+        )?;
 
         main_rays1.merge(&split_rays2); // out1 = trans1 + refl2
         main_rays2.merge(&split_rays1); // out2 = trans2 + refl1
@@ -334,12 +343,15 @@ pub(crate) trait Splitter: OpticNode {
     /// Split the rays arriving at a single input port at the face of the port, by its coating: the
     /// transmitted part keeps its direction, the reflected part is mirrored about the surface
     /// normal. On a body, the part transmitted into its material is not traced through it yet: it
-    /// stops at the face, with a warning if it carries energy.
+    /// stops at the face. Light in the bore has to leave through the bore as well, at the face of
+    /// the transmitted output; otherwise it hits the wall of the bore and stops. Either loss is
+    /// warned about if it carries energy.
     ///
     /// # Arguments
     ///
     /// * `input` - the light arriving at the port, if any.
     /// * `port_name` - the name of the input port.
+    /// * `exit_port` - the output port the transmitted part leaves through.
     /// * `missed_surface_strategy` - what happens to rays that do not hit the surface.
     ///
     /// # Returns
@@ -356,6 +368,7 @@ pub(crate) trait Splitter: OpticNode {
         &mut self,
         input: Option<&LightData>,
         port_name: &str,
+        exit_port: &str,
         missed_surface_strategy: MissedSurfaceStrategy,
     ) -> OpmResult<(Rays, Rays)> {
         let Some(light_data) = input else {
@@ -368,20 +381,20 @@ pub(crate) trait Splitter: OpticNode {
         };
         let mut rays = rays.clone();
         let face = self.face_of_port(port_name)?;
+        let exit_face = self.face_of_port(exit_port)?;
         let name = self.node_attr().name().to_string();
         let Some(geometry) = self.node_attr_mut().runtime_geometry_mut() else {
             return Err(OpossumError::OpticPort(format!(
                 "Input optic surface not found for port '{port_name}'"
             )));
         };
-        let into_body = rays
+        // Whether each ray meets the face on its material, in its bore, or not at all.
+        let on_material = rays
             .iter()
             .map(|ray| {
-                geometry.kind().as_body().is_some()
-                    && ray.valid()
-                    && geometry
-                        .intersect(face, ray)
-                        .is_some_and(|hit| hit.on_material())
+                ray.valid()
+                    .then(|| geometry.intersect(face, ray).map(|hit| hit.on_material()))
+                    .flatten()
             })
             .collect::<Vec<_>>();
         let reflected = geometry.interact_with_rays(
@@ -391,21 +404,37 @@ pub(crate) trait Splitter: OpticNode {
             ReflectedPart::Branch,
             missed_surface_strategy,
         )?;
-        let mut stopped = joule!(0.0);
-        for (ray, _) in rays
-            .iter_mut()
-            .zip(into_body)
-            .filter(|(_, into_body)| *into_body)
-        {
-            stopped += ray.energy();
+        let into_body = geometry.kind().as_body().is_some();
+        let (mut in_body, mut at_wall) = (joule!(0.0), joule!(0.0));
+        for (ray, on_material) in rays.iter_mut().zip(on_material) {
+            let lost = match on_material {
+                Some(true) if into_body => &mut in_body,
+                Some(false)
+                    if !geometry
+                        .intersect(exit_face, ray)
+                        .is_some_and(|hit| !hit.on_material()) =>
+                {
+                    &mut at_wall
+                }
+                Some(_) | None => continue,
+            };
+            *lost += ray.energy();
             ray.set_invalid();
         }
-        if stopped.is_sign_positive() && !stopped.is_zero() {
-            warn!(
-                "{:.3e} J of the light reaching '{name}' at port '{port_name}' enters its body, \
-                 which is not traced yet: that light is lost",
-                stopped.get::<joule>()
-            );
+        for (energy, where_to) in [
+            (in_body, "enters its body, which is not traced yet"),
+            (
+                at_wall,
+                "passes into its bore but hits the wall of the bore",
+            ),
+        ] {
+            if energy > joule!(0.0) {
+                warn!(
+                    "{:.3e} J of the light reaching '{name}' at port '{port_name}' {where_to}: \
+                     that light is lost",
+                    energy.get::<joule>()
+                );
+            }
         }
         Ok((rays, reflected))
     }
@@ -414,12 +443,12 @@ pub(crate) trait Splitter: OpticNode {
     /// Positioning is purely geometric: a fixed 50:50 split leaves energy in both branches, so
     /// neither is invalidated by an energy threshold downstream, and no alignment wavelength has to
     /// lie inside a splitting spectrum. The reflected axis leaves where the axis meets the surface,
-    /// as if there were no bore. If the surface has a bore, the transmitted axis runs on the line
-    /// through its center instead, parallel to the arriving axis: the light the bore lets pass is
-    /// centered there. It starts anew where that line meets the surface, so the way to the node is
-    /// drawn along the reflected axis, and through a body it runs along the line to where it
-    /// leaves through the face of the transmitted output. Without a bore the transmitted axis runs
-    /// on where the axis meets the surface.
+    /// as if there were no bore. If the surface has a bore, the transmitted axis starts anew at
+    /// the center of the bore on the surface instead, where the axis of the bore meets it, and runs
+    /// on parallel to the arriving axis: the light the bore lets pass is centered there, and the
+    /// way to the node is drawn along the reflected axis. Through a body it runs along that line to
+    /// where it leaves through the face of the transmitted output. Without a bore the transmitted
+    /// axis runs on where the axis meets the surface.
     ///
     /// # Arguments
     ///
@@ -464,34 +493,24 @@ pub(crate) trait Splitter: OpticNode {
             ReflectedPart::Branch,
             *config.missed_surface_strategy(),
         )?;
-        if let Some(center) = geometry.kind().bored_rim(face).and_then(Rim::bore_center) {
-            let missed = || {
-                OpossumError::Analysis(
-                    "the optical axis through the center of the bore misses the node".into(),
-                )
-            };
-            let (entry, exit) = (
-                geometry.face(face).ok_or_else(missed)?,
-                geometry.face(exit_face).ok_or_else(missed)?,
-            );
-            for (axis, passed) in rays.iter().zip(transmitted.iter_mut()) {
-                if !passed.valid() {
-                    continue;
-                }
-                // The line parallel to the axis through the center: the axis shifted across itself.
-                let to_center = center - axis.position();
-                let along = axis.direction().normalize();
-                let ahead = to_center.x * along.x + to_center.y * along.y + to_center.z * along.z;
-                let mut line = axis.clone();
-                line.restart_at(
-                    axis.position() + to_center
-                        - vector![ahead * along.x, ahead * along.y, ahead * along.z],
-                );
-                let (start, _) = entry.intersect(&line).ok_or_else(missed)?;
+        let missed = || {
+            OpossumError::Analysis(
+                "the optical axis through the center of the bore misses the node".into(),
+            )
+        };
+        let center = match geometry.kind().bored_rim(face) {
+            Some(rim) => rim.bore_center_on(geometry.face(face).ok_or_else(missed)?)?,
+            None => None,
+        };
+        if let Some(start) = center {
+            let exit = geometry.face(exit_face).ok_or_else(missed)?;
+            for passed in transmitted.iter_mut().filter(|passed| passed.valid()) {
                 passed.restart_at(start);
                 if exit_face != face {
-                    let (end, _) = exit.intersect(&line).ok_or_else(missed)?;
+                    // The line along the arriving axis from the center, up to the exit face.
+                    let (end, _) = exit.intersect(passed).ok_or_else(missed)?;
                     let through = end - start;
+                    let along = passed.direction().normalize();
                     passed.propagate(
                         through.x * along.x + through.y * along.y + through.z * along.z,
                     )?;

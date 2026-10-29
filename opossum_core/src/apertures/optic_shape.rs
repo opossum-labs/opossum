@@ -295,7 +295,7 @@ impl Bore {
     ///
     /// This function returns an error if the surface cannot say how high it lies, or if the line
     /// does not settle on it.
-    fn meeting(
+    pub(crate) fn meeting(
         &self,
         start: Point2<Length>,
         height: &impl Fn(Point2<Length>) -> OpmResult<Length>,
@@ -569,7 +569,43 @@ impl Outline {
                 "the bore crosses or touches itself".into(),
             ));
         }
-        if rings_meet(&edge_ring, &ring) || !ring.first().is_some_and(|&c| self.shape.contains(c)) {
+        self.check_bore_ring(&edge_ring, &ring)
+    }
+    /// Check that the bore meets a surface above the plane of this outline within the edge
+    /// without touching it, as it has to cross the plane itself (see [`Outline::new`]): a tilted
+    /// bore meets the far face of a body beside where it crosses the plane.
+    ///
+    /// # Arguments
+    ///
+    /// - `height`: how far above a position of the plane the surface lies, along the axis of the
+    ///   component
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the surface cannot be told where the bore meets it, or
+    /// if the bore meets it on or beyond the edge.
+    pub(crate) fn check_bore_on(
+        &self,
+        height: impl Fn(Point2<Length>) -> OpmResult<Length>,
+    ) -> OpmResult<()> {
+        let Some(bore) = &self.bore else {
+            return Ok(());
+        };
+        let ring = bore
+            .corners()
+            .into_iter()
+            .map(|corner| bore.meeting(corner, &height))
+            .collect::<OpmResult<Vec<_>>>()?;
+        self.check_bore_ring(&self.shape.corners(), &ring)
+    }
+    /// Check that the corners of the bore, where it meets a plane or a surface, lie within the
+    /// edge without touching it: the two rings do not meet and a corner of the bore lies inside.
+    fn check_bore_ring(
+        &self,
+        edge_ring: &[Point2<Length>],
+        ring: &[Point2<Length>],
+    ) -> OpmResult<()> {
+        if rings_meet(edge_ring, ring) || !ring.first().is_some_and(|&c| self.shape.contains(c)) {
             return Err(OpossumError::Properties(
                 "the bore does not lie within the edge of the component without touching it".into(),
             ));
