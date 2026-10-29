@@ -222,6 +222,7 @@ Everything else the view can be told sits in the **3D View** menu in the top nav
 | **Fit view** | Frame all components (the optical table is not included) |
 | **Reset camera** | Return the camera to its starting pose |
 | **Show / Hide Table** | Show or hide the optical table |
+| **Show / Hide HDR environment** | Put the shipped 360° panorama behind the setup and into mirrors and glass, or return to the background color and the calm horizon |
 | **Show / Hide World axes** | Show or hide the corner orientation gizmo |
 | **Show / Hide Optical axis** | Show or hide the optical axis |
 | **Show / Hide Rays** | Show or hide the traced rays of the analyzer's sources |
@@ -301,10 +302,15 @@ another lens is not solid, so the lens in front would otherwise blot it out. The
 mirrored by its coating, the more solid it is drawn. Solid components — a mirror, a grating, a
 detector — are drawn fully opaque and are seen through a lens in front of them as they are.
 
-Mirrors, gratings and glass reflect a calm, neutral **horizon**, a lighter grey-blue above eye level
-and a darker grey below, not the setup around them. A mirror therefore shows no image of the lenses
+Mirrors, gratings and glass reflect a calm, neutral **horizon**, a lighter gray-blue above eye level
+and a darker gray below, not the setup around them. A mirror therefore shows no image of the lenses
 or the table in front of it. Both tones are deliberately set apart from the background and the table,
 so a mirror stands out against what lies behind it instead of vanishing into it.
+
+With **HDR environment** in the 3D View menu, a 360° panorama shipped with OPOSSUM takes the place of
+both: it stands behind the setup, and it is what mirrors, gratings and glass reflect, bright spots in
+it included. The table still fades into the plain background color at its edge, so against the
+panorama its rim shows.
 
 ## The optical table and orientation
 
