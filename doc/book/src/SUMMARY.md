@@ -34,6 +34,7 @@
   - [Nodes](./reference/nodes.md)
     - [Beam propagation visualizer](./reference/nodes/beam_propagation_visualizer.md)
     - [Beam splitter](./reference/nodes/beam_splitter.md)
+    - [Bored mirror](./reference/nodes/bored_mirror.md)
     - [Cylindric lens](./reference/nodes/cylindric_lens.md)
     - [Dummy](./reference/nodes/dummy.md)
     - [Energy meter](./reference/nodes/energy_meter.md)

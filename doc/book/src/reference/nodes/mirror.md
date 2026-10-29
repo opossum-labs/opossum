@@ -22,4 +22,4 @@ For ray tracing analysis, incoming rays are deflected according to the laws of r
 : The radius of curvature of the mirror surface. A negative value corresponds to a concave (= focussing) mirror while a positive value corresponds to a convex (= defocussing) mirror. A value of `+infinity` or `-infinity` represents a flat mirror. The curved surface must reach the edge of the `optic shape`: for a radius below 12.5 mm, reduce the optic shape first.
 
 `optic shape`
-: Transversal extent of the mirror. It decides which rays are reflected: a ray outside of it, or through one of its bores, is lost in every analysis, since the mirror has no output for it (see [Optic shape](../nodes.md#optic-shape)). Defaults to a circle of 12.5 mm radius; `Open` is refused.
+: Transversal extent of the mirror. It decides which rays are reflected: a ray outside of it is lost in every analysis, since the mirror has no output for it (see [Optic shape](../nodes.md#optic-shape)). Defaults to a circle of 12.5 mm radius; `Open` and a bore are refused. A mirror with a hole for the beam to pass is a [bored mirror](bored_mirror.md).

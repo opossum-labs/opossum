@@ -118,8 +118,8 @@ settled before the first component needs them. Four limits are stated, not hidde
   counts the faces of its parts one after the other. What a face means, for instance which one light enters
   through, is not decided there but by the node.
 - The **optic shape** is the property that states how far the component reaches sideways: an *outline*, an edge
-  with bores through it, in the plane perpendicular to the axis of the component. An open optic shape has no
-  outline, and the component is unbounded.
+  and, on a bored mirror, a bore through it (see [Bores](#bores)), in the plane perpendicular to the axis of the
+  component. An open optic shape has no outline, and the component is unbounded.
 - A **rim** places the outline in space. It holds the outline and a frame: the outline lies in the xy plane of that
   frame and is extruded along its z axis.
 
@@ -148,6 +148,34 @@ a component ends is a question every kind of geometry answers for itself (`Geome
 
 On a closed surface such as a sphere, the point also has to lie on the part that contains the vertex. A rim is thus
 one way to state an edge, the way an extrusion does. The faces of a parametric solid end at each other and need none.
+A face reaches into a bore as well: only its edge ends it.
+
+### Bores
+
+Only the optic shape of a bored mirror has a bore; the validator of every other optic shape refuses one
+(`Validator::OpticShape`). A bore is a prism along its own axis (`Bore::axis`): its shape is the cross section across
+that axis, and its center is where the axis crosses the plane of the outline. Untilted, it runs along the z axis of
+the rim.
+
+- **Hit test.** The bore lies within the component, it only holds no material. A ray through it meets the face, and
+  `Geometry::intersect` returns a `SurfaceHit` that is not on the material (`SurfaceHit::on_material`) and is not
+  recorded. The kind says which face has a bore (`GeometryKind::bored_rim`), and the rim tests the point in the prism
+  (`Rim::in_bore`), so a tilted bore is found where it actually meets each face.
+- **Effect.** At a hit in the bore, `Geometry::interact_with_rays` leaves the ray untouched, whatever the
+  missed-surface strategy, unless the effect acts there as well (`SurfaceEffect::acts_in_bores`). Only
+  `SplittingConfig`, with which the axis is split during positioning, does, so the axis sees only the edge.
+- **Body.** The material of a body is its outline without the bore (`Rim::contains`), so the chord of a ray through the
+  bore holds none. `Extruded::new` checks that the bore lies within the edge where it meets each face
+  (`Outline::check_bore_on`).
+- **Splitting.** A bored mirror splits the light as a beam splitter does (`Splitter` in `nodes/splitter.rs`). Light
+  enters at the face of its input port and leaves at the face of the output port that collects the transmitted part.
+  On a body, the part transmitted into the material is not traced yet and is dropped with a warning. So is light in
+  the bore that does not meet the exit face in the bore as well: it has run into the wall of the bore.
+- **Axis.** The transmitted axis starts anew (`Ray::restart_at`, which clears its position history) at the center of
+  the bore on the entry face (`Rim::bore_center_on`). From there it runs parallel to the arriving axis to the exit
+  face.
+- **Drawing.** Each face is meshed over the outline where the bore meets it (`Outline::triangulate_on`). The wall of
+  the bore is drawn between those two rings along the axis of the bore (`Outline::rim_axes`, `SurfaceMesh::between`).
 
 ### Ports and surfaces
 
@@ -205,7 +233,7 @@ not touch the loop:
 | Effect | Where | At a hit |
 |---|---|---|
 | `Refraction` | `core_optics/surface_effect.rs` | Snell's law into the index behind the surface; the coating splits off a reflected part (`Ray::refract_at`). Without an index the surface is passive and keeps each ray's direction |
-| `SplittingConfig` | `coatings/separator.rs` | a passive refraction with the reflectivity `1 − T(λ)` of the splitting configuration instead of the surface's coating; only the positioning of a beam splitter uses it, for a neutral 50:50 split |
+| `SplittingConfig` | `coatings/separator.rs` | a passive refraction with the reflectivity `1 − T(λ)` of the splitting configuration instead of the surface's coating; only the positioning of a beam splitter or a bored mirror uses it, for a neutral 50:50 split. It is the one effect that acts in a bore (see [Bores](#bores)) |
 | `FilterType` | `nodes/ideal_filter/filter_types/mod.rs` | a passive refraction, then the attenuation by the transmission (`Ray::filter_energy`) |
 | `ParaxialLens` | `nodes/paraxial_surface.rs` | a passive refraction, then the deflection of an ideal thin lens (`Ray::refract_paraxial`) |
 | `Diffraction` | `nodes/reflective_grating.rs` | the grating equation for one order (`Ray::diffract_at`); the whole energy goes into the order, and no hit is recorded |
@@ -217,7 +245,7 @@ bookkeeping of the node, not physics; the node states it as a `ReflectedPart`:
 |---|---|---|
 | `Ghost` | lens, filter, detectors | is a ghost reflection: it branches off the bundle and starts a position history of its own |
 | `Main` | mirror, parabolic mirror, grating | is the intended beam: it continues the bundle, and the bounce does not count as a ghost |
-| `Branch` | beam splitter | is a second intended beam: a bundle of its own, and both parts keep their position history |
+| `Branch` | beam splitter, bored mirror | is a second intended beam: a bundle of its own, and both parts keep their position history |
 
 `Geometry::propagate_rays` does the same for all bundles of an analysis. After each bundle it lets the analyzer act
 at the surface (`PropagationStrategy::on_surface_interaction`, for instance the ghost-focus cache), and it appends the
@@ -293,9 +321,9 @@ All paths are relative to `opossum_core/src` unless stated otherwise.
 | `Assembly`, `Part`, `Interface`, `FaceId` | `geometry/solid/assembly.rs` | several solids sharing interfaces |
 | `Face` | `geometry/face.rs` | one surface: its shape at the frame of its vertex. Intersects rays, tells which side of it a point lies on, moves |
 | `SurfaceShape`, `GeoSurface`, `Plane`, `Sphere`, `Cylinder`, `Parabola` | `geometry/surface/` | the shape of a surface and its math in the vertex frame; `SurfaceShape::as_geo_surface` hands out the math |
-| `Rim` | `geometry/rim.rs` | an outline at a frame: whether a point lies within it, whether a face reaches a point |
+| `Rim` | `geometry/rim.rs` | an outline at a frame: whether a point lies within it or in its bore, whether a face reaches a point, where the axis of the bore meets a face |
 | `Body`, `BoundingBox` | `geometry/body/mod.rs` | what a volume answers: is a point inside, how far a ray travels in it, which box encloses it, which side of a face it lies on, the material it is filled with (`material`, none for an assembly or a reference not resolved yet) and the inversion a gain model built in it (`inversion`, `inversion_mut`). Each kind of solid implements it next to its definition. What the medium does to the rays passing it (`propagate_inside`: gain and absorption along the chord) is a method of `dyn Body`, the same for every kind |
-| `OpticShape`, `Outline`, `Bore` | `apertures/optic_shape.rs` | value of the `optic shape` property; the outline says whether a point lies within it |
+| `OpticShape`, `Outline`, `Bore` | `apertures/optic_shape.rs` | value of the `optic shape` property; the outline says whether a point lies within it, and the bore is a prism along its own axis |
 | `OutlineMesh` | `apertures/mesh.rs` | an outline triangulated in its plane (`Outline::triangulate`): where a face is sampled when it is drawn |
 | `SurfaceMesh` | `geometry/mesh.rs` | one drawn patch of surface: points, normals and triangles. A face laid over an outline mesh gives one (`Face::mesh_over`), and the lateral face of a solid is drawn between two (`SurfaceMesh::between`) |
 | `FacePatch` | `geometry/mesh.rs` | a `SurfaceMesh` with the face it lies on, as `GeometryKind::mesh` returns it; the lateral face of a solid lies on none |
@@ -495,7 +523,8 @@ node's own frame (`OpticNodeExt::geometry_mesh`) and puts the mesh at the node's
 
 - The mirror lays its face over the outline of its rim, measured along the axis of the rim. A surface without a rim
   is drawn over the default optic shape around its vertex.
-- A volume node lays both faces over the outline of its rim and closes the body with the lateral face between them.
+- A volume node lays both faces over the outline of its rim and closes the body with the lateral face between them,
+  and with the wall of its bore if it has one (see [Bores](#bores)).
 
 The patches of a solid form a closed shell and are drawn once. A single surface has no far side of its own, so each of
 its patches is drawn a second time, turned over. Glass takes its refractive index from the material of the solid and
@@ -519,6 +548,7 @@ and answers "not found" for a node that is not drawn.
 |---|---|
 | Parabolic mirror | `Geometry::surface` with an axis other than the identity. The node sits where the chief ray hits the mirror. `calc_off_axis_frames` returns two frames: the frame of the parent parabola's axis through the node, in which the optic shape is measured, and the vertex of the parent parabola, stated in that frame. |
 | Beam splitter | One plane, face 0, under four port names: its surface ports put `input_1` and `input_2` and the outputs `out1_trans1_refl2` and `out2_trans2_refl1` all on `SurfaceGeometry::FACE`, so all four share the one optic surface, and declare that face splitting, so its `surface` takes only a `Separator`. Its analysis addresses the ports by name itself and splits with `Refraction(None)` and `ReflectedPart::Branch`, so the coating of its `surface` is the split (by default a `Separator` of 50 %). Its positioning splits the axis with `SplittingConfig::Ratio(0.5)` as the effect, whatever the coating. The second input enters mirrored on the plane (`axis_entrance_frame`). |
+| Bored mirror | `Geometry::singlet` with a flat rear face: an `Extruded` plate whose outline has a bore. Its surface ports put `input_1` and `out2_trans2_refl1` on the front face and `input_2` and `out1_trans1_refl2` on the rear face, and declare no face splitting. Ray tracing, positioning and ghost focus are those of the beam splitter (`Splitter`), with the bore deciding what passes (see [Bores](#bores)). Its energy analysis is an error. |
 | Detectors | `Geometry::detector` gives the extent window. A window is no edge: the face reaches everywhere, so all light passes. `SurfaceHit::recorded` decides which hit points are recorded, and `record_within_window` cuts the recorded light to the window of the geometry. With an open optic shape there is no window, and everything is recorded. |
 | Ideal filter, paraxial surface | `Geometry::plane`. Their effects (`FilterType`, `ParaxialLens`) attenuate or deflect at the hit, so a ray or helper ray that misses is neither. The paraxial surface may be unbounded. |
 | Grating | `Geometry::plane`. Its effect, `Diffraction`, sends the whole energy into one order, and the diffracted part is the intended beam (`ReflectedPart::Main`), like the reflection of a mirror. |

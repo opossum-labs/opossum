@@ -99,9 +99,8 @@ In addition, nodes have a set of attributes that are common to all of them. Howe
 ## Optic shape
 
 Every component that light hits has a transversal size, its `optic shape`: where the material or the coated surface
-actually is, the size a supplier quotes, with any bores through it. The optic shape decides which rays hit the
-component. A ray that reaches the surface outside of it, or through one of its bores, misses the component. What
-happens to that ray depends on the analysis:
+actually is, the size a supplier quotes. The optic shape decides which rays hit the component. A ray that reaches
+the surface outside of it misses the component. What happens to that ray depends on the analysis:
 
 - **Ray tracing** follows its `missed surface strategy` (see [Analyzers](analyzers.md)): with `Stop`, the default, the
   ray is lost; with `Ignore` it passes the component unchanged.
@@ -109,28 +108,37 @@ happens to that ray depends on the analysis:
 - **Energy** analysis traces no rays and ignores optic shapes.
 
 A mirror, a parabolic mirror and a grating only reflect: a ray that misses them has no way on and is lost in every
-analysis. A ray outside the optic shape of a beam splitter, or through one of its bores as on a scraper mirror,
-follows the strategy above: with `Ignore` it passes on as transmitted light, with `Stop` it is lost.
+analysis. A ray outside the optic shape of a beam splitter follows the strategy above: with `Ignore` it passes on as
+transmitted light, with `Stop` it is lost.
 
-**Edge and bores.** An optic shape is an edge with bores through it. The edge is a circle, a rectangle or a polygon,
-centered on the component's axis and not turned: to shift or turn a component, align its node. A bore is a circle, a
-rectangle or a polygon too, shifted off the axis and turned by its own offset and rotation; a ring, for instance, is a
-circle with a centered bore. A polygon has to enclose an area: its outline neither crosses nor touches itself, so no
-corner is given twice and the corners do not all lie on one line. Every bore lies within the edge, and bores neither
-overlap nor touch each other or the edge. OPOSSUM refuses a shape that breaks one of these rules and says why.
-Overlapping bores and a notch cut into the edge cannot be stated.
+**Edge and bore.** An optic shape is an edge, and on a [bored mirror](nodes/bored_mirror.md) a bore through it. No
+other component takes a bore: a hole that light passes splits the beam in two, and only a node with the ports of a
+beam splitter has an output for both parts. The edge is a circle, a rectangle or a polygon, centered on the
+component's axis and not turned: to shift or turn a component, align its node. The bore is a circle, a rectangle or a
+polygon too, shifted off the axis and turned by its own offset and rotation. A polygon has to enclose an area: its
+outline neither crosses nor touches itself, so no corner is given twice and the corners do not all lie on one line.
+The bore lies within the edge without touching it. OPOSSUM refuses a shape that breaks one of these rules and says
+why. A notch cut into the edge cannot be stated.
 
-In the node editor, choosing another kind of edge starts a fresh edge of that kind without bores. Corners of a
-polygon can always be added or deleted, even while it does not enclose an area yet. While the edge breaks a rule, a
-note below it says why and nothing is saved; the edge is saved as soon as it is valid again. While the bore being
-drafted breaks a rule, the label of "Add bore" (or "Update bore") turns red and the button does nothing; hovering over
-it says why.
+**Tilted bore.** A bore runs through the component like a drilled hole: its shape is the cross section across the
+axis of the bore, and its offset is where that axis crosses the plane of the edge. Untilted, the bore runs along the
+axis of the component. `Tilt x` and `Tilt y` tilt it about the x and the y axis of the component, in the same way as
+`Roll` and `Pitch` of the alignment turn a node: a bore tilted by the roll and the pitch of its node runs along the
+beam arriving at the node. A tilt of 90° or more is refused, and the bore has to lie within the edge on every face it
+passes. Light that enters the bore but runs into its wall is lost (see [Bored mirror](nodes/bored_mirror.md)).
+
+In the node editor, choosing another kind of edge starts a fresh edge of that kind and keeps the bore; if the bore
+does not fit into the fresh edge, the edge stays as it was and the log says why. Corners of a polygon can always be
+added or deleted, even while it does not enclose an area yet. While the edge breaks a rule, a note below it says why
+and nothing is saved; the edge is saved as soon as it is valid again. While the bore being drafted breaks a rule, the
+label of "Update bore" turns red and the button does nothing; hovering over it says why.
 
 The default depends on the kind of component:
 
 | Component | Default optic shape |
 |---|---|
 | lens, wedge, mirror, parabolic mirror, beam splitter, ideal filter, paraxial surface | circle of 12.5 mm radius, the usual 1 inch mount |
+| bored mirror | circle of 12.5 mm radius with a centered circular bore of 2.5 mm radius |
 | cylindric lens | rectangle of 20 mm across its curvature (x) and 30 mm along its cylinder axis (y) |
 | grating | square of 25 mm × 25 mm |
 | detectors | square window of 25 mm × 25 mm |
@@ -156,9 +164,10 @@ visualizers and groups are idealized or abstract nodes and have no optic shape. 
 a dummy behind it or shrink its ray distribution.
 
 **Alignment.** The component alignment run (see [Geometry](../concepts/geometry.md)) respects optic shapes too: if
-the optical axis misses the optic shape of a component, beside its edge or through one of its bores, the alignment
-stops with an error naming that node. A bore meant to let the beam pass along the axis, as on a scraper mirror for
-the main beam, is therefore not supported yet. At a detector a missed window only warns that the measurement may fail.
+the optical axis misses the optic shape of a component beside its edge, the alignment stops with an error naming that
+node. The bore of a bored mirror does not stop it: the axis sees only the edge, is reflected as if there were no
+bore, and behind the mirror runs through the center of the bore (see [Bored mirror](nodes/bored_mirror.md)). At a
+detector a missed window only warns that the measurement may fail.
 
 ## Surfaces
 
@@ -167,15 +176,15 @@ node keeps them as one property per face, named after the face:
 
 | Node | Surface properties |
 |---|---|
-| lens, cylindric lens, wedge | `front surface`, `rear surface` |
+| lens, cylindric lens, wedge, bored mirror | `front surface`, `rear surface` |
 | every other node except groups and references | `surface` |
 
 The coating decides which part of the light a surface reflects and which part it transmits; the LIDT is the fluence
 above which the ghost focus analysis reports the surface as at risk. By default a surface has an ideal antireflective
 coating (`IdealAR`, no reflection) and an infinite LIDT, so it cannot be damaged. Further coatings are a constant
 reflectivity (`ConstantR`), the Fresnel reflection of an uncoated surface (`Fresnel`), and a `Separator`, which
-transmits a fixed ratio or a spectrum and reflects the rest, whatever the angle of incidence. A thin mirror and a
-parabolic mirror start with a fully reflecting coating (`ConstantR` of 100 %).
+transmits a fixed ratio or a spectrum and reflects the rest, whatever the angle of incidence. A thin mirror, a
+parabolic mirror and the front surface of a bored mirror start with a fully reflecting coating (`ConstantR` of 100 %).
 
 A `Separator` belongs to a splitting surface, one at which the node follows both the transmitted and the reflected
 part of the light; today that is the surface of a beam splitter, whose coating is its split (see

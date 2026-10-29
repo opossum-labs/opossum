@@ -65,10 +65,11 @@ detector or a paraxial surface whose optic shape is `Open` has no edge to draw. 
 nominal size instead, a circle of 12.5 mm radius, which says nothing about what it records or
 focuses.
 
-An optic shape with bores is drawn with them: a ring, or a plate with holes through it, shows the
-walls of the bores as well. OPOSSUM only accepts shapes that enclose an area and bores that lie
-within the edge and apart from each other, so every optic shape it accepts can be drawn. A
-component that cannot be drawn all the same is left out, and the status line and the log say so.
+The bore of a [bored mirror](nodes/bored_mirror.md) is drawn with it: the plate shows the hole and
+its wall, which runs along the axis of the bore, slanted through the plate if the bore is tilted.
+OPOSSUM only accepts shapes that enclose an area and a bore that lies within the edge on both faces,
+so every optic shape it accepts can be drawn. A component that cannot be drawn all the same is left
+out, and the status line and the log say so.
 
 A component only knows where it is once the optical axis has been traced from a source, so the
 model needs a **source port** and an **analyzer** that defines its light — see
@@ -84,8 +85,9 @@ and the view cannot be drawn at all. The status line says why and names the comp
 ended at. There are two usual causes:
 
 - **The axis passes the component outside its optic shape** — a lens decentered by more than its
-  radius, say, a double pass whose return path walks off, or a bore the axis runs through. Enlarge
-  the optic shape or correct the position (see [Geometry](../concepts/geometry.md)).
+  radius, say, or a double pass whose return path walks off. Enlarge the optic shape or correct the
+  position (see [Geometry](../concepts/geometry.md)). The bore of a bored mirror is no such case:
+  the axis passes it, and behind the mirror it is drawn from the center of the bore on.
 - **A grating is not tilted**: its diffraction order then does not propagate at the wavelength the
   setup is placed at, and the message names the Littrow angle to tilt the grating by.
 
