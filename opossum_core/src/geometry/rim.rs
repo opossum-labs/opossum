@@ -66,9 +66,7 @@ impl Rim {
     /// `true` if the point's projection along the axis lies within the outline.
     #[must_use]
     pub fn contains(&self, point: &Point3<Length>) -> bool {
-        let local_point = self.frame.inverse_transform_point(point);
-        self.outline
-            .contains(Point2::new(local_point.x, local_point.y))
+        self.outline.contains(self.projected(point))
     }
     /// Return whether a point on an unbounded surface is part of the component this [`Rim`] bounds.
     ///
@@ -82,6 +80,32 @@ impl Rim {
     #[must_use]
     pub fn bounds(&self, face: &Face, point: &Point3<Length>) -> bool {
         self.contains(point) && face.is_on_vertex_sheet(point)
+    }
+    /// Return whether a single surface this [`Rim`] bounds reaches a point on its unbounded
+    /// surface: the point lies within the edge, on the material or in the bore, and on the sheet of
+    /// the vertex (see [`Face::is_on_vertex_sheet`]).
+    ///
+    /// # Arguments
+    ///
+    /// * `face` - the face with the unbounded surface.
+    /// * `point` - a point on the surface, in the frame this rim is stated in.
+    #[must_use]
+    pub fn reaches(&self, face: &Face, point: &Point3<Length>) -> bool {
+        self.outline.within_edge(self.projected(point)) && face.is_on_vertex_sheet(point)
+    }
+    /// Return whether the projection of a point along the axis lies in the bore of the outline.
+    ///
+    /// # Arguments
+    ///
+    /// * `point` - the point to be tested, in the frame this rim is stated in.
+    #[must_use]
+    pub fn in_bore(&self, point: &Point3<Length>) -> bool {
+        self.outline.in_bore(self.projected(point))
+    }
+    /// The projection of a point along the axis onto the plane of the outline.
+    fn projected(&self, point: &Point3<Length>) -> Point2<Length> {
+        let local_point = self.frame.inverse_transform_point(point);
+        Point2::new(local_point.x, local_point.y)
     }
 }
 

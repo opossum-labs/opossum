@@ -325,6 +325,41 @@ mod test {
         assert_abs_diff_eq!(refl_dir, -Vector3::x(), epsilon = 1e-9);
         Ok(())
     }
+    /// The optical axis through the central bore of a 45° scraper is placed by the edge alone: the
+    /// nodes behind both outputs sit where they sit behind a splitter without a bore.
+    #[test]
+    fn the_axis_through_a_bore_places_both_branches() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let src = scenery.add_node(SourcePort::default())?;
+        let mut scraper = super::super::test::scraper(0.0)?;
+        scraper.set_alignment(millimeter!(0., 0., 0.), degree!(0., 45., 0.))?;
+        let scraper = scenery.add_node(scraper)?;
+        let transmitted = scenery.add_node(Dummy::new("transmitted"))?;
+        let reflected = scenery.add_node(Dummy::new("reflected"))?;
+        scenery.connect_nodes(src, "output_1", scraper, "input_1", millimeter!(100.0))?;
+        scenery.connect_nodes(
+            scraper,
+            "out1_trans1_refl2",
+            transmitted,
+            "input_1",
+            millimeter!(50.0),
+        )?;
+        scenery.connect_nodes(
+            scraper,
+            "out2_trans2_refl1",
+            reflected,
+            "input_1",
+            millimeter!(50.0),
+        )?;
+        position(&mut scenery, src)?;
+        let (trans_pos, trans_dir) = placed(&scenery, transmitted);
+        assert_abs_diff_eq!(trans_pos, mm(0., 0., 150.), epsilon = 1e-9);
+        assert_abs_diff_eq!(trans_dir, Vector3::z(), epsilon = 1e-9);
+        let (refl_pos, refl_dir) = placed(&scenery, reflected);
+        assert_abs_diff_eq!(refl_pos, mm(-50., 0., 100.), epsilon = 1e-9);
+        assert_abs_diff_eq!(refl_dir, -Vector3::x(), epsilon = 1e-9);
+        Ok(())
+    }
     /// A group positioning run through a beam splitter connected only on its second input.
     ///
     /// Regression for #1233: connecting only `input_2` used to fail the positioning run. The second

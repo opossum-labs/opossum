@@ -106,6 +106,10 @@ impl GeometryKind for ParametricSolid {
                 .enumerate()
                 .all(|(index, inside)| FaceIndex::new(index) == face || inside)
     }
+    /// The faces of a parametric solid end at each other; it has no bore.
+    fn in_bore(&self, _face: FaceIndex, _point: &Point3<Length>) -> bool {
+        false
+    }
     fn window(&self) -> Option<&Rim> {
         None
     }

@@ -308,7 +308,26 @@ impl Outline {
     /// * `point` - the point, in the plane of the outline with the axis at its origin.
     #[must_use]
     pub(crate) fn contains(&self, point: Point2<Length>) -> bool {
-        self.shape.contains(point) && !self.bore.as_ref().is_some_and(|bore| bore.contains(point))
+        self.within_edge(point) && !self.in_bore(point)
+    }
+    /// Return whether a point of the plane lies on or within the edge, where the component
+    /// reaches, whether it holds material there or lies in the bore.
+    ///
+    /// # Arguments
+    ///
+    /// * `point` - the point, in the plane of the outline with the axis at its origin.
+    #[must_use]
+    pub(crate) fn within_edge(&self, point: Point2<Length>) -> bool {
+        self.shape.contains(point)
+    }
+    /// Return whether a point of the plane lies on or within the bore, if there is one.
+    ///
+    /// # Arguments
+    ///
+    /// * `point` - the point, in the plane of the outline with the axis at its origin.
+    #[must_use]
+    pub(crate) fn in_bore(&self, point: Point2<Length>) -> bool {
+        self.bore.as_ref().is_some_and(|bore| bore.contains(point))
     }
     /// Return the points the component reaches farthest in, in the plane of the outline.
     ///

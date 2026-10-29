@@ -23,7 +23,7 @@ use uuid::Uuid;
 use crate::{
     analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
     apertures::Outline,
-    coatings::Coating,
+    coatings::{Coating, CoatingType},
     core_optics::{optic_surface::OpticSurface, surface_effect::SurfaceEffect},
     error::{OpmResult, OpossumError},
     geometry::{
@@ -275,7 +275,8 @@ impl Geometry {
     /// Return where a ray meets one face of this geometry.
     ///
     /// The ray meets the unbounded surface of the face (see [`Face::intersect`]), and the point
-    /// counts only where the face reaches (see [`GeometryKind::includes`]).
+    /// counts only where the face reaches (see [`GeometryKind::includes`]). A hit in a bore holds
+    /// no material and is not recorded (see [`GeometryKind::in_bore`]).
     ///
     /// # Arguments
     ///
@@ -291,11 +292,13 @@ impl Geometry {
         let kind = self.kind();
         let surface = kind.surface(face)?.face();
         let (point, normal) = surface.intersect(ray)?;
+        let on_material = !kind.in_bore(face, &point);
         kind.includes(face, &point).then(|| SurfaceHit {
             point,
             normal,
             local_point: surface.frame().inverse_transform_point(&point),
-            recorded: kind.window().is_none_or(|window| window.contains(&point)),
+            on_material,
+            recorded: on_material && kind.window().is_none_or(|window| window.contains(&point)),
         })
     }
 }
@@ -318,7 +321,8 @@ impl Geometry {
     /// [`SurfaceEffect::act_at`]) and, if the ray sends a part back, on its helper rays as well; the
     /// surface records the hit in its hit map. Which of the two parts is the intended beam is
     /// recorded on both (see [`ReflectedPart`]). The coating of the surface is built once for the
-    /// whole bundle.
+    /// whole bundle and acts on its material; in a bore the effect acts with a coating that
+    /// reflects nothing, so the light there passes untouched, whatever the missed surface strategy.
     ///
     /// # Arguments
     ///
@@ -350,6 +354,14 @@ impl Geometry {
         missed: MissedSurfaceStrategy,
     ) -> OpmResult<Rays> {
         let coating = Box::<dyn Coating>::try_from(self.surface_of_mut(face)?.coating())?;
+        let bore = Box::<dyn Coating>::try_from(&CoatingType::IdealAR)?;
+        let coating_at = |hit: &SurfaceHit| {
+            if hit.on_material() {
+                coating.as_ref()
+            } else {
+                bore.as_ref()
+            }
+        };
         let uuid = rays.uuid();
         let mut valid_rays_found = false;
         let mut rays_missed = false;
@@ -363,7 +375,8 @@ impl Geometry {
                 rays_missed = true;
                 continue;
             };
-            let (reflected, hit_point) = effect.act_at(ray, &surface_hit, coating.as_ref())?;
+            let (reflected, hit_point) =
+                effect.act_at(ray, &surface_hit, coating_at(&surface_hit))?;
             if let Some(mut reflected) = reflected {
                 if let (Some(helpers), Some(reflected_helpers)) =
                     (ray.helper_rays_mut(), reflected.helper_rays_mut())
@@ -376,7 +389,7 @@ impl Geometry {
                             continue;
                         };
                         if let (Some(helper_reflected), _) =
-                            effect.act_at(helper, &helper_hit, coating.as_ref())?
+                            effect.act_at(helper, &helper_hit, coating_at(&helper_hit))?
                         {
                             reflected_helper.set_direction(helper_reflected.direction())?;
                         }
@@ -470,6 +483,7 @@ pub struct SurfaceHit {
     point: Point3<Length>,
     normal: Vector3<f64>,
     local_point: Point3<Length>,
+    on_material: bool,
     recorded: bool,
 }
 
@@ -490,8 +504,14 @@ impl SurfaceHit {
     pub const fn local_point(&self) -> Point3<Length> {
         self.local_point
     }
-    /// Return whether the hit is recorded: it is not only outside the window of a detector (see
-    /// [`GeometryKind::window`]).
+    /// Return whether the hit lies on the material of the face, rather than in a bore through it
+    /// (see [`GeometryKind::in_bore`]).
+    #[must_use]
+    pub const fn on_material(&self) -> bool {
+        self.on_material
+    }
+    /// Return whether the hit is recorded: it lies on the material and, on a detector, within its
+    /// window (see [`GeometryKind::window`]).
     #[must_use]
     pub const fn recorded(&self) -> bool {
         self.recorded
@@ -543,6 +563,22 @@ pub trait GeometryKind {
     /// `true` if the face reaches to this point; `false` if the point lies on the surface beyond
     /// the edge of the face, or if there is no such face.
     fn includes(&self, face: FaceIndex, point: &Point3<Length>) -> bool;
+    /// Return whether a point a face reaches lies in a bore through it.
+    ///
+    /// A bore lies within the component, it only holds no material: light there passes the face
+    /// untouched (see [`Geometry::interact_with_rays`]). The face reaches into the bore (see
+    /// [`GeometryKind::includes`]), so the optical axis is placed by the edge alone.
+    ///
+    /// # Arguments
+    ///
+    /// - `face`: the number of the face the point lies on.
+    /// - `point`: a point on the surface of that face, in the frame the geometry is stated in.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the point lies in a bore; `false` if it lies on the material, beyond the edge, or
+    /// if there is no such face.
+    fn in_bore(&self, face: FaceIndex, point: &Point3<Length>) -> bool;
     /// Return the window a detector records within, or `None` if all light on its faces is recorded.
     ///
     /// A window is no boundary: light outside it passes the face like light inside, it is just not
@@ -674,9 +710,16 @@ impl GeometryKind for SurfaceGeometry {
     }
     fn includes(&self, face: FaceIndex, point: &Point3<Length>) -> bool {
         GeometryKind::surface(self, face).is_some_and(|surface| match &self.extent {
-            SurfaceExtent::Edge(rim) => rim.bounds(surface.face(), point),
+            SurfaceExtent::Edge(rim) => rim.reaches(surface.face(), point),
             SurfaceExtent::Open | SurfaceExtent::Window(_) => true,
         })
+    }
+    fn in_bore(&self, face: FaceIndex, point: &Point3<Length>) -> bool {
+        face == Self::FACE
+            && match &self.extent {
+                SurfaceExtent::Edge(rim) => rim.in_bore(point),
+                SurfaceExtent::Open | SurfaceExtent::Window(_) => false,
+            }
     }
     fn window(&self) -> Option<&Rim> {
         match &self.extent {
@@ -717,7 +760,7 @@ mod test {
     use super::*;
     use crate::{
         analyzers::RayTraceConfig,
-        apertures::CircleShape,
+        apertures::{Bore, CircleShape},
         coatings::{CoatingConstantR, CoatingType, SplittingConfig, SplittingConfigBuilder},
         core_optics::surface_effect::Refraction,
         degree,
@@ -1639,6 +1682,65 @@ mod test {
     /// A ray along z, the given distance off the axis in y.
     fn ray_at(y: f64) -> OpmResult<Ray> {
         Ray::new_collimated(millimeter!(0.0, y, -10.0), nanometer!(1000.0), joule!(1.0))
+    }
+    /// A plane through the node, its component a ring: 5 mm around the node's axis with a bore of
+    /// 2 mm around it.
+    fn ring_plane() -> OpmResult<Geometry> {
+        Ok(Geometry::plane(Some(Outline::new(
+            CircleShape::new(millimeter!(5.0))?,
+            Some(Bore::new(
+                CircleShape::new(millimeter!(2.0))?,
+                millimeter!(0.0, 0.0),
+                degree!(0.0),
+            )),
+        )?)))
+    }
+    /// A bore lies within the face: a ray through it meets the face, but no material, so the hit
+    /// is not recorded. A ray beside the edge meets nothing.
+    #[test]
+    fn a_ray_through_a_bore_meets_the_face_but_no_material() -> OpmResult<()> {
+        let ring = ring_plane()?;
+        for (y, material) in [(0.0, Some(false)), (3.0, Some(true)), (6.0, None)] {
+            let hit = ring.intersect(SurfaceGeometry::FACE, &ray_at(y)?);
+            assert_eq!(hit.map(|hit| hit.on_material()), material, "at {y} mm");
+            assert_eq!(hit.map(|hit| hit.recorded()), material, "at {y} mm");
+        }
+        Ok(())
+    }
+    /// Light through a bore passes the surface untouched, even where the strategy stops rays that
+    /// miss it, and leaves no hit: the coating acts on the material only.
+    #[test]
+    fn light_through_a_bore_passes_untouched() -> OpmResult<()> {
+        let mut ring = coated(
+            ring_plane()?,
+            CoatingConstantR::new(percent!(100.0))?.into(),
+        )?;
+        let mut rays = Rays::from(vec![ray_at(0.0)?, ray_at(3.0)?]);
+        let reflected = split_by_coating(&mut ring, &mut rays)?;
+        assert_eq!(energies(&rays), [joule!(1.0), joule!(0.0)]);
+        assert_eq!(energies(&reflected), [joule!(0.0), joule!(1.0)]);
+        let through = rays
+            .iter()
+            .next()
+            .ok_or_else(|| OpossumError::Other("the bundle lost its ray".into()))?;
+        assert!(through.valid());
+        assert_eq!(through.direction(), Vector3::z());
+        let hits = ring
+            .surface_of_mut(SurfaceGeometry::FACE)?
+            .get_rays_hit_map(0, rays.uuid())
+            .map(|hit_map| hit_map.hit_map().len());
+        assert_eq!(hits, Some(1), "only the ray on the material leaves a hit");
+        Ok(())
+    }
+    /// The neutral split that places the optical axis brings its own coating, so the axis sees
+    /// the edge only: in the bore it is split as on the material.
+    #[test]
+    fn the_axis_is_split_in_a_bore_as_on_the_material() -> OpmResult<()> {
+        let mut rays = Rays::from(ray_at(0.0)?);
+        let reflected = split(&mut ring_plane()?, &mut rays, &SplittingConfig::Ratio(0.5))?;
+        assert_eq!(energies(&rays), [joule!(0.5)]);
+        assert_eq!(energies(&reflected), [joule!(0.5)]);
+        Ok(())
     }
     /// Propagate bundles forward through the passive surface of a face of a component.
     fn propagate(

@@ -233,6 +233,10 @@ impl GeometryKind for Assembly {
                 .is_some_and(|part| part.geometry.kind().includes(own_face, point))
         })
     }
+    /// Every part is a body (see [`Part::new`]), and the faces of a body end at its bore.
+    fn in_bore(&self, _face: FaceIndex, _point: &Point3<Length>) -> bool {
+        false
+    }
     fn window(&self) -> Option<&Rim> {
         None
     }
