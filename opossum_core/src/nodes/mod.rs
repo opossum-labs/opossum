@@ -38,6 +38,7 @@ pub mod reflective_grating;
 mod source_helper;
 mod source_port;
 mod spectrometer;
+mod splitter;
 mod spot_diagram;
 pub(crate) mod test_helper;
 mod thin_mirror;

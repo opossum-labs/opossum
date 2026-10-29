@@ -4,21 +4,17 @@ mod analysis_energy;
 mod analysis_ghostfocus;
 mod analysis_raytrace;
 
+use super::splitter::Splitter;
 use crate::{
-    analyzers::{AnalyzerType, propagation_strategy::MissedSurfaceStrategy},
     coatings::{CoatingType, SplittingConfig, SplittingConfigBuilder},
-    core_optics::{
-        Appearance, NodeAttr, OpticNode, OpticNodeExt, PortType, SurfacePorts,
-        node_attr::HasNodeAttr, surface_effect::Refraction,
-    },
+    core_optics::{Appearance, NodeAttr, OpticNode, OpticNodeExt, SurfacePorts},
     error::{OpmResult, OpossumError},
     geometry::{
         Geometry, SurfaceGeometry,
         body::{OPTIC_SHAPE, default_optic_shape},
     },
     light::{
-        LightData, Rays,
-        rays::ReflectedPart,
+        LightData,
         spectrum::{Spectrum, merge_spectra},
     },
     nodes::NodeRegistration,
@@ -163,96 +159,8 @@ impl BeamSplitter {
         }
         Ok((out1_data, out2_data))
     }
-    /// Processes rays arriving at a single input port.
-    ///
-    /// The rays are split by the coating of the splitting surface: the transmitted part keeps its
-    /// direction, the reflected part is mirrored about the surface normal.
-    ///
-    /// # Arguments
-    ///
-    /// * `input` - the light arriving at the port, if any.
-    /// * `port_name` - the name of the input port.
-    /// * `missed_surface_strategy` - what happens to rays that do not hit the splitting surface.
-    ///
-    /// # Returns
-    ///
-    /// The transmitted and the reflected rays, both empty if there is no input.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if
-    ///   - the input is not [`LightData::Geometric`].
-    ///   - the surface of the port cannot be found.
-    ///   - the splitting of the rays fails.
-    fn process_input_port(
-        &mut self,
-        input: Option<&LightData>,
-        port_name: &str,
-        missed_surface_strategy: MissedSurfaceStrategy,
-    ) -> OpmResult<(Rays, Rays)> {
-        let Some(light_data) = input else {
-            return Ok((Rays::default(), Rays::default()));
-        };
-        let LightData::Geometric(rays) = light_data else {
-            return Err(OpossumError::Analysis(format!(
-                "Expected LightData::Geometric at port '{port_name}'"
-            )));
-        };
-        let mut rays = rays.clone();
-        let face = self.face_of_port(port_name)?;
-        let Some(geometry) = self.node_attr_mut().runtime_geometry_mut() else {
-            return Err(OpossumError::OpticPort(format!(
-                "Input optic surface not found for port '{port_name}'"
-            )));
-        };
-        let reflected = geometry.interact_with_rays(
-            face,
-            &mut rays,
-            &Refraction(None),
-            ReflectedPart::Branch,
-            missed_surface_strategy,
-        )?;
-        Ok((rays, reflected))
-    }
-    fn analyze_raytrace(
-        &mut self,
-        in1: Option<&LightData>,
-        in2: Option<&LightData>,
-        analyzer_type: &AnalyzerType,
-    ) -> OpmResult<(Option<LightData>, Option<LightData>)> {
-        if in1.is_none() && in2.is_none() {
-            return Ok((None, None));
-        }
-
-        let in1_port_name = &self.ports().names(&PortType::Input)[0];
-        let in2_port_name = &self.ports().names(&PortType::Input)[1];
-
-        let missed_surface_strategy = match analyzer_type {
-            AnalyzerType::Energy(_) => &MissedSurfaceStrategy::Stop,
-            AnalyzerType::RayTrace(ray_trace_config) => ray_trace_config.missed_surface_strategy(),
-            AnalyzerType::GhostFocus(_) => &MissedSurfaceStrategy::Ignore,
-        };
-
-        // Process both inputs
-        let (mut main_rays1, split_rays1) =
-            self.process_input_port(in1, in1_port_name, *missed_surface_strategy)?;
-        let (mut main_rays2, split_rays2) =
-            self.process_input_port(in2, in2_port_name, *missed_surface_strategy)?;
-
-        // Merge the transmitted and reflected rays for the two outputs.
-        main_rays1.merge(&split_rays2); // out1 = trans1 + refl2
-        main_rays2.merge(&split_rays1); // out2 = trans2 + refl1
-        if let AnalyzerType::RayTrace(config) = analyzer_type {
-            main_rays1.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-            main_rays2.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-        }
-
-        Ok((
-            Some(LightData::Geometric(main_rays1)),
-            Some(LightData::Geometric(main_rays2)),
-        ))
-    }
 }
+impl Splitter for BeamSplitter {}
 impl OpticNode for BeamSplitter {
     fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::plane(self.cross_section()?)))
@@ -278,17 +186,22 @@ impl OpticNode for BeamSplitter {
 mod test {
     use super::*;
     use crate::{
+        J_per_cm2,
         analyzers::{
-            GhostFocusConfig, RayTraceConfig, ghostfocus::AnalysisGhostFocus,
+            Analyzer, GhostFocusConfig, RayTraceConfig,
+            ghostfocus::{AnalysisGhostFocus, GhostFocusAnalyzer},
             raytrace::AnalysisRayTrace,
         },
         coatings::{CoatingConstantR, CoatingType},
-        core_optics::{NodeAttrExt, PortType},
-        light::{LightRays, LightResult},
+        core_optics::{NodeAttrExt, PortType, node_attr::HasNodeAttr},
+        degree, joule,
+        light::{LightRays, LightResult, Rays},
         millimeter, nanometer,
-        nodes::test_helper::helper::*,
+        nodes::{NodeGroup, SourcePort, round_collimated_ray_builder, test_helper::helper::*},
         percent,
     };
+    use approx::assert_abs_diff_eq;
+    use nalgebra::Vector3;
     #[test]
     fn default() -> OpmResult<()> {
         let node = BeamSplitter::default();
@@ -412,15 +325,19 @@ mod test {
         );
         Ok(())
     }
-    /// Send rays into `input_1` of the splitter in a ghost focus analysis.
+    /// Send rays into an input of the splitter in a ghost focus analysis.
     ///
     /// # Returns
     ///
-    /// The transmitted and the reflected bundle.
-    fn ghost_trace(splitter: &mut BeamSplitter, rays: Rays) -> OpmResult<(Rays, Rays)> {
+    /// The bundles leaving the first and the second output.
+    fn ghost_trace(
+        splitter: &mut BeamSplitter,
+        input: &str,
+        rays: Rays,
+    ) -> OpmResult<(Rays, Rays)> {
         let output = AnalysisGhostFocus::analyze(
             splitter,
-            LightRays::from([("input_1".into(), vec![rays])]),
+            LightRays::from([(input.into(), vec![rays])]),
             &GhostFocusConfig::default(),
             &mut Vec::new(),
             0,
@@ -456,6 +373,7 @@ mod test {
 
         let (transmitted, reflected) = ghost_trace(
             &mut placed_at_origin::<BeamSplitter>()?,
+            "input_1",
             rays_at(&[12.4, 12.6])?,
         )?;
         assert_valid_energies(
@@ -466,6 +384,51 @@ mod test {
         assert_valid_energies(&reflected, &[0.5], "only the ray inside is reflected");
         let beside = transmitted.iter().nth(1).expect("the ray outside");
         assert_eq!(beside.position(), millimeter!(0.0, 12.6, -10.0));
+        Ok(())
+    }
+    /// In a ghost focus analysis, light at the second input leaves crosswise, as in a ray trace:
+    /// the half a 50:50 splitter transmits keeps its way along z out of the second output, the
+    /// half it reflects leaves the first output turned by 90° on the 45° splitting plane.
+    #[test]
+    fn a_ghost_focus_analysis_sends_the_second_input_out_crosswise() -> OpmResult<()> {
+        let mut splitter = placed_at_origin::<BeamSplitter>()?;
+        splitter.set_alignment(millimeter!(0., 0., 0.), degree!(0., 45., 0.))?;
+        let (first, second) = ghost_trace(&mut splitter, "input_2", rays_at(&[0.0])?)?;
+        assert_valid_energies(
+            &second,
+            &[0.5],
+            "the transmitted half leaves the second output",
+        );
+        assert_valid_energies(&first, &[0.5], "the reflected half leaves the first output");
+        let direction = |rays: &Rays| rays.iter().next().expect("one ray").direction();
+        assert_abs_diff_eq!(direction(&second), Vector3::z(), epsilon = 1e-12);
+        assert_abs_diff_eq!(direction(&first).x.abs(), 1.0, epsilon = 1e-12);
+        Ok(())
+    }
+    /// A ghost focus analysis weighs the fluence of the light arriving at a splitter, here at its
+    /// second input, against the LIDT of the splitting surface: with an LIDT far below any
+    /// fluence, the splitter is reported as critical.
+    #[test]
+    fn a_ghost_focus_analysis_reports_a_critical_fluence_on_the_splitter() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let src = scenery.add_node(SourcePort::default())?;
+        let mut splitter = BeamSplitter::default();
+        splitter.set_lidt(SurfaceGeometry::FACE, J_per_cm2!(1e-9))?;
+        let splitter = scenery.add_node(splitter)?;
+        scenery.connect_nodes(src, "output_1", splitter, "input_2", millimeter!(50.0))?;
+        let mut config = GhostFocusConfig::default();
+        config.set_max_bounces(1);
+        config.map_source(
+            src,
+            round_collimated_ray_builder(millimeter!(5.0), joule!(1.0), 3)?,
+        );
+        let analyzer = GhostFocusAnalyzer::new(config);
+        analyzer.analyze(&mut scenery)?;
+        let report = analyzer.report(&scenery)?;
+        assert!(
+            report.node_reports().len() > 1,
+            "only the global report, no critical fluence on the splitter"
+        );
         Ok(())
     }
 }
