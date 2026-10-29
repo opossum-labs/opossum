@@ -392,14 +392,14 @@ mod test {
         Ok(())
     }
     /// A scraper mirror made of a splitter: a disk of 12.5 mm that reflects all light on its
-    /// material, with a bore of 2 mm at the given height in y.
-    pub(super) fn scraper(bore_y: f64) -> OpmResult<BeamSplitter> {
+    /// material, with a bore of 2 mm centered at the given point (x, y) in mm.
+    pub(super) fn scraper(bore_x: f64, bore_y: f64) -> OpmResult<BeamSplitter> {
         let mut scraper = BeamSplitter::new("scraper", &SplittingConfigBuilder::FixedRatio(0.0))?;
         let outline = Outline::new(
             CircleShape::new(millimeter!(12.5))?,
             Some(Bore::new(
                 CircleShape::new(millimeter!(2.0))?,
-                millimeter!(0.0, bore_y),
+                millimeter!(bore_x, bore_y),
                 degree!(0.0),
             )),
         )?;
@@ -411,7 +411,7 @@ mod test {
     /// here all reflected.
     #[test]
     fn light_through_a_bore_reaches_the_transmitted_output() -> OpmResult<()> {
-        let mut scraper = scraper(0.0)?;
+        let mut scraper = scraper(0.0, 0.0)?;
         scraper.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let (transmitted, reflected) = ray_trace(&mut scraper, rays_at(&[0.0, 5.0])?)?;
         assert_valid_energies(&transmitted, &[1.0], "the ray through the bore passes");

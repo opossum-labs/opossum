@@ -9,6 +9,7 @@
 //! [`Outline`].
 
 use nalgebra::{Point2, Point3};
+use num_traits::Zero;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
@@ -101,6 +102,19 @@ impl Rim {
     #[must_use]
     pub fn in_bore(&self, point: &Point3<Length>) -> bool {
         self.outline.in_bore(self.projected(point))
+    }
+    /// Return the center of the bore of the outline, in the plane of the outline.
+    ///
+    /// # Returns
+    ///
+    /// The center, in the frame this rim is stated in; `None` if the outline has no bore.
+    #[must_use]
+    pub fn bore_center(&self) -> Option<Point3<Length>> {
+        self.outline.bore().map(|bore| {
+            let center = bore.center();
+            self.frame
+                .transform_point(&Point3::new(center.x, center.y, Length::zero()))
+        })
     }
     /// The projection of a point along the axis onto the plane of the outline.
     fn projected(&self, point: &Point3<Length>) -> Point2<Length> {

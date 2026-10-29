@@ -123,10 +123,10 @@ impl GeometryKind for Extruded {
         GeometryKind::surface(self, face)
             .is_some_and(|surface| self.rim.bounds(surface.face(), point))
     }
-    /// The faces of a body end at its bore (see [`GeometryKind::includes`]), so no point they
-    /// reach lies in it.
-    fn in_bore(&self, _face: FaceIndex, _point: &Point3<Length>) -> bool {
-        false
+    /// The faces of a body end at its bore (see [`GeometryKind::includes`]), so light never meets a
+    /// face there.
+    fn bored_rim(&self, _face: FaceIndex) -> Option<&Rim> {
+        None
     }
     fn window(&self) -> Option<&Rim> {
         None

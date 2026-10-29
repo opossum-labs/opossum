@@ -2,7 +2,7 @@
 //! What the nodes have in common that split the light of two inputs on one surface into two
 //! outputs, such as the [`BeamSplitter`](crate::nodes::BeamSplitter).
 
-use nalgebra::{Rotation3, Vector3};
+use nalgebra::{Rotation3, Vector3, vector};
 
 use crate::{
     analyzers::{
@@ -12,6 +12,7 @@ use crate::{
     coatings::SplittingConfig,
     core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, PortType, surface_effect::Refraction},
     error::{OpmResult, OpossumError},
+    geometry::Rim,
     light::{LightData, LightRays, LightResult, Rays, rays::ReflectedPart},
     meter,
     utils::geom_transformation::Isometry,
@@ -376,7 +377,11 @@ pub(crate) trait Splitter: OpticNode {
     ///
     /// Positioning is purely geometric: a fixed 50:50 split leaves energy in both branches, so
     /// neither is invalidated by an energy threshold downstream, and no alignment wavelength has to
-    /// lie inside a splitting spectrum.
+    /// lie inside a splitting spectrum. The reflected axis leaves where the axis meets the surface,
+    /// as if there were no bore. If the surface has a bore, the transmitted axis starts anew at its
+    /// center instead, parallel to the arriving axis: the light the bore lets pass is centered
+    /// there, and the way to the surface is drawn along the reflected axis. Without a bore the
+    /// transmitted axis runs on where the axis meets the surface.
     ///
     /// # Arguments
     ///
@@ -391,7 +396,8 @@ pub(crate) trait Splitter: OpticNode {
     /// # Errors
     ///
     /// This function returns an error if `input` is not [`LightData::Geometric`], the surface
-    /// cannot be found, or the split fails.
+    /// cannot be found, the split fails, or the line through the center of the bore misses the
+    /// surface.
     fn split_axis_rays(
         &mut self,
         input: &LightData,
@@ -417,6 +423,31 @@ pub(crate) trait Splitter: OpticNode {
             ReflectedPart::Branch,
             *config.missed_surface_strategy(),
         )?;
+        if let Some(center) = geometry.kind().bored_rim(face).and_then(Rim::bore_center) {
+            let surface = geometry
+                .face(face)
+                .ok_or_else(|| OpossumError::OpticPort("input optic surface not found".into()))?;
+            for (axis, passed) in rays.iter().zip(transmitted.iter_mut()) {
+                if !passed.valid() {
+                    continue;
+                }
+                // The line parallel to the axis through the center: the axis shifted across itself.
+                let to_center = center - axis.position();
+                let along = axis.direction().normalize();
+                let ahead = to_center.x * along.x + to_center.y * along.y + to_center.z * along.z;
+                let mut line = axis.clone();
+                line.restart_at(
+                    axis.position() + to_center
+                        - vector![ahead * along.x, ahead * along.y, ahead * along.z],
+                );
+                let (point, _) = surface.intersect(&line).ok_or_else(|| {
+                    OpossumError::Analysis(
+                        "the optical axis through the center of the bore misses the surface".into(),
+                    )
+                })?;
+                passed.restart_at(point);
+            }
+        }
         Ok((transmitted, reflected))
     }
     /// Return the names of the two ports of the given type, first and second, as the node shows

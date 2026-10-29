@@ -325,13 +325,20 @@ mod test {
         assert_abs_diff_eq!(refl_dir, -Vector3::x(), epsilon = 1e-9);
         Ok(())
     }
-    /// The optical axis through the central bore of a 45° scraper is placed by the edge alone: the
-    /// nodes behind both outputs sit where they sit behind a splitter without a bore.
-    #[test]
-    fn the_axis_through_a_bore_places_both_branches() -> OpmResult<()> {
+    /// Position a 45° scraper 100 mm from a source, with its bore centered at the given x in mm of
+    /// its own plane, and a dummy 50 mm behind each of its outputs.
+    ///
+    /// # Returns
+    ///
+    /// Where the dummies behind the transmitted and the reflected output are placed, each as its
+    /// position and facing direction.
+    #[allow(clippy::type_complexity)]
+    fn behind_a_scraper(
+        bore_x: f64,
+    ) -> OpmResult<((Vector3<f64>, Vector3<f64>), (Vector3<f64>, Vector3<f64>))> {
         let mut scenery = NodeGroup::default();
         let src = scenery.add_node(SourcePort::default())?;
-        let mut scraper = super::super::test::scraper(0.0)?;
+        let mut scraper = super::super::test::scraper(bore_x, 0.0)?;
         scraper.set_alignment(millimeter!(0., 0., 0.), degree!(0., 45., 0.))?;
         let scraper = scenery.add_node(scraper)?;
         let transmitted = scenery.add_node(Dummy::new("transmitted"))?;
@@ -352,12 +359,57 @@ mod test {
             millimeter!(50.0),
         )?;
         position(&mut scenery, src)?;
-        let (trans_pos, trans_dir) = placed(&scenery, transmitted);
+        Ok((placed(&scenery, transmitted), placed(&scenery, reflected)))
+    }
+    /// The optical axis through the central bore of a 45° scraper is placed by the edge alone: the
+    /// nodes behind both outputs sit where they sit behind a splitter without a bore.
+    #[test]
+    fn the_axis_through_a_bore_places_both_branches() -> OpmResult<()> {
+        let ((trans_pos, trans_dir), (refl_pos, refl_dir)) = behind_a_scraper(0.0)?;
         assert_abs_diff_eq!(trans_pos, mm(0., 0., 150.), epsilon = 1e-9);
         assert_abs_diff_eq!(trans_dir, Vector3::z(), epsilon = 1e-9);
-        let (refl_pos, refl_dir) = placed(&scenery, reflected);
         assert_abs_diff_eq!(refl_pos, mm(-50., 0., 100.), epsilon = 1e-9);
         assert_abs_diff_eq!(refl_dir, -Vector3::x(), epsilon = 1e-9);
+        Ok(())
+    }
+    /// With the bore 5 mm beside the axis, the light it lets pass runs on parallel to the axis
+    /// through the center of the bore, so the node behind the transmitted output sits on that
+    /// line, 50 mm behind the center. The splitter turned by 45° about y carries its own x axis to
+    /// (cos 45°, 0, −sin 45°), which puts the center at (3.536, 0, 96.464) mm. The reflected branch
+    /// stays as if there were no bore.
+    #[test]
+    fn the_transmitted_axis_runs_through_the_center_of_a_bore_beside_it() -> OpmResult<()> {
+        let ((trans_pos, trans_dir), (refl_pos, refl_dir)) = behind_a_scraper(5.0)?;
+        let side = 5.0 * std::f64::consts::FRAC_1_SQRT_2;
+        assert_abs_diff_eq!(trans_pos, mm(side, 0., 150. - side), epsilon = 1e-9);
+        assert_abs_diff_eq!(trans_dir, Vector3::z(), epsilon = 1e-9);
+        assert_abs_diff_eq!(refl_pos, mm(-50., 0., 100.), epsilon = 1e-9);
+        assert_abs_diff_eq!(refl_dir, -Vector3::x(), epsilon = 1e-9);
+        Ok(())
+    }
+    /// Behind a bore beside the axis, the transmitted axis starts anew at the center of the bore:
+    /// it forgets the way the arriving axis took, so no line is drawn across the splitter from
+    /// where that axis met it to the bore. The reflected axis keeps that way.
+    #[test]
+    fn the_transmitted_axis_starts_at_the_center_of_the_bore() -> OpmResult<()> {
+        let mut scraper = super::super::test::scraper(5.0, 0.0)?;
+        scraper.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+        let output = AnalysisRayTrace::calc_node_positions(
+            &mut scraper,
+            ray_along_z_at("input_1")?,
+            &RayTraceConfig::default(),
+        )?;
+        let path = |port: &str| {
+            output_rays(&output, port)
+                .iter()
+                .next()
+                .expect("one axis ray")
+                .position_history_with_current()
+        };
+        let transmitted = path("out1_trans1_refl2");
+        assert_eq!(transmitted.nrows(), 1, "{transmitted:?}");
+        assert_eq!(transmitted[(0, 0)], millimeter!(5.0));
+        assert_eq!(path("out2_trans2_refl1").nrows(), 2);
         Ok(())
     }
     /// A group positioning run through a beam splitter connected only on its second input.

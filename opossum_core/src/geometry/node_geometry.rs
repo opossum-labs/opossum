@@ -276,7 +276,7 @@ impl Geometry {
     ///
     /// The ray meets the unbounded surface of the face (see [`Face::intersect`]), and the point
     /// counts only where the face reaches (see [`GeometryKind::includes`]). A hit in a bore holds
-    /// no material and is not recorded (see [`GeometryKind::in_bore`]).
+    /// no material and is not recorded (see [`GeometryKind::bored_rim`]).
     ///
     /// # Arguments
     ///
@@ -292,7 +292,7 @@ impl Geometry {
         let kind = self.kind();
         let surface = kind.surface(face)?.face();
         let (point, normal) = surface.intersect(ray)?;
-        let on_material = !kind.in_bore(face, &point);
+        let on_material = !kind.bored_rim(face).is_some_and(|rim| rim.in_bore(&point));
         kind.includes(face, &point).then(|| SurfaceHit {
             point,
             normal,
@@ -505,7 +505,7 @@ impl SurfaceHit {
         self.local_point
     }
     /// Return whether the hit lies on the material of the face, rather than in a bore through it
-    /// (see [`GeometryKind::in_bore`]).
+    /// (see [`GeometryKind::bored_rim`]).
     #[must_use]
     pub const fn on_material(&self) -> bool {
         self.on_material
@@ -563,7 +563,7 @@ pub trait GeometryKind {
     /// `true` if the face reaches to this point; `false` if the point lies on the surface beyond
     /// the edge of the face, or if there is no such face.
     fn includes(&self, face: FaceIndex, point: &Point3<Length>) -> bool;
-    /// Return whether a point a face reaches lies in a bore through it.
+    /// Return the rim of a face with a bore through it.
     ///
     /// A bore lies within the component, it only holds no material: light there passes the face
     /// untouched (see [`Geometry::interact_with_rays`]). The face reaches into the bore (see
@@ -571,14 +571,13 @@ pub trait GeometryKind {
     ///
     /// # Arguments
     ///
-    /// - `face`: the number of the face the point lies on.
-    /// - `point`: a point on the surface of that face, in the frame the geometry is stated in.
+    /// - `face`: the number of the face.
     ///
     /// # Returns
     ///
-    /// `true` if the point lies in a bore; `false` if it lies on the material, beyond the edge, or
-    /// if there is no such face.
-    fn in_bore(&self, face: FaceIndex, point: &Point3<Length>) -> bool;
+    /// The rim, whose outline has the bore; `None` if the face has no bore or if there is no such
+    /// face.
+    fn bored_rim(&self, face: FaceIndex) -> Option<&Rim>;
     /// Return the window a detector records within, or `None` if all light on its faces is recorded.
     ///
     /// A window is no boundary: light outside it passes the face like light inside, it is just not
@@ -714,12 +713,12 @@ impl GeometryKind for SurfaceGeometry {
             SurfaceExtent::Open | SurfaceExtent::Window(_) => true,
         })
     }
-    fn in_bore(&self, face: FaceIndex, point: &Point3<Length>) -> bool {
-        face == Self::FACE
-            && match &self.extent {
-                SurfaceExtent::Edge(rim) => rim.in_bore(point),
-                SurfaceExtent::Open | SurfaceExtent::Window(_) => false,
-            }
+    fn bored_rim(&self, face: FaceIndex) -> Option<&Rim> {
+        let rim = match &self.extent {
+            SurfaceExtent::Edge(rim) => Some(rim),
+            SurfaceExtent::Open | SurfaceExtent::Window(_) => None,
+        };
+        rim.filter(|rim| face == Self::FACE && rim.outline().bore().is_some())
     }
     fn window(&self) -> Option<&Rim> {
         match &self.extent {
