@@ -301,6 +301,11 @@ another lens is not solid, so the lens in front would otherwise blot it out. The
 mirrored by its coating, the more solid it is drawn. Solid components — a mirror, a grating, a
 detector — are drawn fully opaque and are seen through a lens in front of them as they are.
 
+Mirrors, gratings and glass reflect a calm, neutral **horizon**, a lighter grey-blue above eye level
+and a darker grey below, not the setup around them. A mirror therefore shows no image of the lenses
+or the table in front of it. Both tones are deliberately set apart from the background and the table,
+so a mirror stands out against what lies behind it instead of vanishing into it.
+
 ## The optical table and orientation
 
 Beneath the setup sits an **optical table**: a dark breadboard surface with a regular raster of holes

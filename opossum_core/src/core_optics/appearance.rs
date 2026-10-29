@@ -60,7 +60,7 @@ impl Appearance {
     #[must_use]
     pub const fn mirror() -> Self {
         Self {
-            color: [0.9, 0.9, 0.92, 1.0],
+            color: [0.0, 0.5, 0.5, 0.6],
             roughness: 0.05,
             metallic: 1.0,
             finish: SurfaceFinish::Reflective,

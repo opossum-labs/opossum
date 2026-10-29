@@ -21,6 +21,7 @@ File: `three-0.174.0.tgz` (sha1: see `npm pack --dry-run three@0.174.0`)
 | `three.core.js` | `package/build/three.core.js` |
 | `examples/jsm/controls/OrbitControls.js` | `package/examples/jsm/controls/OrbitControls.js` |
 | `examples/jsm/loaders/GLTFLoader.js` | `package/examples/jsm/loaders/GLTFLoader.js` |
+| `examples/jsm/loaders/RGBELoader.js` | `package/examples/jsm/loaders/RGBELoader.js` |
 | `examples/jsm/utils/BufferGeometryUtils.js` | `package/examples/jsm/utils/BufferGeometryUtils.js` |
 | `examples/jsm/environments/RoomEnvironment.js` | `package/examples/jsm/environments/RoomEnvironment.js` |
 | `examples/jsm/helpers/ViewHelper.js` | `package/examples/jsm/helpers/ViewHelper.js` |
@@ -39,6 +40,10 @@ File: `three-0.174.0.tgz` (sha1: see `npm pack --dry-run three@0.174.0`)
 - `RoomEnvironment.js` builds the small lit room that `PMREMGenerator` turns into an environment
   map. Transmissive glass (`KHR_materials_transmission`) has nothing to refract without one and
   renders black, so a viewer that shows optics needs it.
+- `RGBELoader.js` reads a Radiance `.hdr` panorama for `Environment::Image`. An HDR keeps
+  brightness above white, so a lamp in it still shines in a mirror; an ordinary image tops out
+  at white. It imports only three-core types, rewritten to the relative build like the other
+  add-ons, and is loaded only when an `.hdr` environment is asked for.
 - `ViewHelper.js` is the corner orientation gizmo: a small axis widget in a screen corner that
   shows which way x/y/z point and snaps the camera to an axis when clicked. It imports only
   three-core types, so it needs no further add-ons. Its bare `from 'three'` import is rewritten to
@@ -77,6 +82,7 @@ cp extracted/package/build/three.module.js assets/three/three.module.js
 cp extracted/package/build/three.core.js   assets/three/three.core.js
 cp extracted/package/examples/jsm/controls/OrbitControls.js    assets/three/examples/jsm/controls/
 cp extracted/package/examples/jsm/loaders/GLTFLoader.js         assets/three/examples/jsm/loaders/
+cp extracted/package/examples/jsm/loaders/RGBELoader.js         assets/three/examples/jsm/loaders/
 cp extracted/package/examples/jsm/utils/BufferGeometryUtils.js  assets/three/examples/jsm/utils/
 cp extracted/package/examples/jsm/environments/RoomEnvironment.js assets/three/examples/jsm/environments/
 cp extracted/package/examples/jsm/helpers/ViewHelper.js            assets/three/examples/jsm/helpers/
