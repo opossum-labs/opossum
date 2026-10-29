@@ -23,7 +23,9 @@ use std::collections::HashSet;
 // The prelude, not just `Asset` and `asset!`: the macro expands to a path through `manganis`, which
 // only the prelude brings into scope.
 use dioxus::prelude::*;
-use dioxus_glb_viewer::{GlbObject, GlbSource, Ground, PickEvent, Transform};
+use dioxus_glb_viewer::{
+    Environment, GlbObject, GlbSource, Ground, PickEvent, Transform, ViewerOptions,
+};
 use opossum_core::types::api_types::SceneManifest;
 use uuid::Uuid;
 
@@ -38,6 +40,13 @@ const TABLE_HEIGHT_M: f32 = -0.075;
 /// Spacing of the table's holes, in metres - the common 25 mm breadboard raster. One copy of
 /// [`TABLE_TILE`] holds one hole.
 const TABLE_PITCH_M: f32 = 0.025;
+/// The 360° panorama shipped for the 3D View menu's **HDR environment**.
+#[allow(clippy::volatile_composites)]
+const SCENE_ENVIRONMENT: Asset = asset!("/assets/scene_environment.hdr");
+/// The two tones of the calm horizon mirrors and glass reflect by default. Both are darker than the
+/// background and the table, so a mirror stands out against them instead of vanishing.
+const HORIZON_ABOVE: &str = "#667079";
+const HORIZON_BELOW: &str = "#46474a";
 /// Describe a model's components the way the 3D viewer wants them.
 ///
 /// The node uuid becomes the object id, which is what a click in the 3D view reports back and what
@@ -161,6 +170,34 @@ pub fn table_ground() -> Ground {
         // An asset of this application, so the webview loads it from its own origin.
         tile_url: TABLE_TILE.to_string(),
         tile_size: TABLE_PITCH_M,
+    }
+}
+
+/// Set what the 3D view's mirrors and glass reflect, and what lies behind the setup.
+///
+/// With the HDR the shipped panorama is both: it is reflected and seen behind the setup, at its own
+/// brightness. Without it the background colour stays behind the setup, and mirrors and glass
+/// reflect the calm horizon at twice the strength, so a mirror reads as a mirror against it.
+///
+/// # Arguments
+///
+/// - `options`: the view's options, changed in place
+/// - `hdr`: whether the shipped HDR panorama is used
+pub fn set_environment(options: &mut ViewerOptions, hdr: bool) {
+    if hdr {
+        // An asset of this application, so the webview loads it from its own origin.
+        options.environment = Environment::Image {
+            url: SCENE_ENVIRONMENT.to_string(),
+        };
+        options.environment_intensity = 1.0;
+        options.environment_background = true;
+    } else {
+        options.environment = Environment::Horizon {
+            above: HORIZON_ABOVE.into(),
+            below: HORIZON_BELOW.into(),
+        };
+        options.environment_intensity = 2.0;
+        options.environment_background = false;
     }
 }
 
@@ -378,6 +415,38 @@ mod tests {
         assert!(ground.height < 0.0, "table at {} m", ground.height);
         assert!(ground.tile_size > 0.0, "tile size {} m", ground.tile_size);
         assert!(!ground.tile_url.is_empty());
+    }
+
+    /// With the HDR switch on, the shipped panorama is reflected and seen behind the setup at its own
+    /// brightness; off, the background colour stays and mirrors reflect the calm horizon, twice as
+    /// strong. Either way the switch decides all three settings, so flipping it back restores them.
+    #[test]
+    fn the_hdr_switch_picks_the_panorama_or_the_horizon() {
+        let mut options = ViewerOptions::default();
+        set_environment(&mut options, true);
+        let Environment::Image { url } = &options.environment else {
+            panic!(
+                "the HDR switch did not choose a panorama: {:?}",
+                options.environment
+            );
+        };
+        assert!(
+            url.contains("scene_environment") && url.ends_with(".hdr"),
+            "{url}"
+        );
+        assert!(options.environment_background);
+        assert_eq!(options.environment_intensity.to_bits(), 1.0_f32.to_bits());
+
+        set_environment(&mut options, false);
+        assert_eq!(
+            options.environment,
+            Environment::Horizon {
+                above: "#667079".into(),
+                below: "#46474a".into(),
+            }
+        );
+        assert!(!options.environment_background);
+        assert_eq!(options.environment_intensity.to_bits(), 2.0_f32.to_bits());
     }
 
     /// A hit reveals the node in the graph the manifest says it actually lives in, and never brings

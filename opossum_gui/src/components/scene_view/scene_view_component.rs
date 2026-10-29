@@ -4,7 +4,7 @@ use std::collections::HashSet;
 
 use dioxus::prelude::*;
 use dioxus_glb_viewer::{
-    Environment, GlbObject, GlbViewer, PickEvent, ViewerEvent, ViewerOptions, use_glb_viewer_handle,
+    GlbObject, GlbViewer, PickEvent, ViewerEvent, ViewerOptions, use_glb_viewer_handle,
 };
 use opossum_core::types::api_types::{
     AnalyzerItemDto, SceneAnalyzer, SceneManifest, SkippedSceneNode,
@@ -18,7 +18,8 @@ use crate::{
         context_menu::cx_menu::CxMenu,
         scene_view::{
             AXIS_OBJECT_ID, RAYS_OBJECT_ID, SceneShortcut, SceneViewRequest, action_for_pick,
-            apply_node_selection, is_ray_object, objects_of, ray_object, table_ground,
+            apply_node_selection, is_ray_object, objects_of, ray_object, set_environment,
+            table_ground,
         },
         scenery_editor::{
             GraphStateStoreExt, GraphsWorkspaceAction, GraphsWorkspaceState,
@@ -100,28 +101,25 @@ pub fn SceneView() -> Element {
         )
     };
 
-    let mut options = use_signal(|| ViewerOptions {
-        // Without this, every lens renders black: glass refracts its surroundings, and an empty
-        // scene has none. See `dioxus_glb_viewer`'s `Environment`. Both tones are darker than
-        // the background and the table, so a mirror stands out against them instead of vanishing.
-        environment: Environment::Horizon {
-            above: "#667079".into(),
-            below: "#46474a".into(),
-        },
-        // Twice as strong, so mirrors read as mirrors against the calm horizon.
-        environment_intensity: 2.0,
-        background: "#435d7a".into(),
-        // The model is metres across and sits near the origin, while the default grid is twenty
-        // units wide - it would swamp the setup rather than give it a floor.
-        grid: false,
-        fit_on_first_load: true,
-        // Show a corner gizmo so the user always knows which way is up in the 3D view.
-        orientation_gizmo: SCENE_VIEW_CONTROLS.peek().axes,
-        // The optical table as a floor reaching to the horizon; see `table_ground`.
-        ground: SCENE_VIEW_CONTROLS.peek().table.then(table_ground),
-        // Drawn light - the optical axis - is a line; at one pixel it disappears against the table.
-        line_width: 3.0,
-        ..ViewerOptions::default()
+    let mut options = use_signal(|| {
+        let mut options = ViewerOptions {
+            background: "#435d7a".into(),
+            // The model is metres across and sits near the origin, while the default grid is twenty
+            // units wide - it would swamp the setup rather than give it a floor.
+            grid: false,
+            fit_on_first_load: true,
+            // Show a corner gizmo so the user always knows which way is up in the 3D view.
+            orientation_gizmo: SCENE_VIEW_CONTROLS.peek().axes,
+            // The optical table as a floor reaching to the horizon; see `table_ground`.
+            ground: SCENE_VIEW_CONTROLS.peek().table.then(table_ground),
+            // Drawn light - the optical axis - is a line; at one pixel it disappears against the table.
+            line_width: 3.0,
+            ..ViewerOptions::default()
+        };
+        // Without an environment every lens renders black: glass refracts its surroundings, and an
+        // empty scene has none. See `dioxus_glb_viewer`'s `Environment`.
+        set_environment(&mut options, SCENE_VIEW_CONTROLS.peek().hdr_environment);
+        options
     });
 
     // Reading `SCENE_REVISION` inside is what keeps the view live: the resource re-runs on every
@@ -201,15 +199,12 @@ pub fn SceneView() -> Element {
     // write of `objects` re-renders the viewer to compute a diff that would come out empty.
     use_effect(move || {
         let controls = SCENE_VIEW_CONTROLS();
-        let ground = controls.table.then(table_ground);
-        let differs = {
-            let options = options.peek();
-            options.ground != ground || options.orientation_gizmo != controls.axes
-        };
-        if differs {
-            let mut options = options.write();
-            options.ground = ground;
-            options.orientation_gizmo = controls.axes;
+        let mut wanted = options.peek().clone();
+        wanted.ground = controls.table.then(table_ground);
+        wanted.orientation_gizmo = controls.axes;
+        set_environment(&mut wanted, controls.hdr_environment);
+        if *options.peek() != wanted {
+            options.set(wanted);
         }
         // Built from the list on screen rather than from the manifest: which components are drawn is
         // whatever the last fetch produced, and only the light over them is the menu's business. The

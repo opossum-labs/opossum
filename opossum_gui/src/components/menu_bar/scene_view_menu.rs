@@ -92,6 +92,15 @@ pub fn SceneViewMenu(on_menu_action: EventHandler<AppCommand>, is_connected: boo
                     },
                 }
                 SceneViewMenuEntry {
+                    label: "HDR environment",
+                    shown: Some(controls.hdr_environment),
+                    disabled: !open,
+                    on_click: move |()| {
+                        let mut controls = SCENE_VIEW_CONTROLS.write();
+                        controls.hdr_environment = !controls.hdr_environment;
+                    },
+                }
+                SceneViewMenuEntry {
                     label: "World axes",
                     shown: Some(controls.axes),
                     disabled: !open,

@@ -10,13 +10,17 @@
 /// them can be answered by looking at the view. The three things that only *happen* are
 /// [`SceneViewRequest`]s instead.
 #[derive(Clone, Copy, Debug, PartialEq)]
-// Four independent switches, each with its own entry in the menu. They are state, not arguments:
+// Independent switches, each with its own entry in the menu. They are state, not arguments:
 // there is no combination of them that is not a legitimate view, so there is nothing to fold into an
 // enum.
 #[allow(clippy::struct_excessive_bools)]
 pub struct SceneViewControls {
     /// Whether the optical table under the setup is shown. Mirrors `ViewerOptions::ground`.
     pub table: bool,
+    /// Whether the shipped HDR panorama is what mirrors and glass reflect and what lies behind the
+    /// setup, instead of the calm horizon and the background colour. Off by default. Mirrors the
+    /// environment settings of `ViewerOptions`; see `adapter::set_environment`.
+    pub hdr_environment: bool,
     /// Whether the corner orientation gizmo is shown. Mirrors `ViewerOptions::orientation_gizmo`.
     pub axes: bool,
     /// Whether the optical axis is shown. Mirrors the `visible` flag of the axis object.
@@ -38,6 +42,7 @@ impl Default for SceneViewControls {
     fn default() -> Self {
         Self {
             table: true,
+            hdr_environment: false,
             axes: true,
             beam_axis: true,
             rays: false,
