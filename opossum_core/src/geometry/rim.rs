@@ -95,7 +95,7 @@ mod test {
         // A circle of 5 mm around (3, 4) mm of a plane, extruded along the reference's x axis.
         let plane = Isometry::new(millimeter!(0.0, 0.0, 2.0), degree!(0.0, 90.0, 0.0))?;
         let rim = Rim::new(
-            Outline::new(CircleShape::new(millimeter!(5.0))?, Vec::new())?,
+            Outline::new(CircleShape::new(millimeter!(5.0))?, None)?,
             plane.append(&Isometry::new_translation(millimeter!(3.0, 4.0, 0.0))?),
         );
         let reference = Isometry::new(millimeter!(10.0, 0.0, 0.0), degree!(0.0, 0.0, 30.0))?;

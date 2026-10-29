@@ -1216,11 +1216,11 @@ mod test {
         let (radius, bore) = (millimeter!(12.5), millimeter!(4.0));
         let ring = OpticShape::Bounded(Outline::new(
             CircleShape::new(radius)?,
-            vec![Bore::new(
+            Some(Bore::new(
                 CircleShape::new(bore)?,
                 millimeter!(0., 0.),
                 degree!(0.),
-            )],
+            )),
         )?);
         let mut mirror = ThinMirror::default();
         mirror.set_property(OPTIC_SHAPE, ring.into())?;
@@ -1247,7 +1247,7 @@ mod test {
         let mut parabola =
             ParabolicMirror::new_with_off_axis_x("oap", millimeter!(100.0), true, degree!(90.0))?;
         let optic_shape =
-            OpticShape::Bounded(Outline::new(CircleShape::new(millimeter!(25.0))?, vec![])?);
+            OpticShape::Bounded(Outline::new(CircleShape::new(millimeter!(25.0))?, None)?);
         parabola.set_property(OPTIC_SHAPE, optic_shape.into())?;
         let mesh = surface_mesh(&parabola, 32)?;
         let geometry = parabola

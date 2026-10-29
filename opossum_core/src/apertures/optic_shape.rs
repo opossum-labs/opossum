@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
-//! The value of a component's optic shape: an outline on its axis with bores through it.
+//! The value of a component's optic shape: an outline on its axis, possibly with a bore through it.
 //!
-//! A component has an edge and, possibly, bores through it, such as a mirror with a hole for the
+//! A component has an edge and, possibly, one bore through it, such as a mirror with a hole for the
 //! beam to pass. That is all the optic shape states: unlike a general [`Aperture`], it has no
 //! soft edges, no obstructions and no stack of arbitrary shapes. The geometry works with the
 //! [`Outline`] directly (see [`OpticShape::outline`]); an [`Aperture`] is made of it only to be
@@ -24,7 +24,7 @@ use std::{f64::consts::TAU, fmt::Display};
 use strum::EnumIter;
 use uom::si::f64::{Angle, Length};
 
-/// How many points the edge of a circle is sampled with when the bores are checked.
+/// How many points the edge of a circle is sampled with when the bore is checked.
 const CIRCLE_POINTS: usize = 64;
 /// How close two edges may come, in meters, before they count as touching.
 const TOUCHING: f64 = 1e-9;
@@ -241,15 +241,16 @@ impl Bore {
     }
 }
 
-/// The edge of a component, centred on its axis, and the bores through it.
+/// The edge of a component, centered on its axis, and the bore through it, if it has one.
 ///
-/// The edge and every bore bound a region, and the bores lie within the edge and apart from each
-/// other; that is checked whenever an [`Outline`] is made, also when one is read from a file.
+/// The edge and the bore bound a region, and the bore lies within the edge; that is checked
+/// whenever an [`Outline`] is made, also when one is read from a file.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(try_from = "OutlineFields")]
 pub struct Outline {
     shape: OutlineShape,
-    bores: Vec<Bore>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bore: Option<Bore>,
 }
 
 /// The fields of an [`Outline`] as a file states them, before they are checked.
@@ -257,14 +258,14 @@ pub struct Outline {
 struct OutlineFields {
     shape: OutlineShape,
     #[serde(default)]
-    bores: Vec<Bore>,
+    bore: Option<Bore>,
 }
 
 impl TryFrom<OutlineFields> for Outline {
     type Error = OpossumError;
 
     fn try_from(fields: OutlineFields) -> OpmResult<Self> {
-        Self::new(fields.shape, fields.bores)
+        Self::new(fields.shape, fields.bore)
     }
 }
 
@@ -273,19 +274,18 @@ impl Outline {
     ///
     /// # Arguments
     ///
-    /// * `shape` - the edge of the component, centred on its axis.
-    /// * `bores` - the bores through the component.
+    /// * `shape` - the edge of the component, centered on its axis.
+    /// * `bore` - the bore through the component, if it has one.
     ///
     /// # Errors
     ///
-    /// This function returns an error if the edge or a bore crosses or touches itself, so that it
-    /// bounds no region, if a bore reaches beyond the edge or touches it, or if two bores overlap
-    /// or touch. The edges are compared as polygons, a circle sampled at 64 points; edges closer
-    /// than 1 nm touch.
-    pub fn new(shape: impl Into<OutlineShape>, bores: Vec<Bore>) -> OpmResult<Self> {
+    /// This function returns an error if the edge or the bore crosses or touches itself, so that it
+    /// bounds no region, or if the bore reaches beyond the edge or touches it. The edges are
+    /// compared as polygons, a circle sampled at 64 points; edges closer than 1 nm touch.
+    pub fn new(shape: impl Into<OutlineShape>, bore: Option<Bore>) -> OpmResult<Self> {
         let outline = Self {
             shape: shape.into(),
-            bores,
+            bore,
         };
         outline.check()?;
         Ok(outline)
@@ -295,24 +295,24 @@ impl Outline {
     pub const fn shape(&self) -> &OutlineShape {
         &self.shape
     }
-    /// Returns the bores through the component.
+    /// Returns the bore through the component, if it has one.
     #[must_use]
-    pub fn bores(&self) -> &[Bore] {
-        &self.bores
+    pub const fn bore(&self) -> Option<&Bore> {
+        self.bore.as_ref()
     }
-    /// Return whether a point of the plane holds material: it lies on or within the edge and in
-    /// none of the bores.
+    /// Return whether a point of the plane holds material: it lies on or within the edge and not
+    /// in the bore.
     ///
     /// # Arguments
     ///
     /// * `point` - the point, in the plane of the outline with the axis at its origin.
     #[must_use]
     pub(crate) fn contains(&self, point: Point2<Length>) -> bool {
-        self.shape.contains(point) && !self.bores.iter().any(|bore| bore.contains(point))
+        self.shape.contains(point) && !self.bore.as_ref().is_some_and(|bore| bore.contains(point))
     }
     /// Return the points the component reaches farthest in, in the plane of the outline.
     ///
-    /// They are the extreme points of the edge (see [`OutlineShape::extreme_points`]): a bore
+    /// They are the extreme points of the edge (see [`OutlineShape::extreme_points`]): the bore
     /// only takes material away.
     #[must_use]
     pub(crate) fn extreme_points(&self) -> Vec<Point2<Length>> {
@@ -331,9 +331,9 @@ impl Outline {
                 Length::max(reach, meter!(point.x.value.hypot(point.y.value)))
             })
     }
-    /// Triangulate the area of this outline: the region within its edge and outside its bores.
+    /// Triangulate the area of this outline: the region within its edge and outside its bore.
     ///
-    /// The edge and every bore are sampled with about `segments` points each (see
+    /// The edge and the bore are sampled with about `segments` points each (see
     /// [`OutlineShape::outline_points`]); those rims are held fixed and the inside is filled (see
     /// [`OutlineMesh`]).
     ///
@@ -351,20 +351,19 @@ impl Outline {
     /// bound the area, such as a bore that the coarser sampling of the edge cuts into.
     pub fn triangulate(&self, segments: usize) -> OpmResult<OutlineMesh> {
         let mut rims = vec![self.shape.outline_points(segments)?];
-        for bore in &self.bores {
-            // A bore takes its area away, so its rim runs clockwise.
+        if let Some(bore) = &self.bore {
+            // The bore takes its area away, so its rim runs clockwise.
             let mut rim = bore.outline_points(segments)?;
             rim.reverse();
             rims.push(rim);
         }
         OutlineMesh::from_rims(&rims, |point| self.contains(point))
     }
-    /// Check that the edge and every bore bound a region, and that every bore lies within the
-    /// edge and apart from every other bore, none touching.
+    /// Check that the edge and the bore bound a region, and that the bore lies within the edge
+    /// without touching it.
     ///
-    /// A shape bounds a region if its edge neither crosses nor touches itself. Two regions apart
-    /// from each other have edges that do not meet and neither holds a point of the other; a bore
-    /// within the edge has edges that do not meet and a corner inside it.
+    /// A shape bounds a region if its edge neither crosses nor touches itself. A bore within the
+    /// edge has edges that do not meet the edge of the component and a corner inside it.
     fn check(&self) -> OpmResult<()> {
         let edge_ring = self.shape.corners();
         if ring_meets_itself(&edge_ring) {
@@ -372,36 +371,19 @@ impl Outline {
                 "the edge of the component crosses or touches itself".into(),
             ));
         }
-        let corners = self.bores.iter().map(Bore::corners).collect::<Vec<_>>();
-        if let Some(number) = corners.iter().position(|ring| ring_meets_itself(ring)) {
-            return Err(OpossumError::Properties(format!(
-                "bore {} crosses or touches itself",
-                number + 1
-            )));
+        let Some(bore) = &self.bore else {
+            return Ok(());
+        };
+        let ring = bore.corners();
+        if ring_meets_itself(&ring) {
+            return Err(OpossumError::Properties(
+                "the bore crosses or touches itself".into(),
+            ));
         }
-        for (number, (bore, ring)) in self.bores.iter().zip(&corners).enumerate() {
-            if rings_meet(&edge_ring, ring)
-                || !ring.first().is_some_and(|&c| self.shape.contains(c))
-            {
-                return Err(OpossumError::Properties(format!(
-                    "bore {} does not lie within the edge of the component without touching it",
-                    number + 1
-                )));
-            }
-            for (other_number, (other, other_ring)) in
-                self.bores.iter().zip(&corners).enumerate().skip(number + 1)
-            {
-                if rings_meet(ring, other_ring)
-                    || other_ring.first().is_some_and(|&c| bore.contains(c))
-                    || ring.first().is_some_and(|&c| other.contains(c))
-                {
-                    return Err(OpossumError::Properties(format!(
-                        "bores {} and {} overlap or touch",
-                        number + 1,
-                        other_number + 1
-                    )));
-                }
-            }
+        if rings_meet(&edge_ring, &ring) || !ring.first().is_some_and(|&c| self.shape.contains(c)) {
+            return Err(OpossumError::Properties(
+                "the bore does not lie within the edge of the component without touching it".into(),
+            ));
         }
         Ok(())
     }
@@ -409,10 +391,7 @@ impl Outline {
 
 impl From<OutlineShape> for Outline {
     fn from(shape: OutlineShape) -> Self {
-        Self {
-            shape,
-            bores: Vec::new(),
-        }
+        Self { shape, bore: None }
     }
 }
 
@@ -425,28 +404,22 @@ fn ring_edges(ring: &[Point2<Length>]) -> Vec<(Point2<f64>, Point2<f64>)> {
         .collect()
 }
 
-/// The region of an outline as an [`Aperture`], to be plotted: its edge as a hole, and each bore
+/// The region of an outline as an [`Aperture`], to be plotted: its edge as a hole, and its bore
 /// as an obstruction in it.
 ///
 /// # Errors
 ///
-/// This function returns an error if a bore cannot be placed as an [`Aperture`].
+/// This function returns an error if the bore cannot be placed as an [`Aperture`].
 impl TryFrom<&Outline> for Aperture {
     type Error = OpossumError;
 
     fn try_from(outline: &Outline) -> OpmResult<Self> {
         let edge = Self::new(outline.shape.clone().into(), ApertureType::Hole, None, None)?;
-        if outline.bores.is_empty() {
+        let Some(bore) = &outline.bore else {
             return Ok(edge);
-        }
-        let bores = outline
-            .bores
-            .iter()
-            .map(|bore| bore.aperture(ApertureType::Obstruction));
+        };
         Self::new_stack(
-            std::iter::once(Ok(edge))
-                .chain(bores)
-                .collect::<OpmResult<_>>()?,
+            vec![edge, bore.aperture(ApertureType::Obstruction)?],
             ApertureType::Hole,
             None,
             None,
@@ -542,7 +515,7 @@ fn distance_to_segment(point: Point2<f64>, from: Point2<f64>, to: Point2<f64>) -
 pub enum OpticShape {
     /// Unbounded, which only an idealization, a detector or a dummy may be.
     Open,
-    /// Bounded by an edge on the axis, with bores through it.
+    /// Bounded by an edge on the axis, possibly with a bore through it.
     Bounded(Outline),
 }
 
@@ -574,10 +547,9 @@ impl Display for OpticShape {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Open => write!(f, "Open"),
-            Self::Bounded(outline) => match outline.bores.len() {
-                0 => write!(f, "{}", outline.shape),
-                1 => write!(f, "{} with 1 bore", outline.shape),
-                bores => write!(f, "{} with {bores} bores", outline.shape),
+            Self::Bounded(outline) => match outline.bore {
+                None => write!(f, "{}", outline.shape),
+                Some(_) => write!(f, "{} with a bore", outline.shape),
             },
         }
     }
@@ -659,7 +631,7 @@ mod test {
     fn a_ring_is_the_region_of_the_stack_it_replaces() -> OpmResult<()> {
         let ring = OpticShape::from(Outline::new(
             circle(12.5)?,
-            vec![bore(circle(2.0)?, 0.0, 0.0, 0.0)],
+            Some(bore(circle(2.0)?, 0.0, 0.0, 0.0)),
         )?);
         let ring = region(&ring)?;
         let stack = Aperture::new_stack(
@@ -688,22 +660,17 @@ mod test {
         );
         Ok(())
     }
-    /// A square plate of 20 mm with a round bore and a turned slot beside its axis holds material
-    /// on the plate but not in the bores, so it transmits on 400 mm² less the bores.
+    /// A square plate of 20 mm with a turned slot beside its axis holds material on the plate but
+    /// not in the slot, so it transmits on 400 mm² less the slot.
     #[test]
-    fn a_plate_transmits_beside_its_shifted_and_turned_bores() -> OpmResult<()> {
+    fn a_plate_transmits_beside_its_shifted_and_turned_bore() -> OpmResult<()> {
         let plate = region(&OpticShape::from(Outline::new(
             rectangle(20.0, 20.0)?,
-            vec![
-                bore(circle(2.0)?, 4.0, 4.0, 0.0),
-                bore(rectangle(3.0, 1.0)?, -4.0, -3.0, 30.0),
-            ],
+            Some(bore(rectangle(3.0, 1.0)?, -4.0, -3.0, 30.0)),
         )?))?;
         assert!(transmits(&plate, 0.0, 0.0));
         assert!(transmits(&plate, 9.9, -9.9));
         assert!(!transmits(&plate, 10.1, 0.0));
-        assert!(!transmits(&plate, 4.0, 4.0));
-        assert!(!transmits(&plate, 5.9, 4.0));
         assert!(!transmits(&plate, -4.0, -3.0));
         // 1.3 mm from the centre of the slot along it, which an unturned slot would not reach, and
         // as far turned the other way.
@@ -711,11 +678,7 @@ mod test {
         let x = 1.3_f64.mul_add(cos, -4.0);
         assert!(!transmits(&plate, x, 1.3_f64.mul_add(sin, -3.0)));
         assert!(transmits(&plate, x, 1.3_f64.mul_add(-sin, -3.0)));
-        assert_relative_eq!(
-            area(&plate, 11),
-            PI.mul_add(-4.0, 400.0) - 3.0,
-            max_relative = 2e-3
-        );
+        assert_relative_eq!(area(&plate, 11), 400.0 - 3.0, max_relative = 2e-3);
         Ok(())
     }
     /// A triangular plate holds material within its edge but not in its turned square bore.
@@ -723,7 +686,7 @@ mod test {
     fn a_polygon_holds_material_beside_its_bore() -> OpmResult<()> {
         let plate = region(&OpticShape::from(Outline::new(
             triangle([(-10.0, -10.0), (10.0, -10.0), (0.0, 10.0)])?,
-            vec![bore(rectangle(2.0, 2.0)?, 0.0, -4.0, 45.0)],
+            Some(bore(rectangle(2.0, 2.0)?, 0.0, -4.0, 45.0)),
         )?))?;
         for ((x, y), holds) in [
             ((0.0, 0.0), true),
@@ -741,7 +704,7 @@ mod test {
         }
         Ok(())
     }
-    /// An outline reaches as far as its edge, wherever its bores are: a ring as far as its outer
+    /// An outline reaches as far as its edge, wherever its bore is: a ring as far as its outer
     /// circle, a rectangle to its corners, a polygon to its farthest corner. Its axis-aligned
     /// bounds are those of its edge.
     #[test]
@@ -775,7 +738,7 @@ mod test {
                 ],
             ))
         };
-        let ring = Outline::new(circle(12.5)?, vec![bore(circle(2.0)?, 3.0, 0.0, 0.0)])?;
+        let ring = Outline::new(circle(12.5)?, Some(bore(circle(2.0)?, 3.0, 0.0, 0.0)))?;
         assert_eq!(
             reach_and_bounds(ring.into())?,
             (0.0125, [-0.0125, 0.0125, -0.0125, 0.0125])
@@ -789,101 +752,47 @@ mod test {
         assert_eq!(bounds, [-0.003, 0.006, -0.004, 0.002]);
         Ok(())
     }
-    /// A bore lies within the edge, and apart from every other bore; none touches another or the
-    /// edge. A bore 1 µm from another or from the edge is apart.
+    /// The bore lies within the edge without touching it. A bore 1 µm from the edge lies within.
     #[test]
-    fn bores_lie_apart_within_the_edge() -> OpmResult<()> {
-        let plate = |bores: Vec<Bore>| Outline::new(rectangle(20.0, 20.0)?, bores);
-        assert!(
-            plate(vec![
-                bore(circle(2.0)?, 4.0, 4.0, 0.0),
-                bore(circle(2.0)?, -4.0, -4.0, 0.0)
-            ])
-            .is_ok()
-        );
-        assert!(plate(vec![bore(rectangle(2.0, 2.0)?, 8.999, 0.0, 0.0)]).is_ok());
-        assert!(
-            plate(vec![
-                bore(rectangle(2.0, 2.0)?, 0.0, 0.0, 0.0),
-                bore(rectangle(2.0, 2.0)?, 2.001, 0.0, 0.0),
-            ])
-            .is_ok()
-        );
-        for (case, bores) in [
-            ("outside the edge", vec![bore(circle(1.0)?, 15.0, 0.0, 0.0)]),
-            ("across the edge", vec![bore(circle(2.0)?, 9.5, 0.0, 0.0)]),
+    fn a_bore_lies_within_the_edge() -> OpmResult<()> {
+        let plate = |bore: Bore| Outline::new(rectangle(20.0, 20.0)?, Some(bore));
+        assert!(plate(bore(rectangle(2.0, 2.0)?, 8.999, 0.0, 0.0)).is_ok());
+        for (case, bore) in [
+            ("outside the edge", bore(circle(1.0)?, 15.0, 0.0, 0.0)),
+            ("across the edge", bore(circle(2.0)?, 9.5, 0.0, 0.0)),
             (
                 "turned across the edge",
-                vec![bore(rectangle(1.0, 6.0)?, 8.0, 0.0, 45.0)],
+                bore(rectangle(1.0, 6.0)?, 8.0, 0.0, 45.0),
             ),
             (
                 "touching the edge",
-                vec![bore(rectangle(2.0, 2.0)?, 9.0, 0.0, 0.0)],
+                bore(rectangle(2.0, 2.0)?, 9.0, 0.0, 0.0),
             ),
-            ("around the plate", vec![bore(circle(20.0)?, 0.0, 0.0, 0.0)]),
-            (
-                "overlapping",
-                vec![
-                    bore(circle(2.0)?, 0.0, 0.0, 0.0),
-                    bore(circle(2.0)?, 3.0, 0.0, 0.0),
-                ],
-            ),
+            ("around the plate", bore(circle(20.0)?, 0.0, 0.0, 0.0)),
             (
                 "touching the edge with a side",
-                vec![bore(
+                bore(
                     triangle([(8.0, 0.0), (10.0, 1.0), (10.0, -1.0)])?,
                     0.0,
                     0.0,
                     0.0,
-                )],
-            ),
-            (
-                "touching",
-                vec![
-                    bore(rectangle(2.0, 2.0)?, 0.0, 0.0, 0.0),
-                    bore(rectangle(2.0, 2.0)?, 2.0, 0.0, 0.0),
-                ],
-            ),
-            (
-                "touching with a corner",
-                vec![
-                    bore(rectangle(2.0, 2.0)?, 0.0, 0.0, 0.0),
-                    bore(
-                        triangle([(3.0, 1.0), (1.0, 0.0), (3.0, -1.0)])?,
-                        0.0,
-                        0.0,
-                        0.0,
-                    ),
-                ],
-            ),
-            (
-                "one in another",
-                vec![
-                    bore(circle(1.0)?, 0.0, 0.0, 0.0),
-                    bore(circle(3.0)?, 0.0, 0.0, 0.0),
-                ],
+                ),
             ),
         ] {
-            assert!(plate(bores).is_err(), "a bore {case} is accepted");
+            assert!(plate(bore).is_err(), "a bore {case} is accepted");
         }
         Ok(())
     }
-    /// The edge and every bore bound a region: a polygon that crosses or touches itself, runs back
-    /// on itself or lies on one line encloses nothing and is refused, as the edge and as a bore. A
-    /// star and a pentagon bound a region.
+    /// The edge and the bore bound a region: a polygon that crosses or touches itself, runs back
+    /// on itself or lies on one line encloses nothing and is refused, as the edge and as the bore.
+    /// A star and a pentagon bound a region.
     #[test]
     fn every_shape_of_an_outline_bounds_a_region() -> OpmResult<()> {
         let polygon = |corners: &[(f64, f64)]| {
             PolygonShape::new(corners.iter().map(|&(x, y)| millimeter!(x, y)).collect())
         };
         let with_bore = |shape: PolygonShape| -> OpmResult<Outline> {
-            Outline::new(
-                rectangle(20.0, 20.0)?,
-                vec![
-                    bore(circle(1.0)?, 8.0, 8.0, 0.0),
-                    bore(shape, 0.0, 0.0, 0.0),
-                ],
-            )
+            Outline::new(rectangle(20.0, 20.0)?, Some(bore(shape, 0.0, 0.0, 0.0)))
         };
         for (case, corners) in [
             (
@@ -912,12 +821,12 @@ mod test {
             ),
         ] {
             let shape = polygon(&corners)?;
-            let error = Outline::new(shape.clone(), Vec::new())
+            let error = Outline::new(shape.clone(), None)
                 .expect_err(case)
                 .to_string();
             assert!(error.contains("the edge"), "an edge {case}: {error}");
             let error = with_bore(shape).expect_err(case).to_string();
-            assert!(error.contains("bore 2"), "a bore {case}: {error}");
+            assert!(error.contains("the bore"), "a bore {case}: {error}");
         }
         let star = PolygonShape::new(
             (0..10)
@@ -936,43 +845,50 @@ mod test {
             (3.804, 1.236),
         ])?;
         for shape in [star, pentagon] {
-            assert!(Outline::new(shape.clone(), Vec::new()).is_ok(), "{shape:?}");
+            assert!(Outline::new(shape.clone(), None).is_ok(), "{shape:?}");
             assert!(with_bore(shape.clone()).is_ok(), "{shape:?}");
         }
         Ok(())
     }
-    /// A file cannot state bores the type refuses: they are checked when the outline is read.
+    /// A file cannot state a bore the type refuses: it is checked when the outline is read.
     #[test]
     fn an_outline_read_from_a_file_is_checked() -> OpmResult<()> {
-        let apart = Outline::new(
+        let within = Outline::new(
             rectangle(20.0, 20.0)?,
-            vec![
-                bore(circle(2.0)?, 4.0, 4.0, 0.0),
-                bore(circle(2.0)?, -4.0, -4.0, 0.0),
-            ],
+            Some(bore(circle(2.0)?, -4.0, 0.0, 0.0)),
         )?;
-        let file = ron::to_string(&apart).map_err(|e| OpossumError::Other(e.to_string()))?;
-        assert_eq!(ron::from_str::<Outline>(&file).ok(), Some(apart));
+        let file = ron::to_string(&within).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert_eq!(ron::from_str::<Outline>(&file).ok(), Some(within));
         assert!(file.contains("-0.004"));
-        let overlapping = file.replace("-0.004", "0.004");
-        assert!(ron::from_str::<Outline>(&overlapping).is_err());
+        let across_the_edge = file.replace("-0.004", "-0.0095");
+        assert!(ron::from_str::<Outline>(&across_the_edge).is_err());
+        Ok(())
+    }
+    /// An outline without a bore is written without one, and the bore list older files state
+    /// is no field of an outline anymore: it is read past.
+    #[test]
+    fn an_outline_without_a_bore_states_none() -> OpmResult<()> {
+        let plate = Outline::new(rectangle(20.0, 20.0)?, None)?;
+        let file = ron::to_string(&plate).map_err(|e| OpossumError::Other(e.to_string()))?;
+        assert!(!file.contains("bore"), "{file}");
+        let older = file
+            .strip_suffix(')')
+            .map(|fields| format!("{fields},bores:[])"))
+            .ok_or_else(|| OpossumError::Other(format!("not a struct: {file}")))?;
+        assert_eq!(ron::from_str::<Outline>(&older).ok(), Some(plate));
         Ok(())
     }
     #[test]
     fn display() -> OpmResult<()> {
-        let plate = |bores| -> OpmResult<OpticShape> {
-            Ok(Outline::new(rectangle(20.0, 20.0)?, bores)?.into())
+        let plate = |bore| -> OpmResult<OpticShape> {
+            Ok(Outline::new(rectangle(20.0, 20.0)?, bore)?.into())
         };
-        let hole_at = |x| -> OpmResult<Bore> { Ok(bore(circle(1.0)?, x, 0.0, 0.0)) };
         assert_eq!(OpticShape::Open.to_string(), "Open");
         assert_eq!(OpticShape::from(circle(5.0)?).to_string(), "Circle");
+        assert_eq!(plate(None)?.to_string(), "Rectangle");
         assert_eq!(
-            plate(vec![hole_at(4.0)?])?.to_string(),
-            "Rectangle with 1 bore"
-        );
-        assert_eq!(
-            plate(vec![hole_at(4.0)?, hole_at(-4.0)?])?.to_string(),
-            "Rectangle with 2 bores"
+            plate(Some(bore(circle(1.0)?, 4.0, 0.0, 0.0)))?.to_string(),
+            "Rectangle with a bore"
         );
         Ok(())
     }

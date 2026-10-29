@@ -348,7 +348,7 @@ mod test {
     };
 
     fn circle() -> OpmResult<Outline> {
-        Outline::new(CircleShape::new(millimeter!(12.5))?, Vec::new())
+        Outline::new(CircleShape::new(millimeter!(12.5))?, None)
     }
     /// Glass with a refractive index of 1.5, the material of every part below.
     fn glass() -> OpmResult<Material> {

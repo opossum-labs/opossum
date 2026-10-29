@@ -1206,7 +1206,7 @@ mod test {
             millimeter!(50.0),
             millimeter!(f64::INFINITY),
             millimeter!(5.0),
-            Outline::new(CircleShape::new(millimeter!(10.0))?, Vec::new())?,
+            Outline::new(CircleShape::new(millimeter!(10.0))?, None)?,
             Material::default(),
         )?;
         let mut ray = Ray::new(

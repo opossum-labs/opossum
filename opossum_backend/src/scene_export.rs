@@ -1202,8 +1202,7 @@ mod test {
         let before = manifest(&document)?;
         assert_eq!(before.nodes.len(), 1);
 
-        let smaller =
-            OpticShape::Bounded(Outline::new(CircleShape::new(millimeter!(5.0))?, vec![])?);
+        let smaller = OpticShape::Bounded(Outline::new(CircleShape::new(millimeter!(5.0))?, None)?);
         document.scenery_mut().with_node_attr_mut(mirror, |attr| {
             attr.set_property(OPTIC_SHAPE, smaller.into())
         })??;
@@ -1223,11 +1222,11 @@ mod test {
     fn a_mirror_with_a_bore_is_drawn() -> OpmResult<()> {
         let bored = OpticShape::Bounded(Outline::new(
             CircleShape::new(millimeter!(12.5))?,
-            vec![Bore::new(
+            Some(Bore::new(
                 CircleShape::new(millimeter!(2.))?,
                 millimeter!(6.0, 0.0),
                 degree!(0.),
-            )],
+            )),
         )?);
         let mut scenery = NodeGroup::default();
         let source = scenery.add_node(SourcePort::default())?;

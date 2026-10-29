@@ -502,7 +502,7 @@ mod test {
     fn circle_mesh(radius: f64) -> OpmResult<OutlineMesh> {
         crate::apertures::Outline::new(
             crate::apertures::CircleShape::new(millimeter!(radius))?,
-            Vec::new(),
+            None,
         )?
         .triangulate(MESH_SEGMENTS)
     }

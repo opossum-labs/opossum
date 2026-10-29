@@ -372,7 +372,7 @@ mod test {
             Point2::origin(),
             Angle::zero(),
         );
-        let ring = Outline::new(CircleShape::new(millimeter!(12.5))?, vec![hole])?;
+        let ring = Outline::new(CircleShape::new(millimeter!(12.5))?, Some(hole))?;
         let mut mirror = ThinMirror::default();
         mirror.set_property(OPTIC_SHAPE, OpticShape::from(ring).into())?;
         mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;

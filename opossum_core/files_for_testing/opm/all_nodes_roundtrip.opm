@@ -30,7 +30,6 @@
                             shape: Circle(
                                 radius: 0.0125,
                             ),
-                            bores: [],
                         )),
                         "surface": SurfaceConfig(
                             coating: Separator(FixedRatio(0.5)),
@@ -50,7 +49,6 @@
                             shape: Rectangle(
                                 side_length: (0.02, 0.03),
                             ),
-                            bores: [],
                         )),
                         "front surface": SurfaceConfig(
                             coating: IdealAR,
@@ -70,7 +68,6 @@
                             shape: Rectangle(
                                 side_length: (0.025, 0.025),
                             ),
-                            bores: [],
                         )),
                         "surface": SurfaceConfig(
                             coating: IdealAR,
@@ -90,7 +87,6 @@
                             shape: Circle(
                                 radius: 0.0125,
                             ),
-                            bores: [],
                         )),
                         "front surface": SurfaceConfig(
                             coating: IdealAR,
@@ -112,7 +108,6 @@
                             shape: Circle(
                                 radius: 0.0125,
                             ),
-                            bores: [],
                         )),
                         "front surface": SurfaceConfig(
                             coating: IdealAR,
@@ -200,7 +195,6 @@
                             shape: Rectangle(
                                 side_length: (0.025, 0.025),
                             ),
-                            bores: [],
                         )),
                         "surface": SurfaceConfig(
                             coating: IdealAR,
@@ -219,7 +213,6 @@
                             shape: Circle(
                                 radius: 0.0125,
                             ),
-                            bores: [],
                         )),
                         "surface": SurfaceConfig(
                             coating: IdealAR,
@@ -236,7 +229,6 @@
                             shape: Circle(
                                 radius: 0.0125,
                             ),
-                            bores: [],
                         )),
                         "surface": SurfaceConfig(
                             coating: IdealAR,
@@ -265,7 +257,6 @@
                             shape: Rectangle(
                                 side_length: (0.025, 0.025),
                             ),
-                            bores: [],
                         )),
                         "surface": SurfaceConfig(
                             coating: IdealAR,
@@ -282,7 +273,6 @@
                             shape: Rectangle(
                                 side_length: (0.025, 0.025),
                             ),
-                            bores: [],
                         )),
                         "surface": SurfaceConfig(
                             coating: IdealAR,
@@ -299,7 +289,6 @@
                             shape: Rectangle(
                                 side_length: (0.025, 0.025),
                             ),
-                            bores: [],
                         )),
                         "decompose zernike": Bool(false),
                         "zernike max order": I32(4),
@@ -321,7 +310,6 @@
                             shape: Circle(
                                 radius: 0.0125,
                             ),
-                            bores: [],
                         )),
                         "surface": SurfaceConfig(
                             coating: ConstantR(
@@ -341,7 +329,6 @@
                             shape: Rectangle(
                                 side_length: (0.025, 0.025),
                             ),
-                            bores: [],
                         )),
                         "surface": SurfaceConfig(
                             coating: IdealAR,
@@ -361,7 +348,6 @@
                             shape: Circle(
                                 radius: 0.0125,
                             ),
-                            bores: [],
                         )),
                         "surface": SurfaceConfig(
                             coating: ConstantR(

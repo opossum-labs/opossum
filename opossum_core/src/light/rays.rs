@@ -2352,7 +2352,7 @@ mod test {
             joule!(1.0),
         )?);
         let rim = Rim::new(
-            Outline::new(CircleShape::new(millimeter!(0.5))?, Vec::new())?,
+            Outline::new(CircleShape::new(millimeter!(0.5))?, None)?,
             Isometry::identity(),
         );
         assert!(rays.invalidate_outside(&rim));

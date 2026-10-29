@@ -216,7 +216,7 @@ mod test {
 
     #[test]
     fn flipping_turns_normals_and_winding_together() -> OpmResult<()> {
-        let outline = Outline::new(CircleShape::new(millimeter!(10.0))?, Vec::new())?;
+        let outline = Outline::new(CircleShape::new(millimeter!(10.0))?, None)?;
         let face = Face::new(
             SurfaceShape::Sphere(Sphere::new(millimeter!(50.0))?),
             Isometry::identity(),

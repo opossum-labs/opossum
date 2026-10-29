@@ -1,11 +1,10 @@
 use super::OutlineShapeInput;
 use crate::components::node_editor::{
-    accordion::{AccordionItem, open_accordion_content},
+    accordion::AccordionItem,
+    hooks::use_synced_signal,
     inputs::{
         InputParam, IntoInputData, IntoInputDataStrings,
-        dynamic_list::DynamicListComponent,
-        format_si_with_base_unit,
-        input_components::{LabeledSelect, RowedInputs, UnitHandling},
+        input_components::{LabeledSelect, RowedInputs},
         select_options_from_enum_iterator,
     },
 };
@@ -66,90 +65,45 @@ impl IntoInputData<f64, Bore, Bore> for BoreParam {
     }
 }
 
-/// The columns a bore is listed with: its shape, its offset and its rotation.
-fn list_entry(bore: &Bore) -> Vec<String> {
-    let length = |value: f64| format_si_with_base_unit(value, &UnitHandling::new("m", true), false);
-    vec![
-        bore.shape().to_string(),
-        format!("x: {}", length(bore.center().x.value)),
-        format!("y: {}", length(bore.center().y.value)),
-        format!("{}°", bore.rotation().get::<degree>()),
-    ]
-}
-
-/// Id of the collapsible holding the bore draft inputs.
-const BORE_CONTENT_ID: &str = "boreEditorCollapse";
-
-/// Editor for the bores through a component: a collapsed section with the bore being drafted
-/// (shape, offset and rotation), and below it the list of the bores the optic shape has, which is
-/// shown only when there are any.
+/// Editor for the bore through a component: a collapsed section with the bore being drafted
+/// (shape, offset and rotation). The draft starts as the bore the optic shape has, if it has one.
 ///
-/// Adding, updating and deleting a bore each hands the whole list on once, so each is one step to
-/// undo. Editing the draft hands nothing on; while the core refuses the outline the draft would
-/// make ([`Outline::new`]), the button looks refused, does nothing and tells why on hover.
+/// Adding, updating and removing the bore each hands it on once, so each is one step to undo.
+/// Editing the draft hands nothing on; while the core refuses the outline the draft would make
+/// ([`Outline::new`]), the button looks refused, does nothing and tells why on hover.
 ///
 /// # Arguments
 ///
-/// * `edge` - the edge of the component shown, which the bores have to lie within.
-/// * `bores` - the bores the optic shape has.
-/// * `on_bores_change` - handler receiving the changed list of bores.
+/// * `edge` - the edge of the component shown, which the bore has to lie within.
+/// * `bore` - the bore the optic shape has, if any.
+/// * `on_bore_change` - handler receiving the changed bore, or `None` once it is removed.
 /// * `readonly` - whether the inputs are shown read-only.
 #[component]
 pub fn BoreEditor(
     edge: OutlineShape,
-    bores: Vec<Bore>,
-    on_bores_change: EventHandler<Vec<Bore>>,
+    bore: Option<Bore>,
+    on_bore_change: EventHandler<Option<Bore>>,
     readonly: bool,
 ) -> Element {
-    let mut draft =
-        use_signal(|| Bore::new(CircleShape::default(), Point2::origin(), degree!(0.0)));
-    let mut editing_index = use_signal(|| None::<usize>);
+    let mut draft = use_synced_signal(
+        bore.clone()
+            .unwrap_or_else(|| Bore::new(CircleShape::default(), Point2::origin(), degree!(0.0))),
+    );
 
     let on_draft_change = EventHandler::new(move |bore: Bore| draft.set(bore));
     let on_draft_shape_change = EventHandler::new(move |shape: OutlineShape| {
         let (center, rotation) = (draft.read().center(), draft.read().rotation());
         draft.set(Bore::new(shape, center, rotation));
     });
-    let delete_entry_handler = EventHandler::new({
-        let bores = bores.clone();
-        move |index: usize| {
-            let mut bores = bores.clone();
-            if index < bores.len() {
-                bores.remove(index);
-                on_bores_change.call(bores);
-            }
-        }
-    });
-    let modify_entry_handler = EventHandler::new({
-        let bores = bores.clone();
-        move |index: usize| {
-            if let Some(bore) = bores.get(index).cloned() {
-                draft.set(bore);
-                editing_index.set(Some(index));
-                open_accordion_content(BORE_CONTENT_ID);
-            }
-        }
-    });
 
     let draft_bore = draft.read().clone();
-    let index = *editing_index.read();
-    // What a click hands on: the draft in place of the bore being edited, or added.
-    let mut submitted = bores.clone();
-    match index.and_then(|index| submitted.get_mut(index)) {
-        Some(edited) => *edited = draft_bore.clone(),
-        None => submitted.push(draft_bore.clone()),
-    }
+    let submitted = draft_bore.clone();
     let refusal = (!readonly)
-        .then(|| Outline::new(edge, submitted.clone()).err())
+        .then(|| Outline::new(edge, Some(draft_bore.clone())).err())
         .flatten()
         .map(|refusal| refusal.to_string());
     let refused = refusal.is_some();
-    let header = if bores.is_empty() {
-        "Bores".to_string()
-    } else {
-        format!("Bores ({})", bores.len())
-    };
-    let list_entries = bores.iter().map(list_entry).collect::<Vec<_>>();
+    let has_bore = bore.is_some();
     let draft_inputs = rsx! {
         LabeledSelect {
             id: "boreShapeSelector",
@@ -174,36 +128,36 @@ pub fn BoreEditor(
             class: if refused { "border-start btn refused" } else { "border-start btn" },
             r#type: "button",
             id: "boreSubmit",
-            value: if index.is_none() { "Add bore" } else { "Update bore" },
+            value: if has_bore { "Update bore" } else { "Add bore" },
             disabled: readonly,
             // Refused, the button stays hoverable so that its title can say why.
             "aria-disabled": refused,
             title: refusal.unwrap_or_default(),
             onclick: move |_| {
                 if !refused {
-                    editing_index.set(None);
-                    on_bores_change.call(submitted.clone());
+                    on_bore_change.call(Some(submitted.clone()));
                 }
             },
+        }
+        if has_bore {
+            input {
+                class: "border-start btn",
+                r#type: "button",
+                id: "boreRemove",
+                value: "Remove bore",
+                disabled: readonly,
+                onclick: move |_| on_bore_change.call(None),
+            }
         }
     };
     rsx! {
         AccordionItem {
             elements: vec![draft_inputs],
-            header,
+            header: "Bore",
             header_id: "boreEditorHeading",
             parent_id: "boreEditorAccordion",
-            content_id: BORE_CONTENT_ID,
+            content_id: "boreEditorCollapse",
             level: 2,
-        }
-        if !list_entries.is_empty() {
-            DynamicListComponent {
-                list_entries,
-                delete_entry_handler,
-                modify_entry_handler,
-                edit_index: editing_index,
-                readonly,
-            }
         }
     }
 }

@@ -314,7 +314,7 @@ mod test {
             Isometry::identity(),
             Face::new(SurfaceShape::Plane, Isometry::identity()),
             Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
-            Outline::new(CircleShape::new(radius)?, Vec::new())?,
+            Outline::new(CircleShape::new(radius)?, None)?,
             Material::default(),
         )
     }
@@ -936,7 +936,7 @@ mod test {
             Isometry::identity(),
             entrance,
             exit,
-            Outline::new(CircleShape::new(millimeter!(aperture_mm))?, Vec::new())?,
+            Outline::new(CircleShape::new(millimeter!(aperture_mm))?, None)?,
             Material::default(),
         )?;
 
@@ -1000,7 +1000,7 @@ mod test {
             Isometry::identity(),
             entrance,
             exit,
-            Outline::new(CircleShape::new(millimeter!(aperture_mm))?, Vec::new())?,
+            Outline::new(CircleShape::new(millimeter!(aperture_mm))?, None)?,
             Material::default(),
         )?;
 

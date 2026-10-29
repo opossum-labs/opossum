@@ -20,8 +20,8 @@
 //! [`Plane`](crate::geometry::Plane)s with a circular cross section, a slab two planes with a
 //! rectangular one, a lens two [`Sphere`](crate::geometry::Sphere)s.
 //!
-//! The cross section is the [`Outline`](crate::apertures::Outline) of the optic shape: an edge
-//! with bores through it, which always delimits a region.
+//! The cross section is the [`Outline`](crate::apertures::Outline) of the optic shape: an edge,
+//! possibly with a bore through it, which always delimits a region.
 
 use crate::{
     absorption::absorption_model::AbsorptionModel,

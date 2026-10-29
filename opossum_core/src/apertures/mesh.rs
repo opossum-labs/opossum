@@ -294,55 +294,48 @@ mod test {
             .collect()
     }
 
-    /// One outline of every shape, convex and not, with and without bores, one of them turned.
+    /// One outline of every shape, convex and not, with and without a bore, one of them turned.
     fn outlines() -> OpmResult<Vec<(&'static str, Outline)>> {
         Ok(vec![
             (
                 "circle",
-                Outline::new(CircleShape::new(millimeter!(12.5))?, Vec::new())?,
+                Outline::new(CircleShape::new(millimeter!(12.5))?, None)?,
             ),
             (
                 "rectangle",
                 Outline::new(
                     RectangleShape::new(millimeter!(30.0), millimeter!(10.0))?,
-                    Vec::new(),
+                    None,
                 )?,
             ),
             (
                 "L polygon",
-                Outline::new(PolygonShape::new(l_shape_corners())?, Vec::new())?,
+                Outline::new(PolygonShape::new(l_shape_corners())?, None)?,
             ),
             (
                 "star polygon",
-                Outline::new(PolygonShape::new(star())?, Vec::new())?,
+                Outline::new(PolygonShape::new(star())?, None)?,
             ),
             (
                 "ring",
                 Outline::new(
                     CircleShape::new(millimeter!(12.5))?,
-                    vec![Bore::new(
+                    Some(Bore::new(
                         CircleShape::new(millimeter!(4.0))?,
                         millimeter!(0.0, 0.0),
                         degree!(0.0),
-                    )],
+                    )),
                 )?,
             ),
             (
-                "plate with two bores",
+                "plate with a turned bore",
                 Outline::new(
                     RectangleShape::new(millimeter!(30.0), millimeter!(12.0))?,
-                    vec![
-                        Bore::new(
-                            CircleShape::new(millimeter!(3.0))?,
-                            millimeter!(-8.0, 0.0),
-                            degree!(0.0),
-                        ),
-                        Bore::new(
-                            RectangleShape::new(millimeter!(4.0), millimeter!(3.0))?,
-                            millimeter!(8.0, 1.0),
-                            degree!(30.0),
-                        ),
-                    ],
+                    Some(Bore::new(
+                        RectangleShape::new(millimeter!(4.0), millimeter!(3.0))?,
+                        millimeter!(8.0, 1.0),
+                        degree!(30.0),
+                    )),
                 )?,
             ),
         ])
@@ -464,8 +457,8 @@ mod test {
                 mesh.points().len() > rim_points,
                 "the {name} got no points inside it at all"
             );
-            // An outline without bores has one rim, and that is its edge point for point.
-            if outline.bores().is_empty() {
+            // An outline without a bore has one rim, and that is its edge point for point.
+            if outline.bore().is_none() {
                 assert_eq!(
                     mesh.points()[..rim_points],
                     outline.shape().outline_points(SEGMENTS)?,
@@ -515,7 +508,7 @@ mod test {
     #[test]
     fn a_finer_circle_covers_more_of_its_disc() -> OpmResult<()> {
         let radius = millimeter!(12.5);
-        let outline = Outline::new(CircleShape::new(radius)?, Vec::new())?;
+        let outline = Outline::new(CircleShape::new(radius)?, None)?;
         let covered = |segments: usize| -> OpmResult<f64> {
             let mesh = outline.triangulate(segments)?;
             Ok(mesh

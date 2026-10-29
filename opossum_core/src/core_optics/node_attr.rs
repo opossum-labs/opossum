@@ -479,7 +479,7 @@ mod test {
             millimeter!(f64::INFINITY),
             millimeter!(f64::INFINITY),
             millimeter!(10.0),
-            Outline::new(CircleShape::new(millimeter!(5.0))?, Vec::new())?,
+            Outline::new(CircleShape::new(millimeter!(5.0))?, None)?,
             Material::default(),
         )
     }

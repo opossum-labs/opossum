@@ -528,7 +528,7 @@ mod test {
             Isometry::identity(),
             Face::new(SurfaceShape::Plane, Isometry::identity()),
             Face::new(SurfaceShape::Plane, Isometry::new_along_z(thickness)?),
-            Outline::new(CircleShape::new(radius)?, Vec::new())?,
+            Outline::new(CircleShape::new(radius)?, None)?,
             Material::default(),
         )
     }

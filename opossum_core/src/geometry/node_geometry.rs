@@ -736,7 +736,7 @@ mod test {
     use uom::si::{energy::joule, f64::Energy, length::millimeter};
 
     fn circle() -> OpmResult<Outline> {
-        Outline::new(CircleShape::new(millimeter!(12.5))?, Vec::new())
+        Outline::new(CircleShape::new(millimeter!(12.5))?, None)
     }
     /// Return the frame of the face with the given number.
     fn frame_of(geometry: &Geometry, index: FaceIndex) -> OpmResult<Isometry> {
@@ -1112,7 +1112,7 @@ mod test {
     #[test]
     fn the_rim_is_measured_across_its_axis() -> OpmResult<()> {
         let tilted = Isometry::new(millimeter!(0.0, 0.0, 0.0), degree!(30.0, 0.0, 0.0))?;
-        let circle = Outline::new(CircleShape::new(millimeter!(5.0))?, Vec::new())?;
+        let circle = Outline::new(CircleShape::new(millimeter!(5.0))?, None)?;
         let plane = Geometry::surface(
             Isometry::identity(),
             SurfaceShape::Plane,
@@ -1332,7 +1332,7 @@ mod test {
         let mut detector = Geometry::detector(SurfaceShape::Plane, Some(circle()?))?;
         detector.move_by(&axis);
         // the outline handed in is for unbounded surfaces only
-        let unused = Outline::new(CircleShape::new(millimeter!(1.0))?, Vec::new())?;
+        let unused = Outline::new(CircleShape::new(millimeter!(1.0))?, None)?;
         for geometry in [mirror, detector] {
             let meshes = geometry.kind().mesh(MESH_SEGMENTS, &unused)?;
             check_drawn(&geometry, &meshes, &axis, 12.5)?;
@@ -1346,7 +1346,7 @@ mod test {
         let axis = Isometry::new(millimeter!(3.0, 0.0, 0.0), degree!(0.0, 90.0, 0.0))?;
         let vertex = Isometry::new_along_z(millimeter!(20.0))?;
         let geometry = Geometry::surface(axis, SurfaceShape::Plane, vertex, None)?;
-        let drawing = Outline::new(CircleShape::new(millimeter!(5.0))?, Vec::new())?;
+        let drawing = Outline::new(CircleShape::new(millimeter!(5.0))?, None)?;
         let meshes = geometry.kind().mesh(MESH_SEGMENTS, &drawing)?;
         check_drawn(&geometry, &meshes, &axis.append(&vertex), 5.0)
     }
@@ -1633,7 +1633,7 @@ mod test {
     fn bounded_plane() -> OpmResult<Geometry> {
         Ok(Geometry::plane(Some(Outline::new(
             CircleShape::new(millimeter!(5.0))?,
-            Vec::new(),
+            None,
         )?)))
     }
     /// A ray along z, the given distance off the axis in y.
@@ -1707,7 +1707,7 @@ mod test {
             millimeter!(f64::INFINITY),
             millimeter!(f64::INFINITY),
             millimeter!(10.0),
-            Outline::new(CircleShape::new(millimeter!(5.0))?, Vec::new())?,
+            Outline::new(CircleShape::new(millimeter!(5.0))?, None)?,
             Material::default(),
         )?;
         let mut bundles = vec![Rays::from(ray_at(0.0)?)];

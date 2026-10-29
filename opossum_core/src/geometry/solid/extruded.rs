@@ -377,7 +377,7 @@ mod test {
 
     /// Create a circular outline of the given radius.
     fn circular_cross_section(radius: Length) -> OpmResult<Outline> {
-        Outline::new(CircleShape::new(radius)?, Vec::new())
+        Outline::new(CircleShape::new(radius)?, None)
     }
     /// Create the two flat faces of a plate of the given thickness.
     fn plate_faces(thickness: Length) -> OpmResult<(Face, Face)> {
@@ -510,7 +510,7 @@ mod test {
             rear,
             Outline::new(
                 RectangleShape::new(millimeter!(20.0), millimeter!(4.0))?,
-                Vec::new(),
+                None,
             )?,
             Isometry::identity(),
         )?;
@@ -709,7 +709,7 @@ mod test {
             rear,
             Outline::new(
                 RectangleShape::new(millimeter!(20.0), millimeter!(4.0))?,
-                Vec::new(),
+                None,
             )?,
             Isometry::identity(),
         )?;
@@ -724,7 +724,7 @@ mod test {
     fn bounding_box_of_a_ring_is_that_of_its_outer_circle() -> OpmResult<()> {
         let bounds_of_disk_with = |bore: Bore| -> OpmResult<BoundingBox> {
             let (front, rear) = plate_faces(millimeter!(10.0))?;
-            let outline = Outline::new(CircleShape::new(millimeter!(8.0))?, vec![bore])?;
+            let outline = Outline::new(CircleShape::new(millimeter!(8.0))?, Some(bore))?;
             body_between(front, rear, outline, Isometry::identity())?.bounding_box()
         };
         let bore = |x: f64, y: f64| -> OpmResult<Bore> {
@@ -1062,7 +1062,7 @@ mod test {
     fn bored(edge: impl Into<OutlineShape>, bore: impl Into<OutlineShape>) -> OpmResult<Outline> {
         Outline::new(
             edge,
-            vec![Bore::new(bore, millimeter!(2.0, -1.0), Angle::zero())],
+            Some(Bore::new(bore, millimeter!(2.0, -1.0), Angle::zero())),
         )
     }
     /// One body of every shape the volume nodes build, at the given node frame.
@@ -1075,7 +1075,7 @@ mod test {
             ))
         };
         let circle = |radius: f64| circular_cross_section(millimeter!(radius));
-        let l_shape = Outline::new(PolygonShape::new(l_shape_corners())?, Vec::new())?;
+        let l_shape = Outline::new(PolygonShape::new(l_shape_corners())?, None)?;
         let shapes = vec![
             (
                 "biconvex lens",
@@ -1238,13 +1238,9 @@ mod test {
         let circle = || CircleShape::new(millimeter!(10.0));
         let l_shape = || PolygonShape::new(l_shape_corners());
         for (name, outline, corners) in [
-            ("circle", Outline::new(circle()?, Vec::new())?, 0),
-            (
-                "rectangle",
-                Outline::new(rectangle(20.0, 8.0)?, Vec::new())?,
-                4,
-            ),
-            ("L", Outline::new(l_shape()?, Vec::new())?, 6),
+            ("circle", Outline::new(circle()?, None)?, 0),
+            ("rectangle", Outline::new(rectangle(20.0, 8.0)?, None)?, 4),
+            ("L", Outline::new(l_shape()?, None)?, 6),
             (
                 "circle with a bore",
                 bored(circle()?, CircleShape::new(millimeter!(3.0))?)?,
