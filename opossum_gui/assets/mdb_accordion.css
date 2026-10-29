@@ -113,7 +113,7 @@ input[type=number] {
   color: rgb(141, 141, 141) !important;
 }
 
-#laserlinesubmit, #energylaserlinesubmit, #polygonPointSubmit, #boreSubmit, #boreRemove{
+#laserlinesubmit, #energylaserlinesubmit, #polygonPointSubmit, #boreSubmit{
     background-color:rgb(70, 70, 70) !important;
     width: 100%;
     color:white;
@@ -121,7 +121,7 @@ input[type=number] {
     padding-top: 0.3rem;
     padding-bottom: 0.3rem;
 }
-#laserlinesubmit:hover, #energylaserlinesubmit:hover, #polygonPointSubmit:hover, #boreSubmit:hover, #boreRemove:hover{
+#laserlinesubmit:hover, #energylaserlinesubmit:hover, #polygonPointSubmit:hover, #boreSubmit:hover{
       background-color:rgb(105, 104, 104) !important;
 }
 /* A bore the core refuses: no hover highlight, reddish text; the title says why. */

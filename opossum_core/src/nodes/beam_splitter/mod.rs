@@ -63,7 +63,10 @@ impl Default for BeamSplitter {
             .create_property_with_validator(
                 OPTIC_SHAPE,
                 "transversal extent of the component",
-                Validator::OpticShapeIsBounded,
+                Validator::OpticShape {
+                    may_be_open: false,
+                    bored: false,
+                },
                 default_optic_shape().into(),
             )
             .unwrap();
@@ -192,18 +195,13 @@ mod test {
             ghostfocus::{AnalysisGhostFocus, GhostFocusAnalyzer},
             raytrace::AnalysisRayTrace,
         },
-        apertures::{Bore, CircleShape, OpticShape, Outline},
         coatings::{CoatingConstantR, CoatingType},
-        core_optics::{
-            NodeAttrExt, PortType,
-            node_attr::{HasNodeAttr, NodePositioning},
-        },
+        core_optics::{NodeAttrExt, PortType, node_attr::HasNodeAttr},
         degree, joule,
         light::{LightRays, LightResult, Rays},
         millimeter, nanometer,
         nodes::{NodeGroup, SourcePort, round_collimated_ray_builder, test_helper::helper::*},
         percent,
-        utils::geom_transformation::Isometry,
     };
     use approx::assert_abs_diff_eq;
     use nalgebra::Vector3;
@@ -389,35 +387,6 @@ mod test {
         assert_valid_energies(&reflected, &[0.5], "only the ray inside is reflected");
         let beside = transmitted.iter().nth(1).expect("the ray outside");
         assert_eq!(beside.position(), millimeter!(0.0, 12.6, -10.0));
-        Ok(())
-    }
-    /// A scraper mirror made of a splitter: a disk of 12.5 mm that reflects all light on its
-    /// material, with a bore of 2 mm centered at the given point (x, y) in mm.
-    pub(super) fn scraper(bore_x: f64, bore_y: f64) -> OpmResult<BeamSplitter> {
-        let mut scraper = BeamSplitter::new("scraper", &SplittingConfigBuilder::FixedRatio(0.0))?;
-        let outline = Outline::new(
-            CircleShape::new(millimeter!(12.5))?,
-            Some(Bore::new(
-                CircleShape::new(millimeter!(2.0))?,
-                millimeter!(bore_x, bore_y),
-                degree!(0.0),
-            )),
-        )?;
-        scraper.set_property(OPTIC_SHAPE, OpticShape::from(outline).into())?;
-        Ok(scraper)
-    }
-    /// Light through the bore of a splitter reaches the transmitted output, even in a ray trace
-    /// that loses the rays missing the surface; light on its material is split by the coating,
-    /// here all reflected.
-    #[test]
-    fn light_through_a_bore_reaches_the_transmitted_output() -> OpmResult<()> {
-        let mut scraper = scraper(0.0, 0.0)?;
-        scraper.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
-        let (transmitted, reflected) = ray_trace(&mut scraper, rays_at(&[0.0, 5.0])?)?;
-        assert_valid_energies(&transmitted, &[1.0], "the ray through the bore passes");
-        assert_valid_energies(&reflected, &[1.0], "the ray on the material is reflected");
-        let through = transmitted.iter().find(|ray| ray.valid()).expect("one ray");
-        assert_eq!(through.direction(), Vector3::z());
         Ok(())
     }
     /// In a ghost focus analysis, light at the second input leaves crosswise, as in a ray trace:

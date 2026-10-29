@@ -74,9 +74,13 @@ impl Default for ParaxialSurface {
             )
             .unwrap();
         node_attr
-            .create_property(
+            .create_property_with_validator(
                 OPTIC_SHAPE,
                 "transversal extent of the surface, open for an unbounded ideal surface",
+                Validator::OpticShape {
+                    may_be_open: true,
+                    bored: false,
+                },
                 default_optic_shape().into(),
             )
             .unwrap();

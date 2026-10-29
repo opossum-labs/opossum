@@ -74,7 +74,10 @@ impl Default for ThinMirror {
             .create_property_with_validator(
                 OPTIC_SHAPE,
                 "transversal extent of the component",
-                Validator::OpticShapeIsBounded,
+                Validator::OpticShape {
+                    may_be_open: false,
+                    bored: false,
+                },
                 default_optic_shape().into(),
             )
             .unwrap();
@@ -228,7 +231,7 @@ mod test {
     use super::*;
     use crate::{
         analyzers::{RayTraceConfig, energy::EnergyConfig},
-        apertures::{Bore, CircleShape, OpticShape, Outline},
+        apertures::{CircleShape, OpticShape},
         core_optics::{Alignable, NodeAttrExt, PortType, node_attr::NodePositioning},
         degree,
         geometry::body::OPTIC_SHAPE,
@@ -238,10 +241,8 @@ mod test {
         nodes::test_helper::helper::*,
         utils::geom_transformation::Isometry,
     };
-    use approx::assert_abs_diff_eq;
-    use nalgebra::{Point2, vector};
+    use nalgebra::vector;
     use num_traits::Zero;
-    use uom::si::f64::Angle;
     #[test]
     fn default() {
         let node = ThinMirror::default();
@@ -361,44 +362,6 @@ mod test {
                 "ray at ({x}, {y}) mm"
             );
         }
-        Ok(())
-    }
-    /// A mirror with a central hole of 2 mm in a 12.5 mm disk: its optic shape is a ring. A ray
-    /// through the hole misses the mirror, one on the ring is reflected.
-    #[test]
-    fn a_ray_through_the_central_hole_of_a_mirror_misses_it() -> OpmResult<()> {
-        let hole = Bore::new(
-            CircleShape::new(millimeter!(2.0))?,
-            Point2::origin(),
-            Angle::zero(),
-        );
-        let ring = Outline::new(CircleShape::new(millimeter!(12.5))?, Some(hole))?;
-        let mut mirror = ThinMirror::default();
-        mirror.set_property(OPTIC_SHAPE, OpticShape::from(ring).into())?;
-        mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
-        let rays = rays_along_z_from(
-            &[millimeter!(0.0, 1.0, -10.0), millimeter!(0.0, 8.0, -10.0)],
-            nanometer!(1000.0),
-        )?;
-        let output = AnalysisRayTrace::analyze(
-            &mut mirror,
-            LightResult::from([("input_1".into(), LightData::Geometric(rays))]),
-            &RayTraceConfig::default(),
-        )?;
-        let Some(LightData::Geometric(reflected)) = output.get("output_1") else {
-            panic!("expected ray data at the output port");
-        };
-        let heights: Vec<f64> = reflected
-            .iter()
-            .filter(|ray| ray.valid())
-            .map(|ray| ray.position().y.get::<uom::si::length::millimeter>())
-            .collect();
-        assert_eq!(
-            heights.len(),
-            1,
-            "only the ray on the ring is reflected: {heights:?}"
-        );
-        assert_abs_diff_eq!(heights[0], 8.0, epsilon = 1e-9);
         Ok(())
     }
     /// An energy analysis traces no rays, so the optic shape does not cut its light, however

@@ -5,7 +5,6 @@ use std::fmt::Debug;
 use uom::si::{angle::degree, f64::Angle};
 
 use crate::{
-    apertures::OpticShape,
     coatings::CoatingType,
     error::{OpmResult, OpossumError},
     nodes::ideal_filter::FilterTypeBuilder,
@@ -28,8 +27,14 @@ pub enum Validator {
         inclusive: bool,
     },
     StringIsNotEmpty,
-    /// The optic shape must bound the component: it may not be open.
-    OpticShapeIsBounded,
+    /// The optic shape must fit the component: open only where it may be, and with a bore exactly
+    /// where the component has one.
+    OpticShape {
+        /// Whether the optic shape may be open, as on a detector, a dummy or an ideal surface.
+        may_be_open: bool,
+        /// Whether the component has a bore, as a bored mirror; every other component has none.
+        bored: bool,
+    },
     /// The coating of a surface must be valid (see [`CoatingType::is_valid`]) and fit the surface:
     /// a separator on a splitting surface, any other coating on every other surface (see
     /// [`SurfacePorts::splitting`](crate::core_optics::SurfacePorts::splitting)).
@@ -66,7 +71,9 @@ impl Validator {
                 inclusive,
             } => Self::validate_angle_is_in_range(prop, *min, *max, *inclusive),
             Self::StringIsNotEmpty => Self::validate_string_is_not_empty(prop),
-            Self::OpticShapeIsBounded => Self::validate_optic_shape_is_bounded(prop),
+            Self::OpticShape { may_be_open, bored } => {
+                Self::validate_optic_shape(prop, *may_be_open, *bored)
+            }
             Self::SurfaceCoating { splitting } => Self::validate_surface_coating(prop, *splitting),
             Self::OrValidator { validators } => Self::validate_or_validator(prop, validators),
             Self::AndValidator { validators } => Self::validate_and_validator(prop, validators),
@@ -78,8 +85,8 @@ impl Validator {
     ///
     /// An editor that offers a choice of kinds (such as an open optic shape) asks here, so it
     /// offers only what the property can take; the value itself is still checked by
-    /// [`Validator::validate`] when it is set. Only [`Validator::OpticShapeIsBounded`] and
-    /// [`Validator::SurfaceCoating`] restrict kinds.
+    /// [`Validator::validate`] when it is set. Only [`Validator::OpticShape`], by whether an optic
+    /// shape is open and whether it has a bore, and [`Validator::SurfaceCoating`] restrict kinds.
     ///
     /// # Arguments
     ///
@@ -87,8 +94,10 @@ impl Validator {
     #[must_use]
     pub fn may_accept(&self, prop: &Proptype) -> bool {
         match (self, prop) {
-            (Self::OpticShapeIsBounded, Proptype::OpticShape(optic_shape)) => {
-                !matches!(optic_shape, OpticShape::Open)
+            (Self::OpticShape { may_be_open, bored }, Proptype::OpticShape(optic_shape)) => {
+                optic_shape
+                    .outline()
+                    .map_or(*may_be_open, |outline| outline.bore().is_some() == *bored)
             }
             (Self::SurfaceCoating { splitting }, Proptype::SurfaceConfig(config)) => {
                 matches!(config.coating(), CoatingType::Separator(_)) == *splitting
@@ -107,7 +116,7 @@ impl Validator {
                 | Self::NumericInRange { .. }
                 | Self::AngleInRange { .. }
                 | Self::StringIsNotEmpty
-                | Self::OpticShapeIsBounded
+                | Self::OpticShape { .. }
                 | Self::SurfaceCoating { .. }
                 | Self::LightDataBuilderValidator,
                 _,
@@ -132,13 +141,22 @@ impl Validator {
         }
         Ok(())
     }
-    fn validate_optic_shape_is_bounded(prop: &Proptype) -> OpmResult<()> {
-        if matches!(prop, Proptype::OpticShape(OpticShape::Open)) {
-            Err(OpossumError::Properties(
+    fn validate_optic_shape(prop: &Proptype, may_be_open: bool, bored: bool) -> OpmResult<()> {
+        let Proptype::OpticShape(optic_shape) = prop else {
+            return Ok(());
+        };
+        match optic_shape.outline() {
+            None if !may_be_open => Err(OpossumError::Properties(
                 "a component ends somewhere, so its optic shape cannot be open".into(),
-            ))
-        } else {
-            Ok(())
+            )),
+            Some(outline) if outline.bore().is_some() != bored => {
+                Err(OpossumError::Properties(if bored {
+                    "a bored mirror has a bore through it, so its optic shape needs one".into()
+                } else {
+                    "only a bored mirror takes a bore through its optic shape".into()
+                }))
+            }
+            None | Some(_) => Ok(()),
         }
     }
 
@@ -448,18 +466,56 @@ mod test {
 #[cfg(test)]
 mod test_apertures {
     use super::*;
-    use crate::{apertures::CircleShape, millimeter};
+    use crate::{
+        apertures::{Bore, CircleShape, OpticShape, Outline},
+        degree, millimeter,
+    };
 
-    /// A component's optic shape may be anything but open; no other validator restricts the
-    /// kinds of optic shapes.
+    /// An optic shape is open only where it may be, and has a bore exactly where the component
+    /// has one; the kinds of optic shapes are judged alike by `may_accept` and `validate`. No
+    /// other validator restricts the kinds of optic shapes.
     #[test]
-    fn may_accept_judges_optic_shapes_by_kind() -> crate::error::OpmResult<()> {
+    fn an_optic_shape_is_open_and_bored_only_where_it_may_be() -> crate::error::OpmResult<()> {
         let open = Proptype::OpticShape(OpticShape::Open);
-        let bounded = Proptype::OpticShape(CircleShape::new(millimeter!(5.0))?.into());
-        assert!(!Validator::OpticShapeIsBounded.may_accept(&open));
-        assert!(Validator::OpticShapeIsBounded.validate(&open).is_err());
-        assert!(Validator::OpticShapeIsBounded.may_accept(&bounded));
-        assert!(Validator::OpticShapeIsBounded.validate(&bounded).is_ok());
+        let plain = Proptype::OpticShape(CircleShape::new(millimeter!(5.0))?.into());
+        let bored = Proptype::OpticShape(
+            Outline::new(
+                CircleShape::new(millimeter!(5.0))?,
+                Some(Bore::new(
+                    CircleShape::new(millimeter!(1.0))?,
+                    millimeter!(0.0, 0.0),
+                    degree!(0.0),
+                )),
+            )?
+            .into(),
+        );
+        for ((may_be_open, has_bore), [takes_open, takes_plain, takes_bored]) in [
+            ((false, false), [false, true, false]),
+            ((true, false), [true, true, false]),
+            ((false, true), [false, false, true]),
+            ((true, true), [true, false, true]),
+        ] {
+            let validator = Validator::OpticShape {
+                may_be_open,
+                bored: has_bore,
+            };
+            for (shape, takes) in [
+                (&open, takes_open),
+                (&plain, takes_plain),
+                (&bored, takes_bored),
+            ] {
+                assert_eq!(
+                    validator.may_accept(shape),
+                    takes,
+                    "{validator:?}, {shape:?}"
+                );
+                assert_eq!(
+                    validator.validate(shape).is_ok(),
+                    takes,
+                    "{validator:?}, {shape:?}"
+                );
+            }
+        }
         assert!(
             Validator::NumericIsPositive.may_accept(&open),
             "a validator of numbers does not restrict the kinds of optic shapes"
@@ -470,7 +526,11 @@ mod test_apertures {
     #[test]
     fn may_accept_combines_its_members() {
         let open = Proptype::OpticShape(OpticShape::Open);
-        let members = vec![Validator::OpticShapeIsBounded, Validator::NumericIsPositive];
+        let bounded = Validator::OpticShape {
+            may_be_open: false,
+            bored: false,
+        };
+        let members = vec![bounded, Validator::NumericIsPositive];
         assert!(
             Validator::OrValidator {
                 validators: members.clone()

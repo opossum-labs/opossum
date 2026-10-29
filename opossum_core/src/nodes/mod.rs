@@ -174,10 +174,13 @@ pub fn is_volume_node_type(node_type: &str) -> bool {
 mod test {
     use super::*;
     use crate::{
+        apertures::{Bore, CircleShape, OpticShape, Outline},
         coatings::{CoatingType, SplittingConfigBuilder},
-        core_optics::{OpticNode, OpticNodeExt, SurfacePorts, node_attr::NodePositioning},
+        core_optics::{
+            NodeAttrExt, OpticNode, OpticNodeExt, SurfacePorts, node_attr::NodePositioning,
+        },
         degree,
-        geometry::{Extruded, FaceIndex, Sphere, SurfaceGeometry, SurfaceShape},
+        geometry::{Extruded, FaceIndex, Sphere, SurfaceGeometry, SurfaceShape, body::OPTIC_SHAPE},
         millimeter,
         nodes::test_helper::helper::{
             assert_snapshots, body_of, body_snapshot, geometry_snapshot, hit_snapshot,
@@ -944,6 +947,40 @@ mod test {
         assert!(error.contains("face count: 1"), "{error}");
     }
 
+    /// Only the bored mirror takes a bore through its optic shape, and it takes none without one:
+    /// every other node type with an optic shape refuses a bore and keeps an optic shape without.
+    #[test]
+    fn only_the_bored_mirror_takes_a_bore() -> OpmResult<()> {
+        let edge = || CircleShape::new(millimeter!(12.5));
+        let bore = Bore::new(
+            CircleShape::new(millimeter!(2.0))?,
+            millimeter!(0.0, 0.0),
+            degree!(0.0),
+        );
+        let bored = OpticShape::from(Outline::new(edge()?, Some(bore))?);
+        let plain = OpticShape::from(edge()?);
+        let mut checked = 0;
+        for (node_type, _) in node_types() {
+            let mut node = create_node_ref(node_type)?;
+            if node.node_attr().get_property(OPTIC_SHAPE).is_err() {
+                continue;
+            }
+            let takes_a_bore = node_type == "bored mirror";
+            assert_eq!(
+                node.set_property(OPTIC_SHAPE, bored.clone().into()).is_ok(),
+                takes_a_bore,
+                "{node_type} with a bore"
+            );
+            assert_eq!(
+                node.set_property(OPTIC_SHAPE, plain.clone().into()).is_ok(),
+                !takes_a_bore,
+                "{node_type} without a bore"
+            );
+            checked += 1;
+        }
+        assert!(checked > 1, "only {checked} node types have an optic shape");
+        Ok(())
+    }
     /// Every surface of every node type takes a separator coating exactly when it splits the
     /// light, and any other coating exactly when it does not. The beam splitter's surface splits.
     #[test]

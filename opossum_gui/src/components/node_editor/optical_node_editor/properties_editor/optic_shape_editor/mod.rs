@@ -92,13 +92,13 @@ fn OutlineShapeInput(
     }
 }
 
-/// Editor for a node's `optic shape` property: the edge of the component and the bore through
-/// it.
+/// Editor for a node's `optic shape` property: the edge of the component and, on a component that
+/// has one (a bored mirror), the bore through it.
 ///
 /// The edge is chosen from the kinds [`edge_options`] offers; choosing another kind starts a fresh
-/// edge of that kind without a bore, which one undo step reverts. Every change is checked by the
-/// core ([`Outline::new`]) and saved only if it accepts it. An edited edge it refuses, such as a
-/// polygon crossing itself, stays on screen with the reason, so it can be edited further; any
+/// edge of that kind, keeping the bore, which one undo step reverts. Every change is checked by
+/// the core ([`Outline::new`]) and saved only if it accepts it. An edited edge it refuses, such as
+/// a polygon crossing itself, stays on screen with the reason, so it can be edited further; any
 /// other refused change is logged.
 ///
 /// # Arguments
@@ -153,17 +153,20 @@ pub fn OpticShapeEditor(
             });
             let on_bore_change = EventHandler::new({
                 let edge = edge.clone();
-                move |bore: Option<Bore>| on_outline.call((edge.clone(), bore))
+                move |bore: Bore| on_outline.call((edge.clone(), Some(bore)))
             });
             rsx! {
                 OutlineShapeInput { shape: edge.clone(), on_shape_change: on_edge_change, readonly }
                 if let Some(refusal) = refusal {
                     div { class: "alert alert-warning py-2 px-3 small mb-2", "{refusal}" }
                 }
-                BoreEditor { edge, bore, on_bore_change, readonly }
+                if let Some(bore) = bore {
+                    BoreEditor { edge, bore, on_bore_change, readonly }
+                }
             }
         }
     };
+    let bore = current.outline().and_then(Outline::bore).cloned();
 
     rsx! {
         LabeledSelect {
@@ -176,7 +179,7 @@ pub fn OpticShapeEditor(
                 if chosen == OpticShape::Open.to_string() {
                     on_save.call(OpticShape::Open);
                 } else if let Some(edge) = OutlineShape::default_from_name(&chosen) {
-                    on_outline.call((edge, None));
+                    on_outline.call((edge, bore.clone()));
                 }
             },
         }
@@ -194,13 +197,17 @@ mod test {
     }
 
     /// Every kind of outline is offered as the edge; `Open` only where the validator accepts it,
-    /// which a component's does not and a detector's window, without one, does.
+    /// which a component's does not and a detector's window does.
     #[test]
     fn the_validator_decides_whether_open_is_offered() {
         let circle = OpticShape::from(CircleShape::default());
-        let component = edge_options(&circle, Some(&Validator::OpticShapeIsBounded));
+        let validator = |may_be_open| Validator::OpticShape {
+            may_be_open,
+            bored: false,
+        };
+        let component = edge_options(&circle, Some(&validator(false)));
         assert_eq!(names(&component), ["Circle", "Rectangle", "Polygon"]);
-        let window = edge_options(&circle, None);
+        let window = edge_options(&circle, Some(&validator(true)));
         assert_eq!(names(&window), ["Open", "Circle", "Rectangle", "Polygon"]);
     }
     /// The kind of the optic shape shown is the selected option.

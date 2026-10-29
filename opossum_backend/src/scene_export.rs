@@ -817,8 +817,9 @@ mod test {
         material::default_reference_wavelength,
         millimeter, nanometer,
         nodes::{
-            BeamSplitter, CylindricLens, EnergyMeter, IdealFilter, Lens, NodeReference,
-            ReflectiveGrating, SourcePort, ThinMirror, Wedge, round_collimated_ray_builder,
+            BeamSplitter, BoredMirror, CylindricLens, EnergyMeter, IdealFilter, Lens,
+            NodeReference, ReflectiveGrating, SourcePort, ThinMirror, Wedge,
+            round_collimated_ray_builder,
         },
         opm_document::OpmDocument,
         percent,
@@ -1216,8 +1217,8 @@ mod test {
         Ok(())
     }
 
-    /// A mirror whose clear aperture is a stack of shapes — here a disc with a bore beside the
-    /// optical axis — is drawn like any other component rather than left out.
+    /// A bored mirror whose bore lies beside the optical axis is drawn like any other component
+    /// rather than left out.
     #[test]
     fn a_mirror_with_a_bore_is_drawn() -> OpmResult<()> {
         let bored = OpticShape::Bounded(Outline::new(
@@ -1230,10 +1231,16 @@ mod test {
         )?);
         let mut scenery = NodeGroup::default();
         let source = scenery.add_node(SourcePort::default())?;
-        let mirror = scenery.add_node(ThinMirror::default())?;
+        let mirror = scenery.add_node(BoredMirror::default())?;
         let detector = scenery.add_node(EnergyMeter::default())?;
         scenery.connect_nodes(source, "output_1", mirror, "input_1", millimeter!(50.0))?;
-        scenery.connect_nodes(mirror, "output_1", detector, "input_1", millimeter!(50.0))?;
+        scenery.connect_nodes(
+            mirror,
+            "out2_trans2_refl1",
+            detector,
+            "input_1",
+            millimeter!(50.0),
+        )?;
         let mut document = OpmDocument::new(scenery);
         let mut config = RayTraceConfig::default();
         config.map_source(source, RayDataBuilder::default());

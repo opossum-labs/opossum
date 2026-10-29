@@ -106,7 +106,10 @@ impl Default for ParabolicMirror {
             .create_property_with_validator(
                 OPTIC_SHAPE,
                 "transversal extent of the component",
-                Validator::OpticShapeIsBounded,
+                Validator::OpticShape {
+                    may_be_open: false,
+                    bored: false,
+                },
                 default_optic_shape().into(),
             )
             .unwrap();

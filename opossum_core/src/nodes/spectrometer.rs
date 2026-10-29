@@ -19,7 +19,7 @@ use crate::{
     },
     light::{LightData, Rays, Spectrum},
     nodes::NodeRegistration,
-    properties::{Properties, Proptype},
+    properties::{Properties, Proptype, validator::Validator},
     reporting::node_report::{NodeReport, NodeReportResult},
 };
 use std::fmt::{Debug, Display};
@@ -89,9 +89,13 @@ impl Default for Spectrometer {
             )
             .unwrap();
         node_attr
-            .create_property(
+            .create_property_with_validator(
                 OPTIC_SHAPE,
                 "window the light is recorded within",
+                Validator::OpticShape {
+                    may_be_open: true,
+                    bored: false,
+                },
                 default_square_optic_shape().into(),
             )
             .unwrap();

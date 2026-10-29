@@ -866,7 +866,7 @@ mod test {
         joule,
         light::Ray,
         millimeter, nanometer,
-        nodes::{BeamSplitter, Dummy, Lens, NodeGroup, ParabolicMirror, ThinMirror},
+        nodes::{BeamSplitter, BoredMirror, Dummy, Lens, NodeGroup, ParabolicMirror, ThinMirror},
         properties::Properties,
     };
     use approx::{assert_abs_diff_eq, assert_relative_eq};
@@ -1209,10 +1209,10 @@ mod test {
         );
         Ok(())
     }
-    /// A mirror with a bore through it is meshed around the bore: what is drawn covers the ring it
-    /// is, not the disc it would be without the bore.
+    /// A bored mirror is meshed around its bore: what is drawn of its mirrored face covers the
+    /// ring it is, not the disc it would be without the bore.
     #[test]
-    fn a_surface_with_a_bore_is_meshed_around_it() -> OpmResult<()> {
+    fn a_bored_mirror_is_meshed_around_its_bore() -> OpmResult<()> {
         let (radius, bore) = (millimeter!(12.5), millimeter!(4.0));
         let ring = OpticShape::Bounded(Outline::new(
             CircleShape::new(radius)?,
@@ -1222,10 +1222,15 @@ mod test {
                 degree!(0.),
             )),
         )?);
-        let mut mirror = ThinMirror::default();
+        let mut mirror = BoredMirror::default();
         mirror.set_property(OPTIC_SHAPE, ring.into())?;
         mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
-        let mesh = surface_mesh(&mirror, 64)?;
+        let mesh = mirror
+            .geometry_mesh(64)?
+            .into_iter()
+            .find(|patch| patch.face == Some(Extruded::FRONT))
+            .map(|patch| patch.mesh)
+            .ok_or_else(|| OpossumError::Other("the mirrored face was not meshed".into()))?;
         let covered = mesh
             .triangles()
             .iter()

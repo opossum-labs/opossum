@@ -129,7 +129,10 @@ impl Default for BoredMirror {
             .create_property_with_validator(
                 OPTIC_SHAPE,
                 "transversal extent of the component",
-                Validator::OpticShapeIsBounded,
+                Validator::OpticShape {
+                    may_be_open: false,
+                    bored: true,
+                },
                 default_bored_shape().unwrap().into(),
             )
             .unwrap();
@@ -420,16 +423,33 @@ mod test {
             iso.transform_vector_f64(&Vector3::z()),
         ))
     }
-    /// The optical axis is placed by the edge of a 45° mirror 100 mm from the source: the mirror
-    /// reflects it at its front face as if there were no bore, and behind the plate it runs on
-    /// through the center of the bore, where that line leaves the rear face. On the axis, the
-    /// tilted rear face lies 6 mm / cos 45° = 8.485 mm behind the front face, so the node 50 mm
-    /// behind the plate sits at 158.485 mm.
-    #[test]
-    fn the_axis_is_placed_by_the_edge_and_leaves_through_the_bore() -> OpmResult<()> {
+    /// A default bored mirror with its bore moved to the given x in mm of its own plane.
+    fn bored_at(x: f64) -> OpmResult<BoredMirror> {
+        let mut mirror = BoredMirror::default();
+        let outline = Outline::new(
+            CircleShape::new(millimeter!(12.5))?,
+            Some(Bore::new(
+                CircleShape::new(millimeter!(2.5))?,
+                millimeter!(x, 0.0),
+                degree!(0.0),
+            )),
+        )?;
+        mirror.set_property(OPTIC_SHAPE, OpticShape::from(outline).into())?;
+        Ok(mirror)
+    }
+    /// Place the given mirror, turned by 45° about y, 100 mm from a source along z, and a dummy
+    /// 50 mm behind each of its outputs.
+    ///
+    /// # Returns
+    ///
+    /// Where the dummies behind the plate and in the reflected beam are placed, in meters, each
+    /// with the direction it faces.
+    #[allow(clippy::type_complexity)]
+    fn behind_a_tilted(
+        mut mirror: BoredMirror,
+    ) -> OpmResult<((Vector3<f64>, Vector3<f64>), (Vector3<f64>, Vector3<f64>))> {
         let mut scenery = NodeGroup::default();
         let src = scenery.add_node(SourcePort::default())?;
-        let mut mirror = BoredMirror::default();
         mirror.set_alignment(millimeter!(0., 0., 0.), degree!(0., 45., 0.))?;
         let mirror = scenery.add_node(mirror)?;
         let behind = scenery.add_node(Dummy::new("behind"))?;
@@ -459,22 +479,59 @@ mod test {
             LightResult::default(),
             &config.for_positioning(),
         )?;
-        let millimeters = |x: f64, y: f64, z: f64| Vector3::new(x, y, z) / 1000.0;
+        Ok((placed(&scenery, behind)?, placed(&scenery, reflected)?))
+    }
+    /// A position given in millimeters, in meters.
+    fn millimeters(x: f64, y: f64, z: f64) -> Vector3<f64> {
+        Vector3::new(x, y, z) / 1000.0
+    }
+    /// The optical axis is placed by the edge of a 45° mirror 100 mm from the source: the mirror
+    /// reflects it at its front face as if there were no bore, and behind the plate it runs on
+    /// through the center of the bore, where that line leaves the rear face. On the axis, the
+    /// tilted rear face lies 6 mm / cos 45° = 8.485 mm behind the front face, so the node 50 mm
+    /// behind the plate sits at 158.485 mm.
+    #[test]
+    fn the_axis_is_placed_by_the_edge_and_leaves_through_the_bore() -> OpmResult<()> {
+        let ((behind_pos, behind_dir), (reflected_pos, reflected_dir)) =
+            behind_a_tilted(BoredMirror::default())?;
         let rear = 6.0 / std::f64::consts::FRAC_1_SQRT_2;
-        let (behind_pos, behind_dir) = placed(&scenery, behind)?;
         assert_abs_diff_eq!(behind_pos, millimeters(0., 0., 150. + rear), epsilon = 1e-9);
         assert_abs_diff_eq!(behind_dir, Vector3::z(), epsilon = 1e-9);
-        let (reflected_pos, reflected_dir) = placed(&scenery, reflected)?;
+        assert_abs_diff_eq!(reflected_pos, millimeters(-50., 0., 100.), epsilon = 1e-9);
+        assert_abs_diff_eq!(reflected_dir, -Vector3::x(), epsilon = 1e-9);
+        Ok(())
+    }
+    /// With the bore 5 mm beside the axis, the light it lets pass runs on parallel to the axis
+    /// through the center of the bore. The mirror turned by 45° about y carries its own x axis to
+    /// (cos 45°, 0, −sin 45°), which puts the center at (3.536, 0, 96.464) mm on the front face;
+    /// the line leaves the rear face 6 mm / cos 45° = 8.485 mm further along z, and the node 50 mm
+    /// behind it sits at z = 154.950 mm. The reflected branch stays as if there were no bore.
+    #[test]
+    fn the_axis_behind_the_plate_runs_through_a_bore_beside_it() -> OpmResult<()> {
+        let ((behind_pos, behind_dir), (reflected_pos, reflected_dir)) =
+            behind_a_tilted(bored_at(5.0)?)?;
+        let (side, rear) = (
+            5.0 * std::f64::consts::FRAC_1_SQRT_2,
+            6.0 / std::f64::consts::FRAC_1_SQRT_2,
+        );
+        assert_abs_diff_eq!(
+            behind_pos,
+            millimeters(side, 0., 150. - side + rear),
+            epsilon = 1e-9
+        );
+        assert_abs_diff_eq!(behind_dir, Vector3::z(), epsilon = 1e-9);
         assert_abs_diff_eq!(reflected_pos, millimeters(-50., 0., 100.), epsilon = 1e-9);
         assert_abs_diff_eq!(reflected_dir, -Vector3::x(), epsilon = 1e-9);
         Ok(())
     }
     /// Behind the bore, the optical axis starts where it meets the plate, in the bore on the side
     /// it arrives from, and runs through the bore to the rear face: the drawn axis leaves no gap
-    /// across the plate.
+    /// across the plate, nor a line across it from where the arriving axis met it to a bore beside
+    /// it.
     #[test]
     fn the_axis_runs_through_the_bore_from_where_it_meets_the_plate() -> OpmResult<()> {
-        let mut mirror = placed_at_origin::<BoredMirror>()?;
+        let mut mirror = bored_at(5.0)?;
+        mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let axis = rays_along_z_from(&[millimeter!(0.0, 0.0, -10.0)], nanometer!(1000.0))?;
         let output = AnalysisRayTrace::calc_node_positions(
             &mut mirror,
@@ -493,7 +550,7 @@ mod test {
         for (row, z) in [(0, 0.0), (1, 6.0)] {
             assert_eq!(
                 (path[(row, 0)], path[(row, 1)], path[(row, 2)]),
-                (millimeter!(0.0), millimeter!(0.0), millimeter!(z)),
+                (millimeter!(5.0), millimeter!(0.0), millimeter!(z)),
                 "point {row}"
             );
         }

@@ -9,9 +9,8 @@ use crate::components::node_editor::{
     },
 };
 use dioxus::prelude::*;
-use nalgebra::Point2;
 use opossum_core::{
-    apertures::{Bore, CircleShape, Outline, OutlineShape},
+    apertures::{Bore, Outline, OutlineShape},
     degree, meter,
     utils::default_from_name::DefaultFromName,
 };
@@ -66,29 +65,27 @@ impl IntoInputData<f64, Bore, Bore> for BoreParam {
 }
 
 /// Editor for the bore through a component: a collapsed section with the bore being drafted
-/// (shape, offset and rotation). The draft starts as the bore the optic shape has, if it has one.
+/// (shape, offset and rotation), starting as the bore the optic shape has. Whether a component
+/// has a bore is up to its kind, so the bore can be changed but neither added nor removed.
 ///
-/// Adding, updating and removing the bore each hands it on once, so each is one step to undo.
-/// Editing the draft hands nothing on; while the core refuses the outline the draft would make
-/// ([`Outline::new`]), the button looks refused, does nothing and tells why on hover.
+/// Updating the bore hands it on once, so it is one step to undo. Editing the draft hands
+/// nothing on; while the core refuses the outline the draft would make ([`Outline::new`]), the
+/// button looks refused, does nothing and tells why on hover.
 ///
 /// # Arguments
 ///
 /// * `edge` - the edge of the component shown, which the bore has to lie within.
-/// * `bore` - the bore the optic shape has, if any.
-/// * `on_bore_change` - handler receiving the changed bore, or `None` once it is removed.
+/// * `bore` - the bore the optic shape has.
+/// * `on_bore_change` - handler receiving the changed bore.
 /// * `readonly` - whether the inputs are shown read-only.
 #[component]
 pub fn BoreEditor(
     edge: OutlineShape,
-    bore: Option<Bore>,
-    on_bore_change: EventHandler<Option<Bore>>,
+    bore: Bore,
+    on_bore_change: EventHandler<Bore>,
     readonly: bool,
 ) -> Element {
-    let mut draft = use_synced_signal(
-        bore.clone()
-            .unwrap_or_else(|| Bore::new(CircleShape::default(), Point2::origin(), degree!(0.0))),
-    );
+    let mut draft = use_synced_signal(bore);
 
     let on_draft_change = EventHandler::new(move |bore: Bore| draft.set(bore));
     let on_draft_shape_change = EventHandler::new(move |shape: OutlineShape| {
@@ -103,7 +100,6 @@ pub fn BoreEditor(
         .flatten()
         .map(|refusal| refusal.to_string());
     let refused = refusal.is_some();
-    let has_bore = bore.is_some();
     let draft_inputs = rsx! {
         LabeledSelect {
             id: "boreShapeSelector",
@@ -128,26 +124,16 @@ pub fn BoreEditor(
             class: if refused { "border-start btn refused" } else { "border-start btn" },
             r#type: "button",
             id: "boreSubmit",
-            value: if has_bore { "Update bore" } else { "Add bore" },
+            value: "Update bore",
             disabled: readonly,
             // Refused, the button stays hoverable so that its title can say why.
             "aria-disabled": refused,
             title: refusal.unwrap_or_default(),
             onclick: move |_| {
                 if !refused {
-                    on_bore_change.call(Some(submitted.clone()));
+                    on_bore_change.call(submitted.clone());
                 }
             },
-        }
-        if has_bore {
-            input {
-                class: "border-start btn",
-                r#type: "button",
-                id: "boreRemove",
-                value: "Remove bore",
-                disabled: readonly,
-                onclick: move |_| on_bore_change.call(None),
-            }
         }
     };
     rsx! {
@@ -166,6 +152,8 @@ pub fn BoreEditor(
 mod test {
     use super::*;
     use approx::assert_relative_eq;
+    use nalgebra::Point2;
+    use opossum_core::apertures::CircleShape;
 
     /// A bore is shifted in meters and turned in degrees, each input leaving the shape and the
     /// other values of the bore as they were; the inputs show the values back in those units.

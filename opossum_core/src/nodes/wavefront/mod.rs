@@ -25,7 +25,7 @@ use crate::{
         NodeRegistration,
         wavefront::zernike::{WavefrontDecomposition, ZernikeNoll},
     },
-    properties::{Properties, Proptype},
+    properties::{Properties, Proptype, validator::Validator},
     reporting::node_report::{NodeReport, NodeReportResult},
     utils::geom_transformation::Isometry,
 };
@@ -79,9 +79,13 @@ impl Default for WaveFront {
             )
             .unwrap();
         node_attr
-            .create_property(
+            .create_property_with_validator(
                 OPTIC_SHAPE,
                 "window the light is recorded within",
+                Validator::OpticShape {
+                    may_be_open: true,
+                    bored: false,
+                },
                 default_square_optic_shape().into(),
             )
             .unwrap();

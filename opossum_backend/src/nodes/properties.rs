@@ -357,7 +357,7 @@ mod test {
     }
 
     /// The GUI offers only the optic shapes a node can take, and learns them from the property's
-    /// validator: a lens must be bounded, a paraxial surface has no validator and may also be open.
+    /// validator: a lens must be bounded, a paraxial surface may also be open, neither takes a bore.
     #[actix_web::test]
     async fn test_get_properties_carries_the_validators() {
         let app_state = create_test_state();
@@ -372,10 +372,11 @@ mod test {
             )
         };
         let app = test::init_service(App::new().app_data(app_state).service(get_properties)).await;
-        for (node_id, expected) in [
-            (lens_id, Some(Validator::OpticShapeIsBounded)),
-            (paraxial_id, None),
-        ] {
+        for (node_id, may_be_open) in [(lens_id, false), (paraxial_id, true)] {
+            let expected = Some(Validator::OpticShape {
+                may_be_open,
+                bored: false,
+            });
             let req = test::TestRequest::get()
                 .uri(&format!("/{node_id}/properties"))
                 .insert_header(("Accept", "application/ron"))

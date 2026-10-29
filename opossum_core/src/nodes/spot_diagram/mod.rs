@@ -23,7 +23,7 @@ use crate::{
     light::{LightData, LightResult, Rays},
     nanometer,
     nodes::NodeRegistration,
-    properties::Properties,
+    properties::{Properties, validator::Validator},
     reporting::{
         node_report::{NodeReport, NodeReportResult},
         report_note::{ReportLevel, ReportNote},
@@ -71,9 +71,13 @@ impl Default for SpotDiagram {
             )
             .expect("Hardcoded property creation must not fail");
         node_attr
-            .create_property(
+            .create_property_with_validator(
                 OPTIC_SHAPE,
                 "window the light is recorded within",
+                Validator::OpticShape {
+                    may_be_open: true,
+                    bored: false,
+                },
                 default_square_optic_shape().into(),
             )
             .expect("Hardcoded property creation must not fail");
