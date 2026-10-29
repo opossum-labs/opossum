@@ -412,7 +412,8 @@ mod test {
     use num_traits::Zero;
     use opossum_core::{
         coatings::SplittingConfigBuilder, error::{OpmResult, OpossumError}, nodes::{
-            BeamSplitter, Dummy, EnergyMeter, Metertype, NodeGroup, SourcePort
+            BeamSplitter, Dummy, EnergyMeter, Metertype, NodeGroup, SourcePort,
+            
         },
     };
     use std::{fs::File, io::Read};

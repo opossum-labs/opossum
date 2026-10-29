@@ -38,7 +38,7 @@ pub fn CoatingEditor(
         on_change.call(ct);
     };
     let mut element_list: Vec<Result<VNode, RenderError>> = vec![rsx! {
-        CoatingTypeSelector {coating_type_sig, validator, on_change: on_coating_changed }
+        CoatingTypeSelector {coating_type_sig, validator, on_change: on_coating_changed, readonly }
     }];
     match &*coating_type_sig.read() {
         CoatingType::ConstantR(conf) => element_list.push(rsx! {
@@ -77,6 +77,7 @@ pub fn CoatingTypeSelector(
     coating_type_sig: ReadSignal<CoatingType>,
     validator: Option<Validator>,
     on_change: EventHandler<CoatingType>,
+    readonly: bool,
 ) -> Element {
     let refused: Vec<CoatingType> = CoatingType::iter()
         .filter(|coating| {
@@ -97,6 +98,7 @@ pub fn CoatingTypeSelector(
                     on_change.call(ftb);
                 }
             },
+            readonly
         }
     }
 }

@@ -121,7 +121,7 @@ pub fn App() -> Element {
     provide_context(backend_status);
 
     // Asynchronous backend health check on startup
-    use_future(move || async move {
+    let mut backend_status_future = use_future(move || async move {
         match get_api_welcome().await {
             Ok(msg) if msg.contains("OPOSSUM backend") => {
                 info!("Backend connection established: {msg}");
@@ -262,6 +262,7 @@ pub fn App() -> Element {
         }
         AppCommand::Refresh => {
             node_editor_command_handler.call(Some(NodeEditorCommand::Refresh));
+            backend_status_future.restart();
         }
         AppCommand::Settings => {
             show_settings.set(true);
