@@ -269,7 +269,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
      * The radial factor is computed from the plane's own local coordinates (±0.5), so it is
      * independent of the zoom-driven scale and of the texture's tiling. The blend runs just before
      * tone mapping, where `gl_FragColor` is still linear, so at the rim the pixel equals the
-     * background colour exactly (uFadeColor is the linear scene.background).
+     * background colour exactly (uFadeColor is the linear `background` option).
      *
      * The compiled shader is stored on `material.userData.groundShader` so applyOptions can keep
      * uFadeColor in step with a later background change.
@@ -278,11 +278,9 @@ export async function createViewer(canvasId, options, send, threeBase) {
      */
     function fadeGroundMaterial(material) {
         material.onBeforeCompile = (shader) => {
-            shader.uniforms.uFadeColor = {
-                value: (scene.background && scene.background.isColor)
-                    ? scene.background.clone()
-                    : new THREE.Color(0x000000),
-            };
+            // The background colour, not scene.background: that may be a panorama (see
+            // applyBackground), and a pixel can only fade into one colour.
+            shader.uniforms.uFadeColor = { value: new THREE.Color(currentOptions.background) };
             shader.uniforms.uFadeStart = { value: GROUND_FADE_START };
             // Carry the plane's local XZ (±0.5) to the fragment stage. The plane is only four
             // vertices, so the radius must be taken PER FRAGMENT here, not per vertex — a per-vertex
@@ -873,6 +871,24 @@ export async function createViewer(canvasId, options, send, threeBase) {
     }
 
     /**
+     * Fetches a 2:1 panorama: an `.hdr` through the vendored RGBELoader, which keeps brightness
+     * beyond white, anything else as an ordinary image.
+     *
+     * @param {string} url - where the panorama is; a path ending in `.hdr` is read as Radiance HDR.
+     * @returns {Promise<THREE.Texture>} the panorama, not yet filtered for reflections.
+     */
+    async function loadPanorama(url) {
+        if (url.split(/[?#]/)[0].toLowerCase().endsWith('.hdr')) {
+            const { RGBELoader } =
+                await import(threeBase + '/examples/jsm/loaders/RGBELoader.js');
+            return new RGBELoader().loadAsync(url);
+        }
+        const texture = await new THREE.TextureLoader().loadAsync(url);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        return texture;
+    }
+
+    /**
      * Builds the environment map an environment asks for.
      *
      * @param {string|object} spec - the environment, as `applyEnvironment` takes it.
@@ -901,7 +917,27 @@ export async function createViewer(canvasId, options, send, threeBase) {
             texture.dispose();
             return map;
         }
+        if (spec && spec.image) {
+            const texture = await loadPanorama(spec.image.url);
+            texture.mapping = THREE.EquirectangularReflectionMapping;
+            const pmrem = new THREE.PMREMGenerator(renderer);
+            const map   = pmrem.fromEquirectangular(texture).texture;
+            // As above: only the filtered map outlives this call.
+            pmrem.dispose();
+            texture.dispose();
+            return map;
+        }
         return null;
+    }
+
+    /**
+     * Puts the plain background colour behind the scene, or the environment map when
+     * `environment_background` asks for it and the map has arrived.
+     */
+    function applyBackground() {
+        scene.background = currentOptions.environment_background && environmentMap
+            ? environmentMap
+            : new THREE.Color(currentOptions.background);
     }
 
     async function applyEnvironment(spec) {
@@ -911,14 +947,25 @@ export async function createViewer(canvasId, options, send, threeBase) {
 
         if (environmentMap) { environmentMap.dispose(); environmentMap = null; }
         scene.environment = null;
-        const map = await environmentMapOf(spec);
+        applyBackground(); // the old map may be the background, and it is gone
+        let map;
+        try {
+            map = await environmentMapOf(spec);
+        } catch (e) {
+            if (!disposed && environmentKey === key) {
+                send({ event: 'error', message: `Environment not drawn: ${(e && e.message) || e}` });
+            }
+            return;
+        }
         if (!map) return;
 
-        // The room's import is awaited, so the viewer may have been torn down in the meantime - and
-        // a second call may have overtaken this one. Either way this map is no longer the wanted one.
+        // Building a map may await an import or a download, so the viewer may have been torn down in
+        // the meantime - and a second call may have overtaken this one. Either way this map is no
+        // longer the wanted one.
         if (disposed || environmentKey !== key) { map.dispose(); return; }
         environmentMap = map;
         scene.environment = map;
+        applyBackground();
     }
 
     // ── Options ───────────────────────────────────────────────────────────────
@@ -930,13 +977,11 @@ export async function createViewer(canvasId, options, send, threeBase) {
 
     function applyOptions(opts) {
         currentOptions = opts;
-        scene.background = new THREE.Color(opts.background);
-        // The ground fades to the background at its rim; keep that colour in step. The shader is
-        // absent until the material first compiles, so this only updates a ground already drawn.
+        applyBackground();
+        // The ground fades to the background colour at its rim; keep that colour in step. The shader
+        // is absent until the material first compiles, so this only updates a ground already drawn.
         const groundShader = ground && ground.mesh.material.userData.groundShader;
-        if (groundShader && scene.background.isColor) {
-            groundShader.uniforms.uFadeColor.value.copy(scene.background);
-        }
+        if (groundShader) groundShader.uniforms.uFadeColor.value.set(opts.background);
         ambient.intensity = opts.ambient_intensity;
         sun.intensity     = opts.directional_intensity;
         void applyEnvironment(opts.environment);

@@ -218,6 +218,16 @@ pub enum Environment {
         /// CSS color of the lower half.
         below: String,
     },
+    /// A 360° panorama around the scene, laid out 2:1 (equirectangular).
+    ///
+    /// An `.hdr` file keeps brightness beyond white, so a lamp in it still shines in a mirror; an
+    /// ordinary image (PNG, JPG) tops out at white. The webview fetches the URL itself, like a model
+    /// URL. A panorama that cannot be loaded is reported as an error and leaves the scene without
+    /// an environment.
+    Image {
+        /// URL of the panorama. A path ending in `.hdr` is read as Radiance HDR.
+        url: String,
+    },
 }
 // ─── Ground ──────────────────────────────────────────────────────────────────
 
@@ -275,6 +285,12 @@ pub struct ViewerOptions {
     /// `1.0` as the environment is, more for brighter reflections (three.js'
     /// `scene.environmentIntensity`).
     pub environment_intensity: f32,
+    /// Whether the [`environment`](Self::environment) is drawn behind the scene instead of the plain
+    /// [`background`](Self::background) colour.
+    ///
+    /// The colour stays in use where the floor fades out at its rim, and until the environment has
+    /// arrived. Defaults to `false`.
+    pub environment_background: bool,
     /// Vertical field of view in degrees.
     pub fov_degrees: f32,
     /// Whether a corner orientation gizmo (`ViewHelper`) is shown.
@@ -307,6 +323,7 @@ impl Default for ViewerOptions {
             initial_target: [0.0, 0.0, 0.0],
             environment: Environment::default(),
             environment_intensity: 1.0,
+            environment_background: false,
             fov_degrees: 50.0,
             orientation_gizmo: false,
             ground: None,

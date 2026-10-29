@@ -149,12 +149,13 @@ impl Serialize for ViewerOptions {
             initial_target,
             environment,
             environment_intensity,
+            environment_background,
             fov_degrees,
             orientation_gizmo,
             ground,
             line_width,
         } = self;
-        let mut st = s.serialize_struct("ViewerOptions", 14)?;
+        let mut st = s.serialize_struct("ViewerOptions", 15)?;
         st.serialize_field("background", background)?;
         st.serialize_field("grid", grid)?;
         st.serialize_field("ambient_intensity", ambient_intensity)?;
@@ -165,6 +166,7 @@ impl Serialize for ViewerOptions {
         st.serialize_field("initial_target", initial_target)?;
         st.serialize_field("environment", environment)?;
         st.serialize_field("environment_intensity", environment_intensity)?;
+        st.serialize_field("environment_background", environment_background)?;
         st.serialize_field("fov_degrees", fov_degrees)?;
         st.serialize_field("orientation_gizmo", orientation_gizmo)?;
         st.serialize_field("ground", ground)?;
@@ -215,6 +217,7 @@ mod tests {
                 "background",
                 "directional_intensity",
                 "environment",
+                "environment_background",
                 "environment_intensity",
                 "fit_on_first_load",
                 "fov_degrees",
@@ -241,6 +244,20 @@ mod tests {
         };
         let json = serde_json::to_value(opts).expect("options serialise");
         assert_eq!(json["environment_intensity"], 2.0);
+    }
+
+    /// The environment stays out of the background unless asked for; asked for, the switch has to
+    /// arrive as exactly `true`.
+    #[test]
+    fn the_environment_is_the_background_only_when_asked_for() {
+        let json = serde_json::to_value(ViewerOptions::default()).expect("options serialise");
+        assert_eq!(json["environment_background"], false);
+        let opts = ViewerOptions {
+            environment_background: true,
+            ..ViewerOptions::default()
+        };
+        let json = serde_json::to_value(opts).expect("options serialise");
+        assert_eq!(json["environment_background"], true);
     }
 
     /// `viewer.js` widens lines only above one pixel, so the default must arrive as exactly that.
@@ -322,6 +339,13 @@ mod tests {
         assert_eq!(
             serde_json::to_value(horizon).expect("serialises"),
             serde_json::json!({ "horizon": { "above": "#667079", "below": "#46474a" } })
+        );
+        let image = Environment::Image {
+            url: "http://x/sky.hdr".into(),
+        };
+        assert_eq!(
+            serde_json::to_value(image).expect("serialises"),
+            serde_json::json!({ "image": { "url": "http://x/sky.hdr" } })
         );
     }
 }
