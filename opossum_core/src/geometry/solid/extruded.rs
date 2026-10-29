@@ -119,14 +119,15 @@ impl GeometryKind for Extruded {
             _ => None,
         }
     }
+    /// A face reaches into the bore, where the body only holds no material.
     fn includes(&self, face: FaceIndex, point: &Point3<Length>) -> bool {
         GeometryKind::surface(self, face)
-            .is_some_and(|surface| self.rim.bounds(surface.face(), point))
+            .is_some_and(|surface| self.rim.reaches(surface.face(), point))
     }
-    /// The faces of a body end at its bore (see [`GeometryKind::includes`]), so light never meets a
-    /// face there.
-    fn bored_rim(&self, _face: FaceIndex) -> Option<&Rim> {
-        None
+    fn bored_rim(&self, face: FaceIndex) -> Option<&Rim> {
+        GeometryKind::surface(self, face)
+            .map(|_| &self.rim)
+            .filter(|rim| rim.outline().bore().is_some())
     }
     fn window(&self) -> Option<&Rim> {
         None
@@ -294,11 +295,14 @@ impl Body for Extruded {
     }
     fn path_length_inside(&self, ray: &Ray) -> Option<Length> {
         // A ray leaving the body through its lateral boundary meets no hit there: that boundary is
-        // not part of the model.
+        // not part of the model. Neither is a hit in the bore, which holds no material.
         let hits = face_hits(
             [self.front.face(), self.rear.face()].into_iter(),
             ray,
-            |face, point| self.includes(face, point),
+            |face, point| {
+                GeometryKind::surface(self, face)
+                    .is_some_and(|surface| self.rim.bounds(surface.face(), point))
+            },
         );
         self.chord_through(ray.position(), ray.direction(), hits)
     }
@@ -430,6 +434,29 @@ mod test {
     /// Create a ray at the given position, propagating along the given direction.
     fn test_ray(position: Point3<Length>, direction: Vector3<f64>) -> OpmResult<Ray> {
         Ray::new(position, direction, nanometer!(1053.0), joule!(1.0))
+    }
+    /// A body holds no material in its bore, so a ray through the bore runs nowhere inside it,
+    /// while one beside the bore runs through the whole plate.
+    #[test]
+    fn a_ray_through_the_bore_runs_nowhere_inside_the_body() -> OpmResult<()> {
+        let (front, rear) = plate_faces(millimeter!(10.0))?;
+        let ring = Outline::new(
+            CircleShape::new(millimeter!(12.5))?,
+            Some(Bore::new(
+                CircleShape::new(millimeter!(2.0))?,
+                millimeter!(0.0, 0.0),
+                Angle::zero(),
+            )),
+        )?;
+        let body = body_between(front, rear, ring, Isometry::identity())?;
+        let along_z = |y: f64| test_ray(millimeter!(0.0, y, -5.0), Vector3::z());
+        assert_eq!(body.path_length_inside(&along_z(0.0)?), None);
+        assert_abs_diff_eq!(
+            path_length(&body, &along_z(5.0)?)?.value,
+            0.01,
+            epsilon = 1e-12
+        );
+        Ok(())
     }
     /// Trace the given ray through the given body and require it to pass through.
     fn path_length(body: &Extruded, ray: &Ray) -> OpmResult<Length> {

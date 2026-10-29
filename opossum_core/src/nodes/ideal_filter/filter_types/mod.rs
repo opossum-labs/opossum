@@ -158,6 +158,9 @@ impl SurfaceEffect for FilterType {
         ray.filter_energy(self)?;
         Ok(split)
     }
+    fn acts_in_bores(&self) -> bool {
+        false
+    }
 }
 impl TryFrom<f64> for FilterTypeBuilder {
     type Error = OpossumError;

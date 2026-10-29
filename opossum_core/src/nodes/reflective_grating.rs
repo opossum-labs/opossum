@@ -387,6 +387,9 @@ impl SurfaceEffect for Diffraction {
             None,
         ))
     }
+    fn acts_in_bores(&self) -> bool {
+        false
+    }
 }
 
 impl OpticNode for ReflectiveGrating {

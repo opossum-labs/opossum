@@ -23,7 +23,7 @@ use uuid::Uuid;
 use crate::{
     analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
     apertures::Outline,
-    coatings::{Coating, CoatingType},
+    coatings::Coating,
     core_optics::{optic_surface::OpticSurface, surface_effect::SurfaceEffect},
     error::{OpmResult, OpossumError},
     geometry::{
@@ -321,13 +321,14 @@ impl Geometry {
     /// [`SurfaceEffect::act_at`]) and, if the ray sends a part back, on its helper rays as well; the
     /// surface records the hit in its hit map. Which of the two parts is the intended beam is
     /// recorded on both (see [`ReflectedPart`]). The coating of the surface is built once for the
-    /// whole bundle and acts on its material; in a bore the effect acts with a coating that
-    /// reflects nothing, so the light there passes untouched, whatever the missed surface strategy.
+    /// whole bundle. A ray in a bore passes untouched, whatever the missed surface strategy, unless
+    /// the effect acts there as well (see [`SurfaceEffect::acts_in_bores`]).
     ///
     /// # Arguments
     ///
     /// * `face` - the number of the face.
-    /// * `rays` - the bundle. Its rays are moved to the surface and continue as the transmitted part.
+    /// * `rays` - the bundle. Its rays are moved to the surface and continue as the transmitted part;
+    ///   a ray passing a bore untouched stays where it was.
     /// * `effect` - what the surface does to a ray that hits it.
     /// * `part` - what the reflected part is to the bundle.
     /// * `missed` - what happens to a ray that misses the surface.
@@ -354,14 +355,7 @@ impl Geometry {
         missed: MissedSurfaceStrategy,
     ) -> OpmResult<Rays> {
         let coating = Box::<dyn Coating>::try_from(self.surface_of_mut(face)?.coating())?;
-        let bore = Box::<dyn Coating>::try_from(&CoatingType::IdealAR)?;
-        let coating_at = |hit: &SurfaceHit| {
-            if hit.on_material() {
-                coating.as_ref()
-            } else {
-                bore.as_ref()
-            }
-        };
+        let acts_at = |hit: &SurfaceHit| hit.on_material() || effect.acts_in_bores();
         let uuid = rays.uuid();
         let mut valid_rays_found = false;
         let mut rays_missed = false;
@@ -375,8 +369,10 @@ impl Geometry {
                 rays_missed = true;
                 continue;
             };
-            let (reflected, hit_point) =
-                effect.act_at(ray, &surface_hit, coating_at(&surface_hit))?;
+            if !acts_at(&surface_hit) {
+                continue;
+            }
+            let (reflected, hit_point) = effect.act_at(ray, &surface_hit, coating.as_ref())?;
             if let Some(mut reflected) = reflected {
                 if let (Some(helpers), Some(reflected_helpers)) =
                     (ray.helper_rays_mut(), reflected.helper_rays_mut())
@@ -388,8 +384,11 @@ impl Geometry {
                             missed.apply_to(helper);
                             continue;
                         };
+                        if !acts_at(&helper_hit) {
+                            continue;
+                        }
                         if let (Some(helper_reflected), _) =
-                            effect.act_at(helper, &helper_hit, coating_at(&helper_hit))?
+                            effect.act_at(helper, &helper_hit, coating.as_ref())?
                         {
                             reflected_helper.set_direction(helper_reflected.direction())?;
                         }
@@ -769,7 +768,7 @@ mod test {
         joule, meter, millimeter, nanometer,
         nodes::ideal_filter::{EdgeFilter, EdgeFilterType, SpectralFilterBuilder},
         percent, radian,
-        refractive_index::{RefrIndexConst, refr_index_vaccuum},
+        refractive_index::{RefrIndexConst, RefractiveIndexType, refr_index_vaccuum},
         utils::test_helper::helper::check_logs,
     };
     use approx::assert_abs_diff_eq;
@@ -1707,7 +1706,8 @@ mod test {
         Ok(())
     }
     /// Light through a bore passes the surface untouched, even where the strategy stops rays that
-    /// miss it, and leaves no hit: the coating acts on the material only.
+    /// miss it: it keeps its way, sends nothing back and leaves no hit. The coating acts on the
+    /// material only.
     #[test]
     fn light_through_a_bore_passes_untouched() -> OpmResult<()> {
         let mut ring = coated(
@@ -1717,18 +1717,78 @@ mod test {
         let mut rays = Rays::from(vec![ray_at(0.0)?, ray_at(3.0)?]);
         let reflected = split_by_coating(&mut ring, &mut rays)?;
         assert_eq!(energies(&rays), [joule!(1.0), joule!(0.0)]);
-        assert_eq!(energies(&reflected), [joule!(0.0), joule!(1.0)]);
+        assert_eq!(energies(&reflected), [joule!(1.0)]);
         let through = rays
             .iter()
             .next()
             .ok_or_else(|| OpossumError::Other("the bundle lost its ray".into()))?;
         assert!(through.valid());
+        assert_eq!(through.position(), millimeter!(0.0, 0.0, -10.0));
         assert_eq!(through.direction(), Vector3::z());
         let hits = ring
             .surface_of_mut(SurfaceGeometry::FACE)?
             .get_rays_hit_map(0, rays.uuid())
             .map(|hit_map| hit_map.hit_map().len());
         assert_eq!(hits, Some(1), "only the ray on the material leaves a hit");
+        Ok(())
+    }
+    /// Light through the bore of a body passes both faces unbent, even where the strategy stops
+    /// rays that miss them; light on the material is refracted into the glass.
+    #[test]
+    fn light_through_the_bore_of_a_body_passes_unbent() -> OpmResult<()> {
+        let mut plate = Geometry::singlet(
+            millimeter!(f64::INFINITY),
+            millimeter!(f64::INFINITY),
+            millimeter!(10.0),
+            Outline::new(
+                CircleShape::new(millimeter!(5.0))?,
+                Some(Bore::new(
+                    CircleShape::new(millimeter!(2.0))?,
+                    millimeter!(0.0, 0.0),
+                    degree!(0.0),
+                )),
+            )?,
+            Material::from(&RefrIndexConst::new(1.5)?),
+        )?;
+        let slanted = vector![0.0, 0.05, 1.0].normalize();
+        let ray_from = |y: f64| {
+            Ray::new(
+                millimeter!(0.0, y, -10.0),
+                slanted,
+                nanometer!(1000.0),
+                joule!(1.0),
+            )
+        };
+        let mut rays = Rays::from(vec![ray_from(0.0)?, ray_from(3.0)?]);
+        let glass = RefractiveIndexType::from(RefrIndexConst::new(1.5)?);
+        for (face, index) in [
+            (Extruded::FRONT, &glass),
+            (Extruded::REAR, &refr_index_vaccuum()),
+        ] {
+            plate.interact_with_rays(
+                face,
+                &mut rays,
+                &Refraction(Some(index)),
+                ReflectedPart::Ghost,
+                MissedSurfaceStrategy::Stop,
+            )?;
+        }
+        let mut rays = rays.iter();
+        let (through, beside) = (
+            rays.next()
+                .ok_or_else(|| OpossumError::Other("no ray".into()))?,
+            rays.next()
+                .ok_or_else(|| OpossumError::Other("no ray".into()))?,
+        );
+        assert!(through.valid());
+        assert_eq!(through.position(), millimeter!(0.0, 0.0, -10.0));
+        assert_abs_diff_eq!(through.direction(), slanted, epsilon = 1e-12);
+        assert!(beside.valid());
+        assert_abs_diff_eq!(beside.position().z.value, 0.01, epsilon = 1e-12);
+        assert!(
+            beside.position().y.value > 0.0035,
+            "refracted towards the axis"
+        );
         Ok(())
     }
     /// The neutral split that places the optical axis brings its own coating, so the axis sees

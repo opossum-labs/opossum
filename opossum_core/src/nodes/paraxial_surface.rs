@@ -140,6 +140,9 @@ impl SurfaceEffect for ParaxialLens {
         ray.refract_paraxial(self.focal_length, &self.frame)?;
         Ok(split)
     }
+    fn acts_in_bores(&self) -> bool {
+        false
+    }
 }
 impl OpticNode for ParaxialSurface {
     fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
