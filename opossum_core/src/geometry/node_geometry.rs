@@ -28,7 +28,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     geometry::{
         Assembly, Extruded, Face, FaceIndex, FacePatch, ParametricSolid, Rim, SurfaceShape,
-        body::Body,
+        body::Body, face::SurfacePlacement,
     },
     light::{Ray, Rays, rays::ReflectedPart},
     material::Material,
@@ -735,17 +735,20 @@ impl GeometryKind for SurfaceGeometry {
         self.surface.move_by(by);
         self.extent.move_by(by);
     }
-    /// The face is laid over the outline of its rim, measured along the axis of the rim; an open
-    /// surface has no rim and is drawn over the given outline around its own vertex.
+    /// The face is laid over the outline of its rim, measured along the axis of the rim, with a
+    /// bore where it meets the face; an open surface has no rim and is drawn over the given
+    /// outline around its own vertex.
     fn mesh(&self, segments: usize, unbounded: &Outline) -> OpmResult<Vec<FacePatch>> {
         let (outline, frame) = match &self.extent {
             SurfaceExtent::Edge(rim) | SurfaceExtent::Window(rim) => (rim.outline(), *rim.frame()),
             SurfaceExtent::Open => (unbounded, *self.surface.face().frame()),
         };
-        let mesh = self
-            .surface
-            .face()
-            .mesh_over(&outline.triangulate(segments)?, &frame)?;
+        let face = self.surface.face();
+        let at = SurfacePlacement::new(face, &frame)?;
+        let mesh = face.mesh_over(
+            &outline.triangulate_on(segments, |position| Ok(at.above(&position)?.0.z))?,
+            &frame,
+        )?;
         Ok(vec![FacePatch {
             face: Some(Self::FACE),
             mesh: mesh.transformed(&frame),

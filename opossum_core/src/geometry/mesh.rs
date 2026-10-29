@@ -61,16 +61,21 @@ impl SurfaceMesh {
             triangles,
         }
     }
-    /// Draw the lateral face closing a body between two faces meshed over the same outline.
+    /// Draw the lateral face closing a body between two faces meshed over the rims of one
+    /// outline.
     ///
-    /// Both faces share the rims of the same [`OutlineMesh`], so the lateral face is built by
-    /// walking each rim once and spanning two triangles between each pair of neighbouring
-    /// positions. Its points are taken from the two face meshes verbatim, which is what makes the
-    /// faces meet without a seam.
+    /// Both faces have the same rims, point for point, so the lateral face is built by walking
+    /// each rim once and spanning two triangles between each pair of neighboring positions. Its
+    /// points are taken from the two face meshes verbatim, which is what makes the faces meet
+    /// without a seam. Each rim runs through the body along its own direction, such as a tilted
+    /// bore along its axis, which the lateral face there is parallel to.
     ///
     /// # Arguments
     ///
-    /// - `outline_mesh`: the triangulated outline both faces were laid over
+    /// - `outline_mesh`: the outline in the plane both faces were laid over, which states the rims
+    ///   and where they cross the plane
+    /// - `axes`: the direction each rim runs along through the body, one per rim (see
+    ///   [`Outline::rim_axes`](crate::apertures::Outline::rim_axes))
     /// - `lower`: the meshed face bounding the body towards -z, still facing +z
     /// - `upper`: the meshed face bounding the body towards +z
     ///
@@ -80,15 +85,24 @@ impl SurfaceMesh {
     ///
     /// # Errors
     ///
-    /// This function returns an error if the face needs more points than can be indexed.
+    /// This function returns an error if there is not one direction per rim, or if the face needs
+    /// more points than can be indexed.
     // The one cast below is guarded by the `try_from` on the very first line: no more than
     // `4 * rim_points` points are ever pushed.
     #[allow(clippy::cast_possible_truncation)]
     pub(super) fn between(
         outline_mesh: &OutlineMesh,
+        axes: &[Vector3<f64>],
         lower: &Self,
         upper: &Self,
     ) -> OpmResult<Self> {
+        if axes.len() != outline_mesh.rims().len() {
+            return Err(OpossumError::Other(format!(
+                "the lateral face needs one direction for each of its {} rims, not {}",
+                outline_mesh.rims().len(),
+                axes.len()
+            )));
+        }
         let rim_points = outline_mesh.rims().iter().map(Range::len).sum::<usize>();
         // Every rim position needs at most two pairs of points, and one index has to address them
         // all.
@@ -98,17 +112,19 @@ impl SurfaceMesh {
         let mut points = Vec::with_capacity(4 * rim_points);
         let mut normals = Vec::with_capacity(4 * rim_points);
         let mut triangles = Vec::with_capacity(2 * rim_points);
-        for rim in outline_mesh.rims() {
+        for (rim, axis) in outline_mesh.rims().iter().zip(axes) {
             let len = rim.len();
             // The outward normal of the rim segment leaving each position. A rim runs with the
-            // body on its left seen from +z, so turning its direction a right angle clockwise
-            // points away from the body. Every one is needed twice — once leaving a position, once
-            // arriving at the next.
+            // body on its left seen from +z, so the segment crossed with the direction the rim runs
+            // along points away from the body. Every one is needed twice — once leaving a position,
+            // once arriving at the next.
             let segment_normals = (0..len)
                 .map(|step| {
                     let from = outline_mesh.points()[rim.start + step];
                     let to = outline_mesh.points()[rim.start + (step + 1) % len];
-                    Vector3::new((to.y - from.y).value, (from.x - to.x).value, 0.0).normalize()
+                    Vector3::new((to.x - from.x).value, (to.y - from.y).value, 0.0)
+                        .cross(axis)
+                        .normalize()
                 })
                 .collect::<Vec<_>>();
             // Where each rim segment begins and ends in the point list. A position the rim merely

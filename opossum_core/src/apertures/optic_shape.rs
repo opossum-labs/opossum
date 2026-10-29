@@ -28,6 +28,11 @@ use uom::si::f64::{Angle, Length};
 const CIRCLE_POINTS: usize = 64;
 /// How close two edges may come, in meters, before they count as touching.
 const TOUCHING: f64 = 1e-9;
+/// How many steps the axis of a bore may take to settle on where it meets a surface.
+const MEETING_STEPS: usize = 100;
+/// How far, in meters, the axis of a bore may still move in a step once it has settled on where
+/// it meets a surface.
+const SETTLED: f64 = 1e-12;
 
 /// A shape with an edge: the outline of a component, or of a bore through it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, EnumIter)]
@@ -269,9 +274,52 @@ impl Bore {
             .map(|corner| self.placed(corner))
             .collect()
     }
-    /// Return whether a point of the plane lies on or within this bore.
-    fn contains(&self, point: Point2<Length>) -> bool {
-        self.contains_at(Point3::new(point.x, point.y, Length::zero()))
+    /// Follow the axis of this bore from where it crosses the plane of the outline to where it
+    /// meets a surface above the plane.
+    ///
+    /// The surface is asked how high it lies above a position, the line along the axis is
+    /// followed up to that height, and that is repeated from where the line got to until it stays
+    /// put. A flat surface square to the axis of the component is met at the second step; a
+    /// curved one closes in on the point.
+    ///
+    /// # Arguments
+    ///
+    /// - `start`: where the line along the axis of the bore crosses the plane of the outline.
+    /// - `height`: how far above a position of the plane the surface lies.
+    ///
+    /// # Returns
+    ///
+    /// The position in the plane right below where the line meets the surface.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the surface cannot say how high it lies, or if the line
+    /// does not settle on it.
+    fn meeting(
+        &self,
+        start: Point2<Length>,
+        height: &impl Fn(Point2<Length>) -> OpmResult<Length>,
+    ) -> OpmResult<Point2<Length>> {
+        let axis = self.axis();
+        let (slope_x, slope_y) = (axis.x / axis.z, axis.y / axis.z);
+        let mut position = start;
+        for _ in 0..MEETING_STEPS {
+            let above = height(position)?.value;
+            let next = Point2::new(
+                meter!(above.mul_add(slope_x, start.x.value)),
+                meter!(above.mul_add(slope_y, start.y.value)),
+            );
+            let moved = (next.x - position.x)
+                .value
+                .hypot((next.y - position.y).value);
+            position = next;
+            if moved <= SETTLED {
+                return Ok(position);
+            }
+        }
+        Err(OpossumError::Other(
+            "the axis of the bore does not settle on where it meets the surface".into(),
+        ))
     }
     /// Return whether a point lies on or within this bore: across the axis of the bore, it lies
     /// within its shape.
@@ -361,15 +409,17 @@ impl Outline {
     pub const fn bore(&self) -> Option<&Bore> {
         self.bore.as_ref()
     }
-    /// Return whether a point of the plane holds material: it lies on or within the edge and not
-    /// in the bore.
+    /// Return whether a point holds material: seen along the axis of the component it lies on or
+    /// within the edge, and it lies outside the bore, which runs along its own axis (see
+    /// [`Bore`]).
     ///
     /// # Arguments
     ///
-    /// * `point` - the point, in the plane of the outline with the axis at its origin.
+    /// * `point` - the point, in the frame of the outline: its plane at z = 0, the axis of the
+    ///   component along z.
     #[must_use]
-    pub(crate) fn contains(&self, point: Point2<Length>) -> bool {
-        self.within_edge(point) && !self.in_bore(point)
+    pub(crate) fn contains_at(&self, point: Point3<Length>) -> bool {
+        self.within_edge(Point2::new(point.x, point.y)) && !self.in_bore_at(point)
     }
     /// Return whether a point of the plane lies on or within the edge, where the component
     /// reaches, whether it holds material there or lies in the bore.
@@ -380,15 +430,6 @@ impl Outline {
     #[must_use]
     pub(crate) fn within_edge(&self, point: Point2<Length>) -> bool {
         self.shape.contains(point)
-    }
-    /// Return whether a point of the plane lies on or within the bore, if there is one.
-    ///
-    /// # Arguments
-    ///
-    /// * `point` - the point, in the plane of the outline with the axis at its origin.
-    #[must_use]
-    pub(crate) fn in_bore(&self, point: Point2<Length>) -> bool {
-        self.bore.as_ref().is_some_and(|bore| bore.contains(point))
     }
     /// Return whether a point lies on or within the bore, if there is one, at whatever depth
     /// along the axis of the component: the bore runs along its own axis (see [`Bore`]).
@@ -443,14 +484,63 @@ impl Outline {
     /// This function returns an error if an edge cannot be sampled, or if the sampled rims do not
     /// bound the area, such as a bore that the coarser sampling of the edge cuts into.
     pub fn triangulate(&self, segments: usize) -> OpmResult<OutlineMesh> {
+        self.triangulate_on(segments, |_| Ok(Length::zero()))
+    }
+    /// Triangulate the area of this outline where it meets a surface above its plane: the region
+    /// within its edge and outside its bore, each taken where it meets the surface.
+    ///
+    /// The edge runs along the axis of the component and meets the surface right above where it
+    /// lies in the plane. The bore runs along its own axis (see [`Bore`]), so a tilted bore meets
+    /// the surface beside where it crosses the plane. Every rim keeps the number and the order of
+    /// its points whatever the surface, which is what lets the two faces of a body be joined along
+    /// them (see [`Outline::rim_axes`]).
+    ///
+    /// # Arguments
+    ///
+    /// - `segments`: the number of points to aim for on each rim, at least 3
+    /// - `height`: how far above a position of the plane the surface lies, along the axis of the
+    ///   component
+    ///
+    /// # Returns
+    ///
+    /// The triangulated area, its points the positions in the plane right below the surface.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if an edge cannot be sampled, if the surface cannot be told
+    /// where the bore meets it, or if the rims do not bound the area.
+    pub(crate) fn triangulate_on(
+        &self,
+        segments: usize,
+        height: impl Fn(Point2<Length>) -> OpmResult<Length>,
+    ) -> OpmResult<OutlineMesh> {
         let mut rims = vec![self.shape.outline_points(segments)?];
         if let Some(bore) = &self.bore {
+            let mut rim = bore
+                .outline_points(segments)?
+                .into_iter()
+                .map(|point| bore.meeting(point, &height))
+                .collect::<OpmResult<Vec<_>>>()?;
             // The bore takes its area away, so its rim runs clockwise.
-            let mut rim = bore.outline_points(segments)?;
             rim.reverse();
             rims.push(rim);
         }
-        OutlineMesh::from_rims(&rims, |point| self.contains(point))
+        OutlineMesh::from_rims(&rims, |point| {
+            self.within_edge(point)
+                && !self.bore.as_ref().is_some_and(|bore| {
+                    height(point)
+                        .is_ok_and(|above| bore.contains_at(Point3::new(point.x, point.y, above)))
+                })
+        })
+    }
+    /// The direction each rim of this outline runs along through a body, in the order
+    /// [`Outline::triangulate_on`] lays out its rims: the edge along the axis of the component,
+    /// the bore along its own.
+    #[must_use]
+    pub(crate) fn rim_axes(&self) -> Vec<Vector3<f64>> {
+        std::iter::once(Vector3::z())
+            .chain(self.bore.as_ref().map(Bore::axis))
+            .collect()
     }
     /// Check that the edge and the bore bound a region, that the bore is tilted by less than 90°
     /// and that it crosses the plane of the outline within the edge without touching it.
@@ -709,7 +799,7 @@ mod test {
     }
     /// Whether the region holds material at (x, y) mm, and thus transmits there.
     fn transmits(region: &Outline, x: f64, y: f64) -> bool {
-        region.contains(millimeter!(x, y))
+        region.contains_at(millimeter!(x, y, 0.0))
     }
     /// The area in mm² the region transmits on, counted on a grid of 0.05 mm over the square of
     /// the given half width in mm.
@@ -868,7 +958,11 @@ mod test {
             ((0.0, 0.9), true),
             ((0.0, 1.1), false),
         ] {
-            assert_eq!(tilted.in_bore(millimeter!(x, y)), inside, "({x}, {y}) mm");
+            assert_eq!(
+                tilted.in_bore_at(millimeter!(x, y, 0.0)),
+                inside,
+                "({x}, {y}) mm"
+            );
         }
         for (x, inside) in [
             (-6.0, true),

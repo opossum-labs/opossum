@@ -153,24 +153,34 @@ impl GeometryKind for Extruded {
     /// be laid over it (see [`Face::mesh_over`]), or if the two faces cross within the profile, so
     /// that there is no body between them.
     fn mesh(&self, segments: usize, _unbounded: &Outline) -> OpmResult<Vec<FacePatch>> {
-        let outline_mesh = self.rim.outline().triangulate(segments)?;
+        let outline = self.rim.outline();
         let frame = self.isometry();
-        let front = self.front.face().mesh_over(&outline_mesh, &frame)?;
-        let rear = self.rear.face().mesh_over(&outline_mesh, &frame)?;
-        // Both faces were sampled above the very same positions, so whether they cross can be
-        // read off point by point rather than guessed at from their rims.
-        for (front_point, rear_point) in front.points().iter().zip(rear.points()) {
-            let (front_z, rear_z) = (front_point.z.value, rear_point.z.value);
+        let front_at = SurfacePlacement::new(self.front.face(), &frame)?;
+        let rear_at = SurfacePlacement::new(self.rear.face(), &frame)?;
+        let in_plane = outline.triangulate(segments)?;
+        // Both faces are asked above the very same positions, so whether they cross can be read
+        // off point by point rather than guessed at from their rims.
+        for position in in_plane.points() {
+            let front_z = front_at.above(position)?.0.z.value;
+            let rear_z = rear_at.above(position)?.0.z.value;
             let tolerance = SURFACE_TOUCHING_TOLERANCE * front_z.abs().max(rear_z.abs());
             if rear_z < front_z - tolerance {
                 return Err(OpossumError::Other(format!(
-                    "the two faces of the body cross {:?} from its axis, so it encloses nothing \
-                     there",
-                    Point2::new(front_point.x, front_point.y)
+                    "the two faces of the body cross {position:?} from its axis, so it encloses \
+                     nothing there"
                 )));
             }
         }
-        let edge = SurfaceMesh::between(&outline_mesh, &front, &rear)?;
+        // A tilted bore meets each face somewhere else, so each face gets its own rims.
+        let front = self.front.face().mesh_over(
+            &outline.triangulate_on(segments, |position| Ok(front_at.above(&position)?.0.z))?,
+            &frame,
+        )?;
+        let rear = self.rear.face().mesh_over(
+            &outline.triangulate_on(segments, |position| Ok(rear_at.above(&position)?.0.z))?,
+            &frame,
+        )?;
+        let edge = SurfaceMesh::between(&in_plane, &outline.rim_axes(), &front, &rear)?;
         // Light enters through the front face, so the outside is the side it comes from.
         Ok([
             (Some(Self::FRONT), front.flipped()),
@@ -1097,6 +1107,20 @@ mod test {
             Some(Bore::new(bore, millimeter!(2.0, -1.0), Angle::zero())),
         )
     }
+    /// A circle of 10 mm with a round bore of 3 mm beside its center, tilted by the given angles.
+    fn tilted_bore(about_x: Angle, about_y: Angle) -> OpmResult<Outline> {
+        Outline::new(
+            CircleShape::new(millimeter!(10.0))?,
+            Some(
+                Bore::new(
+                    CircleShape::new(millimeter!(3.0))?,
+                    millimeter!(2.0, -1.0),
+                    Angle::zero(),
+                )
+                .with_tilt(about_x, about_y),
+            ),
+        )
+    }
     /// One body of every shape the volume nodes build, at the given node frame.
     fn volumes(node_frame: &Isometry) -> OpmResult<Vec<(&'static str, Extruded)>> {
         let sphere = |radius: f64, z: f64| sphere_face(millimeter!(radius), millimeter!(z));
@@ -1160,6 +1184,18 @@ mod test {
                 sphere(50.0, 0.0)?,
                 sphere(-50.0, 6.0)?,
                 bored(CircleShape::new(millimeter!(10.0))?, rectangle(3.0, 3.0)?)?,
+            ),
+            (
+                "plate with a tilted bore",
+                plane(0.0)?,
+                plane(5.0)?,
+                tilted_bore(degree!(0.0), degree!(30.0))?,
+            ),
+            (
+                "lens with a tilted bore",
+                sphere(50.0, 0.0)?,
+                sphere(-50.0, 6.0)?,
+                tilted_bore(degree!(15.0), degree!(-10.0))?,
             ),
         ];
         shapes

@@ -282,6 +282,10 @@ mod test {
     fn corners(mesh: &OutlineMesh, triangle: &[u32; 3]) -> [Point2<Length>; 3] {
         triangle.map(|index| mesh.points()[usize::try_from(index).unwrap()])
     }
+    /// Whether an outline holds material at a point of its plane.
+    fn in_the_plane(outline: &Outline, point: Point2<Length>) -> bool {
+        outline.contains_at(nalgebra::Point3::new(point.x, point.y, millimeter!(0.0)))
+    }
 
     /// A five-pointed star, to cover an outline that dents inwards five times over.
     fn star() -> Vec<Point2<Length>> {
@@ -371,7 +375,7 @@ mod test {
                     (corners[0].y + corners[1].y + corners[2].y) / 3.,
                 );
                 assert!(
-                    outline.contains(centroid),
+                    in_the_plane(&outline, centroid),
                     "a triangle of the {name} lies outside it, centered on {centroid:?}"
                 );
             }
@@ -444,11 +448,11 @@ mod test {
                         )
                     };
                     assert!(
-                        outline.contains(beside(1.0)),
+                        in_the_plane(&outline, beside(1.0)),
                         "left of a rim of the {name} there is no area, at {from:?}"
                     );
                     assert!(
-                        !outline.contains(beside(-1.0)),
+                        !in_the_plane(&outline, beside(-1.0)),
                         "right of a rim of the {name} there is area, at {from:?}"
                     );
                 }

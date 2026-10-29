@@ -68,7 +68,8 @@ impl Rim {
     /// the point lies outside the bore, which runs along its own axis.
     #[must_use]
     pub fn contains(&self, point: &Point3<Length>) -> bool {
-        self.outline.within_edge(self.projected(point)) && !self.in_bore(point)
+        self.outline
+            .contains_at(self.frame.inverse_transform_point(point))
     }
     /// Return whether a point on an unbounded surface is part of the component this [`Rim`] bounds.
     ///
