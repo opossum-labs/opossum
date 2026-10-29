@@ -30,7 +30,7 @@ use crate::{
 /// `out2_trans2_refl1` the rest. An inverted node swaps inputs and outputs. How the light is
 /// split is up to the geometry and the coatings; this trait only routes it. Light entering the
 /// body of a node is not traced through it yet: only light passing a bore gets through a body.
-pub(crate) trait Splitter: OpticNode {
+pub trait Splitter: OpticNode {
     /// Split the rays arriving at both inputs on the surface and merge them per output, as a ray
     /// trace does (see [`AnalysisRayTrace::analyze`](crate::analyzers::raytrace::AnalysisRayTrace::analyze)).
     ///
@@ -215,8 +215,8 @@ pub(crate) trait Splitter: OpticNode {
         incoming_data: LightRays,
         config: &GhostFocusConfig,
     ) -> OpmResult<LightRays> {
-        let (in1_port, in2_port) = self.port_pair(&PortType::Input)?;
-        let (out1_port, out2_port) = self.port_pair(&PortType::Output)?;
+        let (in1_port, in2_port) = self.port_pair(PortType::Input)?;
+        let (out1_port, out2_port) = self.port_pair(PortType::Output)?;
 
         let mut rays1_bundle = incoming_data
             .get(&in1_port)
@@ -304,8 +304,8 @@ pub(crate) trait Splitter: OpticNode {
         if in1.is_none() && in2.is_none() {
             return Ok((None, None));
         }
-        let (in1_port_name, in2_port_name) = self.port_pair(&PortType::Input)?;
-        let (out1_port_name, out2_port_name) = self.port_pair(&PortType::Output)?;
+        let (in1_port_name, in2_port_name) = self.port_pair(PortType::Input)?;
+        let (out1_port_name, out2_port_name) = self.port_pair(PortType::Output)?;
 
         let missed_surface_strategy = match analyzer_type {
             AnalyzerType::Energy(_) => &MissedSurfaceStrategy::Stop,
@@ -410,9 +410,9 @@ pub(crate) trait Splitter: OpticNode {
             let lost = match on_material {
                 Some(true) if into_body => &mut in_body,
                 Some(false)
-                    if !geometry
+                    if geometry
                         .intersect(exit_face, ray)
-                        .is_some_and(|hit| !hit.on_material()) =>
+                        .is_none_or(|hit| hit.on_material()) =>
                 {
                     &mut at_wall
                 }
@@ -525,14 +525,14 @@ pub(crate) trait Splitter: OpticNode {
     /// # Errors
     ///
     /// This function returns an error if the node does not have exactly two such ports.
-    fn port_pair(&self, port_type: &PortType) -> OpmResult<(String, String)> {
-        let [first, second] =
-            <[String; 2]>::try_from(self.ports().names(port_type)).map_err(|names| {
+    fn port_pair(&self, port_type: PortType) -> OpmResult<(String, String)> {
+        <[String; 2]>::try_from(self.ports().names(&port_type))
+            .map(Into::into)
+            .map_err(|names| {
                 OpossumError::Analysis(format!(
                     "{} needs two {port_type:?} ports, but has {names:?}",
                     self.node_type()
                 ))
-            })?;
-        Ok((first, second))
+            })
     }
 }

@@ -65,7 +65,7 @@ impl CircleShape {
     ///
     /// This function returns an error if the radius is zero — such a circle is a single point and
     /// has no outline — or if more points are asked for than can be sampled.
-    pub(super) fn outline_points(&self, segments: usize) -> OpmResult<Vec<Point2<Length>>> {
+    pub(super) fn outline_points(self, segments: usize) -> OpmResult<Vec<Point2<Length>>> {
         let radius = self.radius().get::<meter>();
         if radius == 0.0 {
             return Err(OpossumError::Other(
