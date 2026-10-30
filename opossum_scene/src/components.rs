@@ -4,9 +4,10 @@ use log::warn;
 use nalgebra::{Isometry3, Point3};
 use opossum_core::{
     analyzers::Analyzable,
+    apertures::Outline,
     core_optics::{NodeAttrExt, OpticNodeExt},
     error::{OpmResult, OpossumError},
-    geometry::{Geometry, SurfaceMesh},
+    geometry::{Geometry, SurfaceMesh, body::default_optic_shape},
     nodes::NodeGroup,
     types::api_types::SkippedSceneNode,
     utils::geom_transformation::Isometry,
@@ -26,6 +27,19 @@ use crate::{
 /// The count carries through the whole mesh: it sets how round a lens looks and, through the
 /// triangle size limit, how closely the surfaces themselves are followed.
 const RIM_SEGMENTS: usize = 64;
+
+/// Return the outline a face without an edge of its own is drawn over: the default optic shape,
+/// around the face's vertex. A face is endless, but a drawing is not.
+///
+/// # Errors
+///
+/// This function returns an error if the default optic shape bounds no region.
+pub fn unbounded_outline() -> OpmResult<Outline> {
+    default_optic_shape()
+        .outline()
+        .cloned()
+        .ok_or_else(|| OpossumError::Other("the default optic shape bounds no region".into()))
+}
 
 /// Build the glTF binary of every component of a model whose type is drawn.
 ///
