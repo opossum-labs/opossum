@@ -5,7 +5,7 @@ use crate::{
     variable::FreeVariable,
 };
 
-fn default_target_cost() -> f64 {
+const fn default_target_cost() -> f64 {
     1e-8
 }
 
@@ -49,37 +49,43 @@ impl Default for OptimizationConfig {
 }
 
 impl OptimizationConfig {
-    /// Creates a new, empty optimization configuration[cite: 1].
+    /// Creates a new, empty optimization configuration.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Adds a free variable to the configuration[cite: 1].
+    /// Adds a free variable to the configuration
+    #[must_use]
     pub fn with_variable(mut self, variable: FreeVariable) -> Self {
         self.free_variables.push(variable);
         self
     }
 
-    /// Adds a parameter coupling to the configuration[cite: 1].
+    /// Adds a parameter coupling to the configuration
+    #[must_use]
     pub fn with_coupling(mut self, coupling: ParameterCoupling) -> Self {
         self.couplings.push(coupling);
         self
     }
 
-    /// Adds an operand to the configuration[cite: 1].
+    /// Adds an operand to the configuration
+    #[must_use]
     pub fn with_operand(mut self, operand: impl Into<StandardOperand>) -> Self {
         self.operands.push(operand.into());
         self
     }
 
-    /// Sets the numerical optimization algorithm[cite: 1].
-    pub fn with_algorithm(mut self, algorithm: OptimizationAlgorithm) -> Self {
+    /// Sets the numerical optimization algorithm
+    #[must_use]
+    pub const fn with_algorithm(mut self, algorithm: OptimizationAlgorithm) -> Self {
         self.algorithm = algorithm;
         self
     }
 
-    /// Sets the target cost threshold[cite: 1].
-    pub fn with_target_cost(mut self, target_cost: f64) -> Self {
+    /// Sets the target cost threshold
+    #[must_use]
+    pub const fn with_target_cost(mut self, target_cost: f64) -> Self {
         self.target_cost = target_cost;
         self
     }

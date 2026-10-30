@@ -6,6 +6,7 @@ use opossum_core::{
     core_optics::NodeAttrExt,
     error::{OpmResult, OpossumError},
     opm_document::OpmDocument,
+    utils::to_f64,
 };
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
@@ -19,6 +20,7 @@ pub struct EvaluationContext<'a> {
 
 impl<'a> EvaluationContext<'a> {
     /// Creates a new evaluation context wrapping an optical document.
+    #[must_use]
     pub const fn new(doc: &'a OpmDocument) -> Self {
         Self { doc }
     }
@@ -37,7 +39,7 @@ pub trait Operand: Send + Sync + Debug {
     /// Human-readable name or description of the operand.
     fn name(&self) -> &str;
 
-    /// Relative weight $w_i$ of this operand in the merit function.
+    /// Relative weight `w_i` of this operand in the merit function.
     fn weight(&self) -> f64;
 
     /// Evaluates the operand contribution to the overall cost $\Phi(x)$.
@@ -170,7 +172,7 @@ impl Operand for ThresholdOperand {
 
 /// Geometric constraint operand penalizing if the sum of multiple parameter values exceeds an upper bound.
 ///
-/// $\text{cost} = w \cdot \left( \frac{\max(0, \sum p_i - L_{\max})}{\text{scale}} \right)^2$
+/// $\text{cost} = w \cdot \left( \frac{\max(0, \sum `p_i` - L_{\max})}{\text{scale}} \right)^2$
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MaxTotalLengthOperand {
     pub name: String,
@@ -198,6 +200,7 @@ impl MaxTotalLengthOperand {
     }
 
     /// Overrides the normalization scale factor.
+    #[must_use]
     pub fn with_scale(mut self, scale: f64) -> Self {
         if scale.abs() >= f64::EPSILON {
             self.scale = scale;
@@ -240,6 +243,7 @@ pub struct MinEdgeThicknessOperand {
 
 impl MinEdgeThicknessOperand {
     /// Creates a new edge thickness constraint operand.
+    #[must_use]
     pub fn new(name: impl Into<String>, node_id: Uuid, min_thickness: f64, weight: f64) -> Self {
         Self {
             name: name.into(),
@@ -251,6 +255,7 @@ impl MinEdgeThicknessOperand {
     }
 
     /// Overrides the normalization scale factor.
+    #[must_use]
     pub fn with_scale(mut self, scale: f64) -> Self {
         if scale.abs() >= f64::EPSILON {
             self.scale = scale;
@@ -322,7 +327,7 @@ impl TransmissionPenaltyOperand {
         Self {
             name: name.into(),
             address,
-            expected_rays: expected_rays as f64,
+            expected_rays: to_f64(expected_rays),
             weight,
         }
     }

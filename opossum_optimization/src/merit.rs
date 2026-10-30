@@ -62,18 +62,21 @@ impl MeritFunction {
     }
 
     /// Configures the finite difference approximation method for gradients.
-    pub fn with_gradient_method(mut self, method: FiniteDifferenceMethod) -> Self {
+    #[must_use]
+    pub const fn with_gradient_method(mut self, method: FiniteDifferenceMethod) -> Self {
         self.gradient_method = method;
         self
     }
 
-    /// Sets a custom penalty value for fatal simulation crashes[cite: 1].
+    /// Sets a custom penalty value for fatal simulation crashes
+    #[must_use]
     pub const fn with_fatal_penalty(mut self, penalty: f64) -> Self {
         self.fatal_penalty = penalty;
         self
     }
 
-    /// Sets a custom penalty weight for box bound violations[cite: 1].
+    /// Sets a custom penalty weight for box bound violations
+    #[must_use]
     pub const fn with_bounds_penalty_weight(mut self, weight: f64) -> Self {
         self.bounds_penalty_weight = weight;
         self
@@ -96,24 +99,25 @@ impl MeritFunction {
     /// Adheres to the strict no-panic guarantee: any simulation failure or unresolvable
     /// metric is caught and converted into a large penalty cost[cite: 1].
     /// Evaluates the scalar cost Phi(x).
+    #[must_use]
     pub fn evaluate(&self, x: &[f64]) -> f64 {
         let mut total_cost = 0.0;
         for (var, &val) in self.free_variables.iter().zip(x.iter()) {
             if let Some(bounds) = &var.bounds {
                 let violation = bounds.penalty(val);
                 if violation > 0.0 {
-                    total_cost += self.bounds_penalty_weight * violation;
+                    total_cost = self.bounds_penalty_weight.mul_add(violation, total_cost);
                 }
             }
         }
 
         let mut working_doc = self.blueprint.clone();
 
-        let parameter_map =
-            match ParameterResolver::resolve(&self.free_variables, &self.couplings, x) {
-                Ok(map) => map,
-                Err(_) => return self.fatal_penalty,
-            };
+        let Ok(parameter_map) =
+            ParameterResolver::resolve(&self.free_variables, &self.couplings, x)
+        else {
+            return self.fatal_penalty;
+        };
 
         for (address, value) in parameter_map {
             if ParameterApplier::set_value(&mut working_doc, &address, value).is_err() {
@@ -137,7 +141,7 @@ impl MeritFunction {
                 }
                 Err(err) => {
                     log::warn!("Operand '{}' failed to evaluate: {err}", operand.name());
-                    total_cost += self.fatal_penalty * 0.1;
+                    total_cost = self.fatal_penalty.mul_add(0.1, total_cost);
                 }
             }
         }
@@ -146,6 +150,7 @@ impl MeritFunction {
     /// Computes the numerical gradient vector using adaptive finite differences.
     ///
     /// Evaluates parameter perturbations in parallel across available CPU cores via Rayon.
+    #[must_use]
     pub fn compute_gradient(&self, x: &[f64]) -> Vec<f64> {
         let n = self.free_variables.len();
 
@@ -214,16 +219,19 @@ impl Anneal for MeritFunction {
         let mut next_param = param.clone();
 
         // Scale perturbation by temperature
-        let temp_factor = temp.min(1.0).max(1e-4);
+        let temp_factor = temp.clamp(1e-4, 1.0);
 
         for (i, var) in self.free_variables.iter().enumerate() {
-            let range = if let Some(bounds) = &var.bounds {
-                bounds.max - bounds.min
-            } else if param[i].abs() > 1e-7 {
-                param[i].abs() * 0.5
-            } else {
-                1e-2
-            };
+            let range = var.bounds.as_ref().map_or_else(
+                || {
+                    if param[i].abs() > 1e-7 {
+                        param[i].abs() * 0.5
+                    } else {
+                        1e-2
+                    }
+                },
+                |bounds| bounds.max - bounds.min,
+            );
 
             // Uniform displacement in interval [-1.0, 1.0]
             let offset = rng.random_range(-1.0..=1.0);

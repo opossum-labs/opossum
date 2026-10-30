@@ -12,6 +12,13 @@ pub struct BoxBounds {
 }
 
 impl BoxBounds {
+    /// Creates a new [`BoxBounds`].
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if
+    /// - one of the bounds bound ist NaN
+    /// - min bound is larger than the max bound
     pub fn new(min: f64, max: f64) -> OpmResult<Self> {
         if min.is_nan() || max.is_nan() {
             return Err(OpossumError::Other("Box bounds cannot be NaN".to_string()));
@@ -74,16 +81,19 @@ impl FreeVariable {
     }
 
     /// Explicitly overrides the initial parameter value.
+    #[must_use]
     pub const fn with_initial_value(mut self, value: f64) -> Self {
         self.initial_value = Some(value);
         self
     }
 
+    #[must_use]
     pub const fn with_bounds(mut self, bounds: BoxBounds) -> Self {
         self.bounds = Some(bounds);
         self
     }
 
+    #[must_use]
     pub const fn with_step_config(mut self, delta_rel: f64, delta_abs_min: f64) -> Self {
         self.delta_rel = delta_rel;
         self.delta_abs_min = delta_abs_min;

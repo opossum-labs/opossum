@@ -18,7 +18,7 @@ pub enum CouplingType {
     },
     /// Enforces a fixed total system length
     ///
-    /// Target = total_length - sum(other_segments)
+    /// `Target = total_length - sum(other_segments)`
     TotalLengthLock {
         total_length: f64,
         other_segments: Vec<ParameterAddress>,
@@ -28,14 +28,15 @@ pub enum CouplingType {
 /// A coupling rule that drives a dependent parameter from other system variables
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ParameterCoupling {
-    /// Dependent parameter being modified[cite: 1].
+    /// Dependent parameter being modified
     pub target: ParameterAddress,
-    /// Mathematical rule defining how target is calculated[cite: 1].
+    /// Mathematical rule defining how target is calculated
     pub rule: CouplingType,
 }
 
 impl ParameterCoupling {
-    /// Creates an identical parameter coupling[cite: 1].
+    /// Creates an identical parameter coupling
+    #[must_use]
     pub const fn identical(target: ParameterAddress, source: ParameterAddress) -> Self {
         Self {
             target,
@@ -43,7 +44,8 @@ impl ParameterCoupling {
         }
     }
 
-    /// Creates an opposite parameter coupling (Target = -Source)[cite: 1].
+    /// Creates an opposite parameter coupling (Target = -Source)
+    #[must_use]
     pub const fn opposite(target: ParameterAddress, source: ParameterAddress) -> Self {
         Self {
             target,
@@ -51,7 +53,8 @@ impl ParameterCoupling {
         }
     }
 
-    /// Creates an affine coupling (Target = factor * Source + offset)[cite: 1].
+    /// Creates an affine coupling (Target = factor * Source + offset)
+    #[must_use]
     pub const fn affine(
         target: ParameterAddress,
         source: ParameterAddress,
@@ -68,7 +71,7 @@ impl ParameterCoupling {
         }
     }
 
-    /// Creates a total length lock coupling[cite: 1].
+    /// Creates a total length lock coupling
     pub fn total_length_lock(
         target: ParameterAddress,
         total_length: f64,

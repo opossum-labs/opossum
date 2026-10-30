@@ -40,6 +40,7 @@ impl Default for OptimizationAlgorithm {
 
 impl OptimizationAlgorithm {
     /// Creates a default Nelder-Mead configuration (100 iterations, 1e-6 tolerance).
+    #[must_use]
     pub const fn nelder_mead() -> Self {
         Self::NelderMead {
             max_iterations: 100,
@@ -48,7 +49,8 @@ impl OptimizationAlgorithm {
     }
 
     /// Creates a default L-BFGS configuration with central differences.
-    pub fn lbfgs() -> Self {
+    #[must_use]
+    pub const fn lbfgs() -> Self {
         Self::LBFGS {
             max_iterations: 60,
             gradient_tolerance: 1e-5,
@@ -58,7 +60,8 @@ impl OptimizationAlgorithm {
     }
 
     /// Creates a default Simulated Annealing configuration with robust defaults.
-    pub fn simulated_annealing() -> Self {
+    #[must_use]
+    pub const fn simulated_annealing() -> Self {
         Self::SimulatedAnnealing {
             max_iterations: 1000,
             initial_temperature: 15.0,
@@ -69,7 +72,8 @@ impl OptimizationAlgorithm {
     }
 
     /// Sets the initial temperature for Simulated Annealing.
-    pub fn with_temperature(mut self, temp: f64) -> Self {
+    #[must_use]
+    pub const fn with_temperature(mut self, temp: f64) -> Self {
         if let Self::SimulatedAnnealing {
             initial_temperature,
             ..
@@ -81,23 +85,25 @@ impl OptimizationAlgorithm {
     }
 
     /// Sets the maximum iteration count across all supported algorithms.
-    pub fn with_max_iterations(mut self, iters: u64) -> Self {
+    #[must_use]
+    pub const fn with_max_iterations(mut self, iters: u64) -> Self {
         match &mut self {
-            Self::NelderMead { max_iterations, .. } => *max_iterations = iters,
-            Self::LBFGS { max_iterations, .. } => *max_iterations = iters,
-            Self::SimulatedAnnealing { max_iterations, .. } => *max_iterations = iters,
+            Self::LBFGS { max_iterations, .. }
+            | Self::NelderMead { max_iterations, .. }
+            | Self::SimulatedAnnealing { max_iterations, .. } => *max_iterations = iters,
         }
         self
     }
 
     /// Sets the standard deviation tolerance for Nelder-Mead or gradient tolerance for L-BFGS.
+    #[must_use]
     pub const fn with_sd_tolerance(mut self, tol: f64) -> Self {
         match &mut self {
             Self::NelderMead { sd_tolerance, .. } => *sd_tolerance = tol,
             Self::LBFGS {
                 gradient_tolerance, ..
             } => *gradient_tolerance = tol,
-            _ => {}
+            Self::SimulatedAnnealing { .. } => {}
         }
         self
     }
@@ -128,13 +134,16 @@ impl OptimizationAlgorithm {
         for (i, var) in free_vars.iter().enumerate() {
             let mut vertex = base_vertex.clone();
             let current = vertex[i];
-            let step = if let Some(bounds) = &var.bounds {
-                (bounds.max - bounds.min) * 0.05
-            } else if current.abs() > 1e-7 {
-                current.abs() * 0.05
-            } else {
-                1e-3
-            };
+            let step = var.bounds.as_ref().map_or_else(
+                || {
+                    if current.abs() > 1e-7 {
+                        current.abs() * 0.05
+                    } else {
+                        1e-3
+                    }
+                },
+                |bounds| (bounds.max - bounds.min) * 0.05,
+            );
 
             let mut candidate = current + step;
             if let Some(bounds) = &var.bounds

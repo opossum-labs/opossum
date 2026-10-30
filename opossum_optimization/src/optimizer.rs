@@ -25,7 +25,8 @@ pub struct OpticOptimizer<'a> {
 }
 
 impl<'a> OpticOptimizer<'a> {
-    /// Creates a new `OpticOptimizer` bound to the provided optical document[cite: 1, 2].
+    /// Creates a new `OpticOptimizer` bound to the provided optical document
+    #[must_use]
     pub fn new(doc: &'a mut OpmDocument) -> Self {
         Self {
             doc,
@@ -62,7 +63,7 @@ impl<'a> OpticOptimizer<'a> {
     }
 
     /// Registers a free parameter. If no initial value was set on the variable,
-    /// it is automatically read from the current state of the document[cite: 1].
+    /// it is automatically read from the current state of the document.
     pub fn add_variable(mut self, mut variable: FreeVariable) -> OpmResult<Self> {
         if variable.initial_value.is_none() {
             let current_val = MetricReader::read_parameter_value(self.doc, &variable.address)?;
@@ -73,24 +74,28 @@ impl<'a> OpticOptimizer<'a> {
     }
 
     /// Registers a parameter coupling rule (e.g. `Opposite`, `TotalLengthLock`)
+    #[must_use]
     pub fn add_coupling(mut self, coupling: ParameterCoupling) -> Self {
         self.couplings.push(coupling);
         self
     }
 
     /// Registers an evaluation criterion (operand) for the merit function
+    #[must_use]
     pub fn add_operand(mut self, operand: impl Operand + 'static) -> Self {
         self.operands.push(Arc::new(operand));
         self
     }
 
-    /// Selects the optimization algorithm and its solver-specific settings[cite: 1].
+    /// Selects the optimization algorithm and its solver-specific settings
+    #[must_use]
     pub const fn with_algorithm(mut self, algorithm: OptimizationAlgorithm) -> Self {
         self.algorithm = algorithm;
         self
     }
 
-    /// Sets the target cost threshold for early stopping[cite: 1].
+    /// Sets the target cost threshold for early stopping
+    #[must_use]
     pub const fn with_target_cost(mut self, target_cost: f64) -> Self {
         self.target_cost = target_cost;
         self

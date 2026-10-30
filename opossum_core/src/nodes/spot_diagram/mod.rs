@@ -29,7 +29,7 @@ use crate::{
         node_report::{NodeReport, NodeReportResult},
         report_note::{ReportLevel, ReportNote},
     },
-    utils::geom_transformation::Isometry,
+    utils::{geom_transformation::Isometry, to_f64},
 };
 use opm_macros_lib::OpmNode;
 
@@ -189,7 +189,7 @@ impl OpticNode for SpotDiagram {
             "geo beam radius" => rays.beam_radius_geo().map(|r| r.value),
             "centroid x" => rays.energy_weighted_centroid().map(|c| c.x.value),
             "centroid y" => rays.energy_weighted_centroid().map(|c| c.y.value),
-            "valid rays" => Some(rays.nr_of_rays(true) as f64),
+            "valid rays" => Some(to_f64(rays.nr_of_rays(true))),
             _ => None,
         }
     }

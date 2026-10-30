@@ -173,6 +173,10 @@ pub fn is_volume_node_type(node_type: &str) -> bool {
 /// This trait is necessary for implementing optimization operands such as "mininum edge thickness" etc.
 pub trait EdgeThickness: Send + Sync {
     /// Computes the minimal edge thickness of the component at its clear rim.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the undelying concrete implementation returns an error.
     fn min_edge_thickness(&self) -> OpmResult<Length>;
 }
 
