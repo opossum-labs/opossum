@@ -207,19 +207,16 @@ impl NodeGroup {
     }
 
     /// Recursively collects all optical node references contained in this graph.
-    ///
-    /// # Errors
-    /// Returns an error if acquiring a lock on any contained node fails.
-    pub fn collect_all_nodes_recursive(&self) -> OpmResult<Vec<OpticRef>> {
+    pub fn collect_all_nodes_recursive(&self) -> Vec<OpticRef> {
         let mut result = Vec::new();
         for node_ref in self.nodes() {
             result.push(node_ref.clone());
             if let Some(group) = node_ref.as_any().downcast_ref::<Self>() {
-                let mut sub_nodes = group.collect_all_nodes_recursive()?;
+                let mut sub_nodes = group.collect_all_nodes_recursive();
                 result.append(&mut sub_nodes);
             }
         }
-        Ok(result)
+        result
     }
 
     /// Executes a closure on every optical node in this group and all nested subgroups recursively.

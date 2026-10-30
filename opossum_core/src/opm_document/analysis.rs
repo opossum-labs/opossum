@@ -62,7 +62,7 @@ impl OpmDocument {
             analyzer_box.analyze(&mut self.scenery)?;
 
             // 3. Observablen aller Detektorknoten für diesen Run einsammeln
-            let nodes = self.scenery.collect_all_nodes_recursive()?;
+            let nodes = self.scenery.collect_all_nodes_recursive();
             for node in nodes {
                 let node_id = node.uuid();
                 for desc in node.observable_metrics(analyzer_kind) {

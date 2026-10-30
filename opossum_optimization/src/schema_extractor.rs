@@ -6,20 +6,20 @@ use super::{
     },
 };
 use opossum_core::{
-    core_optics::NodeAttrExt, error::OpmResult, nodes::NodeGroup, opm_document::OpmDocument,
+    core_optics::NodeAttrExt, nodes::NodeGroup, opm_document::OpmDocument,
 };
 
 pub struct SchemaExtractor;
 
 impl SchemaExtractor {
     /// Extracts all controllable variables, observable metrics, and constraint candidates from an `OpmDocument`.
-    pub fn extract(doc: &OpmDocument) -> OpmResult<ModelOptimizationSchema> {
+    pub fn extract(doc: &OpmDocument) -> ModelOptimizationSchema {
         let mut schema = ModelOptimizationSchema::default();
 
         // 1. Extract controllable variables from the scenery recursively
-        Self::extract_from_group(doc.scenery(), &mut schema)?;
+        Self::extract_from_group(doc.scenery(), &mut schema);
 
-        let all_nodes = doc.scenery().collect_all_nodes_recursive()?;
+        let all_nodes = doc.scenery().collect_all_nodes_recursive();
 
         // 2. Discover nodes implementing the EdgeThickness constraint trait
         for node_ref in &all_nodes {
@@ -57,15 +57,11 @@ impl SchemaExtractor {
                 }
             }
         }
-
-        Ok(schema)
+        schema
     }
 
     /// Recursively inspects a `NodeGroup` for controllable properties and connection distances.
-    fn extract_from_group(
-        group: &NodeGroup,
-        schema: &mut ModelOptimizationSchema,
-    ) -> OpmResult<()> {
+    fn extract_from_group(group: &NodeGroup, schema: &mut ModelOptimizationSchema) {
         // Collect edge connection distances inside this group
         for conn in group.connections() {
             schema.controllable_variables.push(DiscoveredVariable {
@@ -103,9 +99,8 @@ impl SchemaExtractor {
 
             // Recurse into nested sub-groups
             if let Some(sub_group) = node_ref.as_any().downcast_ref::<NodeGroup>() {
-                Self::extract_from_group(sub_group, schema)?;
+                Self::extract_from_group(sub_group, schema);
             }
         }
-        Ok(())
     }
 }

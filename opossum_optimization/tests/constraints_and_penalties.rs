@@ -14,7 +14,7 @@ use uom::si::length::millimeter;
 fn test_optimize_kepler_with_geometric_length_penalty() -> OpmResult<()> {
     let (mut doc, analyzer_id, lens2_id, spot_id) = build_kepler_setup(millimeter!(45.0))?;
 
-    let all_nodes = doc.scenery().collect_all_nodes_recursive()?;
+    let all_nodes = doc.scenery().collect_all_nodes_recursive();
     let lens1 = all_nodes.iter().find(|n| n.name() == "75 mm lens").unwrap();
     let lens1_id = lens1.uuid();
 

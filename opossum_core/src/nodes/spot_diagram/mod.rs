@@ -519,11 +519,12 @@ mod test {
         let sd = SpotDiagram::default();
         assert!(sd.observable_metrics(AnalyzerKind::Energy).is_empty());
         let metrics = sd.observable_metrics(AnalyzerKind::RayTrace);
-        assert_eq!(metrics.len(), 4);
+        assert_eq!(metrics.len(), 5);
         assert_eq!(metrics[0].name, "rms beam radius");
         assert_eq!(metrics[1].name, "geo beam radius");
         assert_eq!(metrics[2].name, "centroid x");
         assert_eq!(metrics[3].name, "centroid y");
+        assert_eq!(metrics[4].name, "valid rays");
     }
 
     #[test]

@@ -19,10 +19,7 @@ pub fn extract_materials_from_document(
 ) -> Result<HashMap<Uuid, (Material, Vec<NodeUsageInfo>)>, String> {
     let mut materials_map: HashMap<Uuid, (Material, Vec<NodeUsageInfo>)> = HashMap::new();
 
-    let all_nodes = document
-        .scenery()
-        .collect_all_nodes_recursive()
-        .map_err(|e| format!("Failed to collect scenery nodes: {e}"))?;
+    let all_nodes = document.scenery().collect_all_nodes_recursive();
 
     for node_ref in all_nodes {
         let node_id = node_ref.node_attr().uuid();

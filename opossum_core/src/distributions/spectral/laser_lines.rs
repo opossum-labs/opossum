@@ -381,7 +381,7 @@ mod laser_lines_tests {
 
         // Verify serialization produces a clean list without redundant wrappers
         let ron_str = ron::to_string(&laser).map_err(|e| OpossumError::Other(e.to_string()))?;
-        assert_eq!(ron_str, "[(0.000000532,0.5),(0.000001064,0.5)]");
+        assert_eq!(ron_str, "[(5.32e-7,0.5),(1.064e-6,0.5)]");
 
         // Verify deserialization works and validates the input
         let restored: LaserLines =

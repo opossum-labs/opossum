@@ -16,7 +16,7 @@ use uuid::Uuid;
 fn test_schema_discovery_on_kepler_model() -> OpmResult<()> {
     let (doc, analyzer_id, lens2_id, spot_id) = build_kepler_setup(millimeter!(45.0))?;
 
-    let schema = SchemaExtractor::extract(&doc)?;
+    let schema = SchemaExtractor::extract(&doc);
 
     assert!(
         schema.controllable_variables.len() >= 3,
