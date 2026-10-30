@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
 //! Rectangular, evenly-sized grid distribution
-use super::PositionDistribution;
+use super::{PosDistType, PositionDistribution};
 use crate::{
     error::OpmResult,
     generic_validators::{AllFinite, AllNotZero, AllPositive, NotAllZero},
@@ -9,7 +9,7 @@ use crate::{
     validated, validated_type,
 };
 use nalgebra::{Point2, Point3};
-use num_traits::Zero;
+use num_traits::{ToPrimitive, Zero};
 use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
@@ -254,6 +254,29 @@ impl PositionDistribution for Grid {
         }
         points
     }
+    fn coarsened(&self, max_points: usize) -> OpmResult<PosDistType> {
+        let (nr_x, nr_y) = (self.nr_of_points_x(), self.nr_of_points_y());
+        let nr_of_points = nr_x.saturating_mul(nr_y);
+        if nr_of_points <= max_points {
+            return Ok((*self).into());
+        }
+        // Both axes shrink by the same factor; the longer one then takes up what the shorter left.
+        let scale = (to_f64(max_points) / to_f64(nr_of_points)).sqrt();
+        let (shorter, longer) = (nr_x.min(nr_y), nr_x.max(nr_y));
+        let shorter = (to_f64(shorter) * scale)
+            .floor()
+            .to_usize()
+            .unwrap_or(0)
+            .max(1);
+        let longer = longer.min(max_points / shorter);
+        let mut coarse = *self;
+        if nr_x <= nr_y {
+            coarse.set_nr_of_points(Point2::new(shorter, longer))?;
+        } else {
+            coarse.set_nr_of_points(Point2::new(longer, shorter))?;
+        }
+        Ok(coarse.into())
+    }
 }
 
 impl From<Grid> for super::PosDistType {
@@ -265,6 +288,31 @@ impl From<Grid> for super::PosDistType {
 mod test {
     use super::*;
     use crate::millimeter;
+    #[test]
+    fn coarsened_shrinks_both_axes_and_keeps_the_side_lengths() -> OpmResult<()> {
+        let fine = Grid::new(millimeter!(4.0, 2.0), Point2::new(100, 100))?;
+        let PosDistType::Grid(coarse) = fine.coarsened(100)? else {
+            panic!("a coarsened grid is still a grid");
+        };
+        assert_eq!(coarse.nr_of_points(), Point2::new(10, 10));
+        assert_eq!(coarse.side_length(), fine.side_length());
+        Ok(())
+    }
+    #[test]
+    fn a_stretched_grid_coarsens_along_its_long_side() -> OpmResult<()> {
+        for (fine, coarse) in [
+            (Point2::new(1000, 1), Point2::new(100, 1)),
+            (Point2::new(1, 1000), Point2::new(1, 100)),
+        ] {
+            let PosDistType::Grid(coarsened) =
+                Grid::new(millimeter!(1.0, 1.0), fine)?.coarsened(100)?
+            else {
+                panic!("a coarsened grid is still a grid");
+            };
+            assert_eq!(coarsened.nr_of_points(), coarse);
+        }
+        Ok(())
+    }
     #[test]
     fn new_wrong() {
         assert!(Grid::new(millimeter!(0.0, 0.0), Point2::new(1, 1)).is_err());

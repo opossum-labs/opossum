@@ -603,6 +603,33 @@ impl RayDataSource {
         }
     }
 
+    /// Returns this source with at most `max_per_wavelength` rays of each wavelength, for drawing it.
+    ///
+    /// A collimated or point source keeps its energy, its spectrum and the area it covers and only
+    /// gets a coarser position distribution (see
+    /// [`PositionDistribution::coarsened`](crate::distributions::position::PositionDistribution::coarsened)),
+    /// so every wavelength of its spectrum is still drawn. Raw rays and images are built and
+    /// thinned to `max_per_wavelength` rays in all instead (see [`Rays::thinned`]).
+    ///
+    /// # Arguments
+    ///
+    /// * `max_per_wavelength` - the most rays of each wavelength; zero counts as one.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the coarser distribution cannot be built, or if raw rays
+    /// or an image cannot be built.
+    pub fn coarsened(&self, max_per_wavelength: usize) -> OpmResult<Self> {
+        let max = max_per_wavelength.max(1);
+        let mut coarse = self.clone();
+        if let Some(pos_dist) = self.get_position_distribution_type() {
+            coarse.set_pos_dist(pos_dist.generate().coarsened(max)?);
+            Ok(coarse)
+        } else {
+            Ok(Self::Raw(coarse.build()?.thinned(max)))
+        }
+    }
+
     /// Set the position distribution type for the ray source.
     ///
     /// This function sets the [`PosDistType`] on either a collimated or point source variant
@@ -867,5 +894,34 @@ mod tests {
             v.is_ok(),
             "Validator combination for reference_length should remain AllPositive && AllNormal"
         );
+    }
+
+    /// Raw rays have no distribution to coarsen, so they are thinned.
+    #[test]
+    fn coarsened_raw_rays_are_thinned() -> OpmResult<()> {
+        let mut rays = Rays::default();
+        for x in 0..10 {
+            rays.add_ray(crate::light::Ray::new_collimated(
+                meter!(f64::from(x), 0.0, 0.0),
+                nanometer!(1000.0),
+                joule!(1.0),
+            )?);
+        }
+        let RayDataSource::Raw(coarse) = RayDataSource::Raw(rays).coarsened(3)? else {
+            panic!("coarsened raw rays are still raw rays");
+        };
+        assert!((1..=3).contains(&coarse.nr_of_rays(false)));
+        Ok(())
+    }
+
+    /// Asked for no rays at all, a source still keeps one point of its distribution.
+    #[test]
+    fn a_source_coarsened_to_nothing_keeps_one_point() -> OpmResult<()> {
+        let coarse = RayDataSource::default().coarsened(0)?;
+        let points = coarse
+            .get_position_distribution_type()
+            .map(|dist| dist.generate().generate().len());
+        assert_eq!(points, Some(1));
+        Ok(())
     }
 }

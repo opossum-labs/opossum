@@ -8,11 +8,7 @@ use crate::{
     },
     core_optics::OpticNode,
     error::{OpmResult, OpossumError},
-    light::{
-        Rays,
-        light_result::LightResult,
-        lightdata::{ray_data_builder::RayDataBuilder, ray_data_source::RayDataSource},
-    },
+    light::{Rays, light_result::LightResult},
     nodes::NodeGroup,
     reporting::analysis_report::AnalysisReport,
 };
@@ -173,16 +169,19 @@ impl OpmDocument {
     ///
     /// The sources are the ones the analyzer defines, and the model is placed exactly as
     /// [`placed_scenery`](OpmDocument::placed_scenery) places it, so the rays run through the
-    /// components where the 3D view shows them. Each source is thinned to at most `max_rays` rays
-    /// first (see [`Rays::thinned`]), which keeps the trace cheap however many rays the source
-    /// holds. Only the primary path is traced: a ghost focus analyzer contributes its sources, not
-    /// its reflections. As everywhere else, this runs on a copy and leaves the model untouched.
+    /// components where the 3D view shows them. Each source is coarsened to at most `max_rays` rays
+    /// of each wavelength first (see
+    /// [`RayDataSource::coarsened`](crate::light::lightdata::ray_data_source::RayDataSource::coarsened)),
+    /// which keeps the trace cheap
+    /// however many rays the source holds, while every wavelength of its spectrum is still traced.
+    /// Only the primary path is traced: a ghost focus analyzer contributes its sources, not its
+    /// reflections. As everywhere else, this runs on a copy and leaves the model untouched.
     ///
     /// # Arguments
     ///
     /// - `analyzer_id`: the analyzer to take the sources from, or `None` to follow the one chosen
     ///   exactly as for [`placed_scenery`](OpmDocument::placed_scenery)
-    /// - `max_rays`: the most rays traced per source
+    /// - `max_rays`: the most rays traced per source and wavelength
     ///
     /// # Returns
     ///
@@ -205,7 +204,7 @@ impl OpmDocument {
         let placing = analyzer.analyzer_type().positioning_config();
         let mut scenery = self.scenery.clone();
         // Placed from the full sources first, exactly as the components are drawn: the trace below
-        // leaves placed nodes where they are, so the thinned sources cannot move anything.
+        // leaves placed nodes where they are, so the coarsened sources cannot move anything.
         AnalysisRayTrace::calc_node_positions(&mut scenery, LightResult::default(), &placing)?;
         scenery.reset_data();
 
@@ -213,15 +212,17 @@ impl OpmDocument {
         config.set_positioning_run(false);
         // Only copies collect ray ends, so the scenery the copy came from holds none.
         config.set_collect_ray_ends(true);
-        let thinned = config
+        // A coarsened source keeps its builder's alignment wavelength and isometry.
+        let coarsened = config
             .source_map()
             .iter()
             .map(|(source, builder)| {
-                let rays = builder.build()?.thinned(max_rays);
-                Ok((*source, RayDataBuilder::from(RayDataSource::Raw(rays))))
+                let mut coarse = builder.clone();
+                coarse.set_source(builder.source().coarsened(max_rays)?);
+                Ok((*source, coarse))
             })
             .collect::<OpmResult<_>>()?;
-        config.set_source_map(thinned);
+        config.set_source_map(coarsened);
         RayTracingAnalyzer::new(config).analyze(&mut scenery)?;
         Ok(scenery.ray_ends().into_iter().cloned().collect())
     }
@@ -353,18 +354,32 @@ mod tests {
         analyzers::{AnalyzerType, energy::EnergyConfig},
         apertures::{CircleShape, OpticShape},
         core_optics::NodeAttrExt,
+        degree,
+        distributions::{
+            energy::UniformDist,
+            position::Hexapolar,
+            spectral::{Gaussian, LaserLines, SpecDistType},
+        },
         gain::{ConstGain, GainModel},
         geometry::body::OPTIC_SHAPE,
         joule,
         light::{
             Ray,
-            lightdata::energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
+            lightdata::{
+                energy_data_builder::{EnergyDataBuilder, EnergyLaserLines},
+                ray_data_builder::RayDataBuilder,
+                ray_data_source::{CollimatedSrc, RayDataSource},
+            },
         },
         millimeter, nanometer,
-        nodes::{Dummy, EnergyMeter, Lens, NodeGroup, SourcePort, round_collimated_ray_builder},
+        nodes::{
+            Dummy, EnergyMeter, Lens, NodeGroup, ReflectiveGrating, SourcePort, ThinMirror,
+            round_collimated_ray_builder,
+        },
         utils::{geom_transformation::Isometry, test_helper::helper::metered_energy},
     };
     use approx::assert_relative_eq;
+    use num_traits::Zero;
     use uom::si::{f64::Length, length::millimeter};
     use uuid::Uuid;
 
@@ -583,11 +598,119 @@ mod tests {
         Ok(())
     }
 
+    /// A collimated source of 1 J and 1 mm radius with the given hexapolar rings and spectrum.
+    fn collimated_source(nr_of_rings: u8, spectrum: SpecDistType) -> OpmResult<RayDataBuilder> {
+        Ok(RayDataSource::Collimated(CollimatedSrc::new(
+            Hexapolar::new(millimeter!(1.0), nr_of_rings)?.into(),
+            UniformDist::new(joule!(1.0))?.into(),
+            spectrum,
+        ))
+        .into())
+    }
+
+    /// A model tracing the given source into a dummy whose output stays open.
+    fn source_then_open_dummy(builder: RayDataBuilder) -> OpmResult<OpmDocument> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let dummy = scenery.add_node(Dummy::default())?;
+        scenery.connect_nodes(source, "output_1", dummy, "input_1", millimeter!(50.0))?;
+        let mut document = OpmDocument::new(scenery);
+        let mut config = RayTraceConfig::default();
+        config.map_source(source, builder);
+        document.add_analyzer(AnalyzerType::RayTrace(config));
+        Ok(document)
+    }
+
+    /// A source of 721 rays is traced with at most the asked number, which still cover all of it:
+    /// the outermost one starts on its rim.
+    #[test]
+    fn the_traced_rays_of_a_source_cover_all_of_it() -> OpmResult<()> {
+        let document = source_then_open_dummy(round_collimated_ray_builder(
+            millimeter!(5.0),
+            joule!(1.0),
+            15,
+        )?)?;
+
+        let ends = document.traced_rays(None, 100)?;
+
+        assert_eq!(ends.len(), 1, "one open output");
+        assert!(ends[0].nr_of_rays(false) <= 100);
+        let outermost = ends[0]
+            .iter()
+            .filter_map(|ray| {
+                let path = ray.position_history_with_current();
+                let start = path.row_iter().next()?;
+                Some((start[0] * start[0] + start[1] * start[1]).sqrt())
+            })
+            .fold(Length::zero(), Length::max);
+        assert_relative_eq!(outermost.get::<millimeter>(), 5.0, epsilon = 1e-9);
+        Ok(())
+    }
+
+    /// Every laser line of a source is traced, each with at most the asked number of rays. Thinning
+    /// the built rays used to keep the first line only: all lines of a point start there.
+    #[test]
+    fn every_wavelength_of_a_source_is_traced() -> OpmResult<()> {
+        let lines = (0..10)
+            .map(|i| (nanometer!(10.0f64.mul_add(f64::from(i), 1000.0)), 1.0))
+            .collect();
+        let document =
+            source_then_open_dummy(collimated_source(15, LaserLines::new(lines)?.into())?)?;
+
+        let ends = document.traced_rays(None, 100)?;
+
+        assert_eq!(ends.len(), 1, "one open output");
+        let (lines, _) = ends[0].split_ray_bundle_by_wavelength(nanometer!(1.0), true)?;
+        assert_eq!(lines.len(), 10, "every line arrives");
+        for line in &lines {
+            assert!(line.nr_of_rays(true) <= 100);
+        }
+        Ok(())
+    }
+
+    /// A spectrum through a grating set to Littrow for its center, on to a mirror with a component
+    /// behind it. The trace re-runs the positioning along the sources it traces, so it has to find
+    /// the axis the model was placed by. Thinning used to leave only the shortest wavelength, whose
+    /// axis left the grating at another angle and missed the mirror.
+    #[test]
+    fn a_spectrum_behind_a_grating_is_traced_to_the_end() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let grating = scenery.add_node(
+            ReflectiveGrating::default().with_rot_from_littrow(nanometer!(1053.0), degree!(0.0))?,
+        )?;
+        let mirror = scenery.add_node(ThinMirror::default())?;
+        let screen = scenery.add_node(Dummy::default())?;
+        scenery.connect_nodes(source, "output_1", grating, "input_1", millimeter!(50.0))?;
+        scenery.connect_nodes(grating, "output_1", mirror, "input_1", millimeter!(200.0))?;
+        scenery.connect_nodes(mirror, "output_1", screen, "input_1", millimeter!(50.0))?;
+        let mut document = OpmDocument::new(scenery);
+        let spectrum = Gaussian::new(
+            (nanometer!(1003.0), nanometer!(1103.0)),
+            50,
+            nanometer!(1053.0),
+            nanometer!(10.0),
+            1.0,
+        )?;
+        let mut config = RayTraceConfig::default();
+        config.map_source(source, collimated_source(7, spectrum.into())?);
+        document.add_analyzer(AnalyzerType::RayTrace(config));
+
+        let ends = document.traced_rays(None, 100)?;
+
+        assert_eq!(
+            ends.len(),
+            1,
+            "the light reaches the open output behind the mirror"
+        );
+        Ok(())
+    }
+
     /// A source of 721 rays behind an aperture that only lets the core through: at most the
     /// asked number is traced, and the rays the aperture stops end there.
     #[test]
     #[ignore = "a ray beyond a clear aperture is stopped where it last was, not at the aperture"]
-    fn the_traced_rays_are_thinned_and_end_where_they_are_stopped() -> OpmResult<()> {
+    fn the_traced_rays_are_coarsened_and_end_where_they_are_stopped() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
         let source = scenery.add_node(SourcePort::default())?;
         let mut aperture = Dummy::default();

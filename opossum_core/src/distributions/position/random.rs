@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
 //! Rectangular, uniform random distribution
-use super::PositionDistribution;
+use super::{PosDistType, PositionDistribution};
 use crate::{
     error::OpmResult,
     generic_validators::{AllFinite, AllNotZero, AllPositive, NotAllZero},
@@ -146,6 +146,11 @@ impl PositionDistribution for Random {
             points.push(point![point_x, point_y, Length::zero()]);
         }
         points
+    }
+    fn coarsened(&self, max_points: usize) -> OpmResult<PosDistType> {
+        let mut coarse = *self;
+        coarse.set_nr_of_points(self.nr_of_points().min(max_points))?;
+        Ok(coarse.into())
     }
 }
 impl From<Random> for super::PosDistType {

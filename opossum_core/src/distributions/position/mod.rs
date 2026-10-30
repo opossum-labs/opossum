@@ -38,7 +38,7 @@ pub use hexapolar::Hexapolar;
 pub use random::Random;
 pub use sobol::SobolDist;
 
-use crate::utils::default_from_name::DefaultFromName;
+use crate::{error::OpmResult, utils::default_from_name::DefaultFromName};
 
 /// Trait for the generation of point distributions
 pub trait PositionDistribution {
@@ -46,6 +46,19 @@ pub trait PositionDistribution {
     ///
     /// This function generates a vector of 3D points (of dimension [`Length`]) with the given parameters defined earlier.
     fn generate(&self) -> Vec<Point3<Length>>;
+    /// Returns a distribution of the same kind over the same area with at most `max_points` points.
+    ///
+    /// This is for drawing a source, not for analyzing it: the distribution only gets fewer points
+    /// (fewer rings, a coarser grid, ...), and one that already fits is returned unchanged.
+    ///
+    /// # Arguments
+    ///
+    /// * `max_points` - the most points the distribution may have, at least one.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the coarser distribution cannot be built.
+    fn coarsened(&self, max_points: usize) -> OpmResult<PosDistType>;
 }
 
 /// Enum for the different types of position distributions
@@ -103,5 +116,24 @@ impl PosDistType {
             Self::FibonacciEllipse(dist) => dist,
             Self::Sobol(dist) => dist,
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use strum::IntoEnumIterator;
+
+    /// Every kind of distribution, at its defaults, coarsens to at most the asked number of points
+    /// and keeps at least one, and stays as it is when it already fits.
+    #[test]
+    fn every_distribution_coarsens_to_at_most_the_asked_points() -> OpmResult<()> {
+        for dist in PosDistType::iter() {
+            let coarse = dist.generate().coarsened(50)?;
+            let nr_of_points = coarse.generate().generate().len();
+            assert!((1..=50).contains(&nr_of_points), "{dist}: {nr_of_points}");
+            assert_eq!(dist.generate().coarsened(1_000_000)?, dist, "{dist}");
+        }
+        Ok(())
     }
 }
