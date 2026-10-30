@@ -36,7 +36,7 @@ mod test {
     use crate::{
         analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
         coatings::SplittingConfigBuilder,
-        core_optics::{OpticNode, OpticNodeExt, node_attr::NodePositioning},
+        core_optics::{Alignable, OpticNode, OpticNodeExt, node_attr::NodePositioning},
         degree,
         error::OpmResult,
         joule,
@@ -723,6 +723,101 @@ mod test {
         let (back_pos, back_dir) = placed(&scenery, back);
         assert_abs_diff_eq!(back_pos, mm(0., 0., 50.), epsilon = 1e-9);
         assert_abs_diff_eq!(back_dir, -Vector3::z(), epsilon = 1e-9);
+        Ok(())
+    }
+    /// A Mach-Zehnder interferometer in the x-z plane, every leg 100 mm and a dummy 50 mm behind
+    /// each output of the second splitter.
+    ///
+    /// The first splitter at z = 100 mm passes the axis on along +z to a mirror that turns it to −x,
+    /// and reflects it along −x to a mirror that turns it to +z. Both arms meet at the second
+    /// splitter at (−100, 0, 200) mm: the first through `input_1`, the second through `input_2`.
+    ///
+    /// Returns the scenery and the source, the splitters, the mirrors and the dummies, in the order
+    /// the light meets them.
+    fn mach_zehnder() -> OpmResult<(NodeGroup, [uuid::Uuid; 7])> {
+        let mut scenery = NodeGroup::default();
+        let src = scenery.add_node(SourcePort::default())?;
+        let mut first = BeamSplitter::new("first", &SplittingConfigBuilder::FixedRatio(0.5))?;
+        first.set_alignment(millimeter!(0., 0., 0.), degree!(0., 45., 0.))?;
+        let first = scenery.add_node(first)?;
+        let along = scenery.add_node(ThinMirror::new("along").with_tilt(degree!(0., 45., 0.))?)?;
+        let aside = scenery.add_node(ThinMirror::new("aside").with_tilt(degree!(0., -45., 0.))?)?;
+        let mut second = BeamSplitter::new("second", &SplittingConfigBuilder::FixedRatio(0.5))?;
+        second.set_alignment(millimeter!(0., 0., 0.), degree!(0., -45., 0.))?;
+        let second = scenery.add_node(second)?;
+        let out_1 = scenery.add_node(Dummy::new("out 1"))?;
+        let out_2 = scenery.add_node(Dummy::new("out 2"))?;
+        let leg = millimeter!(100.0);
+        scenery.connect_nodes(src, "output_1", first, "input_1", leg)?;
+        scenery.connect_nodes(first, "out1_trans1_refl2", along, "input_1", leg)?;
+        scenery.connect_nodes(first, "out2_trans2_refl1", aside, "input_1", leg)?;
+        scenery.connect_nodes(along, "output_1", second, "input_1", leg)?;
+        scenery.connect_nodes(aside, "output_1", second, "input_2", leg)?;
+        let behind = millimeter!(50.0);
+        scenery.connect_nodes(second, "out1_trans1_refl2", out_1, "input_1", behind)?;
+        scenery.connect_nodes(second, "out2_trans2_refl1", out_2, "input_1", behind)?;
+        Ok((scenery, [src, first, along, aside, second, out_1, out_2]))
+    }
+    /// Pins the placement of a Mach-Zehnder interferometer: the second splitter is placed by its
+    /// first input, the second arm agrees with it, and each output goes on along both arms alike.
+    #[test]
+    fn a_mach_zehnder_is_placed_by_the_first_input_of_its_second_splitter() -> OpmResult<()> {
+        let (mut scenery, [src, first, along, aside, second, out_1, out_2]) = mach_zehnder()?;
+
+        testing_logger::setup();
+        position(&mut scenery, src)?;
+
+        testing_logger::validate(|logs| {
+            let warnings: Vec<&str> = logs
+                .iter()
+                .filter(|l| l.level == log::Level::Warn)
+                .map(|l| l.body.as_str())
+                .collect();
+            assert!(warnings.is_empty(), "the arms agree: {warnings:?}");
+        });
+        for (node, position, facing) in [
+            (first, mm(0., 0., 100.), Vector3::z()),
+            (along, mm(0., 0., 200.), Vector3::z()),
+            (aside, mm(-100., 0., 100.), -Vector3::x()),
+            (second, mm(-100., 0., 200.), -Vector3::x()),
+            (out_1, mm(-150., 0., 200.), -Vector3::x()),
+            (out_2, mm(-100., 0., 250.), Vector3::z()),
+        ] {
+            let (placed_at, placed_facing) = placed(&scenery, node);
+            assert_abs_diff_eq!(placed_at, position, epsilon = 1e-9);
+            assert_abs_diff_eq!(placed_facing, facing, epsilon = 1e-9);
+        }
+        Ok(())
+    }
+    /// The optical axis of both arms of a Mach-Zehnder interferometer is drawn: the second
+    /// splitter passes on what arrives at its second input as well, not only what places it.
+    #[test]
+    fn the_axis_of_both_arms_of_a_mach_zehnder_leaves_it() -> OpmResult<()> {
+        let (scenery, [src, _, _, aside, ..]) = mach_zehnder()?;
+        let mut document = OpmDocument::new(scenery);
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            src,
+            round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 1)?,
+        );
+        document.add_analyzer(AnalyzerType::RayTrace(config));
+        let (aside_at, _) = placed(&document.placed_scenery(None)?, aside);
+
+        let axes = document.positioning_rays(None)?;
+
+        assert_eq!(axes.len(), 2, "one end behind each output");
+        for axis in &axes {
+            let via_aside = axis.iter().any(|ray| {
+                ray.position_history_with_current().row_iter().any(|point| {
+                    let point = Vector3::new(point[0].value, point[1].value, point[2].value);
+                    (point - aside_at).norm() < 1e-9
+                })
+            });
+            assert!(
+                via_aside,
+                "an axis leaves through each output by the second arm"
+            );
+        }
         Ok(())
     }
 }

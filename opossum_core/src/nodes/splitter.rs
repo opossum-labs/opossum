@@ -91,11 +91,13 @@ pub trait Splitter: OpticNode {
     /// Calculate the outgoing axis rays of this node for positioning the following nodes (see
     /// [`AnalysisRayTrace::calc_node_positions`](crate::analyzers::raytrace::AnalysisRayTrace::calc_node_positions)).
     ///
-    /// The axis rays arriving at an input are split on the surface. The first input is used when
-    /// it carries axis data, otherwise the second input. For the first input the transmitted rays
-    /// position the nodes behind the first output and the reflected rays those behind the second;
-    /// for the second input the roles are swapped, since its transmission exits the second output
-    /// and its reflection the first. All output ports are swapped, if the node is inverted.
+    /// The axis rays arriving at each input are split on the surface. For the first input the
+    /// transmitted rays go on behind the first output and the reflected rays behind the second; for
+    /// the second input the roles are swapped, since its transmission exits the second output and
+    /// its reflection the first. On both outputs the rays of the first input come first, if it has
+    /// any: the first ray of a bundle is the axis the nodes behind it are placed along, and the node
+    /// itself is placed by that input as well. The rays of the second input follow them, so that
+    /// its arm is drawn on as far as it goes. All ports are swapped, if the node is inverted.
     ///
     /// # Arguments
     ///
@@ -133,25 +135,30 @@ pub trait Splitter: OpticNode {
         // Transmission keeps the beam direction, reflection exits on the other output. So the first
         // input feeds (out_1, out_2) with its (transmitted, reflected) rays; the second input, whose
         // transmission continues into out_2, feeds them in swapped order.
-        let light_result = if let Some(input) = incoming_data.get(input_1) {
-            let (transmitted, reflected) = self.split_axis_rays(input, input_1, out_1, config)?;
-            LightResult::from([
-                (out_1.into(), LightData::Geometric(transmitted)),
-                (out_2.into(), LightData::Geometric(reflected)),
-            ])
-        } else if let Some(input) = incoming_data.get(input_2) {
-            let (transmitted, reflected) = self.split_axis_rays(input, input_2, out_2, config)?;
-            LightResult::from([
-                (out_2.into(), LightData::Geometric(transmitted)),
-                (out_1.into(), LightData::Geometric(reflected)),
-            ])
-        } else {
+        let first = incoming_data
+            .get(input_1)
+            .map(|input| self.split_axis_rays(input, input_1, out_1, config))
+            .transpose()?;
+        let second = incoming_data
+            .get(input_2)
+            .map(|input| self.split_axis_rays(input, input_2, out_2, config))
+            .transpose()?
+            .map(|(transmitted, reflected)| (reflected, transmitted));
+        let mut parts = first.into_iter().chain(second);
+        let Some((mut on_out_1, mut on_out_2)) = parts.next() else {
             return Err(OpossumError::Analysis(format!(
                 "could not calc optical axis for {}",
                 self.node_type()
             )));
         };
-        Ok(light_result)
+        for (to_out_1, to_out_2) in parts {
+            on_out_1.merge(&to_out_1);
+            on_out_2.merge(&to_out_2);
+        }
+        Ok(LightResult::from([
+            (out_1.into(), LightData::Geometric(on_out_1)),
+            (out_2.into(), LightData::Geometric(on_out_2)),
+        ]))
     }
     /// Returns the local frame from which the optical axis enters the given input port (see
     /// [`AnalysisRayTrace::axis_entrance_frame`](crate::analyzers::raytrace::AnalysisRayTrace::axis_entrance_frame)).
