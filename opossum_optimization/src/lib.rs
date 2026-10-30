@@ -21,8 +21,8 @@ pub use coupling::{CouplingType, ParameterCoupling};
 pub use discovery::{DiscoveredObservable, DiscoveredVariable, ModelOptimizationSchema};
 pub use merit::{DEFAULT_BOUNDS_PENALTY_WEIGHT, DEFAULT_FATAL_PENALTY, MeritFunction};
 pub use operand::{
-    EvaluationContext, MaxTotalLengthOperand, Operand, StandardOperand, TargetValueOperand,
-    ThresholdDirection, ThresholdOperand, MinEdgeThicknessOperand, TransmissionPenaltyOperand
+    EvaluationContext, MaxTotalLengthOperand, MinEdgeThicknessOperand, Operand, StandardOperand,
+    TargetValueOperand, ThresholdDirection, ThresholdOperand, TransmissionPenaltyOperand,
 };
 pub use optimizer::OpticOptimizer;
 pub use reader::MetricReader;

@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use opossum_core::{
     apertures::CircleShape,
     core_optics::NodeAttrExt,
@@ -10,10 +8,12 @@ use opossum_core::{
     prelude::*,
 };
 use opossum_optimization::{
-    BoxBounds, FreeVariable, MaxTotalLengthOperand, MeritFunction, MetricReader, ObservableAddress,
-    OpticOptimizer, OptimizationAlgorithm, ParameterAddress, SchemaExtractor, TargetValueOperand,
+    BoxBounds, EvaluationContext, FreeVariable, MaxTotalLengthOperand, MeritFunction, MetricReader,
+    MinEdgeThicknessOperand, ObservableAddress, Operand, OpticOptimizer, OptimizationAlgorithm,
+    ParameterAddress, SchemaExtractor, TargetValueOperand, TransmissionPenaltyOperand,
 };
-use uom::si::f64::Length;
+use std::sync::Arc;
+use uom::si::{f64::Length, length::millimeter};
 use uuid::Uuid;
 
 /// Constructs a Keplerian optical system based on workshop_04_kepler_imaging_point.
@@ -137,8 +137,8 @@ fn test_schema_discovery_on_kepler_model() -> OpmResult<()> {
 
     assert_eq!(
         spot_metrics.len(),
-        4,
-        "SpotDiagram must provide 4 scalar observables"
+        5,
+        "SpotDiagram must provide 5 scalar observables"
     );
     assert!(
         spot_metrics
@@ -868,5 +868,144 @@ fn test_optimize_kepler_multi_analyzer() -> OpmResult<()> {
     );
     // assert!(final_spot_rms < 1.0e-3, "Spot radius should remain well focused");
 
+    Ok(())
+}
+#[test]
+fn test_optimize_kepler_with_min_edge_thickness() -> OpmResult<()> {
+    // 1. Defocused setup with 45 mm image distance
+    let fixed_image_distance = millimeter!(45.0);
+    let (mut doc, analyzer_id, lens2_id, spot_id) = build_kepler_setup(fixed_image_distance)?;
+
+    let front_curvature_addr = ParameterAddress::NodeProperty {
+        node_id: lens2_id,
+        property_name: "front curvature".into(),
+    };
+    let rear_curvature_addr = ParameterAddress::NodeProperty {
+        node_id: lens2_id,
+        property_name: "rear curvature".into(),
+    };
+    let spot_observable_addr = ObservableAddress {
+        analyzer_id,
+        node_id: spot_id,
+        metric_name: "rms beam radius".into(),
+    };
+
+    // 2. High-level optimization: Free curvatures, enforce min edge thickness >= 1.5 mm
+    let summary = OpticOptimizer::new(&mut doc)
+        .add_variable(
+            FreeVariable::new(front_curvature_addr.clone(), "lens2_front_roc")
+                .with_bounds(BoxBounds::new(0.040, 0.200)?),
+        )?
+        .add_variable(
+            FreeVariable::new(rear_curvature_addr.clone(), "lens2_rear_roc")
+                .with_bounds(BoxBounds::new(-0.200, -0.040)?),
+        )?
+        .add_operand(TargetValueOperand::new(
+            "minimize_rms_spot",
+            spot_observable_addr.clone(),
+            0.0,
+            1.0,
+            1.0e-3,
+        ))
+        .add_operand(MinEdgeThicknessOperand::new(
+            "lens2_min_edge_thickness",
+            lens2_id,
+            0.0015, // Mindestens 1.5 mm Randdicke
+            500.0,  // Deutlicheres Gewicht
+        ))
+        .with_algorithm(
+            OptimizationAlgorithm::nelder_mead()
+                .with_max_iterations(150)
+                .with_sd_tolerance(1e-7),
+        )
+        .optimize()?;
+
+    // 3. Verification
+    let (node_ref, _) = doc.scenery().node_recursive(lens2_id)?;
+    let edge_thickness = node_ref
+        .as_edge_thickness()
+        .expect("Lens must implement EdgeThickness")
+        .min_edge_thickness()?;
+
+    let optimized_rms = MetricReader::read_metric(&doc, &spot_observable_addr)?;
+
+    eprintln!("\n=== MIN EDGE THICKNESS OPTIMIZATION RESULT ===");
+    eprintln!("Iterations        : {}", summary.iterations);
+    eprintln!("Final Cost        : {:.4}", summary.final_cost);
+    eprintln!("Final RMS Spot    : {:8.2} µm", optimized_rms * 1e6);
+    eprintln!(
+        "Edge Thickness    : {:8.3} mm (Constraint: >= 1.5 mm)",
+        edge_thickness.get::<millimeter>()
+    );
+    eprintln!("==============================================\n");
+
+    assert!(
+        edge_thickness.get::<millimeter>() >= 1.49,
+        "Edge thickness ({:.3} mm) violated 1.5 mm constraint",
+        edge_thickness.get::<millimeter>()
+    );
+    assert!(optimized_rms < 1.0e-3);
+    Ok(())
+}
+#[test]
+fn test_min_edge_thickness_rejects_incompatible_node() -> OpmResult<()> {
+    let (doc, _analyzer_id, _lens2_id, spot_id) = build_kepler_setup(millimeter!(45.0))?;
+
+    // Attempting to apply MinEdgeThicknessOperand to SpotDiagram (which is not a Lens)
+    let invalid_operand = MinEdgeThicknessOperand::new("invalid_op", spot_id, 0.005, 1.0);
+
+    let res = MeritFunction::new(doc, vec![], vec![], vec![Arc::new(invalid_operand)]);
+
+    // Pre-flight check must reject this configuration immediately
+    assert!(
+        res.is_err(),
+        "Must reject applying edge thickness to non-lens node"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_transmission_penalty_operand() -> OpmResult<()> {
+    let (mut doc, analyzer_id, _lens2_id, spot_id) = build_kepler_setup(millimeter!(45.0))?;
+
+    // Initialen Raytrace ausführen, damit der Detektor Daten hält
+    doc.analyze_headless()?;
+
+    let valid_rays_addr = ObservableAddress {
+        analyzer_id,
+        node_id: spot_id,
+        metric_name: "valid rays".into(),
+    };
+
+    // Kepler-Setup mit 5 Ringen: 1 + 6 + 12 + 18 + 24 + 30 = 91 Strahlen
+    let expected_rays = 91;
+
+    // 1. Normalzustand: Alle 91 Strahlen kommen an -> Strafe muss 0.0 sein
+    let context = EvaluationContext::new(&doc);
+    let penalty_operand = TransmissionPenaltyOperand::new(
+        "penalty_normal",
+        valid_rays_addr.clone(),
+        expected_rays,
+        50.0,
+    );
+
+    penalty_operand.validate(&doc)?;
+    let initial_cost = penalty_operand.evaluate(&context)?;
+    assert_eq!(
+        initial_cost, 0.0,
+        "No penalty when all rays are transmitted"
+    );
+
+    // 2. Erhöhte Erwartung: 100 erwartet, 91 kommen an -> 9 Strahlen Verlust
+    let strict_operand =
+        TransmissionPenaltyOperand::new("penalty_strict", valid_rays_addr, 100, 50.0);
+    let penalty_cost = strict_operand.evaluate(&context)?;
+    assert!(
+        penalty_cost > 0.0,
+        "Penalty must be positive when rays are missing"
+    );
+
+    // Theoretische Kosten: 50.0 * ((100 - 91) / 100)^2 = 50.0 * 0.0081 = 0.405
+    approx::assert_relative_eq!(penalty_cost, 0.405, epsilon = 1e-4);
     Ok(())
 }

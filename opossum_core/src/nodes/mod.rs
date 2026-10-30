@@ -168,6 +168,9 @@ static VOLUME_NODE_TYPES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
 pub fn is_volume_node_type(node_type: &str) -> bool {
     VOLUME_NODE_TYPES.contains(node_type)
 }
+/// Trait for dealing with nodes providing an edge thickness (`Lens` & `CylindricLens`)
+///
+/// This trait is necessary for implementing optimization operands such as "mininum edge thickness" etc.
 pub trait EdgeThickness: Send + Sync {
     /// Computes the minimal edge thickness of the component at its clear rim.
     fn min_edge_thickness(&self) -> OpmResult<Length>;

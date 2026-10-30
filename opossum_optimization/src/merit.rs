@@ -45,6 +45,11 @@ impl MeritFunction {
     ) -> OpmResult<Self> {
         ParameterResolver::validate_configuration(&free_variables, &couplings)?;
 
+        // Pre-flight validation of all operands against the initial blueprint model
+        for operand in &operands {
+            operand.validate(&blueprint)?;
+        }
+
         Ok(Self {
             blueprint,
             free_variables,
