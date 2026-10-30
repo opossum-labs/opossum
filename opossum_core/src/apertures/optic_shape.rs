@@ -287,7 +287,7 @@ impl Outline {
     ///
     /// The largest distance of a point of the edge from the axis.
     #[must_use]
-    pub(crate) fn transversal_reach(&self) -> Length {
+    pub fn transversal_reach(&self) -> Length {
         self.extreme_points()
             .iter()
             .fold(Length::zero(), |reach, point| {

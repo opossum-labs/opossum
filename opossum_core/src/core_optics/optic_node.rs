@@ -9,19 +9,12 @@ use uom::si::f64::{Angle, Length};
 use uuid::Uuid;
 
 use crate::{
-    analyzers::{Analyzable, AnalyzerKind, propagation_strategy::PropagationStrategy},
-    core_optics::{
+    analyzers::{Analyzable, AnalyzerKind, propagation_strategy::PropagationStrategy}, core_optics::{
         NodeAttrExt, OpticNodeExt, OpticPorts, SurfacePorts,
         node_attr::{HasNodeAttr, NodePositioning},
         observable::ObservableDescriptor,
         volumetric::Volumetric,
-    },
-    error::{OpmResult, OpossumError},
-    geometry::{FaceIndex, Geometry},
-    light::LightData,
-    nodes::fluence_detector::Fluence,
-    reporting::node_report::NodeReportResult,
-    utils::geom_transformation::Isometry,
+    }, error::{OpmResult, OpossumError}, geometry::{FaceIndex, Geometry}, light::LightData, nodes::{EdgeThickness, fluence_detector::Fluence}, reporting::node_report::NodeReportResult, utils::geom_transformation::Isometry,
 };
 
 /// Trait providing visual metadata for an optical component (such as node color for diagrams).
@@ -249,6 +242,9 @@ pub trait OpticNode: VisualNode + HasNodeAttr + OpticNodeAny {
     /// Reads the scalar value (in SI base units) of a recorded metric after an analysis run.
     /// Returns `None` if no simulation data is available or the key is not recognized.
     fn read_observable(&self, _metric_name: &str) -> Option<f64> {
+        None
+    }
+    fn as_edge_thickness(&self) -> Option<&dyn EdgeThickness> {
         None
     }
 }

@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 use std::fmt::Debug;
 
 use crate::{
-    address::{MetricSource, ParameterAddress},
-    reader::MetricReader,
+    ObservableAddress, address::{MetricSource, ParameterAddress}, reader::MetricReader,
 };
-use opossum_core::{error::OpmResult, opm_document::OpmDocument};
+use opossum_core::{core_optics::NodeAttrExt, error::{OpmResult, OpossumError}, opm_document::OpmDocument};
 
 /// Context provided to operands during merit function evaluation.
 pub struct EvaluationContext<'a> {
@@ -216,12 +216,123 @@ impl Operand for MaxTotalLengthOperand {
     }
 }
 
-/// Standard serializable operand wrapper combining built-in operand variants[cite: 1].
+/// Penalizes ray loss at a detector when the number of valid rays drops below the expected count.
+///
+/// Cost formula:
+/// cost = weight * ((expected - valid) / expected)^2   if valid < expected
+/// cost = 0.0                                          if valid >= expected
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TransmissionPenaltyOperand {
+    pub name: String,
+    pub address: ObservableAddress,
+    pub expected_rays: f64,
+    pub weight: f64,
+}
+
+impl TransmissionPenaltyOperand {
+    pub fn new(
+        name: impl Into<String>,
+        address: ObservableAddress,
+        expected_rays: usize,
+        weight: f64,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            address,
+            expected_rays: expected_rays as f64,
+            weight,
+        }
+    }
+}
+
+impl Operand for TransmissionPenaltyOperand {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn weight(&self) -> f64 {
+        self.weight
+    }
+
+    fn evaluate(&self, ctx: &EvaluationContext<'_>) -> OpmResult<f64> {
+        let valid_rays = MetricReader::read_metric(ctx.doc, &self.address)?;
+        if valid_rays >= self.expected_rays {
+            return Ok(0.0);
+        }
+
+        let loss_ratio = (self.expected_rays - valid_rays) / self.expected_rays;
+        Ok(self.weight * loss_ratio * loss_ratio)
+    }
+}
+
+/// Geometric constraint penalizing optical components whose edge thickness drops below a limit.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MinEdgeThicknessOperand {
+    pub name: String,
+    pub node_id: Uuid,
+    pub min_thickness: f64,
+    pub weight: f64,
+    pub scale: f64,
+}
+
+impl MinEdgeThicknessOperand {
+    pub fn new(
+        name: impl Into<String>,
+        node_id: Uuid,
+        min_thickness: f64,
+        weight: f64,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            node_id,
+            min_thickness,
+            weight,
+            scale: 1.0e-3, // 1 mm default scale
+        }
+    }
+
+    pub fn with_scale(mut self, scale: f64) -> Self {
+        if scale.abs() >= f64::EPSILON {
+            self.scale = scale;
+        }
+        self
+    }
+}
+
+impl Operand for MinEdgeThicknessOperand {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn weight(&self) -> f64 {
+        self.weight
+    }
+
+    fn evaluate(&self, ctx: &EvaluationContext<'_>) -> OpmResult<f64> {
+        let (node_ref, _) = ctx.doc.scenery().node_recursive(self.node_id)?;
+        let edge_provider = node_ref.as_edge_thickness().ok_or_else(|| {
+            OpossumError::Other(format!(
+                "Node '{}' ({}) does not support edge thickness evaluation",
+                node_ref.name(),
+                node_ref.node_type()
+            ))
+        })?;
+
+        let actual_thickness = edge_provider.min_edge_thickness()?.value;
+        let violation = (self.min_thickness - actual_thickness).max(0.0);
+        let normalized = violation / self.scale;
+
+        Ok(self.weight * normalized * normalized)
+    }
+}
+/// Standard serializable operand wrapper combining built-in operand variants
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum StandardOperand {
     Target(TargetValueOperand),
     Threshold(ThresholdOperand),
     MaxTotalLength(MaxTotalLengthOperand),
+    TransmissionPenalty(TransmissionPenaltyOperand),
+    MinEdgeThickness(MinEdgeThicknessOperand),
 }
 
 impl Operand for StandardOperand {
@@ -230,6 +341,8 @@ impl Operand for StandardOperand {
             Self::Target(op) => op.name(),
             Self::Threshold(op) => op.name(),
             Self::MaxTotalLength(op) => op.name(),
+            Self::MinEdgeThickness(op) => op.name(),
+            Self::TransmissionPenalty(op) => op.name()
         }
     }
 
@@ -238,6 +351,8 @@ impl Operand for StandardOperand {
             Self::Target(op) => op.weight(),
             Self::Threshold(op) => op.weight(),
             Self::MaxTotalLength(op) => op.weight(),
+            Self::MinEdgeThickness(op) => op.weight(),
+            Self::TransmissionPenalty(op) => op.weight()
         }
     }
 
@@ -246,6 +361,8 @@ impl Operand for StandardOperand {
             Self::Target(op) => op.evaluate(ctx),
             Self::Threshold(op) => op.evaluate(ctx),
             Self::MaxTotalLength(op) => op.evaluate(ctx),
+            Self::MinEdgeThickness(op) => op.evaluate(ctx),
+            Self::TransmissionPenalty(op) => op.evaluate(ctx)
         }
     }
 }
@@ -265,5 +382,17 @@ impl From<ThresholdOperand> for StandardOperand {
 impl From<MaxTotalLengthOperand> for StandardOperand {
     fn from(op: MaxTotalLengthOperand) -> Self {
         Self::MaxTotalLength(op)
+    }
+}
+
+impl From<MinEdgeThicknessOperand> for StandardOperand {
+    fn from(op: MinEdgeThicknessOperand) -> Self {
+        Self::MinEdgeThickness(op)
+    }
+}
+
+impl From<TransmissionPenaltyOperand> for StandardOperand {
+    fn from(op: TransmissionPenaltyOperand) -> Self {
+        Self::TransmissionPenalty(op)
     }
 }

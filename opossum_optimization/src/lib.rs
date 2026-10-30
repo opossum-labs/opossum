@@ -22,7 +22,7 @@ pub use discovery::{DiscoveredObservable, DiscoveredVariable, ModelOptimizationS
 pub use merit::{DEFAULT_BOUNDS_PENALTY_WEIGHT, DEFAULT_FATAL_PENALTY, MeritFunction};
 pub use operand::{
     EvaluationContext, MaxTotalLengthOperand, Operand, StandardOperand, TargetValueOperand,
-    ThresholdDirection, ThresholdOperand,
+    ThresholdDirection, ThresholdOperand, MinEdgeThicknessOperand, TransmissionPenaltyOperand
 };
 pub use optimizer::OpticOptimizer;
 pub use reader::MetricReader;

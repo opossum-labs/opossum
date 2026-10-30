@@ -11,13 +11,14 @@ use crate::{
     },
     material::{MATERIAL, Material},
     millimeter,
-    nodes::NodeRegistration,
+    nodes::{EdgeThickness, NodeRegistration},
     properties::{Proptype, validator::Validator},
     refractive_index::RefrIndexConst,
 };
 use log::warn;
+use num_traits::Zero;
 use opm_macros_lib::OpmNode;
-use uom::si::f64::Length;
+use uom::si::{f64::Length, length::millimeter};
 
 mod analysis_ghostfocus;
 mod analysis_raytrace;
@@ -155,9 +156,85 @@ impl Lens {
         lens.update_surfaces()?;
         Ok(lens)
     }
+    /// Computes the axial sagitta of a spherical surface at height `y`.
+    ///
+    /// Returns a positive `Length` if the surface curves into the lens body (reducing edge thickness),
+    /// and a negative `Length` if it curves outwards (increasing edge thickness).
+    fn calc_surface_sag(roc: Length, y: Length, is_front: bool) -> OpmResult<Length> {
+        // Flat surfaces have infinite curvature radius
+        if !roc.is_finite() {
+            return Ok(Length::zero());
+        }
+
+        let r = roc.abs();
+        if y > r {
+            return Err(OpossumError::Other(format!(
+                "Aperture reach ({:.3} mm) exceeds radius of curvature ({:.3} mm)",
+                y.get::<millimeter>(),
+                r.get::<millimeter>()
+            )));
+        }
+
+        // Exact geometric sagitta using uom: Length * Length -> Area, Area.sqrt() -> Length
+        let sag_magnitude = r - (r * r - y * y).sqrt();
+
+        let sag = if is_front {
+            // Front surface: R > 0 is convex (curves into lens body, reduces edge thickness)
+            if roc.is_sign_positive() {
+                sag_magnitude
+            } else {
+                -sag_magnitude
+            }
+        } else {
+            // Rear surface: R < 0 is convex (curves into lens body, reduces edge thickness)
+            if roc.is_sign_negative() {
+                sag_magnitude
+            } else {
+                -sag_magnitude
+            }
+        };
+
+        Ok(sag)
+    }
 }
 
 impl Volumetric for Lens {}
+
+impl EdgeThickness for Lens {
+    fn min_edge_thickness(&self) -> OpmResult<Length> {
+        let (
+            Ok(Proptype::Curvature(front_roc)),
+            Ok(Proptype::Curvature(rear_roc)),
+            Ok(Proptype::Length(center_thickness)),
+        ) = (
+            self.node_attr.get_property("front curvature"),
+            self.node_attr.get_property("rear curvature"),
+            self.node_attr.get_property("center thickness"),
+        )
+        else {
+            return Err(OpossumError::Analysis(
+                "Cannot read curvatures and center thickness from lens".into(),
+            ));
+        };
+
+        let cross_section = self.cross_section()?.ok_or_else(|| {
+            OpossumError::Analysis(format!(
+                "Node '{}' has an open shape; cannot determine rim radius",
+                self.node_attr.name()
+            ))
+        })?;
+
+        // Maximum radial distance to the outer rim
+        let r_ap = cross_section.transversal_reach();
+
+        let sag_front = Self::calc_surface_sag(*front_roc, r_ap, true)?;
+        let sag_rear = Self::calc_surface_sag(*rear_roc, r_ap, false)?;
+
+        // Pure Length arithmetic: Length - Length - Length
+        Ok(*center_thickness - sag_front - sag_rear)
+    }
+}
+
 impl OpticNode for Lens {
     fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         let (
@@ -193,16 +270,12 @@ impl OpticNode for Lens {
     fn surface_ports(&self) -> SurfacePorts {
         SurfacePorts::THROUGH_SOLID
     }
+    fn as_edge_thickness(&self) -> Option<&dyn EdgeThickness> {
+        Some(self)
+    }
 }
 impl AnalysisEnergy for Lens {}
-// impl SDF for Lens
-// {
-//     fn sdf_eval_point(&self, p: &nalgebra::Point3<f64>, p_out: &mut nalgebra::Point3<f64>) -> f64 {
-//         self.isometry.inverse_transform_point_mut_f64(&p, p_out);
-//         // (p.x * p.x + p.y * p.y + p.z * p.z).sqrt() - self.radius.value
-//         (p_out.x.mul_add(p_out.x, p_out.y.mul_add(p_out.y, p_out.z*p_out.z)) ).sqrt() - self.radius.value
-//     }
-// }
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -644,6 +717,24 @@ mod test {
         } else {
             panic!("Expected LightData::Geometric at output_1");
         }
+        Ok(())
+    }
+    #[test]
+    fn test_lens_edge_thickness_biconvex() -> OpmResult<()> {
+        // Biconvex lens: R1 = 100 mm, R2 = -100 mm, d = 10 mm, aperture radius = 12.5 mm
+        let lens = Lens::default();
+        let edge_thickness = lens.min_edge_thickness()?;
+
+        // Sagitta s = R - sqrt(R^2 - y^2) = 100 - sqrt(100^2 - 12.5^2) = 0.7843 mm
+        // Edge thickness = d - 2*s = 10.0 - 2 * 0.7843 = 8.4314 mm
+        let expected_sag = 100.0 - (100.0_f64.powi(2) - 12.5_f64.powi(2)).sqrt();
+        let expected_edge = 10.0 - 2.0 * expected_sag;
+
+        approx::assert_relative_eq!(
+            edge_thickness.get::<millimeter>(),
+            expected_edge,
+            epsilon = 1e-6
+        );
         Ok(())
     }
 }

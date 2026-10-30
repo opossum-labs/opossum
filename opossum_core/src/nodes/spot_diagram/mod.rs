@@ -171,6 +171,12 @@ impl OpticNode for SpotDiagram {
                     MetricDimension::Length,
                 )
                 .with_default_target(0.0),
+                ObservableDescriptor::new(
+                    "valid rays",
+                    "Number of Valid Rays",
+                    MetricDimension::Dimensionless,
+                )
+                .with_default_target(1.0),
             ],
             AnalyzerKind::Energy => Vec::new(),
         }
@@ -183,6 +189,7 @@ impl OpticNode for SpotDiagram {
             "geo beam radius" => rays.beam_radius_geo().map(|r| r.value),
             "centroid x" => rays.energy_weighted_centroid().map(|c| c.x.value),
             "centroid y" => rays.energy_weighted_centroid().map(|c| c.y.value),
+            "valid rays" => Some(rays.nr_of_rays(true) as f64),
             _ => None,
         }
     }
