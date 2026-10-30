@@ -2,9 +2,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1120" height="470" viewBox="0 0 1120 470"
      font-family="Helvetica, Arial, sans-serif">
   <title>How a model reaches the 3D view</title>
-  <desc>The model is meshed and its light traced in the backend, and travels over four HTTP endpoints
-        to the viewer component: the manifest and one geometry file per component, plus the optical
-        axis and the traced rays as lines. optoscene and dioxus_glb_viewer have no dependency on each
+  <desc>The model is meshed by opossum_scene and its light traced, both run by the backend, and
+        travels over four HTTP endpoints to the viewer component: the manifest and one geometry file
+        per component, plus the optical axis and the traced rays as lines. optoscene and dioxus_glb_viewer have no dependency on each
         other; the GUI is the only seam between them.</desc>
 
   <defs>
@@ -17,14 +17,14 @@
   <!-- ── the backend, top row ─────────────────────────────────────────────── -->
   <rect x="24" y="24" width="812" height="118" rx="8"
         fill="none" stroke="#a0aec0" stroke-dasharray="6 4"/>
-  <text x="38" y="44" font-size="12" fill="#718096">opossum_backend</text>
+  <text x="38" y="44" font-size="12" fill="#718096">run by opossum_backend</text>
 
   <rect x="44" y="58" width="196" height="62" rx="6" fill="#e2e8f0" stroke="#4a5568"/>
   <text x="142" y="82" font-size="14" text-anchor="middle" fill="#1a202c">opossum_core</text>
   <text x="142" y="102" font-size="12" text-anchor="middle" fill="#4a5568">OpmDocument</text>
 
   <rect x="318" y="58" width="224" height="62" rx="6" fill="#e2e8f0" stroke="#4a5568"/>
-  <text x="430" y="82" font-size="14" text-anchor="middle" fill="#1a202c">scene_export.rs</text>
+  <text x="430" y="82" font-size="14" text-anchor="middle" fill="#1a202c">opossum_scene</text>
   <text x="430" y="102" font-size="12" text-anchor="middle" fill="#4a5568">the seam</text>
 
   <rect x="620" y="58" width="196" height="62" rx="6" fill="#e2e8f0" stroke="#4a5568"/>

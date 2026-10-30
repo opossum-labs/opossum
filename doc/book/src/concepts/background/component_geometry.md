@@ -515,7 +515,7 @@ A ray that misses the mirror is lost in every analysis, because only reflected l
 the next node is placed along the reflected axis. If the axis misses the mirror, the run stops with an error that
 names the mirror.
 
-**Draw.** The 3D view (`for_each_drawable` in `opossum_backend/src/scene_export.rs`) asks each node for its
+**Draw.** The 3D view (`for_each_drawable` in `opossum_scene/src/components.rs`) asks each node for its
 appearance (`OpticNode::appearance`) and passes over a node that states none. It meshes the node's geometry in the
 node's own frame (`OpticNodeExt::geometry_mesh`) and puts the mesh at the node's current placement
 (`effective_node_iso`), the same placement its surfaces are traced at. Every kind of geometry meshes itself
@@ -535,12 +535,12 @@ face (`Appearance::coated`, read from the face's `SurfaceConfig`). The share the
 makes a glass or a reflecting face that much metallic, and a reflecting one that much opaque; a mirror's bare surface
 is a pale pane. Other finishes keep their look, because those nodes do not act through their coating. The lateral face
 of a solid has no coating and is drawn as the appearance asks. Glass is drawn at an opacity of 0.7 (`GLASS_OPACITY` in
-the backend), rising to 1 the more its face is mirrored, because three.js shows only opaque objects through
+`opossum_scene`), rising to 1 the more its face is mirrored, because three.js shows only opaque objects through
 transmissive glass (see the 3D view reference).
 
-Neither reads the runtime surfaces, so a property that was changed without a rebuild is drawn as it is now. The
-endpoint for a single component (`opossum_backend/src/document.rs`) therefore meshes the node without rebuilding it,
-and answers "not found" for a node that is not drawn.
+Neither reads the runtime surfaces, so a property that was changed without a rebuild is drawn as it is now. A single
+component's file (`glb_of_node` in `opossum_scene`) is therefore meshed without rebuilding the node, and its endpoint
+in `opossum_backend/src/document.rs` answers "not found" for a node that is not drawn.
 
 ### Other components
 

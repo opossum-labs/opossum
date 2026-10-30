@@ -31,8 +31,10 @@ without needing a server in the middle.
 The 3D view is a good example of the above in miniature, and of one rule worth stating explicitly.
 
 The geometry comes from `opossum_core`, which knows the shape of every component. The file format
-comes from `optoscene`, a small export crate that knows glTF and nothing about optics. The drawing is
-done by `dioxus_glb_viewer`, a viewer component that knows three.js and nothing about optics either.
+comes from `optoscene`, a small export crate that knows glTF and nothing about optics. Between the two
+sits `opossum_scene`: it decides what of a model is drawn and in which material, and hands the result
+to `optoscene`. The backend only calls it and serves the bytes. The drawing is done by
+`dioxus_glb_viewer`, a viewer component that knows three.js and nothing about optics either.
 
 ![How a model reaches the 3D view](../../images/scene_view_dataflow.svg)
 
@@ -50,8 +52,13 @@ Drawn light takes the same way with two endpoints of its own, one for the optica
 the rays of the analyzer's sources. Both are traced on a copy of the model, and the core hands back
 the ray bundles that leave the setup, each ray carrying the whole path it took. Keeping those
 bundles is an opt-in of the ray-trace configuration that only these copies switch on, so a real
-analysis never pays for it. The backend turns the paths into glTF lines in world coordinates, which
-the viewer draws over the components as they are, without moving them.
+analysis never pays for it. `opossum_scene` turns the paths into glTF lines in world coordinates,
+which the viewer draws over the components as they are, without moving them.
+
+The rule behind the split is that the core describes and `opossum_scene` draws. The core holds what
+a simulation needs: faces, outlines, coatings, materials. Everything that serves only the picture
+belongs in `opossum_scene`. Two pieces have not moved yet: the colors and roughness of a node's
+`Appearance`, and the meshing of a geometry into triangles. Both are meant to follow.
 
 `optoscene` does bring a streaming protocol of its own, which computes the minimal set of update
 messages between two scenes. OPOSSUM does not use it. The viewer already performs the same kind of
