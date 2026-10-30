@@ -7,10 +7,9 @@ use opossum_core::{
 pub struct MetricReader;
 
 impl MetricReader {
-    /// Reads a scalar metric directly from a node inside an `OpmDocument`.
     /// Reads a scalar metric produced by a specific analyzer on a detector node.
     pub fn read_metric(doc: &OpmDocument, address: &ObservableAddress) -> OpmResult<f64> {
-        // 1. Primär: Schneller Lookup im MetricStore nach (analyzer_id, node_id, metric_name)
+        // 1. Primary: Fast lookup in MetricStore by (analyzer_id, node_id, metric_name)
         let key = (
             address.analyzer_id,
             address.node_id,
@@ -20,7 +19,7 @@ impl MetricReader {
             return Ok(val);
         }
 
-        // 2. Fallback: Direktes Auslesen vom Knoten im Scenery-Graphen
+        // 2. Fallback: Direct inspection on the detector node in the scenery graph
         let (node_ref, _) = doc.scenery().node_recursive(address.node_id).map_err(|e| {
             OpossumError::Other(format!(
                 "Failed to find detector node {}: {}",
@@ -38,11 +37,8 @@ impl MetricReader {
             })
     }
 
-    //// Reads the current scalar value of any parameter address from the document.
-    pub fn read_parameter_value(
-        doc: &OpmDocument,
-        address: &crate::address::ParameterAddress,
-    ) -> OpmResult<f64> {
+    /// Reads the current scalar value of any parameter address from the document.
+    pub fn read_parameter_value(doc: &OpmDocument, address: &ParameterAddress) -> OpmResult<f64> {
         match address {
             ParameterAddress::NodeProperty {
                 node_id,

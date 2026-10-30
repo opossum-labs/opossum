@@ -2,7 +2,6 @@ use crate::variable::{FiniteDifferenceMethod, FreeVariable};
 use opossum_core::error::{OpmResult, OpossumError};
 use serde::{Deserialize, Serialize};
 
-/// Supported numerical optimization algorithms and their solver-specific controls[cite: 1].
 /// Supported numerical optimization algorithms and their solver-specific controls.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum OptimizationAlgorithm {
@@ -11,7 +10,7 @@ pub enum OptimizationAlgorithm {
         max_iterations: u64,
         sd_tolerance: f64,
     },
-    /// Limited-memory Broyden-Fletcher-Goldfarb-Shanno (quasi-Newton method)[cite: 1].
+    /// Limited-memory Broyden-Fletcher-Goldfarb-Shanno (quasi-Newton method).
     LBFGS {
         max_iterations: u64,
         gradient_tolerance: f64,
@@ -20,11 +19,13 @@ pub enum OptimizationAlgorithm {
     },
     /// Simulated Annealing global stochastic optimization.
     SimulatedAnnealing {
-        /// Initial temperature[cite: 1].
+        /// Maximum number of iterations (search steps).
+        max_iterations: u64,
+        /// Initial temperature.
         initial_temperature: f64,
-        /// Maximum iterations without global best improvement[cite: 1].
+        /// Maximum iterations without global best improvement.
         stall_best: u64,
-        /// Maximum iterations without any accepted move[cite: 1].
+        /// Maximum iterations without any accepted move.
         stall_accepted: u64,
         /// Periodic reannealing interval (steps). If None, no reannealing occurs.
         reannealing_fixed: Option<u64>,
@@ -38,7 +39,7 @@ impl Default for OptimizationAlgorithm {
 }
 
 impl OptimizationAlgorithm {
-    /// Creates a default Nelder-Mead configuration (100 iterations, 1e-6 tolerance)[cite: 1].
+    /// Creates a default Nelder-Mead configuration (100 iterations, 1e-6 tolerance).
     pub const fn nelder_mead() -> Self {
         Self::NelderMead {
             max_iterations: 100,
@@ -46,7 +47,7 @@ impl OptimizationAlgorithm {
         }
     }
 
-    /// Creates a default L-BFGS configuration with central differences[cite: 1].
+    /// Creates a default L-BFGS configuration with central differences.
     pub fn lbfgs() -> Self {
         Self::LBFGS {
             max_iterations: 60,
@@ -56,9 +57,10 @@ impl OptimizationAlgorithm {
         }
     }
 
-    /// Creates a default Simulated Annealing configuration with robust defaults[cite: 1].
+    /// Creates a default Simulated Annealing configuration with robust defaults.
     pub fn simulated_annealing() -> Self {
         Self::SimulatedAnnealing {
+            max_iterations: 1000,
             initial_temperature: 15.0,
             stall_best: 60,
             stall_accepted: 120,
@@ -66,7 +68,7 @@ impl OptimizationAlgorithm {
         }
     }
 
-    /// Sets the initial temperature for Simulated Annealing[cite: 1].
+    /// Sets the initial temperature for Simulated Annealing.
     pub fn with_temperature(mut self, temp: f64) -> Self {
         if let Self::SimulatedAnnealing {
             initial_temperature,
@@ -78,17 +80,17 @@ impl OptimizationAlgorithm {
         self
     }
 
-    /// Sets the maximum iteration count.
+    /// Sets the maximum iteration count across all supported algorithms.
     pub fn with_max_iterations(mut self, iters: u64) -> Self {
         match &mut self {
             Self::NelderMead { max_iterations, .. } => *max_iterations = iters,
             Self::LBFGS { max_iterations, .. } => *max_iterations = iters,
-            _ => {}
+            Self::SimulatedAnnealing { max_iterations, .. } => *max_iterations = iters,
         }
         self
     }
 
-    /// Sets the standard deviation tolerance for Nelder-Mead.
+    /// Sets the standard deviation tolerance for Nelder-Mead or gradient tolerance for L-BFGS.
     pub const fn with_sd_tolerance(mut self, tol: f64) -> Self {
         match &mut self {
             Self::NelderMead { sd_tolerance, .. } => *sd_tolerance = tol,
@@ -100,7 +102,7 @@ impl OptimizationAlgorithm {
         self
     }
 
-    /// Automatically generates a non-degenerate, bound-respecting initial simplex[cite: 1].
+    /// Automatically generates a non-degenerate, bound-respecting initial simplex.
     pub fn build_initial_simplex(free_vars: &[FreeVariable]) -> OpmResult<Vec<Vec<f64>>> {
         let n = free_vars.len();
         if n == 0 {
@@ -108,7 +110,6 @@ impl OptimizationAlgorithm {
                 "Cannot build simplex without free variables".to_string(),
             ));
         }
-
         let base_vertex: Vec<f64> = free_vars
             .iter()
             .map(|v| {
@@ -127,7 +128,6 @@ impl OptimizationAlgorithm {
         for (i, var) in free_vars.iter().enumerate() {
             let mut vertex = base_vertex.clone();
             let current = vertex[i];
-
             let step = if let Some(bounds) = &var.bounds {
                 (bounds.max - bounds.min) * 0.05
             } else if current.abs() > 1e-7 {
@@ -142,11 +142,9 @@ impl OptimizationAlgorithm {
             {
                 candidate = current - step;
             }
-
             vertex[i] = candidate;
             simplex.push(vertex);
         }
-
         Ok(simplex)
     }
 }

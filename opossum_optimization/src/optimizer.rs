@@ -120,15 +120,22 @@ impl<'a> OpticOptimizer<'a> {
             self.operands.clone(),
         )?;
 
-        // Measure initial baseline cost[cite: 1]
+        // Extract initial vector safely (no unwrap)
         let initial_vector: Vec<f64> = self
             .free_variables
             .iter()
-            .map(|v| v.initial_value.unwrap())
-            .collect();
-        let initial_cost = merit.evaluate(&initial_vector);
+            .map(|v| {
+                v.initial_value.ok_or_else(|| {
+                    OpossumError::Other(format!(
+                        "FreeVariable '{}' has uninitialized start value",
+                        v.name
+                    ))
+                })
+            })
+            .collect::<OpmResult<Vec<f64>>>()?;
 
-        // Execute solver according to chosen algorithm[cite: 1]
+        let initial_cost = merit.evaluate(&initial_vector);
+        // Execute solver according to chosen algorithm
         let (best_params, final_cost, iterations, converged) = match self.algorithm {
             OptimizationAlgorithm::NelderMead {
                 max_iterations,
@@ -156,7 +163,6 @@ impl<'a> OpticOptimizer<'a> {
                 let cost = state.best_cost;
                 let iters = state.iter;
                 let reached_target = cost <= self.target_cost;
-
                 (best_p, cost, iters, reached_target)
             }
             OptimizationAlgorithm::LBFGS {
@@ -192,17 +198,16 @@ impl<'a> OpticOptimizer<'a> {
                 let cost = state.best_cost;
                 let iters = state.iter;
                 let reached_target = cost <= self.target_cost;
-
                 (best_p, cost, iters, reached_target)
             }
             OptimizationAlgorithm::SimulatedAnnealing {
+                max_iterations,
                 initial_temperature,
                 stall_best,
                 stall_accepted,
                 reannealing_fixed,
-                ..
             } => {
-                // Initialisierung mit Starttemperatur und exponentiellem Abkühlplan (z. B. T_next = 0.95 * T)
+                // Initialize simulated annealing with temperature and cooling schedule
                 let mut solver = SimulatedAnnealing::new(initial_temperature)
                     .map_err(|e| {
                         OpossumError::Other(format!("Failed to init Simulated Annealing: {e}"))
@@ -219,7 +224,7 @@ impl<'a> OpticOptimizer<'a> {
                     .configure(|state| {
                         state
                             .param(initial_vector)
-                            .max_iters(1000) // Höhere Iterationszahl für stochastische Suche
+                            .max_iters(max_iterations)
                             .target_cost(self.target_cost)
                     })
                     .run()
@@ -232,7 +237,6 @@ impl<'a> OpticOptimizer<'a> {
                 let cost = state.best_cost;
                 let iters = state.iter;
                 let reached_target = cost <= self.target_cost;
-
                 (best_p, cost, iters, reached_target)
             }
         };

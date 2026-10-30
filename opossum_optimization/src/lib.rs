@@ -18,7 +18,9 @@ pub use algorithm::OptimizationAlgorithm;
 pub use applier::ParameterApplier;
 pub use config::OptimizationConfig;
 pub use coupling::{CouplingType, ParameterCoupling};
-pub use discovery::{DiscoveredObservable, DiscoveredVariable, ModelOptimizationSchema};
+pub use discovery::{
+    DiscoveredEdgeThicknessNode, DiscoveredObservable, DiscoveredVariable, ModelOptimizationSchema,
+};
 pub use merit::{DEFAULT_BOUNDS_PENALTY_WEIGHT, DEFAULT_FATAL_PENALTY, MeritFunction};
 pub use operand::{
     EvaluationContext, MaxTotalLengthOperand, MinEdgeThicknessOperand, Operand, StandardOperand,

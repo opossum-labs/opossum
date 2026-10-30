@@ -349,6 +349,11 @@ impl Operand for TransmissionPenaltyOperand {
     }
 
     fn evaluate(&self, ctx: &EvaluationContext<'_>) -> OpmResult<f64> {
+        // Guard against division by zero if expected_rays is misconfigured
+        if self.expected_rays <= 0.0 {
+            return Ok(0.0);
+        }
+
         let valid_rays = MetricReader::read_metric(ctx.doc, &self.address)?;
         if valid_rays >= self.expected_rays {
             return Ok(0.0);

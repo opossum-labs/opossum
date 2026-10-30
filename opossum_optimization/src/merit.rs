@@ -135,12 +135,12 @@ impl MeritFunction {
                 Ok(operand_cost) => {
                     total_cost += operand_cost;
                 }
-                Err(_) => {
+                Err(err) => {
+                    log::warn!("Operand '{}' failed to evaluate: {err}", operand.name());
                     total_cost += self.fatal_penalty * 0.1;
                 }
             }
         }
-
         total_cost
     }
     /// Computes the numerical gradient vector using adaptive finite differences.
@@ -213,7 +213,7 @@ impl Anneal for MeritFunction {
         let mut rng = rand::rng();
         let mut next_param = param.clone();
 
-        // Skalierung über die Temperatur
+        // Scale perturbation by temperature
         let temp_factor = temp.min(1.0).max(1e-4);
 
         for (i, var) in self.free_variables.iter().enumerate() {
@@ -225,16 +225,15 @@ impl Anneal for MeritFunction {
                 1e-2
             };
 
-            // Gleichverteilte Auslenkung im Intervall [-1.0, 1.0]
+            // Uniform displacement in interval [-1.0, 1.0]
             let offset = rng.random_range(-1.0..=1.0);
             let step = offset * range * temp_factor;
             let mut candidate = param[i] + step;
 
-            // Box-Bounds strikt einhalten
+            // Strictly enforce box bounds
             if let Some(bounds) = &var.bounds {
                 candidate = bounds.clamp(candidate);
             }
-
             next_param[i] = candidate;
         }
 

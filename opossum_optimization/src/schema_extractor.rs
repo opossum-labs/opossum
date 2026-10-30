@@ -1,6 +1,9 @@
 use super::{
     address::{ObservableAddress, ParameterAddress},
-    discovery::{DiscoveredObservable, DiscoveredVariable, ModelOptimizationSchema},
+    discovery::{
+        DiscoveredEdgeThicknessNode, DiscoveredObservable, DiscoveredVariable,
+        ModelOptimizationSchema,
+    },
 };
 use opossum_core::{
     core_optics::NodeAttrExt, error::OpmResult, nodes::NodeGroup, opm_document::OpmDocument,
@@ -9,27 +12,38 @@ use opossum_core::{
 pub struct SchemaExtractor;
 
 impl SchemaExtractor {
-    /// Extracts all controllable variables and observable metrics from an `OpmDocument`.
+    /// Extracts all controllable variables, observable metrics, and constraint candidates from an `OpmDocument`.
     pub fn extract(doc: &OpmDocument) -> OpmResult<ModelOptimizationSchema> {
         let mut schema = ModelOptimizationSchema::default();
 
         // 1. Extract controllable variables from the scenery recursively
         Self::extract_from_group(doc.scenery(), &mut schema)?;
 
-        // 2. Extract observable metrics across all configured analyzers
         let all_nodes = doc.scenery().collect_all_nodes_recursive()?;
+
+        // 2. Discover nodes implementing the EdgeThickness constraint trait
+        for node_ref in &all_nodes {
+            if node_ref.as_edge_thickness().is_some() {
+                schema
+                    .edge_thickness_nodes
+                    .push(DiscoveredEdgeThicknessNode {
+                        node_id: node_ref.uuid(),
+                        node_name: node_ref.name().to_string(),
+                        node_type: node_ref.node_type().to_string(),
+                    });
+            }
+        }
+
+        // 3. Extract observable metrics across all configured analyzers
         for (analyzer_id, analyzer_info) in doc.analyzers() {
             let analyzer_kind = analyzer_info.kind();
-
             for node_ref in &all_nodes {
                 let metrics = node_ref.observable_metrics(analyzer_kind);
                 if metrics.is_empty() {
                     continue;
                 }
-
                 let node_id = node_ref.uuid();
                 let node_name = node_ref.name().to_string();
-
                 for descriptor in metrics {
                     schema.observable_metrics.push(DiscoveredObservable {
                         address: ObservableAddress {
@@ -71,7 +85,6 @@ impl SchemaExtractor {
             let node_id = node_ref.uuid();
             let node_name = node_ref.name().to_string();
             let attr = node_ref.node_attr();
-
             for (prop_name, prop) in attr.properties() {
                 // Only consider properties that can be represented as an f64 scalar
                 if let Some(val) = prop.prop().as_f64() {
@@ -93,7 +106,6 @@ impl SchemaExtractor {
                 Self::extract_from_group(sub_group, schema)?;
             }
         }
-
         Ok(())
     }
 }
