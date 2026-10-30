@@ -1335,6 +1335,40 @@ mod test {
         assert!(super::super::doubled_signed_area(&outline) > 0.0);
         Ok(())
     }
+    /// An upright bore places a point of its cross-section shifted by its center and turned by its
+    /// rotation, and nothing more.
+    #[test]
+    fn an_upright_bore_shifts_and_turns_a_point() -> OpmResult<()> {
+        let placed = bore(circle(1.0)?, 5.0, -3.0, 90.0).placed(millimeter!(2.0, 0.0));
+        assert_abs_diff_eq!(placed.x.value, millimeter!(5.0).value, epsilon = 1e-12);
+        assert_abs_diff_eq!(placed.y.value, millimeter!(-1.0).value, epsilon = 1e-12);
+        Ok(())
+    }
+    /// A tilted bore places a point of its cross-section along its axis onto the plane of the
+    /// outline: the point keeps its distance from the axis, while its ring is stretched across the
+    /// plane.
+    #[test]
+    fn a_tilted_bore_places_a_point_along_its_axis() -> OpmResult<()> {
+        let radius = 2.0;
+        let tilted =
+            bore(circle(radius)?, 1.0, -1.0, 30.0).with_tilt(degree!(20.0), degree!(-10.0));
+        let axis = tilted.axis();
+        let center = Vector3::new(millimeter!(1.0).value, millimeter!(-1.0).value, 0.0);
+        let mut reach = 0.0_f64;
+        for step in 0..8 {
+            let angle = f64::from(step) * PI / 4.0;
+            let placed = tilted.placed(millimeter!(radius * angle.cos(), radius * angle.sin()));
+            let from_center = Vector3::new(placed.x.value, placed.y.value, 0.0) - center;
+            let off_axis = from_center - axis * from_center.dot(&axis);
+            assert_abs_diff_eq!(off_axis.norm(), millimeter!(radius).value, epsilon = 1e-12);
+            reach = reach.max(from_center.norm());
+        }
+        assert!(
+            reach > millimeter!(radius).value * 1.01,
+            "the tilt did not stretch the ring across the plane"
+        );
+        Ok(())
+    }
     #[test]
     fn an_outline_needs_at_least_three_points() -> OpmResult<()> {
         let shape = OutlineShape::from(CircleShape::new(millimeter!(1.0))?);

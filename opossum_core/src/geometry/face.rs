@@ -681,4 +681,107 @@ mod test {
         }
         Ok(())
     }
+
+    /// Transversal positions of a frame to place points above, all within the reach of every face
+    /// of [`faces_of_a_node`].
+    fn positions() -> [Point2<Length>; 5] {
+        [
+            millimeter!(0.0, 0.0),
+            millimeter!(6.0, 0.0),
+            millimeter!(0.0, -7.0),
+            millimeter!(3.0, 4.0),
+            millimeter!(-6.0, -6.0),
+        ]
+    }
+    /// A face placed in a frame answers with the point right above the asked position, lying on the
+    /// face, and with a unit normal facing the +z of the frame.
+    #[test]
+    fn a_placed_face_follows_the_contract() -> OpmResult<()> {
+        for node in [Isometry::identity(), somewhere_else()?] {
+            for (name, face) in faces_of_a_node(&node)? {
+                let placement = SurfacePlacement::new(&face, &node)?;
+                for position in positions() {
+                    let (point, normal) = placement.above(&position)?;
+                    assert_abs_diff_eq!(point.x.value, position.x.value, epsilon = 1e-12);
+                    assert_abs_diff_eq!(point.y.value, position.y.value, epsilon = 1e-12);
+                    // Where the face itself says it lies there, asked through its own frame.
+                    let local = face
+                        .frame()
+                        .inverse_transform_point(&node.transform_point(&point));
+                    let sag = face
+                        .surface()
+                        .local_z_at(&Point2::new(local.x, local.y))
+                        .expect("the face reaches a point it was placed at");
+                    assert_abs_diff_eq!(local.z.value, sag.value, epsilon = 1e-12);
+                    assert_abs_diff_eq!(normal.norm(), 1.0, epsilon = 1e-12);
+                    assert!(
+                        normal.z > 0.0,
+                        "a normal of the {name} does not face the +z of its frame: {normal:?}"
+                    );
+                }
+            }
+        }
+        Ok(())
+    }
+    /// A face is placed in its node's own frame, so moving the node changes no answer.
+    #[test]
+    fn a_placement_does_not_move_with_the_node() -> OpmResult<()> {
+        let (here, there) = (Isometry::identity(), somewhere_else()?);
+        for ((_, face), (_, moved)) in faces_of_a_node(&here)?
+            .into_iter()
+            .zip(faces_of_a_node(&there)?)
+        {
+            let at_origin = SurfacePlacement::new(&face, &here)?;
+            let elsewhere = SurfacePlacement::new(&moved, &there)?;
+            for position in positions() {
+                let (before, before_normal) = at_origin.above(&position)?;
+                let (after, after_normal) = elsewhere.above(&position)?;
+                assert_abs_diff_eq!(
+                    (before - after).map(|c| c.value).norm(),
+                    0.0,
+                    epsilon = 1e-12
+                );
+                assert_abs_diff_eq!((before_normal - after_normal).norm(), 0.0, epsilon = 1e-12);
+            }
+        }
+        Ok(())
+    }
+    /// A sphere ends where its radius of curvature does, so it places no point beyond that.
+    #[test]
+    fn a_face_places_no_point_beyond_its_reach() -> OpmResult<()> {
+        let face = Face::new(
+            SurfaceShape::Sphere(Sphere::new(millimeter!(5.0))?),
+            Isometry::identity(),
+        );
+        let placement = SurfacePlacement::new(&face, &Isometry::identity())?;
+        assert!(placement.above(&millimeter!(10.0, 0.0)).is_err());
+        assert!(placement.above(&millimeter!(2.0, 0.0)).is_ok());
+        Ok(())
+    }
+    /// A face standing on edge never crosses the frame's axis, so it cannot be placed in that frame.
+    #[test]
+    fn a_face_parallel_to_the_frame_axis_cannot_be_placed() -> OpmResult<()> {
+        let on_edge = Face::new(
+            SurfaceShape::Plane,
+            Isometry::new(millimeter!(0.0, 0.0, 0.0), degree!(0.0, 90.0, 0.0))?,
+        );
+        assert!(SurfacePlacement::new(&on_edge, &Isometry::identity()).is_err());
+        Ok(())
+    }
+    /// Where a curved face tilted against its frame is met cannot be found by walking along the
+    /// frame's axis, so no point off its vertex is placed.
+    #[test]
+    fn a_curved_face_tilted_against_the_frame_places_no_point() -> OpmResult<()> {
+        let node = Isometry::identity();
+        for shape in [
+            SurfaceShape::Sphere(Sphere::new(millimeter!(50.0))?),
+            SurfaceShape::Cylinder(Cylinder::new(millimeter!(40.0))?),
+            SurfaceShape::Parabola(Parabola::new(millimeter!(60.0))?),
+        ] {
+            let face = tilted(shape, &node)?;
+            let placement = SurfacePlacement::new(&face, &node)?;
+            assert!(placement.above(&millimeter!(5.0, 3.0)).is_err());
+        }
+        Ok(())
+    }
 }
