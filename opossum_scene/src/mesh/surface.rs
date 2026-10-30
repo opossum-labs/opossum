@@ -40,7 +40,6 @@ impl Meshable for SurfaceGeometry {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::test_helpers::assert_meshed_as_the_core_does;
     use approx::assert_abs_diff_eq;
     use nalgebra::{Point2, Vector3};
     use opossum_core::{
@@ -151,24 +150,5 @@ mod test {
         let drawing = Outline::new(CircleShape::new(millimeter!(5.0))?, None)?;
         let meshes = Meshable::mesh(surface_of(&geometry)?, MESH_SEGMENTS, &drawing)?;
         check_drawn(&geometry, &meshes, &vertex, 5.0)
-    }
-    /// Transitional: every kind of surface is meshed bit for bit as the core does.
-    #[test]
-    fn a_surface_is_meshed_as_the_core_does() -> OpmResult<()> {
-        let (_, [mirror, detector]) = mirror_and_detector()?;
-        let (_, plane) = open_plane()?;
-        let drawing = Outline::new(CircleShape::new(millimeter!(5.0))?, None)?;
-        for (name, geometry) in [
-            ("off-axis mirror", mirror),
-            ("detector window", detector),
-            ("open plane", plane),
-        ] {
-            assert_meshed_as_the_core_does(
-                name,
-                GeometryKind::mesh(geometry.kind(), MESH_SEGMENTS, &drawing),
-                Meshable::mesh(surface_of(&geometry)?, MESH_SEGMENTS, &drawing),
-            );
-        }
-        Ok(())
     }
 }

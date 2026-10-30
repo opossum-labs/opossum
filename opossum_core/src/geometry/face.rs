@@ -14,9 +14,8 @@ use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 use crate::{
-    apertures::OutlineMesh,
     error::{OpmResult, OpossumError},
-    geometry::{GeoSurface, SurfaceMesh, SurfaceShape},
+    geometry::{GeoSurface, SurfaceShape},
     light::Ray,
     nanometer, radian,
     utils::geom_transformation::Isometry,
@@ -203,48 +202,6 @@ impl Face {
                 .axis_mismatch(&other.frame, angle_tolerance, length_tolerance)
                 .is_none()
             && (!self.shape.depends_on_roll() || same_roll())
-    }
-    /// Lay a flat [`OutlineMesh`] onto this face.
-    ///
-    /// The outline mesh states *where* to sample — a triangulation of the area the face is wanted
-    /// over — and the face answers where it lies above each of those positions and which way it
-    /// faces there. Splitting it this way is what lets a lens mesh both of its faces over one
-    /// outline.
-    ///
-    /// Points and triangles come out in the order the outline mesh had them, so
-    /// [`OutlineMesh::rims`] are the rims of the result too.
-    ///
-    /// # Arguments
-    ///
-    /// - `outline_mesh`: the triangulated area to lay onto the face, in the xy plane of `frame`
-    /// - `frame`: the frame to express the result in, given in the frame this face is stated in
-    ///
-    /// # Returns
-    ///
-    /// The meshed face, with all normals facing the +z of `frame`.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the face runs parallel to the frame's axis, if it does
-    /// not reach as far out as the outline, or if it is both curved and tilted against the frame.
-    pub(crate) fn mesh_over(
-        &self,
-        outline_mesh: &OutlineMesh,
-        frame: &Isometry,
-    ) -> OpmResult<SurfaceMesh> {
-        let placement = SurfacePlacement::new(self, frame)?;
-        let mut points = Vec::with_capacity(outline_mesh.points().len());
-        let mut normals = Vec::with_capacity(outline_mesh.points().len());
-        for transversal_position in outline_mesh.points() {
-            let (point, normal) = placement.above(transversal_position)?;
-            points.push(point);
-            normals.push(normal);
-        }
-        Ok(SurfaceMesh::new(
-            points,
-            normals,
-            outline_mesh.triangles().to_vec(),
-        ))
     }
 }
 
@@ -495,17 +452,6 @@ mod test {
         Ok(())
     }
 
-    /// The number of points the rim of an outline is sampled with in the mesh tests.
-    const MESH_SEGMENTS: usize = 24;
-
-    /// A circle of the given radius in millimeter, triangulated.
-    fn circle_mesh(radius: f64) -> OpmResult<OutlineMesh> {
-        crate::apertures::Outline::new(
-            crate::apertures::CircleShape::new(millimeter!(radius))?,
-            None,
-        )?
-        .triangulate(MESH_SEGMENTS)
-    }
     /// A face of the given shape the given distance along the axis of a node.
     fn along(shape: SurfaceShape, node: &Isometry, z: f64) -> OpmResult<Face> {
         Ok(Face::new(
@@ -549,137 +495,6 @@ mod test {
             ),
             ("tilted plane", tilted(SurfaceShape::Plane, node)?),
         ])
-    }
-    /// Check everything [`Face::mesh_over`] promises.
-    fn check_mesh_contract(
-        name: &str,
-        face: &Face,
-        frame: &Isometry,
-        outline_mesh: &OutlineMesh,
-    ) -> OpmResult<()> {
-        let mesh = face.mesh_over(outline_mesh, frame)?;
-        assert_eq!(mesh.points().len(), outline_mesh.points().len());
-        assert_eq!(mesh.normals().len(), outline_mesh.points().len());
-        assert_eq!(mesh.triangles(), outline_mesh.triangles());
-        // Where the face itself says it lies above each meshed point - asked through its own
-        // frame rather than the one the mesh was built from, so this is an independent answer.
-        for point in mesh.points() {
-            let local = face
-                .frame()
-                .inverse_transform_point(&frame.transform_point(point));
-            let sag = face
-                .surface()
-                .local_z_at(&Point2::new(local.x, local.y))
-                .expect("the face reaches a point it was meshed at");
-            assert_abs_diff_eq!(local.z.value, sag.value, epsilon = 1e-12);
-        }
-        for normal in mesh.normals() {
-            assert_abs_diff_eq!(normal.norm(), 1.0, epsilon = 1e-12);
-            assert!(
-                normal.z > 0.0,
-                "a normal of the {name} does not face the +z of its frame: {normal:?}"
-            );
-        }
-        for triangle in mesh.triangles() {
-            let corner =
-                |index: u32| mesh.points()[usize::try_from(index).unwrap()].map(|c| c.value);
-            let [first, second, third] = triangle.map(corner);
-            let normal = |index: u32| mesh.normals()[usize::try_from(index).unwrap()];
-            let facing = (second - first).cross(&(third - first));
-            let mean_normal =
-                (normal(triangle[0]) + normal(triangle[1]) + normal(triangle[2])) / 3.;
-            assert!(
-                facing.dot(&mean_normal) > 0.0,
-                "a triangle of the {name} is wound against the normals of its corners"
-            );
-        }
-        Ok(())
-    }
-    #[test]
-    fn a_meshed_face_follows_the_contract() -> OpmResult<()> {
-        let outline_mesh = circle_mesh(10.0)?;
-        for node in [Isometry::identity(), somewhere_else()?] {
-            for (name, face) in faces_of_a_node(&node)? {
-                check_mesh_contract(name, &face, &node, &outline_mesh)?;
-            }
-        }
-        Ok(())
-    }
-    /// The mesh is built in the node's own frame, so moving the node leaves it alone. That is what
-    /// lets a changed setup be redrawn by resending placements instead of geometry.
-    #[test]
-    fn the_mesh_does_not_move_with_the_node() -> OpmResult<()> {
-        let outline_mesh = circle_mesh(10.0)?;
-        let (here, there) = (Isometry::identity(), somewhere_else()?);
-        for ((name, face), (_, moved)) in faces_of_a_node(&here)?
-            .into_iter()
-            .zip(faces_of_a_node(&there)?)
-        {
-            let at_origin = face.mesh_over(&outline_mesh, &here)?;
-            let elsewhere = moved.mesh_over(&outline_mesh, &there)?;
-            assert_eq!(at_origin.triangles(), elsewhere.triangles());
-            for (before, after) in at_origin.points().iter().zip(elsewhere.points()) {
-                for axis in 0..3 {
-                    assert_abs_diff_eq!(before[axis].value, after[axis].value, epsilon = 1e-12);
-                }
-            }
-            for (before, after) in at_origin.normals().iter().zip(elsewhere.normals()) {
-                assert_abs_diff_eq!((before - after).norm(), 0.0, epsilon = 1e-12);
-            }
-            assert!(
-                !at_origin.points().is_empty(),
-                "the {name} was not meshed at all"
-            );
-        }
-        Ok(())
-    }
-    /// A sphere ends where its radius of curvature does. Asked beyond that it has no answer, and a
-    /// mesh reaching further out must not be filled in with something made up.
-    #[test]
-    fn a_face_too_small_for_the_outline_cannot_be_meshed() -> OpmResult<()> {
-        let face = Face::new(
-            SurfaceShape::Sphere(Sphere::new(millimeter!(5.0))?),
-            Isometry::identity(),
-        );
-        assert!(
-            face.mesh_over(&circle_mesh(10.0)?, &Isometry::identity())
-                .is_err()
-        );
-        assert!(
-            face.mesh_over(&circle_mesh(2.0)?, &Isometry::identity())
-                .is_ok()
-        );
-        Ok(())
-    }
-    /// A face standing on edge never crosses the frame's axis, so there is no point "above" any
-    /// transversal position to mesh.
-    #[test]
-    fn a_face_parallel_to_the_frame_axis_cannot_be_meshed() -> OpmResult<()> {
-        let on_edge = Face::new(
-            SurfaceShape::Plane,
-            Isometry::new(millimeter!(0.0, 0.0, 0.0), degree!(0.0, 90.0, 0.0))?,
-        );
-        assert!(
-            on_edge
-                .mesh_over(&circle_mesh(10.0)?, &Isometry::identity())
-                .is_err()
-        );
-        Ok(())
-    }
-    /// Where a curved face tilted against its frame is met cannot be worked out by walking along
-    /// the frame's axis, so it is turned away - the same limit the extent of a body is subject to.
-    #[test]
-    fn a_curved_face_tilted_against_the_frame_cannot_be_meshed() -> OpmResult<()> {
-        let node = Isometry::identity();
-        for shape in [
-            SurfaceShape::Sphere(Sphere::new(millimeter!(50.0))?),
-            SurfaceShape::Cylinder(Cylinder::new(millimeter!(40.0))?),
-            SurfaceShape::Parabola(Parabola::new(millimeter!(60.0))?),
-        ] {
-            let face = tilted(shape, &node)?;
-            assert!(face.mesh_over(&circle_mesh(10.0)?, &node).is_err());
-        }
-        Ok(())
     }
 
     /// Transversal positions of a frame to place points above, all within the reach of every face

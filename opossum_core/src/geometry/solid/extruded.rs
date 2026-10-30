@@ -16,7 +16,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     gain::Inversion,
     geometry::{
-        Face, FaceIndex, FacePatch, GeometryKind, Rim, SurfaceMesh,
+        Face, FaceIndex, GeometryKind, Rim,
         body::{Body, BoundingBox},
         face::SurfacePlacement,
     },
@@ -151,57 +151,6 @@ impl GeometryKind for Extruded {
         self.front.move_by(by);
         self.rear.move_by(by);
     }
-    /// The profile is triangulated once and both faces are laid over that same mesh, which is what
-    /// makes their rims agree point for point; the lateral face is then drawn between those rims
-    /// and closes the body. All three face outwards.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the profile cannot be triangulated, if either face cannot
-    /// be laid over it (see [`Face::mesh_over`]), or if the two faces cross within the profile, so
-    /// that there is no body between them.
-    fn mesh(&self, segments: usize, _unbounded: &Outline) -> OpmResult<Vec<FacePatch>> {
-        let outline = self.rim.outline();
-        let frame = self.isometry();
-        let front_at = SurfacePlacement::new(self.front.face(), &frame)?;
-        let rear_at = SurfacePlacement::new(self.rear.face(), &frame)?;
-        let in_plane = outline.triangulate(segments)?;
-        // Both faces are asked above the very same positions, so whether they cross can be read
-        // off point by point rather than guessed at from their rims.
-        for position in in_plane.points() {
-            let front_z = front_at.above(position)?.0.z.value;
-            let rear_z = rear_at.above(position)?.0.z.value;
-            let tolerance = SURFACE_TOUCHING_TOLERANCE * front_z.abs().max(rear_z.abs());
-            if rear_z < front_z - tolerance {
-                return Err(OpossumError::Other(format!(
-                    "the two faces of the body cross {position:?} from its axis, so it encloses \
-                     nothing there"
-                )));
-            }
-        }
-        // A tilted bore meets each face somewhere else, so each face gets its own rims.
-        let front = self.front.face().mesh_over(
-            &outline.triangulate_on(segments, |position| Ok(front_at.above(&position)?.0.z))?,
-            &frame,
-        )?;
-        let rear = self.rear.face().mesh_over(
-            &outline.triangulate_on(segments, |position| Ok(rear_at.above(&position)?.0.z))?,
-            &frame,
-        )?;
-        let edge = SurfaceMesh::between(&in_plane, &outline.rim_axes(), &front, &rear)?;
-        // Light enters through the front face, so the outside is the side it comes from.
-        Ok([
-            (Some(Self::FRONT), front.flipped()),
-            (Some(Self::REAR), rear),
-            (None, edge),
-        ]
-        .into_iter()
-        .map(|(face, mesh)| FacePatch {
-            face,
-            mesh: mesh.transformed(&frame),
-        })
-        .collect())
-    }
 }
 
 impl Extruded {
@@ -236,8 +185,8 @@ impl Extruded {
     /// not reach as far out as the cross section, or if it is both curved and tilted against the
     /// body.
     fn surface_z_range(&self, face: &Face, transversal_reach: Length) -> OpmResult<Range<Length>> {
-        // How the face stands in the body's frame is the same question a mesh laid over it asks,
-        // so both read it off the same placement.
+        // How the face stands in the body's frame is the same question the 3D view asks when it
+        // lays a mesh over it, so both read it off the same placement.
         let placement = SurfacePlacement::new(face, &self.isometry())?;
         let (surface, alignment, vertex) = (
             placement.surface(),
@@ -285,17 +234,6 @@ impl Extruded {
             ..anchor + from_tilt + Length::max(one_sag, other_sag))
     }
 }
-
-/// How far a point of the rear face may sit below the front face in the mesh of an [`Extruded`]
-/// solid before the two faces genuinely cross, rather than merely meeting.
-///
-/// The two faces are allowed to touch — a lens whose center thickness is exactly twice the sag of
-/// two hemispherical faces meeting at the rim is a complete ball, not an error. But the two points
-/// reach that shared value through independent chains of floating point operations, so where they
-/// are mathematically equal they need not agree bit-for-bit. Scaled by the larger of the two
-/// magnitudes rather than fixed, so the same relative slack applies whether the body is measured in
-/// micrometres or metres.
-const SURFACE_TOUCHING_TOLERANCE: f64 = 1e-9;
 
 /// A point is inside this body if it lies behind the front surface (see
 /// [`is_behind`](crate::geometry::GeoSurface::is_behind)), not behind the rear surface
@@ -391,15 +329,13 @@ fn span(values: impl Iterator<Item = Length>) -> Option<Range<Length>> {
 mod test {
     use super::*;
     use crate::{
-        apertures::{Bore, CircleShape, OutlineShape, PolygonShape, RectangleShape},
+        apertures::{Bore, CircleShape, RectangleShape},
         degree,
         geometry::{Cylinder, Face, Sphere, SurfaceShape},
-        joule, meter, millimeter, nanometer,
-        utils::test_helper::helper::{l_shape_corners, somewhere_else},
+        joule, millimeter, nanometer,
     };
     use approx::assert_abs_diff_eq;
     use nalgebra::Vector3;
-    use std::collections::HashMap;
     use uom::si::{f64::Angle, length::millimeter};
 
     /// Create a circular outline of the given radius.
@@ -1089,310 +1025,6 @@ mod test {
         let body = disk(millimeter!(10.0), millimeter!(5.0))?;
         let ray = test_ray(millimeter!(0.0, 0.0, 1.0), Vector3::new(0.0, 1.0, 0.1))?;
         assert_eq!(body.path_length_inside(&ray), None);
-        Ok(())
-    }
-
-    const SEGMENTS: usize = 32;
-    /// How far to step off a face to decide which side of the body one lands on, in meter.
-    const STEP: f64 = 1e-6;
-
-    /// Mesh the given body; a solid is bounded all around, so the unbounded outline goes unused.
-    fn patches_of(body: &Extruded) -> OpmResult<Vec<FacePatch>> {
-        GeometryKind::mesh(body, SEGMENTS, body.rim().outline())
-    }
-    /// The meshes of the given body's patches, without the faces they lie on.
-    fn mesh_of(body: &Extruded) -> OpmResult<Vec<SurfaceMesh>> {
-        Ok(patches_of(body)?
-            .into_iter()
-            .map(|patch| patch.mesh)
-            .collect())
-    }
-    /// A body is drawn as its front face, its rear face and the lateral face between them, which
-    /// is no face of its own.
-    #[test]
-    fn every_patch_of_a_body_lies_on_its_face() -> OpmResult<()> {
-        for (name, body) in volumes(&Isometry::identity())? {
-            let faces: Vec<_> = patches_of(&body)?
-                .into_iter()
-                .map(|patch| patch.face)
-                .collect();
-            assert_eq!(
-                faces,
-                [Some(Extruded::FRONT), Some(Extruded::REAR), None],
-                "the patches of the {name} lie on the wrong faces"
-            );
-        }
-        Ok(())
-    }
-    /// How many points of the mesh of an outline lie on its rims; they lead the points.
-    fn rim_points(outline: &Outline) -> OpmResult<usize> {
-        let mesh = outline.triangulate(SEGMENTS)?;
-        Ok(mesh.rims().last().map_or(0, |rim| rim.end))
-    }
-    fn rectangle(width: f64, height: f64) -> OpmResult<RectangleShape> {
-        RectangleShape::new(millimeter!(width), millimeter!(height))
-    }
-    /// The given edge with a bore through it, beside its center.
-    fn bored(edge: impl Into<OutlineShape>, bore: impl Into<OutlineShape>) -> OpmResult<Outline> {
-        Outline::new(
-            edge,
-            Some(Bore::new(bore, millimeter!(2.0, -1.0), Angle::zero())),
-        )
-    }
-    /// A circle of 10 mm with a round bore of 3 mm beside its center, tilted by the given angles.
-    fn tilted_bore(about_x: Angle, about_y: Angle) -> OpmResult<Outline> {
-        Outline::new(
-            CircleShape::new(millimeter!(10.0))?,
-            Some(
-                Bore::new(
-                    CircleShape::new(millimeter!(3.0))?,
-                    millimeter!(2.0, -1.0),
-                    Angle::zero(),
-                )
-                .with_tilt(about_x, about_y),
-            ),
-        )
-    }
-    /// One body of every shape the volume nodes build, at the given node frame.
-    fn volumes(node_frame: &Isometry) -> OpmResult<Vec<(&'static str, Extruded)>> {
-        let sphere = |radius: f64, z: f64| sphere_face(millimeter!(radius), millimeter!(z));
-        let plane = |z: f64| -> OpmResult<Face> {
-            Ok(Face::new(
-                SurfaceShape::Plane,
-                Isometry::new_along_z(millimeter!(z))?,
-            ))
-        };
-        let circle = |radius: f64| circular_cross_section(millimeter!(radius));
-        let l_shape = Outline::new(PolygonShape::new(l_shape_corners())?, None)?;
-        let shapes = vec![
-            (
-                "biconvex lens",
-                sphere(50.0, 0.0)?,
-                sphere(-50.0, 6.0)?,
-                circle(10.0)?,
-            ),
-            (
-                "meniscus lens",
-                sphere(50.0, 0.0)?,
-                sphere(80.0, 4.0)?,
-                circle(10.0)?,
-            ),
-            (
-                "plano-convex lens",
-                plane(0.0)?,
-                sphere(-50.0, 5.0)?,
-                circle(10.0)?,
-            ),
-            (
-                "cylindric lens",
-                Face::new(
-                    SurfaceShape::Cylinder(Cylinder::new(millimeter!(40.0))?),
-                    Isometry::identity(),
-                ),
-                plane(5.0)?,
-                circle(10.0)?,
-            ),
-            (
-                "wedge",
-                plane(0.0)?,
-                Face::new(
-                    SurfaceShape::Plane,
-                    Isometry::new(millimeter!(0.0, 0.0, 5.0), degree!(8.0, 0.0, 0.0))?,
-                ),
-                circle(8.0)?,
-            ),
-            ("lens over an L", sphere(60.0, 0.0)?, plane(8.0)?, l_shape),
-            (
-                "plate with a bore",
-                plane(0.0)?,
-                plane(5.0)?,
-                bored(
-                    CircleShape::new(millimeter!(10.0))?,
-                    CircleShape::new(millimeter!(3.0))?,
-                )?,
-            ),
-            (
-                "lens with a square bore",
-                sphere(50.0, 0.0)?,
-                sphere(-50.0, 6.0)?,
-                bored(CircleShape::new(millimeter!(10.0))?, rectangle(3.0, 3.0)?)?,
-            ),
-            (
-                "plate with a tilted bore",
-                plane(0.0)?,
-                plane(5.0)?,
-                tilted_bore(degree!(0.0), degree!(30.0))?,
-            ),
-            (
-                "lens with a tilted bore",
-                sphere(50.0, 0.0)?,
-                sphere(-50.0, 6.0)?,
-                tilted_bore(degree!(15.0), degree!(-10.0))?,
-            ),
-        ];
-        shapes
-            .into_iter()
-            .map(|(name, front, rear, outline)| {
-                Ok((name, body_between(front, rear, outline, *node_frame)?))
-            })
-            .collect()
-    }
-    /// Quantize a point, so that a corner reached through two different faces hashes alike.
-    // Picometers of a body measured in millimeters: nowhere near the range of an i64.
-    #[allow(clippy::cast_possible_truncation)]
-    fn vertex_key(point: &Point3<Length>) -> [i64; 3] {
-        [point.x, point.y, point.z].map(|coordinate| (coordinate.value * 1e12).round() as i64)
-    }
-    /// Stepping off a face along its normal has to leave the body, and stepping the other way has
-    /// to stay in it. That pins down both where the faces lie and which way they face.
-    ///
-    /// The step starts a hair inside a triangle rather than on its very corner. Where two walls
-    /// meet in a corner pointing into the body, as in a square bore, a step from the corner along
-    /// the normal of one wall runs along the other, and rounding would decide which side it is on.
-    #[test]
-    fn every_face_of_a_body_points_out_of_it() -> OpmResult<()> {
-        /// How far towards the center of its triangle a step starts, as a fraction of the way.
-        const INTO_THE_TRIANGLE: f64 = 1e-3;
-        for node_frame in [Isometry::identity(), somewhere_else()?] {
-            for (name, body) in volumes(&node_frame)? {
-                let rim = rim_points(body.rim().outline())?;
-                let meshes = mesh_of(&body)?;
-                // front, rear, then the lateral face, which bounds nothing a step could land in
-                for (index, face) in meshes.iter().enumerate() {
-                    let bounds_the_body = index < 2;
-                    for triangle in face.triangles() {
-                        let corners = triangle.map(|index| face.points()[index as usize]);
-                        let to_the_center = |corner: Point3<Length>| {
-                            ((corners[0] - corner) + (corners[1] - corner) + (corners[2] - corner))
-                                .map(|c| c / 3.)
-                        };
-                        for (index, corner) in
-                            triangle.map(|index| index as usize).iter().zip(corners)
-                        {
-                            let from =
-                                corner + to_the_center(corner).map(|c| c * INTO_THE_TRIANGLE);
-                            let outwards = face.normals()[*index];
-                            let step = |sign: f64| {
-                                Point3::new(
-                                    from.x + meter!(sign * STEP * outwards.x),
-                                    from.y + meter!(sign * STEP * outwards.y),
-                                    from.z + meter!(sign * STEP * outwards.z),
-                                )
-                            };
-                            assert!(
-                                !body.contains(&step(1.0)),
-                                "a point just outside the {name} was taken for being in it"
-                            );
-                            // Stepping the other way has to land inside - except from the rim of
-                            // a bounding face, which lies on the edge of the profile too and would
-                            // leave it sideways on the slightest rounding.
-                            if bounds_the_body && *index >= rim {
-                                assert!(
-                                    body.contains(&step(-1.0)),
-                                    "a point just inside the {name} was taken for being outside it"
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-    /// A solid has no holes and no loose sheets: once the corners the three faces share are
-    /// recognized as the same, every edge is shared by exactly two triangles.
-    #[test]
-    fn the_mesh_of_a_body_is_closed() -> OpmResult<()> {
-        for node_frame in [Isometry::identity(), somewhere_else()?] {
-            for (name, body) in volumes(&node_frame)? {
-                let meshes = mesh_of(&body)?;
-                assert_eq!(meshes.len(), 3, "the {name} is not drawn as three faces");
-                let mut edges = HashMap::<[[i64; 3]; 2], usize>::new();
-                for face in &meshes {
-                    for triangle in face.triangles() {
-                        let corners =
-                            triangle.map(|index| vertex_key(&face.points()[index as usize]));
-                        for corner in 0..3 {
-                            let mut edge = [corners[corner], corners[(corner + 1) % 3]];
-                            edge.sort_unstable();
-                            *edges.entry(edge).or_default() += 1;
-                        }
-                    }
-                }
-                assert!(!edges.is_empty(), "the {name} was not meshed at all");
-                for (edge, shared_by) in &edges {
-                    assert_eq!(
-                        *shared_by, 2,
-                        "an edge of the {name} belongs to {shared_by} triangles instead of two: \
-                         {edge:?}"
-                    );
-                }
-            }
-        }
-        Ok(())
-    }
-    /// The rim of a circle is a polygon only because it was sampled into one, so the lateral face
-    /// is rounded over it - while a real corner keeps both of its normals and stays sharp.
-    #[test]
-    fn the_lateral_face_rounds_curves_but_keeps_corners() -> OpmResult<()> {
-        let circle = || CircleShape::new(millimeter!(10.0));
-        let l_shape = || PolygonShape::new(l_shape_corners());
-        for (name, outline, corners) in [
-            ("circle", Outline::new(circle()?, None)?, 0),
-            ("rectangle", Outline::new(rectangle(20.0, 8.0)?, None)?, 4),
-            ("L", Outline::new(l_shape()?, None)?, 6),
-            (
-                "circle with a bore",
-                bored(circle()?, CircleShape::new(millimeter!(3.0))?)?,
-                0,
-            ),
-            (
-                "rectangle with a square bore",
-                bored(rectangle(20.0, 8.0)?, rectangle(3.0, 3.0)?)?,
-                8,
-            ),
-        ] {
-            let rim = rim_points(&outline)?;
-            let (front, rear) = plate_faces(millimeter!(5.0))?;
-            let body = body_between(front, rear, outline, Isometry::identity())?;
-            // One pair of points per rim position, and a second pair at every corner so that the
-            // two sides meeting there keep their own normals.
-            assert_eq!(
-                mesh_of(&body)?[2].points().len(),
-                2 * (rim + corners),
-                "the lateral face of the {name} was not creased where it should be"
-            );
-        }
-        Ok(())
-    }
-    /// Two faces curving into each other steeply enough meet before the rim is reached, leaving no
-    /// body out there at all - a lens ground thinner than its own sag.
-    #[test]
-    fn a_body_whose_faces_cross_cannot_be_meshed() -> OpmResult<()> {
-        let too_thin = body_between(
-            sphere_face(millimeter!(20.0), millimeter!(0.0))?,
-            sphere_face(millimeter!(-20.0), millimeter!(0.5))?,
-            circular_cross_section(millimeter!(10.0))?,
-            Isometry::identity(),
-        )?;
-        let error = mesh_of(&too_thin).unwrap_err();
-        assert!(error.to_string().contains("cross"), "{error}");
-        Ok(())
-    }
-    /// The tightest a body can be without its faces crossing: two hemispheres meeting exactly at
-    /// the rim, center thickness equal to twice the sag (25 mm each). Geometrically this is a
-    /// complete ball, not an error, so it pins down [`SURFACE_TOUCHING_TOLERANCE`] the way
-    /// `surface::test_curved_local_z` pins down the single-surface tolerance it complements -
-    /// mirrored at the node level by `nodes::lens::test::a_hemisphere_lens_can_be_meshed`.
-    #[test]
-    fn two_hemispheres_meeting_exactly_at_the_rim_are_not_a_crossing() -> OpmResult<()> {
-        let ball = body_between(
-            sphere_face(millimeter!(25.0), millimeter!(0.0))?,
-            sphere_face(millimeter!(-25.0), millimeter!(50.0))?,
-            circular_cross_section(millimeter!(25.0))?,
-            Isometry::identity(),
-        )?;
-        mesh_of(&ball)?;
         Ok(())
     }
 }

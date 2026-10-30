@@ -27,8 +27,7 @@ use crate::{
     core_optics::{optic_surface::OpticSurface, surface_effect::SurfaceEffect},
     error::{OpmResult, OpossumError},
     geometry::{
-        Assembly, Extruded, Face, FaceIndex, FacePatch, ParametricSolid, Rim, SurfaceShape,
-        body::Body, face::SurfacePlacement,
+        Assembly, Extruded, Face, FaceIndex, ParametricSolid, Rim, SurfaceShape, body::Body,
     },
     light::{Ray, Rays, rays::ReflectedPart},
     material::Material,
@@ -521,7 +520,8 @@ impl SurfaceHit {
 ///
 /// The faces of a geometry are numbered. What a face means, for instance which one light enters
 /// through, is not decided here but by the node using the geometry. Every kind answers each
-/// question itself.
+/// question itself. A new kind is also drawn by `opossum_scene`, whose dispatch over [`Geometry`]
+/// stops compiling until it is.
 pub trait GeometryKind {
     /// Return the optic surface of the face with the given number.
     ///
@@ -594,29 +594,6 @@ pub trait GeometryKind {
     ///
     /// * `by` - the frame this geometry is stated in, given in the frame it is moved to.
     fn move_by(&mut self, by: &Isometry);
-    /// Return triangle meshes of the surfaces that bound this geometry, to draw it.
-    ///
-    /// Each mesh is one patch of surface: a face laid over the outline it ends at, or the lateral
-    /// face closing a body between two faces. Every patch carries the number of the face it lies
-    /// on; the lateral face has none. Patches do not share points, so the hard edge where two of
-    /// them meet stays hard. Every patch faces out of a body; a single surface faces along the +z
-    /// of its face.
-    ///
-    /// # Arguments
-    ///
-    /// * `segments` - the number of points to sample the rim of an outline with.
-    /// * `unbounded` - the outline to draw a face over that has no edge of its own, such as an
-    ///   unbounded surface; a face is endless, but a drawing is not.
-    ///
-    /// # Returns
-    ///
-    /// The meshed patches, in the frame the geometry is stated in.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if an outline cannot be triangulated, if a face cannot be
-    /// laid over it or if this kind of geometry cannot be meshed yet.
-    fn mesh(&self, segments: usize, unbounded: &Outline) -> OpmResult<Vec<FacePatch>>;
 }
 
 /// A single surface without thickness.
@@ -740,25 +717,6 @@ impl GeometryKind for SurfaceGeometry {
         self.surface.move_by(by);
         self.extent.move_by(by);
     }
-    /// The face is laid over the outline of its rim, measured along the axis of the rim, with a
-    /// bore where it meets the face; an open surface has no rim and is drawn over the given
-    /// outline around its own vertex.
-    fn mesh(&self, segments: usize, unbounded: &Outline) -> OpmResult<Vec<FacePatch>> {
-        let (outline, frame) = match &self.extent {
-            SurfaceExtent::Edge(rim) | SurfaceExtent::Window(rim) => (rim.outline(), *rim.frame()),
-            SurfaceExtent::Open => (unbounded, *self.surface.face().frame()),
-        };
-        let face = self.surface.face();
-        let at = SurfacePlacement::new(face, &frame)?;
-        let mesh = face.mesh_over(
-            &outline.triangulate_on(segments, |position| Ok(at.above(&position)?.0.z))?,
-            &frame,
-        )?;
-        Ok(vec![FacePatch {
-            face: Some(Self::FACE),
-            mesh: mesh.transformed(&frame),
-        }])
-    }
 }
 
 #[cfg(test)]
@@ -780,8 +738,8 @@ mod test {
         utils::test_helper::helper::check_logs,
     };
     use approx::assert_abs_diff_eq;
+    use nalgebra::Vector3;
     use nalgebra::vector;
-    use nalgebra::{Point2, Vector3};
     use uom::si::{energy::joule, f64::Energy, length::millimeter};
 
     fn circle() -> OpmResult<Outline> {
@@ -1319,85 +1277,6 @@ mod test {
             ReflectedPart::Branch,
             MissedSurfaceStrategy::Stop,
         )
-    }
-    /// The number of points the rim of an outline is sampled with in the mesh tests.
-    const MESH_SEGMENTS: usize = 24;
-
-    /// Check that a surface was drawn as one patch on its face, reaching `reach` millimeter around
-    /// the z axis of `frame` and no further, and facing along the +z of its face.
-    fn check_drawn(
-        geometry: &Geometry,
-        meshes: &[FacePatch],
-        frame: &Isometry,
-        reach: f64,
-    ) -> OpmResult<()> {
-        let [FacePatch { face, mesh }] = meshes else {
-            return Err(OpossumError::Other(format!(
-                "a surface was drawn as {} patches",
-                meshes.len()
-            )));
-        };
-        assert_eq!(
-            *face,
-            Some(SurfaceGeometry::FACE),
-            "the patch of a surface lies on its one face"
-        );
-        let face = geometry
-            .face(SurfaceGeometry::FACE)
-            .ok_or_else(|| OpossumError::Other("the surface has no face".into()))?;
-        let mut farthest = 0.0_f64;
-        for point in mesh.points() {
-            let around_axis = frame.inverse_transform_point(point);
-            let off_axis = around_axis
-                .x
-                .get::<millimeter>()
-                .hypot(around_axis.y.get::<millimeter>());
-            assert!(
-                off_axis <= reach + 1e-9,
-                "a point lies {off_axis} mm off axis"
-            );
-            farthest = farthest.max(off_axis);
-            let on_face = face.frame().inverse_transform_point(point);
-            let sag = face
-                .surface()
-                .local_z_at(&Point2::new(on_face.x, on_face.y))
-                .ok_or_else(|| OpossumError::Other("the face misses a drawn point".into()))?;
-            assert_abs_diff_eq!(on_face.z.value, sag.value, epsilon = 1e-12);
-        }
-        assert_abs_diff_eq!(farthest, reach, epsilon = 1e-9);
-        let up = face.frame().transform_vector_f64(&Vector3::z());
-        assert!(mesh.normals().iter().all(|normal| normal.dot(&up) > 0.0));
-        Ok(())
-    }
-    /// An off-axis mirror is cut from its parent surface around the axis of its rim, not around
-    /// its vertex: here a parabola whose vertex lies 50 mm beside the rim. A detector draws its
-    /// window the same way.
-    #[test]
-    fn a_bounded_surface_is_drawn_over_its_rim_around_the_axis_of_the_rim() -> OpmResult<()> {
-        let axis = Isometry::new_translation(millimeter!(50.0, 0.0, 0.0))?;
-        let beside = Isometry::new_translation(millimeter!(-50.0, 0.0, 0.0))?;
-        let parabola = SurfaceShape::Parabola(Parabola::new(millimeter!(100.0))?);
-        let mirror = Geometry::surface(axis, parabola, beside, Some(circle()?))?;
-        let mut detector = Geometry::detector(SurfaceShape::Plane, Some(circle()?))?;
-        detector.move_by(&axis);
-        // the outline handed in is for unbounded surfaces only
-        let unused = Outline::new(CircleShape::new(millimeter!(1.0))?, None)?;
-        for geometry in [mirror, detector] {
-            let meshes = geometry.kind().mesh(MESH_SEGMENTS, &unused)?;
-            check_drawn(&geometry, &meshes, &axis, 12.5)?;
-        }
-        Ok(())
-    }
-    /// An unbounded surface has no edge to end the drawing at, so it is drawn over the outline it
-    /// is given, around its own vertex - even where that stands across the axis of the node.
-    #[test]
-    fn an_unbounded_surface_is_drawn_over_the_given_outline_around_its_vertex() -> OpmResult<()> {
-        let axis = Isometry::new(millimeter!(3.0, 0.0, 0.0), degree!(0.0, 90.0, 0.0))?;
-        let vertex = Isometry::new_along_z(millimeter!(20.0))?;
-        let geometry = Geometry::surface(axis, SurfaceShape::Plane, vertex, None)?;
-        let drawing = Outline::new(CircleShape::new(millimeter!(5.0))?, None)?;
-        let meshes = geometry.kind().mesh(MESH_SEGMENTS, &drawing)?;
-        check_drawn(&geometry, &meshes, &axis.append(&vertex), 5.0)
     }
     #[test]
     fn refraction_of_an_empty_bundle() -> OpmResult<()> {

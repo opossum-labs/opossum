@@ -14,7 +14,6 @@
 //! volume bounded by such faces. It is the domain volumetric quantities are defined on.
 
 mod face;
-mod mesh;
 mod node_geometry;
 mod rim;
 mod solid;
@@ -23,7 +22,6 @@ mod surface;
 pub mod body;
 
 pub use face::{Face, FaceIndex, SurfacePlacement};
-pub use mesh::{FacePatch, SurfaceMesh};
 pub use node_geometry::{Geometry, GeometryKind, SurfaceExtent, SurfaceGeometry, SurfaceHit};
 pub use rim::Rim;
 pub use solid::{Assembly, Extruded, FaceId, Interface, ParametricSolid, Part, Side};

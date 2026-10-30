@@ -6,12 +6,11 @@ use uom::si::f64::Length;
 
 use super::{Side, face_hits};
 use crate::{
-    apertures::Outline,
     core_optics::optic_surface::OpticSurface,
     error::{OpmResult, OpossumError},
     gain::Inversion,
     geometry::{
-        Face, FaceIndex, FacePatch, GeometryKind, Rim,
+        Face, FaceIndex, GeometryKind, Rim,
         body::{Body, BoundingBox},
     },
     light::Ray,
@@ -124,17 +123,6 @@ impl GeometryKind for ParametricSolid {
         for (surface, _) in &mut self.faces {
             surface.move_by(by);
         }
-    }
-    /// The faces of a parametric solid end where they meet each other, which no outline states, so
-    /// it cannot be meshed yet.
-    ///
-    /// # Errors
-    ///
-    /// This function always returns an error.
-    fn mesh(&self, _segments: usize, _unbounded: &Outline) -> OpmResult<Vec<FacePatch>> {
-        Err(OpossumError::Other(
-            "a parametric solid cannot be meshed yet".into(),
-        ))
     }
 }
 

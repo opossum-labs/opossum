@@ -495,7 +495,7 @@ impl Outline {
     /// lies in the plane. The bore runs along its own axis (see [`Bore`]), so a tilted bore meets
     /// the surface beside where it crosses the plane. Every rim keeps the number and the order of
     /// its points whatever the surface, which is what lets the two faces of a body be joined along
-    /// them (see [`Outline::rim_axes`]).
+    /// them.
     ///
     /// # Arguments
     ///
@@ -534,15 +534,6 @@ impl Outline {
                         .is_ok_and(|above| bore.contains_at(Point3::new(point.x, point.y, above)))
                 })
         })
-    }
-    /// The direction each rim of this outline runs along through a body, in the order
-    /// [`Outline::triangulate_on`] lays out its rims: the edge along the axis of the component,
-    /// the bore along its own.
-    #[must_use]
-    pub(crate) fn rim_axes(&self) -> Vec<Vector3<f64>> {
-        std::iter::once(Vector3::z())
-            .chain(self.bore.as_ref().map(Bore::axis))
-            .collect()
     }
     /// Check that the edge and the bore bound a region, that the bore is tilted by less than 90°
     /// and that it crosses the plane of the outline within the edge without touching it.

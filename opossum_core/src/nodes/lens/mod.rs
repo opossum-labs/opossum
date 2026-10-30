@@ -646,44 +646,4 @@ mod test {
         }
         Ok(())
     }
-
-    /// A lens whose curvature radius exactly equals its clear aperture radius is a hemisphere - the
-    /// tightest a spherical surface can be without folding back past its own equator. Geometrically
-    /// this is exactly valid (the sag at the rim is the radius itself, the surface just reaches flat
-    /// tangent to the aperture plane there), so this pins down whether it can actually be meshed, or
-    /// whether the floating-point boundary in `curved_local_z` rejects it as "not reaching as far
-    /// out as" the aperture. See `known_issue_update_surfaces.md`'s sibling investigation notes.
-    #[test]
-    fn a_hemisphere_lens_can_be_meshed() -> OpmResult<()> {
-        let hemisphere_radius = millimeter!(25.0);
-        let aperture: Proptype = OpticShape::from(CircleShape::new(hemisphere_radius)?).into();
-
-        // Plano-convex: one flat face, one exact hemisphere - the centre thickness has to reach
-        // that one sag (25 mm) or the hemisphere's rim would poke out past the flat face.
-        let mut plano_convex = Lens::new(
-            "plano-convex hemisphere",
-            millimeter!(f64::INFINITY),
-            -hemisphere_radius,
-            hemisphere_radius,
-            RefrIndexConst::new(1.5)?,
-        )?;
-        plano_convex
-            .node_attr
-            .set_property(OPTIC_SHAPE, aperture.clone())?;
-        plano_convex.geometry_mesh(64)?;
-
-        // Bi-convex: both faces an exact hemisphere, so the centre thickness must reach both sags
-        // (25 mm each) or the two surfaces would cross inside the lens.
-        let mut bi_convex = Lens::new(
-            "bi-convex hemisphere",
-            hemisphere_radius,
-            -hemisphere_radius,
-            millimeter!(50.0),
-            RefrIndexConst::new(1.5)?,
-        )?;
-        bi_convex.node_attr.set_property(OPTIC_SHAPE, aperture)?;
-        bi_convex.geometry_mesh(64)?;
-
-        Ok(())
-    }
 }

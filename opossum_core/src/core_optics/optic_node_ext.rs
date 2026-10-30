@@ -10,10 +10,7 @@ use crate::{
         surface_effect::{Refraction, SurfaceEffect},
     },
     error::{OpmResult, OpossumError},
-    geometry::{
-        FaceIndex, FacePatch, Geometry,
-        body::{OPTIC_SHAPE, default_optic_shape},
-    },
+    geometry::{FaceIndex, Geometry, body::OPTIC_SHAPE},
     light::{LightData, LightRays, LightResult, Rays, rays::ReflectedPart},
     material::{MATERIAL, Material},
     nodes::fluence_detector::Fluence,
@@ -64,24 +61,6 @@ pub trait OpticNodeExt {
     ///
     /// This function returns an error if the node has no [`MATERIAL`] property holding a material.
     fn material(&self) -> OpmResult<AssetRef<Material>>;
-
-    /// Return triangle meshes of this node's geometry, each with the face it lies on, to draw it
-    /// (see [`GeometryKind::mesh`](crate::geometry::GeometryKind::mesh)).
-    ///
-    /// The geometry is derived from the node's properties as they are now, so the meshes follow a
-    /// changed property even if the node's surfaces have not been rebuilt since. They are stated
-    /// in the node's own frame, so moving the node leaves them untouched. A face without an edge of
-    /// its own is drawn over the default optic shape.
-    ///
-    /// # Arguments
-    ///
-    /// * `segments` - the number of points to sample the rim of an outline with.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the node has no geometry, if it cannot be derived or if it
-    /// cannot be meshed.
-    fn geometry_mesh(&self, segments: usize) -> OpmResult<Vec<FacePatch>>;
 
     /// Set local alignment (decenter, tilt) of an optical node and update its optical surfaces.
     ///
@@ -465,20 +444,6 @@ impl<T: ?Sized + crate::core_optics::node_attr::HasNodeAttr + OpticNode> OpticNo
         Ok(material.clone())
     }
 
-    fn geometry_mesh(&self, segments: usize) -> OpmResult<Vec<FacePatch>> {
-        let Some(geometry) = self.create_geometry()? else {
-            return Err(OpossumError::Other(format!(
-                "node '{}' has no geometry to draw",
-                self.name()
-            )));
-        };
-        let default_shape = default_optic_shape();
-        let unbounded = default_shape.outline().ok_or_else(|| {
-            OpossumError::Other("the default optic shape bounds no region".into())
-        })?;
-        geometry.kind().mesh(segments, unbounded)
-    }
-
     fn set_alignment(
         &mut self,
         decenter: nalgebra::Point3<Length>,
@@ -855,23 +820,21 @@ mod test {
     use crate::{
         J_per_cm2,
         analyzers::RayTraceConfig,
-        apertures::{Bore, CircleShape, OpticShape},
+        apertures::OpticShape,
         coatings::SplittingConfigBuilder,
         core_optics::{
             node_attr::{HasNodeAttr, NodePositioning},
             optic_node::LIDT,
         },
         degree,
-        geometry::{Extruded, SurfaceGeometry, SurfaceMesh},
+        geometry::{Extruded, SurfaceGeometry},
         joule,
         light::Ray,
         millimeter, nanometer,
-        nodes::{BeamSplitter, BoredMirror, Dummy, Lens, NodeGroup, ParabolicMirror, ThinMirror},
+        nodes::{BeamSplitter, Dummy, Lens, ThinMirror},
         properties::Properties,
     };
-    use approx::{assert_abs_diff_eq, assert_relative_eq};
-    use nalgebra::Point2;
-    use std::f64::consts::PI;
+    use approx::assert_abs_diff_eq;
 
     #[test]
     fn effective_node_iso_and_clear_alignment() -> OpmResult<()> {
@@ -1113,167 +1076,5 @@ mod test {
         );
         assert!(node.get_optic_surface("output_2").is_none());
         assert!(node.get_optic_surface("output_1").is_some());
-    }
-    /// A node is meshed from its geometry: a group has none of its own and so nothing to mesh, and
-    /// the unbounded plane of a dummy is drawn as far as the default optic shape reaches.
-    #[test]
-    fn a_node_is_meshed_from_its_geometry() -> OpmResult<()> {
-        let error = NodeGroup::default().geometry_mesh(16).unwrap_err();
-        assert!(error.to_string().contains("no geometry"), "{error}");
-        let meshes = Dummy::default().geometry_mesh(16)?;
-        assert_eq!(meshes.len(), 1);
-        assert_eq!(meshes[0].face, Some(SurfaceGeometry::FACE));
-        let farthest = meshes[0]
-            .mesh
-            .points()
-            .iter()
-            .map(|point| point.x.value.hypot(point.y.value))
-            .fold(0.0, f64::max);
-        let reach = default_optic_shape()
-            .outline()
-            .map(|outline| outline.transversal_reach().value)
-            .ok_or_else(|| OpossumError::Other("the default optic shape is unbounded".into()))?;
-        assert_abs_diff_eq!(farthest, reach, epsilon = 1e-12);
-        Ok(())
-    }
-    /// The one patch a surface node is drawn as.
-    fn surface_mesh(node: &impl OpticNode, segments: usize) -> OpmResult<SurfaceMesh> {
-        let mut meshes = node.geometry_mesh(segments)?;
-        assert_eq!(meshes.len(), 1, "a surface is drawn as one patch");
-        meshes
-            .pop()
-            .map(|patch| patch.mesh)
-            .ok_or_else(|| OpossumError::Other("the surface was not meshed".into()))
-    }
-    /// A node in its default state — a flat mirror over the default optic shape — can be meshed at
-    /// all, and the mesh actually covers ground rather than coming back empty.
-    #[test]
-    fn a_surface_node_can_be_meshed_in_its_default_state() -> OpmResult<()> {
-        let mut mirror = ThinMirror::default();
-        mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
-        let mesh = surface_mesh(&mirror, 32)?;
-        assert!(
-            !mesh.triangles().is_empty(),
-            "a mirror's default surface came out without any triangles"
-        );
-        assert_eq!(
-            mesh.points().len(),
-            mesh.normals().len(),
-            "every meshed point needs a normal to shade or hit-test it"
-        );
-        Ok(())
-    }
-    /// The mesh is drawn from the node's properties as they are now, exactly like a volume node's
-    /// body: a curvature set without rebuilding the surfaces already bends it. A sphere of radius R
-    /// rises by R - sqrt(R² - r²) at the 12.5 mm rim of the default optic shape.
-    #[test]
-    fn the_mesh_follows_a_changed_property_without_a_rebuild() -> OpmResult<()> {
-        let mut mirror = ThinMirror::default();
-        mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
-        let radius = 100.0_f64;
-        mirror.set_property("curvature", Proptype::Curvature(millimeter!(radius)))?;
-        let mesh = surface_mesh(&mirror, 32)?;
-        let rise = mesh
-            .points()
-            .iter()
-            .map(|point| point.z.value.abs())
-            .fold(0.0, f64::max);
-        assert_abs_diff_eq!(
-            rise,
-            millimeter!(radius - radius.mul_add(radius, -12.5 * 12.5).sqrt()).value,
-            epsilon = 1e-9
-        );
-        Ok(())
-    }
-    /// The mesh lives in the node's own frame, exactly like a volume node's - moving the node must
-    /// not bake a translation into the points themselves.
-    #[test]
-    fn the_mesh_does_not_depend_on_where_the_node_is_placed() -> OpmResult<()> {
-        let at_origin = {
-            let mut mirror = ThinMirror::default();
-            mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
-            surface_mesh(&mirror, 16)?
-        };
-        let far_away = {
-            let mut mirror = ThinMirror::default();
-            mirror.set_positioning(NodePositioning::Absolute(Isometry::new(
-                millimeter!(0.0, 0.0, 500.0),
-                degree!(0.0, 0.0, 0.0),
-            )?))?;
-            surface_mesh(&mirror, 16)?
-        };
-        assert_eq!(
-            at_origin.points(),
-            far_away.points(),
-            "the surface mesh must be independent of the node's placement"
-        );
-        Ok(())
-    }
-    /// A bored mirror is meshed around its bore: what is drawn of its mirrored face covers the
-    /// ring it is, not the disc it would be without the bore.
-    #[test]
-    fn a_bored_mirror_is_meshed_around_its_bore() -> OpmResult<()> {
-        let (radius, bore) = (millimeter!(12.5), millimeter!(4.0));
-        let ring = OpticShape::Bounded(Outline::new(
-            CircleShape::new(radius)?,
-            Some(Bore::new(
-                CircleShape::new(bore)?,
-                millimeter!(0., 0.),
-                degree!(0.),
-            )),
-        )?);
-        let mut mirror = BoredMirror::default();
-        mirror.set_property(OPTIC_SHAPE, ring.into())?;
-        mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
-        let mesh = mirror
-            .geometry_mesh(64)?
-            .into_iter()
-            .find(|patch| patch.face == Some(Extruded::FRONT))
-            .map(|patch| patch.mesh)
-            .ok_or_else(|| OpossumError::Other("the mirrored face was not meshed".into()))?;
-        let covered = mesh
-            .triangles()
-            .iter()
-            .map(|triangle| {
-                let [a, b, c] =
-                    triangle.map(|index| mesh.points()[index as usize].map(|c| c.value));
-                (b - a).cross(&(c - a)).norm() / 2.
-            })
-            .sum::<f64>();
-        let ring_area = PI * (radius.value.powi(2) - bore.value.powi(2));
-        assert_relative_eq!(covered, ring_area, max_relative = 1e-2);
-        Ok(())
-    }
-    /// The mesh of an off-axis parabola lies on the mirror, every normal standing on it, although
-    /// the optic shape is measured across the axis of the parent parabola rather than the mirror's
-    /// own.
-    #[test]
-    fn the_mesh_of_an_off_axis_parabola_lies_on_the_mirror() -> OpmResult<()> {
-        let mut parabola =
-            ParabolicMirror::new_with_off_axis_x("oap", millimeter!(100.0), true, degree!(90.0))?;
-        let optic_shape =
-            OpticShape::Bounded(Outline::new(CircleShape::new(millimeter!(25.0))?, None)?);
-        parabola.set_property(OPTIC_SHAPE, optic_shape.into())?;
-        let mesh = surface_mesh(&parabola, 32)?;
-        let geometry = parabola
-            .create_geometry()?
-            .ok_or_else(|| OpossumError::Other("a mirror has a geometry".into()))?;
-        let face = geometry
-            .face(SurfaceGeometry::FACE)
-            .ok_or_else(|| OpossumError::Other("a mirror has a face".into()))?;
-        for (point, normal) in mesh.points().iter().zip(mesh.normals()) {
-            assert!(
-                face.is_on_vertex_sheet(point),
-                "{point:?} does not lie on the mirror"
-            );
-            let on_surface = face.frame().inverse_transform_point(point);
-            let surface_normal = face
-                .surface()
-                .local_normal_at(&Point2::new(on_surface.x, on_surface.y))
-                .expect("the mirror reaches a point it was meshed at");
-            let surface_normal = face.frame().transform_vector_f64(&surface_normal);
-            assert_abs_diff_eq!(normal.dot(&surface_normal).abs(), 1.0, epsilon = 1e-9);
-        }
-        Ok(())
     }
 }

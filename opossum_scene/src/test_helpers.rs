@@ -1,12 +1,11 @@
 //! Models and readers the tests of every module share.
 
-use nalgebra::{Point2, Point3, Vector3};
+use nalgebra::Point2;
 use opossum_core::{
     analyzers::{AnalyzerType, RayTraceConfig},
     core_optics::OpticNode,
     degree,
     error::OpmResult,
-    geometry::FacePatch as CoreFacePatch,
     light::lightdata::ray_data_builder::RayDataBuilder,
     material::default_reference_wavelength,
     millimeter,
@@ -18,7 +17,7 @@ use opossum_core::{
 };
 use uom::si::f64::Length;
 
-use crate::{mesh::FacePatch, scene_glb};
+use crate::scene_glb;
 
 /// A model holding one of everything: three components that enclose a volume, two that are a
 /// single surface (a mirror and a detector), a source port that is neither, and a reference,
@@ -104,73 +103,6 @@ pub fn two_lenses(spacing: Length) -> OpmResult<OpmDocument> {
 /// not depend on where a node sits.
 pub fn somewhere_else() -> OpmResult<Isometry> {
     Isometry::new(millimeter!(12.0, -4.0, 80.0), degree!(3.0, -7.0, 20.0))
-}
-
-/// Transitional: check that the scene meshed something bit for bit as the core does, or failed with
-/// the same error.
-///
-/// Bits rather than values: `-0.0 == 0.0`, but the manifest hashes the bytes of a mesh.
-pub fn assert_meshed_as_the_core_does(
-    name: &str,
-    core: OpmResult<Vec<CoreFacePatch>>,
-    scene: OpmResult<Vec<FacePatch>>,
-) {
-    let point_bits = |p: &Point3<Length>| {
-        [
-            p.x.value.to_bits(),
-            p.y.value.to_bits(),
-            p.z.value.to_bits(),
-        ]
-    };
-    let normal_bits = |n: &Vector3<f64>| [n.x.to_bits(), n.y.to_bits(), n.z.to_bits()];
-    match (core, scene) {
-        (Ok(core), Ok(scene)) => {
-            assert_eq!(
-                core.len(),
-                scene.len(),
-                "the {name} has another patch count"
-            );
-            for (core, scene) in core.iter().zip(&scene) {
-                assert_eq!(
-                    core.face, scene.face,
-                    "a patch of the {name} lies on another face"
-                );
-                assert_eq!(
-                    core.mesh.triangles(),
-                    scene.mesh.triangles(),
-                    "a patch of the {name} has other triangles"
-                );
-                assert!(
-                    core.mesh.points().iter().map(point_bits).eq(scene
-                        .mesh
-                        .points()
-                        .iter()
-                        .map(point_bits)),
-                    "a patch of the {name} has other points"
-                );
-                assert!(
-                    core.mesh.normals().iter().map(normal_bits).eq(scene
-                        .mesh
-                        .normals()
-                        .iter()
-                        .map(normal_bits)),
-                    "a patch of the {name} has other normals"
-                );
-            }
-        }
-        (Err(core), Err(scene)) => {
-            assert_eq!(
-                core.to_string(),
-                scene.to_string(),
-                "the {name} failed otherwise"
-            );
-        }
-        (core, scene) => panic!(
-            "the core meshed the {name} as {:?}, the scene as {:?}",
-            core.map(|patches| patches.len()),
-            scene.map(|patches| patches.len())
-        ),
-    }
 }
 
 /// The corners of an L, 20 mm along each arm and 5 mm wide.

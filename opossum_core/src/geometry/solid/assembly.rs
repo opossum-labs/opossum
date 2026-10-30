@@ -6,12 +6,11 @@ use uom::si::f64::Length;
 
 use super::Side;
 use crate::{
-    apertures::Outline,
     core_optics::optic_surface::OpticSurface,
     error::{OpmResult, OpossumError},
     gain::Inversion,
     geometry::{
-        FaceIndex, FacePatch, Geometry, GeometryKind, Rim,
+        FaceIndex, Geometry, GeometryKind, Rim,
         body::{Body, BoundingBox},
     },
     light::Ray,
@@ -257,29 +256,6 @@ impl GeometryKind for Assembly {
         for part in &mut self.parts {
             part.geometry.move_by(by);
         }
-    }
-    /// An assembly is drawn as its parts, part after part, each patch on the face its part's face
-    /// is numbered as in the assembly.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if a part cannot be meshed.
-    fn mesh(&self, segments: usize, unbounded: &Outline) -> OpmResult<Vec<FacePatch>> {
-        let mut patches = Vec::new();
-        let mut first_face = 0;
-        for part in &self.parts {
-            let kind = part.geometry.kind();
-            patches.extend(kind.mesh(segments, unbounded)?.into_iter().map(|patch| {
-                FacePatch {
-                    face: patch
-                        .face
-                        .map(|face| FaceIndex::new(first_face + usize::from(face))),
-                    ..patch
-                }
-            }));
-            first_face += kind.face_count();
-        }
-        Ok(patches)
     }
 }
 
@@ -881,32 +857,6 @@ mod test {
             surface.to_string().contains("enclose a volume"),
             "{surface}"
         );
-        Ok(())
-    }
-    /// An assembly is drawn as the patches of its parts one after the other, each where the
-    /// assembly places it and on the face the assembly numbers it as; a part that cannot be drawn
-    /// leaves the whole assembly undrawn.
-    #[test]
-    fn an_assembly_is_drawn_as_its_parts() -> OpmResult<()> {
-        let unbounded = circle()?;
-        let meshes = GeometryKind::mesh(&side_by_side()?, 16, &unbounded)?;
-        assert_eq!(meshes.len(), 6, "each lens is drawn as three patches");
-        let faces: Vec<_> = meshes.iter().map(|patch| patch.face).collect();
-        let face = |index| Some(FaceIndex::new(index));
-        assert_eq!(faces, [face(0), face(1), None, face(2), face(3), None]);
-        // The second lens sits 30 mm aside, the first one around the axis of the assembly.
-        for (patches, center) in [(&meshes[..3], 0.0), (&meshes[3..], 30.0)] {
-            for point in patches.iter().flat_map(|patch| patch.mesh.points()) {
-                let off_center =
-                    (point.x.get::<millimeter>() - center).hypot(point.y.get::<millimeter>());
-                assert!(
-                    off_center <= 12.5 + 1e-9,
-                    "a point lies {off_center} mm off its lens"
-                );
-            }
-        }
-        let error = GeometryKind::mesh(&cube()?, 16, &unbounded).unwrap_err();
-        assert!(error.to_string().contains("cannot be meshed"), "{error}");
         Ok(())
     }
 }

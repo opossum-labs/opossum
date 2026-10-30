@@ -59,16 +59,13 @@ impl Meshable for Geometry {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{
-        appearance::Appearance, components::unbounded_outline,
-        test_helpers::assert_meshed_as_the_core_does,
-    };
+    use crate::{appearance::Appearance, components::unbounded_outline};
     use approx::{assert_abs_diff_eq, assert_relative_eq};
     use nalgebra::Point2;
     use opossum_core::{
         analyzers::Analyzable,
         apertures::{Bore, CircleShape, OpticShape, OutlineShape},
-        core_optics::{NodeAttrExt, OpticNode, OpticNodeExt, node_attr::NodePositioning},
+        core_optics::{NodeAttrExt, OpticNode, node_attr::NodePositioning},
         degree,
         error::OpossumError,
         geometry::{Extruded, FaceIndex, SurfaceGeometry, body::OPTIC_SHAPE},
@@ -321,29 +318,6 @@ mod test {
                 "the patches of a {node_type} do not lie on exactly its faces"
             );
         }
-        Ok(())
-    }
-    /// Transitional: every node type that is drawn, and a bored mirror with a tilted bore, is
-    /// meshed bit for bit as the core does.
-    #[test]
-    fn every_node_is_meshed_as_the_core_does() -> OpmResult<()> {
-        for (node_type, _) in node_types() {
-            if Appearance::of_node_type(node_type)?.is_none() {
-                continue;
-            }
-            let node = create_node_ref(node_type)?;
-            assert_meshed_as_the_core_does(
-                node_type,
-                node.geometry_mesh(64),
-                node_patches(&*node, 64),
-            );
-        }
-        let tilted = bored_mirror(10.0, -5.0)?;
-        assert_meshed_as_the_core_does(
-            "bored mirror with a tilted bore",
-            tilted.geometry_mesh(64),
-            node_patches(&tilted, 64),
-        );
         Ok(())
     }
 }

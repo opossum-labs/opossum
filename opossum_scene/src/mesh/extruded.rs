@@ -99,10 +99,7 @@ impl Meshable for Extruded {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{
-        mesh::ring::RingPoints,
-        test_helpers::{assert_meshed_as_the_core_does, l_shape_corners, somewhere_else},
-    };
+    use crate::test_helpers::{l_shape_corners, somewhere_else};
     use nalgebra::Point3;
     use opossum_core::{
         apertures::{CircleShape, OutlineShape, PolygonShape, RectangleShape},
@@ -456,36 +453,6 @@ mod test {
             Isometry::identity(),
         )?;
         mesh_of(&ball)?;
-        Ok(())
-    }
-    /// Transitional: every body is meshed bit for bit as the core does, wherever its node sits,
-    /// and one whose faces cross is refused alike.
-    #[test]
-    fn a_body_is_meshed_as_the_core_does() -> OpmResult<()> {
-        for node_frame in [Isometry::identity(), somewhere_else()?] {
-            for (name, body) in volumes(&node_frame)? {
-                assert_meshed_as_the_core_does(
-                    name,
-                    GeometryKind::mesh(&body, SEGMENTS, body.rim().outline()),
-                    patches_of(&body),
-                );
-            }
-        }
-        let too_thin = too_thin()?;
-        assert_meshed_as_the_core_does(
-            "lens too thin for its sag",
-            GeometryKind::mesh(&too_thin, SEGMENTS, too_thin.rim().outline()),
-            patches_of(&too_thin),
-        );
-        // The rims the scene samples are the ones the core samples.
-        for (name, body) in volumes(&Isometry::identity())? {
-            let shape = body.rim().outline().shape();
-            assert_eq!(
-                shape.ring_points(SEGMENTS)?,
-                shape.outline_points(SEGMENTS)?,
-                "the rim of the {name}"
-            );
-        }
         Ok(())
     }
 }

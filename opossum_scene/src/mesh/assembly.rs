@@ -34,14 +34,10 @@ impl Meshable for Assembly {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::test_helpers::assert_meshed_as_the_core_does;
     use opossum_core::{
         apertures::CircleShape,
         degree,
-        geometry::{
-            Face, FaceId, Geometry, GeometryKind, Interface, ParametricSolid, Part, Side,
-            SurfaceShape,
-        },
+        geometry::{Face, FaceId, Geometry, Interface, ParametricSolid, Part, Side, SurfaceShape},
         material::Material,
         millimeter,
         refractive_index::RefrIndexConst,
@@ -148,20 +144,6 @@ mod test {
         }
         let error = Meshable::mesh(&cube()?, 16, &unbounded).unwrap_err();
         assert!(error.to_string().contains("cannot be meshed"), "{error}");
-        Ok(())
-    }
-    /// Transitional: an assembly is meshed bit for bit as the core does, and one with a part that
-    /// cannot be drawn is refused alike.
-    #[test]
-    fn an_assembly_is_meshed_as_the_core_does() -> OpmResult<()> {
-        let unbounded = circle()?;
-        for (name, assembly) in [("pair of lenses", side_by_side()?), ("cube", cube()?)] {
-            assert_meshed_as_the_core_does(
-                name,
-                GeometryKind::mesh(&assembly, 16, &unbounded),
-                Meshable::mesh(&assembly, 16, &unbounded),
-            );
-        }
         Ok(())
     }
 }
