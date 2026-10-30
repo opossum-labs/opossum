@@ -381,6 +381,22 @@ body {
     background-color: #4a4a4a;
 }
 
+/* The false colors the light is drawn in: the shortest wavelength, a bar of the colors, the longest. */
+.scene-view-spectrum {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: #d0d0d0;
+    font-size: 0.75rem;
+}
+
+.scene-view-spectrum-bar {
+    width: 80px;
+    height: 8px;
+    border-radius: 2px;
+}
+
 /* What was left out of the scene; a click lists it, and an entry goes to it in the graph. */
 .scene-view-skipped {
     color: #f0a500;

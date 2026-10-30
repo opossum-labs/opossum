@@ -7,7 +7,7 @@ use dioxus_glb_viewer::{
     GlbObject, GlbViewer, PickEvent, ViewerEvent, ViewerOptions, use_glb_viewer_handle,
 };
 use opossum_core::types::api_types::{
-    AnalyzerItemDto, SceneAnalyzer, SceneManifest, SkippedSceneNode,
+    AnalyzerItemDto, SceneAnalyzer, SceneManifest, SceneSpectrum, SkippedSceneNode,
 };
 
 use crate::{
@@ -61,6 +61,8 @@ pub fn SceneView() -> Element {
     // The analyzer the last fetch was placed after. The axis and the rays follow the same one, and
     // the status line names it.
     let mut drawn_after = use_signal(|| None::<SceneAnalyzer>);
+    // The false colors that analyzer's light is drawn in, for the legend; `None` for one wavelength.
+    let mut spectrum = use_signal(|| None::<SceneSpectrum>);
     let viewer_handle = use_glb_viewer_handle();
     let workspace_processor = use_coroutine_handle::<GraphsWorkspaceAction>();
     // The graph editor provides its workspace store to this whole subtree, so the 3D view can read
@@ -148,6 +150,7 @@ pub fn SceneView() -> Element {
                     let fetch = *fetches.peek() + 1;
                     fetches.set(fetch);
                     drawn_after.set(fetched.analyzer.clone());
+                    spectrum.set(fetched.spectrum.clone());
                     notice.set(fetched.notice.clone());
                     skipped.set(fetched.skipped.clone());
                     for s in &fetched.skipped {
@@ -254,6 +257,24 @@ pub fn SceneView() -> Element {
         }
     });
 
+    // The legend of the false colors, while the rays they color are shown: the shortest and longest
+    // wavelength, to a tenth of a nanometer, around a bar of the colors in between.
+    let legend = spectrum()
+        .filter(|_| SCENE_VIEW_CONTROLS.read().rays)
+        .map(|spectrum| {
+            let stops = spectrum
+                .colors
+                .iter()
+                .map(|[r, g, b]| format!("rgb({:.0} {:.0} {:.0})", r * 255., g * 255., b * 255.))
+                .collect::<Vec<_>>()
+                .join(", ");
+            (
+                (spectrum.shortest_nm * 10.).round() / 10.,
+                format!("background: linear-gradient(to right, {stops});"),
+                (spectrum.longest_nm * 10.).round() / 10.,
+            )
+        });
+
     rsx! {
         div {
             class: "scene-view",
@@ -348,6 +369,15 @@ pub fn SceneView() -> Element {
                             });
                         },
                         "{analyzer.name} \u{25be}"
+                    }
+                }
+                if let Some((shortest, bar, longest)) = legend {
+                    span {
+                        class: "scene-view-spectrum",
+                        title: "The light is drawn in false colors, from blue at the shortest wavelength of the sources to red at the longest.",
+                        "{shortest} nm"
+                        span { class: "scene-view-spectrum-bar", style: "{bar}" }
+                        "{longest} nm"
                     }
                 }
                 if let Some(text) = notice() {
