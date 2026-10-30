@@ -327,14 +327,14 @@ mod test {
              {opacity}: {material}"
         );
     }
-    /// A mirror is drawn as mirrored as its coating makes it: an opaque mirror by default, the pale
-    /// pane it is without a coating that reflects.
+    /// A mirror is drawn as mirrored as its coating makes it: fully metallic at the mirror's own
+    /// opacity by default, the pale pane it is without a coating that reflects.
     #[test]
     fn a_mirror_is_drawn_as_mirrored_as_its_coating_makes_it() -> OpmResult<()> {
         let mut mirror = ThinMirror::default();
         mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         for material in patch_materials(&mirror)? {
-            assert_drawn_as(&material, 1.0, 1.0);
+            assert_drawn_as(&material, 1.0, 0.6);
         }
         mirror.set_coating(SurfaceGeometry::FACE, &CoatingType::IdealAR)?;
         for material in patch_materials(&mirror)? {
@@ -348,7 +348,7 @@ mod test {
         let mut splitter = BeamSplitter::default();
         splitter.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         for material in patch_materials(&splitter)? {
-            assert_drawn_as(&material, 0.5, 0.65);
+            assert_drawn_as(&material, 0.5, 0.45);
         }
         Ok(())
     }

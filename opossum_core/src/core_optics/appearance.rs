@@ -55,8 +55,8 @@ pub struct Appearance {
 const UNCOATED_ALPHA: f32 = 0.3;
 
 impl Appearance {
-    /// A mirror: a shiny, light grey surface, as it looks fully mirrored. How much of that a face
-    /// shows, its coating says (see [`Appearance::coated`]).
+    /// A mirror: a shiny, teal, partly see-through surface, as it looks fully mirrored. How much of
+    /// that a face shows, its coating says (see [`Appearance::coated`]).
     #[must_use]
     pub const fn mirror() -> Self {
         Self {
@@ -169,14 +169,14 @@ mod test {
     };
     use approx::assert_abs_diff_eq;
 
-    /// A mirror is drawn reflective: as it looks fully mirrored, metallic and opaque.
+    /// A mirror is drawn reflective: as it looks fully mirrored, metallic and in its own color.
     #[test]
     fn a_mirror_looks_reflective() {
         let appearance = ThinMirror::default().appearance();
         assert_eq!(appearance, Some(Appearance::mirror()));
         assert_eq!(
             appearance.map(|appearance| appearance.color),
-            Some([0.9, 0.9, 0.92, 1.0_f32])
+            Some([0.0, 0.5, 0.5, 0.6_f32])
         );
         assert_eq!(appearance.map(|appearance| appearance.metallic), Some(1.0));
     }
@@ -200,7 +200,7 @@ mod test {
             1.0,
         )?;
         assert_abs_diff_eq!(half.metallic, 0.5);
-        assert_abs_diff_eq!(half.color[3], 0.65);
+        assert_abs_diff_eq!(half.color[3], 0.45);
         let none = Appearance::mirror().coated(&CoatingType::IdealAR, green(), 1.0)?;
         assert_abs_diff_eq!(none.metallic, 0.0);
         assert_abs_diff_eq!(none.color[3], UNCOATED_ALPHA);
