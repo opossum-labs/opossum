@@ -22,7 +22,7 @@ use opossum_core::{
         SceneAnalyzer, SceneManifest, UndoRedoResponse, UpdateNodeRequest, ViewportChangeRequest,
     },
 };
-use opossum_scene::{AXIS_COLOR, glb_of_node, manifest_of, rays_glb, scene_glb};
+use opossum_scene::{AXIS_COLOR, LineColors, glb_of_node, manifest_of, rays_glb, scene_glb};
 use serde::Deserialize;
 use std::{path::PathBuf, str::FromStr};
 use tokio::sync::mpsc;
@@ -158,7 +158,8 @@ async fn get_scene(
 ///
 /// As with `/scene.glb`, the components only have a place in space once the optical axis has been
 /// traced, so that run happens here on a copy, and the `analyzer` parameter picks which analyzer to
-/// follow when the model has more than one. The list names the analyzer it followed.
+/// follow when the model has more than one. The list names the analyzer it followed, and the false
+/// colors `/scene/rays.glb` draws that analyzer's light in if it holds several wavelengths.
 ///
 /// A model that cannot be placed is answered with an empty list whose `notice` says why: that is
 /// a state of the model a viewer has to show, not a failed request.
@@ -176,7 +177,7 @@ async fn get_scene_manifest(
 ) -> Result<impl Responder, BackEndErrorResponse> {
     // Same split as `get_scene`: only the copy needs the live model, and the meshing that follows
     // must not block every other edit for as long as it takes.
-    let (placed, analyzer) = {
+    let (placed, analyzer, colors) = {
         let document = data.document.lock();
         let asked = analyzer_still_there(&document, query.analyzer);
         let analyzer = document
@@ -185,10 +186,14 @@ async fn get_scene_manifest(
                 uid,
                 name: info.display_name(),
             });
-        (document.placed_scenery(asked), analyzer)
+        let colors = LineColors::Wavelength(document.source_wavelength_range(asked)?);
+        (document.placed_scenery(asked), analyzer, colors)
     };
     let mut manifest = match placed {
-        Ok(placed) => manifest_of(&placed, default_reference_wavelength())?,
+        Ok(placed) => SceneManifest {
+            spectrum: colors.legend(),
+            ..manifest_of(&placed, default_reference_wavelength())?
+        },
         Err(e) => SceneManifest {
             notice: Some(e.to_string()),
             ..SceneManifest::default()
@@ -264,7 +269,7 @@ async fn get_scene_axis(
         document.positioning_rays(analyzer_still_there(&document, query.analyzer))?
     };
     // One ray per source: nothing to thin out.
-    let glb = rays_glb(&axes, Some(AXIS_COLOR), usize::MAX)?;
+    let glb = rays_glb(&axes, &LineColors::Fixed(AXIS_COLOR), usize::MAX)?;
     Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
 }
 
@@ -272,11 +277,14 @@ async fn get_scene_axis(
 ///
 /// This function traces the sources an analyzer defines through the model and returns the rays'
 /// paths as lines in a binary glTF (GLB) file, in the same world coordinates `/scene/manifest`
-/// places the components in. Each line is coloured by its wavelength. Rays an aperture stops are
-/// drawn up to where they stop.
+/// places the components in. Light of a single wavelength is drawn in the color of that
+/// wavelength; light of several in false colors from blue for the shortest to red for the longest,
+/// which `/scene/manifest` names as its `spectrum`. Rays an aperture stops are drawn up to where
+/// they stop.
 ///
-/// Each source is thinned to at most `max_rays` rays before the trace, spread evenly over its
-/// cross section, so a source of millions of rays costs no more than one of a few hundred. Only the
+/// Each source is coarsened to at most `max_rays` rays of each wavelength before the trace, spread
+/// evenly over its cross section, so a source of millions of rays costs no more than one of a few
+/// hundred, while every wavelength of its spectrum is still drawn. Only the
 /// primary path is traced; a ghost focus analyzer contributes its sources, not its reflections.
 /// Without an analyzer whose light is rays - none at all, or an energy analysis - the file is
 /// empty. The trace runs on a copy, off the request thread, and the `analyzer` parameter picks
@@ -308,8 +316,13 @@ async fn get_scene_rays(
         )
     };
     let glb = web::block(move || {
-        let rays = OpmDocument::from_string(&model)?.traced_rays(analyzer, max_rays)?;
-        rays_glb(&rays, None, max_rays)
+        let document = OpmDocument::from_string(&model)?;
+        let colors = LineColors::Wavelength(document.source_wavelength_range(analyzer)?);
+        rays_glb(
+            &document.traced_rays(analyzer, max_rays)?,
+            &colors,
+            max_rays,
+        )
     })
     .await
     .map_err(|e| OpossumError::Other(format!("the rays could not be traced: {e}")))??;
@@ -1694,12 +1707,21 @@ mod test {
         app.call(req).await.unwrap()
     }
 
-    /// A source of 721 rays in front of a lens, traced by a ray-trace analyzer.
+    /// A source of 721 rays at 1000 nm in front of a lens, traced by a ray-trace analyzer.
     fn state_with_a_traced_source() -> Data<AppState> {
+        use opossum_core::{joule, millimeter, nodes::round_collimated_ray_builder};
+
+        state_tracing(round_collimated_ray_builder(millimeter!(5.0), joule!(1.0), 15).unwrap())
+    }
+
+    /// The given source in front of a lens, traced by a ray-trace analyzer.
+    fn state_tracing(
+        builder: opossum_core::light::lightdata::ray_data_builder::RayDataBuilder,
+    ) -> Data<AppState> {
         use opossum_core::{
             analyzers::{AnalyzerType, RayTraceConfig},
-            joule, millimeter,
-            nodes::{Lens, NodeGroup, SourcePort, round_collimated_ray_builder},
+            millimeter,
+            nodes::{Lens, NodeGroup, SourcePort},
         };
 
         let mut scenery = NodeGroup::default();
@@ -1710,14 +1732,42 @@ mod test {
             .unwrap();
         let mut document = OpmDocument::new(scenery);
         let mut config = RayTraceConfig::default();
-        config.map_source(
-            source,
-            round_collimated_ray_builder(millimeter!(5.0), joule!(1.0), 15).unwrap(),
-        );
+        config.map_source(source, builder);
         document.add_analyzer(AnalyzerType::RayTrace(config));
         let app_state = Data::new(AppState::default());
         *app_state.document.lock() = document;
         app_state
+    }
+
+    /// Light of several wavelengths is drawn in false colors, which the manifest names for a
+    /// legend; light of one wavelength keeps the color of its own and has none.
+    #[actix_web::test]
+    async fn the_manifest_names_the_false_colors_of_several_wavelengths() {
+        use opossum_core::{
+            distributions::spectral::LaserLines, joule, millimeter, nanometer,
+            nodes::round_collimated_ray_builder,
+        };
+
+        let manifest: SceneManifest =
+            test::read_body_json(request_manifest(&state_with_a_traced_source(), "").await).await;
+        assert_eq!(manifest.spectrum, None, "a single laser line");
+
+        let mut builder = round_collimated_ray_builder(millimeter!(5.0), joule!(1.0), 3).unwrap();
+        let mut source = builder.source().clone();
+        let lines = vec![(nanometer!(1000.0), 1.0), (nanometer!(1100.0), 1.0)];
+        source.set_spectral_dist(LaserLines::new(lines).unwrap().into());
+        builder.set_source(source);
+        let app_state = state_tracing(builder);
+
+        let manifest: SceneManifest =
+            test::read_body_json(request_manifest(&app_state, "").await).await;
+        let spectrum = manifest.spectrum.expect("two laser lines");
+        assert!((spectrum.shortest_nm - 1000.0).abs() < 1e-9);
+        assert!((spectrum.longest_nm - 1100.0).abs() < 1e-9);
+        assert!(spectrum.colors.len() >= 2);
+        let resp = request_rays(&app_state, "").await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert!(holds_lines(&test::read_body(resp).await));
     }
 
     /// Whether a GLB holds a line primitive.

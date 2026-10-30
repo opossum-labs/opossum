@@ -1,10 +1,14 @@
 //! Drawing the paths ray bundles took as lines.
 
+use std::ops::Range;
+
 use nalgebra::Point3;
 use opossum_core::{
     error::{OpmResult, OpossumError},
     light::Rays,
     nanometer,
+    types::api_types::SceneSpectrum,
+    utils::{to_f64, try_f64_to_usize},
 };
 use optoscene::{RayStyle, RayTrace, Scene, SceneOptions};
 use uom::si::{f64::Length, length::meter};
@@ -12,6 +16,122 @@ use uom::si::{f64::Length, length::meter};
 /// The colour the optical axis is drawn in: a bright purple that stands apart from the wavelength
 /// colours real rays are drawn in and from the grey and glass tones of the components.
 pub const AXIS_COLOR: [f32; 4] = [183. / 255., 17. / 255., 1., 1.0];
+
+/// The false colors light of several wavelengths is drawn in, from the shortest wavelength to the
+/// longest, as sRGB: blue, cyan, green, yellow and red. Violet is left out: the axis is drawn in it.
+const SPECTRUM_COLORS: [[f32; 3]; 5] = [
+    [0.15, 0.35, 1.0],
+    [0.0, 0.8, 0.9],
+    [0.2, 0.8, 0.2],
+    [1.0, 0.8, 0.0],
+    [0.9, 0.1, 0.05],
+];
+
+/// How [`rays_glb`] colors the lines it draws.
+#[derive(Debug, Clone, PartialEq)]
+pub enum LineColors {
+    /// Every line in the one color given, as the optical axis is drawn.
+    Fixed([f32; 4]),
+    /// Each line after its wavelength, within the range of wavelengths the model's sources emit.
+    ///
+    /// A range of more than one wavelength is spread over false colors from blue to red, so that
+    /// neighboring wavelengths stand apart even where the eye could not see or tell them apart.
+    /// Light of a single wavelength, or with no range given, is drawn in the color of its
+    /// wavelength, with infrared in red and ultraviolet in violet.
+    Wavelength(Option<Range<Length>>),
+}
+
+impl LineColors {
+    /// Returns the false colors the lines are drawn in, for a legend.
+    ///
+    /// # Returns
+    ///
+    /// The range of wavelengths and the colors it is spread over, or `None` if the lines are not
+    /// drawn in false colors.
+    #[must_use]
+    pub fn legend(&self) -> Option<SceneSpectrum> {
+        let range = self.false_color_range()?;
+        Some(SceneSpectrum {
+            shortest_nm: range.start.get::<uom::si::length::nanometer>(),
+            longest_nm: range.end.get::<uom::si::length::nanometer>(),
+            colors: SPECTRUM_COLORS.to_vec(),
+        })
+    }
+
+    /// Returns the range of wavelengths spread over the false colors, if there is one to spread.
+    fn false_color_range(&self) -> Option<&Range<Length>> {
+        match self {
+            Self::Wavelength(Some(range)) if range.start < range.end => Some(range),
+            _ => None,
+        }
+    }
+
+    /// Returns the color of the lines of one wavelength.
+    ///
+    /// # Arguments
+    ///
+    /// - `wavelength`: the vacuum wavelength of the light
+    ///
+    /// # Returns
+    ///
+    /// The color, or `None` for visible light that `optoscene` colors after its wavelength.
+    fn of(&self, wavelength: Length) -> Option<[f32; 4]> {
+        if let Self::Fixed(color) = self {
+            return Some(*color);
+        }
+        let Some(range) = self.false_color_range() else {
+            return invisible_light_color(wavelength);
+        };
+        Some(false_color(
+            ((wavelength - range.start) / (range.end - range.start)).value,
+        ))
+    }
+}
+
+/// Returns the false color at `t` along the range of wavelengths drawn.
+///
+/// The color is interpolated between the neighboring false colors and made linear, as glTF wants
+/// its colors.
+///
+/// # Arguments
+///
+/// - `t`: 0 for the shortest wavelength, 1 for the longest; anything beyond is clamped
+///
+/// # Returns
+///
+/// The linear RGBA color.
+fn false_color(t: f64) -> [f32; 4] {
+    let segments = SPECTRUM_COLORS.len() - 1;
+    let position = t.clamp(0.0, 1.0) * to_f64(segments);
+    // The last segment also takes t = 1.
+    let segment = try_f64_to_usize(position).unwrap_or(0).min(segments - 1);
+    #[allow(clippy::cast_possible_truncation)]
+    let fraction = (position - to_f64(segment)) as f32;
+    let mut color = [0.0, 0.0, 0.0, 1.0];
+    if let Some([from, to]) = SPECTRUM_COLORS.windows(2).nth(segment) {
+        for ((channel, from), to) in color.iter_mut().zip(from).zip(to) {
+            *channel = srgb_to_linear((to - from).mul_add(fraction, *from));
+        }
+    }
+    color
+}
+
+/// Turns an sRGB color channel into the linear one glTF wants.
+///
+/// # Arguments
+///
+/// - `channel`: the sRGB value, from 0 to 1
+///
+/// # Returns
+///
+/// The linear value, from 0 to 1.
+fn srgb_to_linear(channel: f32) -> f32 {
+    if channel <= 0.040_45 {
+        channel / 12.92
+    } else {
+        ((channel + 0.055) / 1.055).powf(2.4)
+    }
+}
 
 /// Build the glTF binary of ray bundles, drawn as lines along the paths the rays took.
 ///
@@ -27,7 +147,7 @@ pub const AXIS_COLOR: [f32; 4] = [183. / 255., 17. / 255., 1., 1.0];
 /// # Arguments
 ///
 /// - `bundles`: the ray bundles to draw
-/// - `color`: the colour of every line, or `None` to colour each by its wavelength
+/// - `colors`: how the lines are colored
 /// - `max_lines`: how many rays of each wavelength of a bundle are drawn at most
 ///
 /// # Returns
@@ -39,7 +159,7 @@ pub const AXIS_COLOR: [f32; 4] = [183. / 255., 17. / 255., 1., 1.0];
 ///
 /// This function returns an error if a bundle cannot be split by wavelength, or if the scene
 /// cannot be built or written.
-pub fn rays_glb(bundles: &[Rays], color: Option<[f32; 4]>, max_lines: usize) -> OpmResult<Vec<u8>> {
+pub fn rays_glb(bundles: &[Rays], colors: &LineColors, max_lines: usize) -> OpmResult<Vec<u8>> {
     let mut scene = Scene::new(SceneOptions {
         origin: Some(Point3::origin()),
         ..SceneOptions::default()
@@ -57,7 +177,7 @@ pub fn rays_glb(bundles: &[Rays], color: Option<[f32; 4]>, max_lines: usize) -> 
             }
             let style = RayStyle {
                 max_lines,
-                line_color: color.or_else(|| invisible_light_color(wavelength)),
+                line_color: colors.of(wavelength),
                 ..RayStyle::default()
             };
             scene
@@ -152,8 +272,10 @@ mod test {
     /// Nothing to draw still makes a file, so a viewer can show "no rays" like any other state.
     #[test]
     fn no_rays_are_still_a_file() -> OpmResult<()> {
-        assert!(rays_glb(&[], Some(AXIS_COLOR), 10)?.starts_with(b"glTF"));
-        assert!(rays_glb(&[Rays::default()], None, 10)?.starts_with(b"glTF"));
+        assert!(rays_glb(&[], &LineColors::Fixed(AXIS_COLOR), 10)?.starts_with(b"glTF"));
+        assert!(
+            rays_glb(&[Rays::default()], &LineColors::Wavelength(None), 10)?.starts_with(b"glTF")
+        );
         Ok(())
     }
 
@@ -170,7 +292,7 @@ mod test {
         bundle.add_ray(stopped_early);
         bundle.add_ray(went_on);
 
-        let glb = rays_glb(&[bundle], None, 10)?;
+        let glb = rays_glb(&[bundle], &LineColors::Wavelength(None), 10)?;
         let scene = glb_json(&glb);
         let primitive = &scene["meshes"][0]["primitives"][0];
         assert_eq!(primitive["mode"], 1, "drawn as LINES");
@@ -185,35 +307,108 @@ mod test {
         Ok(())
     }
 
+    /// The colors the lines of rays at the given wavelengths are drawn in, one per wavelength.
+    fn drawn_colors(wavelengths: &[Length], colors: &LineColors) -> OpmResult<Vec<Vec<f64>>> {
+        let mut bundle = Rays::default();
+        for wavelength in wavelengths {
+            let mut ray = Ray::origin_along_z(*wavelength, joule!(1.0))?;
+            ray.propagate(millimeter!(10.0))?;
+            bundle.add_ray(ray);
+        }
+        let scene = glb_json(&rays_glb(&[bundle], colors, 10)?);
+        Ok(scene["materials"]
+            .as_array()
+            .expect("lines have materials")
+            .iter()
+            .map(|material| {
+                material["pbrMetallicRoughness"]["baseColorFactor"]
+                    .as_array()
+                    .expect("a line has a color")
+                    .iter()
+                    .map(|c| c.as_f64().unwrap_or(f64::NAN))
+                    .collect()
+            })
+            .collect())
+    }
+
+    /// Whether two colors agree within what `f32` keeps.
+    fn same_color(drawn: &[f64], expected: [f32; 4]) -> bool {
+        drawn
+            .iter()
+            .zip(expected)
+            .all(|(d, e)| (d - f64::from(e)).abs() < 1e-6)
+    }
+
     /// An infrared laser is drawn red, not in the magenta that would make it look like the axis;
-    /// visible light keeps its spectral colour.
+    /// visible light keeps its spectral colour. So does light of one wavelength given as a range.
     #[test]
     fn infrared_rays_are_drawn_red() -> OpmResult<()> {
-        let color_of = |wavelength| -> OpmResult<serde_json::Value> {
-            let mut ray = Ray::origin_along_z(wavelength, joule!(1.0))?;
-            ray.propagate(millimeter!(10.0))?;
-            let mut bundle = Rays::default();
-            bundle.add_ray(ray);
-            let scene = glb_json(&rays_glb(&[bundle], None, 10)?);
-            Ok(scene["materials"][0]["pbrMetallicRoughness"]["baseColorFactor"].clone())
-        };
-        let infrared = color_of(nanometer!(1053.0))?;
-        let red: Vec<f64> = INFRARED_COLOR.iter().map(|c| f64::from(*c)).collect();
-        let drawn: Vec<f64> = infrared
-            .as_array()
-            .expect("a line has a colour")
-            .iter()
-            .map(|c| c.as_f64().unwrap_or(f64::NAN))
-            .collect();
-        for (d, r) in drawn.iter().zip(&red) {
-            assert!((d - r).abs() < 1e-6, "infrared drawn as {infrared}");
+        let infrared = nanometer!(1053.0);
+        for colors in [
+            LineColors::Wavelength(None),
+            LineColors::Wavelength(Some(infrared..infrared)),
+        ] {
+            let drawn = drawn_colors(&[infrared], &colors)?;
+            assert!(
+                same_color(&drawn[0], INFRARED_COLOR),
+                "{colors:?}: {drawn:?}"
+            );
+            assert_ne!(
+                drawn_colors(&[nanometer!(550.0)], &colors)?,
+                drawn,
+                "visible light keeps its colour"
+            );
         }
-        assert_ne!(
-            color_of(nanometer!(550.0))?,
-            infrared,
-            "visible light keeps its colour"
-        );
         Ok(())
+    }
+
+    /// Over a range of wavelengths, its ends are drawn in the first and last false color and what
+    /// lies between in another, even where all of it is infrared.
+    #[test]
+    fn a_range_of_wavelengths_is_drawn_in_false_colors() -> OpmResult<()> {
+        let colors = LineColors::Wavelength(Some(nanometer!(1000.0)..nanometer!(1100.0)));
+
+        let drawn = drawn_colors(
+            &[nanometer!(1000.0), nanometer!(1050.0), nanometer!(1100.0)],
+            &colors,
+        )?;
+
+        assert_eq!(drawn.len(), 3, "one material per wavelength");
+        assert!(same_color(&drawn[0], false_color(0.0)));
+        assert!(same_color(&drawn[2], false_color(1.0)));
+        assert_ne!(drawn[1], drawn[0]);
+        assert_ne!(drawn[1], drawn[2]);
+        Ok(())
+    }
+
+    /// The ends of the false colors are blue and red, made linear for glTF.
+    #[test]
+    fn the_false_colors_run_from_blue_to_red() {
+        let [r, g, b, _] = false_color(0.0);
+        assert!(b > r && b > g, "blue at the start: {r} {g} {b}");
+        let [r, g, b, _] = false_color(1.0);
+        assert!(r > g && r > b, "red at the end: {r} {g} {b}");
+        assert_eq!(false_color(-1.0), false_color(0.0), "clamped below");
+        assert_eq!(false_color(2.0), false_color(1.0), "clamped above");
+        assert!((srgb_to_linear(0.5) - 0.214).abs() < 1e-3, "the sRGB curve");
+    }
+
+    /// Only lines drawn in false colors have a legend, and it names their range.
+    #[test]
+    fn only_false_colors_have_a_legend() {
+        let legend = LineColors::Wavelength(Some(nanometer!(1000.0)..nanometer!(1100.0))).legend();
+        assert_eq!(
+            legend,
+            Some(SceneSpectrum {
+                shortest_nm: 1000.0,
+                longest_nm: 1100.0,
+                colors: SPECTRUM_COLORS.to_vec(),
+            })
+        );
+        let one = nanometer!(1053.0);
+        assert_eq!(LineColors::Wavelength(Some(one..one)).legend(), None);
+        assert_eq!(LineColors::Wavelength(None).legend(), None);
+        assert_eq!(LineColors::Fixed(AXIS_COLOR).legend(), None);
     }
 
     /// The same rays give the same bytes, so a viewer can tell an unchanged file from a new one.
@@ -222,8 +417,8 @@ mod test {
         let axes = two_lenses(millimeter!(100.0))?.positioning_rays(None)?;
         assert!(!axes.is_empty(), "the model has an open output");
         assert_eq!(
-            rays_glb(&axes, Some(AXIS_COLOR), 10)?,
-            rays_glb(&axes, Some(AXIS_COLOR), 10)?
+            rays_glb(&axes, &LineColors::Fixed(AXIS_COLOR), 10)?,
+            rays_glb(&axes, &LineColors::Fixed(AXIS_COLOR), 10)?
         );
         Ok(())
     }

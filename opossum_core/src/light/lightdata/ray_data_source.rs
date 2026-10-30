@@ -603,6 +603,31 @@ impl RayDataSource {
         }
     }
 
+    /// Returns the wavelengths this source emits, without building its rays.
+    ///
+    /// # Returns
+    ///
+    /// The wavelengths its spectrum is sampled at, the one wavelength of an image, or the distinct
+    /// wavelengths of the valid raw rays.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the spectrum cannot be sampled.
+    pub fn wavelengths(&self) -> OpmResult<Vec<Length>> {
+        let spectrum = match self {
+            Self::Collimated(collimated_src) => collimated_src.spect_dist(),
+            Self::PointSrc(point_src) => point_src.spect_dist(),
+            Self::Image(image_src) => return Ok(vec![image_src.wavelength()]),
+            Self::Raw(rays) => return rays.get_unique_wavelengths(true),
+        };
+        Ok(spectrum
+            .generate()
+            .generate()?
+            .into_iter()
+            .map(|(wavelength, _)| wavelength)
+            .collect())
+    }
+
     /// Returns this source with at most `max_per_wavelength` rays of each wavelength, for drawing it.
     ///
     /// A collimated or point source keeps its energy, its spectrum and the area it covers and only
@@ -911,6 +936,34 @@ mod tests {
             panic!("coarsened raw rays are still raw rays");
         };
         assert!((1..=3).contains(&coarse.nr_of_rays(false)));
+        Ok(())
+    }
+
+    /// An image shines its one wavelength; raw rays count only the wavelengths of valid rays.
+    #[test]
+    fn the_wavelengths_of_an_image_and_of_raw_rays() -> OpmResult<()> {
+        let image = RayDataSource::Image(ImageSrc::default());
+        assert_eq!(image.wavelengths()?, vec![ImageSrc::default().wavelength()]);
+
+        let mut rays = Rays::default();
+        for nm in [1000.0, 500.0, 1000.0, 700.0] {
+            rays.add_ray(crate::light::Ray::new_collimated(
+                meter!(0.0, 0.0, 0.0),
+                nanometer!(nm),
+                joule!(1.0),
+            )?);
+        }
+        let mut stopped = crate::light::Ray::new_collimated(
+            meter!(0.0, 0.0, 0.0),
+            nanometer!(300.0),
+            joule!(1.0),
+        )?;
+        stopped.set_invalid();
+        rays.add_ray(stopped);
+        assert_eq!(
+            RayDataSource::Raw(rays).wavelengths()?,
+            vec![nanometer!(500.0), nanometer!(700.0), nanometer!(1000.0)]
+        );
         Ok(())
     }
 

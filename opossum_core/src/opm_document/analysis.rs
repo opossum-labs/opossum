@@ -13,6 +13,8 @@ use crate::{
     reporting::analysis_report::AnalysisReport,
 };
 use log::info;
+use std::ops::Range;
+use uom::si::f64::Length;
 use uuid::Uuid;
 
 /// Internal description of a single planned analysis run.
@@ -225,6 +227,50 @@ impl OpmDocument {
         config.set_source_map(coarsened);
         RayTracingAnalyzer::new(config).analyze(&mut scenery)?;
         Ok(scenery.ray_ends().into_iter().cloned().collect())
+    }
+
+    /// Returns the range of wavelengths the sources of [`traced_rays`](OpmDocument::traced_rays)
+    /// emit, without building any rays.
+    ///
+    /// # Arguments
+    ///
+    /// - `analyzer_id`: the analyzer to take the sources from, or `None` to follow the one chosen
+    ///   exactly as for [`placed_scenery`](OpmDocument::placed_scenery)
+    ///
+    /// # Returns
+    ///
+    /// The shortest and longest wavelength of all those sources, the same for light of one
+    /// wavelength. `None` if there are no rays to draw, as for [`traced_rays`](OpmDocument::traced_rays).
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the named analyzer does not exist or a spectrum cannot be
+    /// sampled.
+    pub fn source_wavelength_range(
+        &self,
+        analyzer_id: Option<Uuid>,
+    ) -> OpmResult<Option<Range<Length>>> {
+        let Some((_, analyzer)) = self
+            .drawing_analyzer(analyzer_id)?
+            .filter(|(_, analyzer)| analyzer.analyzer_type().has_ray_sources())
+        else {
+            return Ok(None);
+        };
+        let mut range: Option<Range<Length>> = None;
+        // A range does not depend on the order the sources are visited in.
+        for builder in analyzer
+            .analyzer_type()
+            .positioning_config()
+            .source_map()
+            .values()
+        {
+            for wavelength in builder.source().wavelengths()? {
+                range = Some(range.map_or(wavelength..wavelength, |range| {
+                    range.start.min(wavelength)..range.end.max(wavelength)
+                }));
+            }
+        }
+        Ok(range)
     }
 
     /// Returns the configuration a positioning run of this model starts from.
@@ -703,6 +749,64 @@ mod tests {
             1,
             "the light reaches the open output behind the mirror"
         );
+        Ok(())
+    }
+
+    /// The range of wavelengths drawn is that of the sources' spectra, read without building any
+    /// rays: from the first to the last sample of a spectrum, a single line for a laser.
+    #[test]
+    fn the_wavelengths_of_the_sources_span_their_spectra() -> OpmResult<()> {
+        let gaussian = Gaussian::new(
+            (nanometer!(1003.0), nanometer!(1103.0)),
+            50,
+            nanometer!(1053.0),
+            nanometer!(10.0),
+            1.0,
+        )?;
+        let lines = LaserLines::new(vec![(nanometer!(1053.0), 1.0)])?;
+        for (spectrum, range) in [
+            (
+                SpecDistType::from(gaussian),
+                nanometer!(1003.0)..nanometer!(1103.0),
+            ),
+            (lines.into(), nanometer!(1053.0)..nanometer!(1053.0)),
+        ] {
+            let document = source_then_open_dummy(collimated_source(1, spectrum)?)?;
+            let drawn = document
+                .source_wavelength_range(None)?
+                .ok_or_else(|| OpossumError::Other("no range".into()))?;
+            assert_relative_eq!(drawn.start.value, range.start.value, max_relative = 1e-12);
+            assert_relative_eq!(drawn.end.value, range.end.value, max_relative = 1e-12);
+        }
+        Ok(())
+    }
+
+    /// The range spans every source of the analyzer.
+    #[test]
+    fn the_wavelengths_of_several_sources_are_spanned_together() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let first = scenery.add_node(SourcePort::default())?;
+        let second = scenery.add_node(SourcePort::default())?;
+        let mut document = OpmDocument::new(scenery);
+        let mut config = RayTraceConfig::default();
+        for (source, nm) in [(first, 527.0), (second, 1053.0)] {
+            let line = LaserLines::new(vec![(nanometer!(nm), 1.0)])?;
+            config.map_source(source, collimated_source(1, line.into())?);
+        }
+        document.add_analyzer(AnalyzerType::RayTrace(config));
+
+        assert_eq!(
+            document.source_wavelength_range(None)?,
+            Some(nanometer!(527.0)..nanometer!(1053.0))
+        );
+        Ok(())
+    }
+
+    /// An energy analysis has no rays to draw, so no wavelengths to draw them in.
+    #[test]
+    fn an_energy_analysis_has_no_wavelengths_to_draw() -> OpmResult<()> {
+        let (document, _) = document_with_one_analyzer()?;
+        assert_eq!(document.source_wavelength_range(None)?, None);
         Ok(())
     }
 

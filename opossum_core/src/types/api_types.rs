@@ -1023,6 +1023,17 @@ pub struct SceneAnalyzer {
     pub name: String,
 }
 
+/// The false colors a 3D view draws light of several wavelengths in, for a legend.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, ToSchema)]
+pub struct SceneSpectrum {
+    /// The shortest wavelength of the sources, in nanometers, drawn in the first color.
+    pub shortest_nm: f64,
+    /// The longest wavelength of the sources, in nanometers, drawn in the last color.
+    pub longest_nm: f64,
+    /// The colors from the shortest to the longest wavelength, evenly spaced, as sRGB.
+    pub colors: Vec<[f32; 3]>,
+}
+
 /// Every drawable component of a model, with its placement but without its geometry.
 ///
 /// This is the cheap half of a 3D view. A viewer fetches it whenever the model changed and compares
@@ -1051,4 +1062,8 @@ pub struct SceneManifest {
     /// another one instead.
     #[serde(default)]
     pub analyzer: Option<SceneAnalyzer>,
+    /// The false colors the light of the analyzer's sources is drawn in, or `None` if it is drawn
+    /// in the colors of its wavelength - light of a single wavelength, or no light at all.
+    #[serde(default)]
+    pub spectrum: Option<SceneSpectrum>,
 }

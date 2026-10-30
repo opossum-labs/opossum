@@ -19,4 +19,4 @@ mod test_helpers;
 
 pub use components::{glb_of_node, scene_glb};
 pub use manifest::manifest_of;
-pub use rays::{AXIS_COLOR, rays_glb};
+pub use rays::{AXIS_COLOR, LineColors, rays_glb};
