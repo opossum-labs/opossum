@@ -32,7 +32,7 @@ use crate::{
 ///
 /// Long enough that holding a spinner or dragging a value through a range costs one fetch rather
 /// than dozens, short enough that a single deliberate edit still feels immediate.
-const SETTLE: std::time::Duration = std::time::Duration::from_millis(300);
+const SETTLE: std::time::Duration = std::time::Duration::from_millis(100);
 
 /// Wait out [`SETTLE`], on whichever platform this is.
 async fn debounce() {

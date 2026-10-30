@@ -269,7 +269,7 @@ fn add_at(scene: &mut Scene, drawn: Drawn<'_>, placement: Isometry3<f64>) -> Opm
 /// # Errors
 ///
 /// This function returns an error if no look is defined for the component's type, if the component
-/// cannot be drawn (see [`Drawn::new`]), or if the scene cannot be written.
+/// cannot be meshed or the medium of its solid cannot be told, or if the scene cannot be written.
 pub fn glb_of_node(node: &dyn Analyzable, wavelength: Length) -> OpmResult<Option<Vec<u8>>> {
     let Some(appearance) = Appearance::of_node_type(node.node_type())? else {
         return Ok(None);

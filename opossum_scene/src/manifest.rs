@@ -368,7 +368,7 @@ mod test {
 
         let m = manifest_of(&scenery, default_reference_wavelength())?;
 
-        assert!(m.nodes.is_empty());
+        assert!(m.nodes.is_empty(), "{:?}", m.nodes);
         assert_eq!(m.skipped.len(), 1);
         assert_eq!(m.skipped[0].uid, stranger);
         assert!(
