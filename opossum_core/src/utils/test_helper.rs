@@ -13,8 +13,6 @@ pub mod helper {
         reporting::analysis_report::AnalysisReport,
         utils::geom_transformation::Isometry,
     };
-    use nalgebra::Point2;
-    use uom::si::f64::Length;
 
     /// Read the energy an [`EnergyMeter`](crate::nodes::EnergyMeter) recorded from an analysis
     /// report.
@@ -79,21 +77,5 @@ pub mod helper {
     /// This function returns an error if the hard-coded placement is rejected, which cannot happen.
     pub fn somewhere_else() -> OpmResult<Isometry> {
         Isometry::new(millimeter!(12.0, -4.0, 80.0), degree!(3.0, -7.0, 20.0))
-    }
-
-    /// The corners of an L, the smallest outline that is not convex.
-    ///
-    /// Counter-clockwise, and with one corner the outline turns *into* — which is what makes it
-    /// worth testing against anything that walks or fills an outline.
-    #[must_use]
-    pub fn l_shape_corners() -> Vec<Point2<Length>> {
-        vec![
-            millimeter!(0.0, 0.0),
-            millimeter!(20.0, 0.0),
-            millimeter!(20.0, 5.0),
-            millimeter!(5.0, 5.0),
-            millimeter!(5.0, 20.0),
-            millimeter!(0.0, 20.0),
-        ]
     }
 }

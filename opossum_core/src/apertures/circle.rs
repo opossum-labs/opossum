@@ -1,12 +1,8 @@
 use super::Shape;
 use crate::{
-    error::{OpmResult, OpossumError},
-    meter,
-    prelude::ApertureShape,
-    types::validated_type_definitions::ValidatedRadius,
-    utils::math_distribution_functions::ellipse,
+    error::OpmResult, prelude::ApertureShape, types::validated_type_definitions::ValidatedRadius,
 };
-use nalgebra::{Point2, Point3};
+use nalgebra::Point3;
 use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use uom::si::{f64::Length, length::meter};
@@ -52,35 +48,6 @@ impl CircleShape {
     pub fn set_radius(&mut self, radius: Length) -> OpmResult<()> {
         self.radius.set(radius)?;
         Ok(())
-    }
-    /// Return `segments` points evenly spaced on this circle, counter-clockwise.
-    ///
-    /// See [`OutlineShape::outline_points`](crate::apertures::OutlineShape::outline_points).
-    ///
-    /// # Arguments
-    ///
-    /// - `segments`: the number of points
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the radius is zero — such a circle is a single point and
-    /// has no outline — or if more points are asked for than can be sampled.
-    pub(super) fn outline_points(self, segments: usize) -> OpmResult<Vec<Point2<Length>>> {
-        let radius = self.radius().get::<meter>();
-        if radius == 0.0 {
-            return Err(OpossumError::Other(
-                "a circle of radius zero has no outline".into(),
-            ));
-        }
-        let num_points = u32::try_from(segments).map_err(|_| {
-            OpossumError::Other(format!(
-                "a circle cannot be sampled with as many as {segments} outline points"
-            ))
-        })?;
-        Ok(ellipse((0.0, 0.0), (radius, radius), num_points)?
-            .into_iter()
-            .map(|point| Point2::new(meter!(point.x), meter!(point.y)))
-            .collect())
     }
 }
 impl Shape for CircleShape {

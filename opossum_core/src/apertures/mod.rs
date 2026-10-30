@@ -25,7 +25,6 @@
 //! ```
 mod circle;
 mod gaussian;
-mod mesh;
 mod optic_shape;
 mod polygon;
 mod rectangle;
@@ -33,14 +32,11 @@ mod stack;
 
 use crate::{
     degree,
-    error::{OpmResult, OpossumError},
+    error::OpmResult,
     meter,
     prelude::Isometry,
     types::validated_type_definitions::{ValidatedAngle1D, ValidatedCenter2D},
-    utils::{
-        default_from_name::DefaultFromName,
-        math_utils::{distance_2d_point, to_f64, try_f64_to_usize},
-    },
+    utils::default_from_name::DefaultFromName,
 };
 use core::f64;
 use nalgebra::{Point2, Point3};
@@ -53,7 +49,6 @@ use uom::si::f64::{Angle, Length};
 
 pub use circle::CircleShape;
 pub use gaussian::GaussianShape;
-pub use mesh::OutlineMesh;
 pub use optic_shape::{Bore, OpticShape, Outline, OutlineShape};
 pub use polygon::PolygonShape;
 pub use rectangle::RectangleShape;
@@ -372,99 +367,6 @@ impl ApertureShape {
                 .fold(1.0, |acc, ap| acc * ap.apodize(point)),
         }
     }
-}
-
-/// The length of the edge leaving the ring's `from`th point, in meter.
-fn ring_edge_length(ring: &[Point2<Length>], from: usize) -> f64 {
-    distance_2d_point(&ring[(from + 1) % ring.len()], &ring[from]).value
-}
-
-/// The length of the closed ring through the given points, in meter.
-fn ring_perimeter(ring: &[Point2<Length>]) -> f64 {
-    (0..ring.len())
-        .map(|from| ring_edge_length(ring, from))
-        .sum()
-}
-
-/// Twice the area a ring of points encloses, in square meters, signed by its orientation.
-///
-/// Positive for a counter-clockwise ring, negative for a clockwise one, and zero for one whose
-/// points all lie on a line — which is the only reason this is doubled rather than halved: the
-/// factor carries no meaning here, only the sign does.
-fn doubled_signed_area(ring: &[Point2<Length>]) -> f64 {
-    (0..ring.len())
-        .map(|from| {
-            let to = (from + 1) % ring.len();
-            ring[from]
-                .x
-                .value
-                .mul_add(ring[to].y.value, -(ring[to].x.value * ring[from].y.value))
-        })
-        .sum()
-}
-
-/// Spread points along a closed ring of corners and return it counter-clockwise.
-///
-/// Every corner is kept and further points are inserted along the edges, roughly `segments` in
-/// total, handed out by edge length so that a long edge is not sampled more coarsely than a short
-/// one. This is what lets a rectangle and a polygon share one implementation: each only has to name
-/// its corners.
-///
-/// # Arguments
-///
-/// - `corners`: the corners of the ring, in either orientation, without repeating the first one
-/// - `segments`: the number of points to aim for
-///
-/// # Returns
-///
-/// The resampled ring, counter-clockwise, without a repeated first point.
-///
-/// # Errors
-///
-/// This function returns an error if fewer than three corners are given, or if the corners enclose
-/// no area — a ring whose corners all lie on one line has no inside, and no orientation either.
-fn resample_ring(corners: &[Point2<Length>], segments: usize) -> OpmResult<Vec<Point2<Length>>> {
-    if corners.len() < 3 {
-        return Err(OpossumError::Other(format!(
-            "a ring of {} corners encloses nothing",
-            corners.len()
-        )));
-    }
-    let area = doubled_signed_area(corners);
-    if area == 0.0 {
-        return Err(OpossumError::Other(
-            "the corners of the ring enclose no area, so there is no outline to walk".into(),
-        ));
-    }
-    // A negative area means the corners run clockwise. Turning the ring around here rather than in
-    // each shape keeps the counter-clockwise promise in one place.
-    let ring: Vec<Point2<Length>> = if area.is_sign_negative() {
-        corners.iter().rev().copied().collect()
-    } else {
-        corners.to_vec()
-    };
-    let perimeter = ring_perimeter(&ring);
-    let mut outline = Vec::with_capacity(segments.max(ring.len()));
-    for from in 0..ring.len() {
-        let to = (from + 1) % ring.len();
-        // At least one interval per edge, so every corner survives even when fewer segments than
-        // corners were asked for.
-        let intervals = try_f64_to_usize(
-            (to_f64(segments) * ring_edge_length(&ring, from) / perimeter).round(),
-        )
-        .unwrap_or(1)
-        .max(1);
-        outline.push(ring[from]);
-        let step = ring[to] - ring[from];
-        for point_nr in 1..intervals {
-            let along = to_f64(point_nr) / to_f64(intervals);
-            outline.push(Point2::new(
-                ring[from].x + step.x * along,
-                ring[from].y + step.y * along,
-            ));
-        }
-    }
-    Ok(outline)
 }
 
 /// Trait for the calculation of the transmission factor for each shape.
