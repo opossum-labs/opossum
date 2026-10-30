@@ -9,8 +9,8 @@
         never written to the file: create_geometry() turns the shape into the Geometry in the node's
         own frame, with numbered faces, where each face ends and the body of a solid;
         effective_node_iso() is the position followed by the alignment. move_by(node iso) moves the
-        geometry to the node. Separately, mesh() turns the geometry, still in the node's own frame,
-        into triangle meshes, which are placed at the node iso. install_geometry(), run by
+        geometry to the node. Separately, opossum_scene meshes the geometry, still in the node's own
+        frame, into triangles, which are placed at the node iso. install_geometry(), run by
         update_surfaces(), keeps the moved geometry as the runtime geometry, gives every face the
         coating and LIDT of its surface property and lets
         every port name its face; it is rebuilt on create, load, placement, alignment, set_coating,
@@ -100,7 +100,7 @@
        meshes are placed at the node iso; the geometry itself is not moved. -->
   <line x1="800" y1="332" x2="800" y2="436" stroke="#4a5568" marker-end="url(#arrow)"/>
   <line x1="572" y1="440" x2="800" y2="440" stroke="#276749" stroke-width="3"/>
-  <text x="686" y="432" font-size="12" text-anchor="middle" fill="#276749">mesh(), placed at node iso</text>
+  <text x="686" y="432" font-size="12" text-anchor="middle" fill="#276749">meshed by opossum_scene, at node iso</text>
 
   <!-- install_geometry: the moved geometry, with the surface properties, becomes the runtime geometry -->
   <line x1="520" y1="360" x2="520" y2="476" stroke="#4a5568" marker-end="url(#arrow)"/>
