@@ -42,10 +42,10 @@ struct SceneQuery {
     analyzer: Option<Uuid>,
 }
 
-/// How many rays per source `/scene/rays.glb` draws unless asked for another number.
+/// How many rays per source and wavelength `/scene/rays.glb` draws unless asked for another number.
 const DEFAULT_DISPLAY_RAYS: usize = 500;
-/// The most rays per source `/scene/rays.glb` draws, whatever is asked for: a mistyped number must
-/// not keep the server tracing for minutes.
+/// The most rays per source and wavelength `/scene/rays.glb` draws, whatever is asked for: a
+/// mistyped number must not keep the server tracing for minutes.
 const MAX_DISPLAY_RAYS: usize = 5000;
 
 /// Which analyzer's light a 3D view of the model should draw, and how much of it.
@@ -54,7 +54,7 @@ struct RaysQuery {
     /// Uuid of the analyzer to take the sources from, or none to follow the first analyzer whose
     /// light is rays, else the first. One the document no longer has is ignored.
     analyzer: Option<Uuid>,
-    /// The most rays drawn per source (default 500, at most 5000).
+    /// The most rays drawn per source and wavelength (default 500, at most 5000).
     max_rays: Option<usize>,
 }
 
@@ -1776,7 +1776,7 @@ mod test {
             .any(|window| window == br#""mode":1"#)
     }
 
-    /// An analyzer's source is traced through the model and drawn as lines, thinned to the number
+    /// An analyzer's source is traced through the model and drawn as lines, coarsened to the number
     /// asked for.
     #[actix_web::test]
     async fn the_rays_of_a_source_are_drawn_as_lines() {

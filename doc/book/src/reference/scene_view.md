@@ -116,25 +116,40 @@ Two kinds of light can be drawn over the components, each switched on and off in
 **The optical axis** (**Optical axis** in the menu, on by default) is the path the positioning run follows: one ray
 per source, the one every component is placed on. It is drawn as a purple line from each source
 through the components to wherever the axis leaves the setup, and shows how the setup is built up —
-why a component sits where it does, which way a fold turns.
+why a component sits where it does, which way a fold turns. Where a beam splitter brings two arms
+back together, as in a Mach-Zehnder interferometer, the axis of both arms runs on through it. A
+component at the end of the setup that the axis cannot pass — a grating whose diffraction order does
+not propagate at that angle, say — ends the axis where it sits.
 
 **The rays** (**Rays**, off by default) are the light of the sources as the analyzer the view
 follows defines it, traced through the setup like a ray trace does. They show what the axis alone
 cannot: how a bundle widens and focuses, where an optic shape clips it, where a beam splitter divides
-it. Each ray is colored by its wavelength; infrared light, which has no color of its own, is drawn
-red, and ultraviolet light violet.
+it, how a grating fans a spectrum out.
+
+How the rays are colored depends on how many wavelengths the sources hold:
+
+- **One wavelength** is drawn in its own color; infrared light, which has no color of its own, is
+  drawn red, and ultraviolet light violet.
+- **Several wavelengths** — a spectrum or several laser lines — are drawn in false colors, from blue
+  at the shortest wavelength of the sources to red at the longest, whether the light is visible or
+  not. The status line then shows the scale (see [The status line](#the-status-line)).
 
 A ray that is stopped for passing a component outside its optic shape is drawn up to the last
-component it reached before, not up to the one it missed. One that misses a mirror, a parabolic
-mirror or a grating is not drawn at all.
+component it reached before, not up to the one it missed. A ray a grating cannot send into its
+diffraction order is drawn up to the grating.
 
 A few things to know about the rays:
 
 - **They are a picture, not the analysis.** A source may hold far more rays than can be drawn, so
-  each source is thinned first to at most **max. rays** (500 by default, at most 5000), spread evenly
-  over the bundle's cross section with its outermost rays kept, so the drawn bundle has the true
-  width. A source with fewer rays is drawn in full. The energies of the rays play no part in the
-  picture.
+  each source is drawn coarser: its position distribution gets fewer points over the same area —
+  fewer rings, a coarser grid — until it holds at most **max. rays** (500 by default, at most 5000)
+  of each wavelength. Every wavelength of its spectrum is kept, so a spectrum of many samples is
+  traced with up to that many times **max. rays**. An image source is thinned to at most
+  **max. rays** in all instead, spread evenly over its cross section with its outermost rays kept.
+  A source with fewer rays is drawn in full.
+- **Energies only decide which rays are drawn.** As in the analysis, a ray below the analyzer's
+  minimum energy per ray is dropped at its source. A coarser source shares its energy among fewer
+  rays, so the faint edges of a spectrum can be drawn where the analysis drops them.
 - **Only the primary path is drawn.** A ghost focus analyzer contributes its sources, but not its
   reflections.
 - **They need an analyzer whose light is rays.** An energy analysis has none of its own, and the
@@ -206,6 +221,7 @@ Above the picture the view keeps a single line about itself:
 | Part | Effect |
 | :--- | :--- |
 | **Analyzer name ▾** | The analyzer the view follows; click it to follow another |
+| **λ ▬▬ λ** | The false colors the rays are drawn in, from the shortest to the longest wavelength of the sources; shown while **Rays** is on and the sources hold several wavelengths |
 | Red message | Why nothing could be drawn: no source port, no analyzer, or where the optical axis ends |
 | **N component(s) could not be drawn** | Click it for a list of them; pick one to go to it in the graph |
 | **N components** | How many components are drawn |
@@ -228,7 +244,7 @@ Everything else the view can be told sits in the **3D View** menu in the top nav
 | **Show / Hide World axes** | Show or hide the corner orientation gizmo |
 | **Show / Hide Optical axis** | Show or hide the optical axis |
 | **Show / Hide Rays** | Show or hide the traced rays of the analyzer's sources |
-| **max. rays** | The most rays drawn per source; takes effect on Enter or when leaving the field |
+| **max. rays** | The most rays drawn per source and wavelength; takes effect on Enter or when leaving the field |
 | **ray opacity** | How opaque the rays are drawn; the axis is always solid |
 
 See [Light: the optical axis and the rays](#light-the-optical-axis-and-the-rays) for what the last

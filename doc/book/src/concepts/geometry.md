@@ -98,7 +98,7 @@ OPOSSUM must decide where to place the Beam Combiner in 3D space. The logic is a
 1. **Placement:** The Beam Combiner is placed from the beam reaching its **first input** (`input_1`) — deterministically, independently of the order in which the two arms happen to be traced. Here that puts it at the end of the 100 mm Arm 1.
 2. **Consistency check:** The axis reaching the **second input** (`input_2`) is then checked against that placement. Since Arm 2 is 200 mm long, its beam does not meet the Combiner where Arm 1 placed it.
 
-**Result:** OPOSSUM keeps the placement from `input_1` and issues a **warning**. The warning does more than flag the problem: it reports how far the second beam is off (in direction, in distance along the axis, and as a sideways miss), the connection length that would remove the along-axis error, and the exact position and direction the second arm would need at its predecessor to be consistent. Use it to correct the offending connection distance or alignment; you must verify warnings in split-path setups.
+**Result:** OPOSSUM keeps the placement from `input_1` and issues a **warning**. The warning does more than flag the problem: it reports how far the second beam is off (in direction, in distance along the axis, and as a sideways miss), the connection length that would remove the along-axis error, and the exact position and direction the second arm would need at its predecessor to be consistent. Use it to correct the offending connection distance or alignment; you must verify warnings in split-path setups. The axes of both arms run on through the combiner all the same, so in the 3D view an inconsistent second arm shows as a second axis leaving the combiner beside the first.
 
 ### Two Sources on One Combiner
 
