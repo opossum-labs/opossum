@@ -11,7 +11,7 @@ use crate::{
         raytrace::AnalysisRayTrace,
     },
     core_optics::{
-        Appearance, NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, SurfacePorts,
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, SurfacePorts,
         optic_node::APERTURE_LIMIT_NOTE,
     },
     error::{OpmResult, OpossumError},
@@ -197,9 +197,6 @@ impl OpticNode for WaveFront {
                 .unwrap_or(SurfaceShape::Plane),
             self.cross_section()?,
         )?))
-    }
-    fn appearance(&self) -> Option<Appearance> {
-        Some(Appearance::detector())
     }
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;

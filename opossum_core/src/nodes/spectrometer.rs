@@ -9,7 +9,7 @@ use crate::{
         raytrace::AnalysisRayTrace,
     },
     core_optics::{
-        Appearance, NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, SurfacePorts,
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, SurfacePorts,
         optic_node::APERTURE_LIMIT_NOTE,
     },
     error::OpmResult,
@@ -180,9 +180,6 @@ impl OpticNode for Spectrometer {
             SurfaceShape::Plane,
             self.cross_section()?,
         )?))
-    }
-    fn appearance(&self) -> Option<Appearance> {
-        Some(Appearance::detector())
     }
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;

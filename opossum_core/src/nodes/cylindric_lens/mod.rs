@@ -4,7 +4,7 @@
 use crate::{
     analyzers::energy::AnalysisEnergy,
     apertures::{OpticShape, RectangleShape},
-    core_optics::{Appearance, NodeAttr, OpticNode, OpticNodeExt, SurfacePorts},
+    core_optics::{NodeAttr, OpticNode, OpticNodeExt, SurfacePorts},
     error::{OpmResult, OpossumError},
     geometry::{Geometry, body::OPTIC_SHAPE},
     material::{MATERIAL, Material},
@@ -186,9 +186,6 @@ impl OpticNode for CylindricLens {
             cross_section,
             self.material()?,
         )?))
-    }
-    fn appearance(&self) -> Option<Appearance> {
-        Some(Appearance::glass())
     }
     fn surface_ports(&self) -> SurfacePorts {
         SurfacePorts::THROUGH_SOLID

@@ -100,18 +100,4 @@ mod test {
     fn a_name_that_is_no_node_type_has_no_look() {
         assert!(appearance_of("no such type").is_err());
     }
-
-    /// Transitional: the table answers for every node type exactly as the node itself still does.
-    #[test]
-    fn the_table_agrees_with_every_node() -> OpmResult<()> {
-        let node_types = node_types().into_iter().map(|(node_type, _)| node_type);
-        for node_type in node_types.chain(["reference"]) {
-            assert_eq!(
-                appearance_of(node_type)?,
-                create_node_ref(node_type)?.appearance(),
-                "the table and the node disagree on how '{node_type}' looks"
-            );
-        }
-        Ok(())
-    }
 }

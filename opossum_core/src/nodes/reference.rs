@@ -6,7 +6,7 @@ use crate::{
         raytrace::AnalysisRayTrace,
     },
     core_optics::{
-        Appearance, NodeAttr, NodeAttrExt, OpticNode, OpticPorts, OpticRef, SurfacePorts,
+        NodeAttr, NodeAttrExt, OpticNode, OpticPorts, OpticRef, SurfacePorts,
         node_attr::{HasNodeAttr, NodePositioning},
     },
     error::{OpmResult, OpossumError},
@@ -128,10 +128,6 @@ impl OpticNode for NodeReference {
     /// A reference has no shape of its own; it is traced through the node it refers to.
     fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(None)
-    }
-    /// A reference is the node it refers to, passed again; that node is drawn already.
-    fn appearance(&self) -> Option<Appearance> {
-        None
     }
     fn ports(&self) -> OpticPorts {
         let mut ports = self.ports.clone();

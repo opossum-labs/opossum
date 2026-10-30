@@ -10,8 +10,8 @@ use crate::{
     },
     coatings::Coating,
     core_optics::{
-        Appearance, NodeAttr, OpticNode, OpticNodeExt, PortType, SurfaceFinish, SurfacePorts,
-        hit_map::rays_hit_map::HitPoint, node_attr::HasNodeAttr, surface_effect::SurfaceEffect,
+        NodeAttr, OpticNode, OpticNodeExt, PortType, SurfacePorts, hit_map::rays_hit_map::HitPoint,
+        node_attr::HasNodeAttr, surface_effect::SurfaceEffect,
     },
     error::{OpmResult, OpossumError},
     geometry::{
@@ -399,15 +399,6 @@ impl OpticNode for ReflectiveGrating {
     fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::plane(self.cross_section()?)))
     }
-    /// A grating reflects, but it is drawn iridescent: the rainbow its periodic structure shows.
-    fn appearance(&self) -> Option<Appearance> {
-        Some(Appearance {
-            color: [0.85, 0.85, 0.9, 1.0],
-            roughness: 0.15,
-            metallic: 1.0,
-            finish: SurfaceFinish::Iridescent,
-        })
-    }
     fn surface_ports(&self) -> SurfacePorts {
         SurfacePorts::SINGLE_SURFACE
     }
@@ -419,7 +410,7 @@ mod test {
     use crate::{
         J_per_cm2,
         analyzers::{RayTraceConfig, energy::EnergyConfig},
-        core_optics::{NodeAttrExt, PortType, SurfaceFinish, node_attr::NodePositioning},
+        core_optics::{NodeAttrExt, PortType, node_attr::NodePositioning},
         degree, joule,
         light::{Ray, Rays, spectrum_helper::create_he_ne_spec},
         millimeter, nanometer,
@@ -660,17 +651,6 @@ mod test {
         Ok(())
     }
 
-    /// A grating reflects, but it is drawn iridescent rather than as a mirror.
-    #[test]
-    fn grating_appearance_is_iridescent() {
-        assert_eq!(
-            ReflectiveGrating::default()
-                .appearance()
-                .map(|appearance| appearance.finish),
-            Some(SurfaceFinish::Iridescent),
-            "a ReflectiveGrating must be drawn iridescent"
-        );
-    }
     /// Trace one ray of 1 J at 1000 nm from 10 mm in front of a grating along z.
     fn diffracted_by(node: &mut ReflectiveGrating) -> OpmResult<(Rays, Rays)> {
         let incoming = Rays::from(Ray::new_collimated(

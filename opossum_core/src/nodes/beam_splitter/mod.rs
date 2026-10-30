@@ -7,7 +7,7 @@ mod analysis_raytrace;
 use super::splitter::Splitter;
 use crate::{
     coatings::{CoatingType, SplittingConfig, SplittingConfigBuilder},
-    core_optics::{Appearance, NodeAttr, OpticNode, OpticNodeExt, SurfacePorts},
+    core_optics::{NodeAttr, OpticNode, OpticNodeExt, SurfacePorts},
     error::{OpmResult, OpossumError},
     geometry::{
         Geometry, SurfaceGeometry,
@@ -167,9 +167,6 @@ impl Splitter for BeamSplitter {}
 impl OpticNode for BeamSplitter {
     fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::plane(self.cross_section()?)))
-    }
-    fn appearance(&self) -> Option<Appearance> {
-        Some(Appearance::mirror())
     }
     fn surface_ports(&self) -> SurfacePorts {
         SurfacePorts {

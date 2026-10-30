@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use crate::{
-    core_optics::{Appearance, NodeAttr, OpticNodeExt, SurfacePorts, node_attr::NodePositioning},
+    core_optics::{NodeAttr, OpticNodeExt, SurfacePorts, node_attr::NodePositioning},
     error::OpmResult,
     geometry::{Geometry, SurfaceGeometry},
     nodes::NodeRegistration,
@@ -62,10 +62,6 @@ impl Display for SourcePort {
 impl OpticNode for SourcePort {
     fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::plane(None)))
-    }
-    /// A source port is where light begins, not a thing to be drawn.
-    fn appearance(&self) -> Option<Appearance> {
-        None
     }
     /// A source port only has an output port.
     fn surface_ports(&self) -> SurfacePorts {

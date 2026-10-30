@@ -10,7 +10,7 @@ use crate::{
     },
     apertures::{Bore, CircleShape, OpticShape, Outline},
     coatings::CoatingConstantR,
-    core_optics::{Appearance, NodeAttr, OpticNode, OpticNodeExt, SurfacePorts},
+    core_optics::{NodeAttr, OpticNode, OpticNodeExt, SurfacePorts},
     degree,
     error::{OpmResult, OpossumError},
     geometry::{Extruded, Geometry, body::OPTIC_SHAPE},
@@ -194,9 +194,6 @@ impl OpticNode for BoredMirror {
             cross_section,
             self.material()?,
         )?))
-    }
-    fn appearance(&self) -> Option<Appearance> {
-        Some(Appearance::glass())
     }
     fn surface_ports(&self) -> SurfacePorts {
         SurfacePorts {

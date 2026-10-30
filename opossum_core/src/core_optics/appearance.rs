@@ -2,8 +2,8 @@
 //! Cosmetic appearance types for drawable optical components.
 //!
 //! These types describe how a component should look in a 3-D rendering, independently of any
-//! renderer or rendering library. Every node states its own (see
-//! [`OpticNode::appearance`](super::OpticNode::appearance)); it never affects a simulation.
+//! renderer or rendering library. Which component looks how is decided by the 3D view; it never
+//! affects a simulation.
 
 use nalgebra::Vector3;
 use uom::si::f64::Length;
@@ -162,24 +162,10 @@ mod test {
     use super::*;
     use crate::{
         coatings::{CoatingConstantR, SplittingConfigBuilder},
-        core_optics::OpticNode,
-        nanometer,
-        nodes::{EnergyMeter, IdealFilter, Lens, ReflectiveGrating, ThinMirror},
-        percent,
+        nanometer, percent,
     };
     use approx::assert_abs_diff_eq;
 
-    /// A mirror is drawn reflective: as it looks fully mirrored, metallic and in its own color.
-    #[test]
-    fn a_mirror_looks_reflective() {
-        let appearance = ThinMirror::default().appearance();
-        assert_eq!(appearance, Some(Appearance::mirror()));
-        assert_eq!(
-            appearance.map(|appearance| appearance.color),
-            Some([0.0, 0.5, 0.5, 0.6_f32])
-        );
-        assert_eq!(appearance.map(|appearance| appearance.metallic), Some(1.0));
-    }
     /// The wavelength the coatings below are evaluated at.
     fn green() -> Length {
         nanometer!(532.0)
@@ -220,9 +206,10 @@ mod test {
     #[test]
     fn other_finishes_keep_their_look_under_a_coating() -> OpmResult<()> {
         let mirroring: CoatingType = CoatingConstantR::new(percent!(100.0))?.into();
-        let grating = ReflectiveGrating::default()
-            .appearance()
-            .ok_or_else(|| crate::error::OpossumError::Other("a grating is drawn".into()))?;
+        let grating = Appearance {
+            finish: SurfaceFinish::Iridescent,
+            ..Appearance::mirror()
+        };
         for appearance in [grating, Appearance::detector(), Appearance::transmissive()] {
             assert_eq!(appearance.coated(&mirroring, green(), 1.5)?, appearance);
         }
@@ -235,36 +222,6 @@ mod test {
             Appearance::mirror()
                 .coated(&CoatingType::Fresnel, nanometer!(0.0), 1.0)
                 .is_err()
-        );
-    }
-    /// A filter is drawn transmissive.
-    #[test]
-    fn a_filter_looks_transmissive() {
-        let appearance = IdealFilter::default().appearance();
-        assert_eq!(appearance, Some(Appearance::transmissive()));
-        assert_eq!(
-            appearance.map(|appearance| appearance.color),
-            Some([0.85, 0.9, 0.85, 0.4_f32])
-        );
-    }
-    /// A detector is drawn opaque.
-    #[test]
-    fn a_detector_looks_opaque() {
-        let appearance = EnergyMeter::default().appearance();
-        assert_eq!(appearance, Some(Appearance::detector()));
-        assert_eq!(
-            appearance.map(|appearance| appearance.color),
-            Some([0.25, 0.25, 0.28, 1.0_f32])
-        );
-    }
-    /// A lens is drawn as neutral glass.
-    #[test]
-    fn a_lens_looks_like_neutral_glass() {
-        let appearance = Lens::default().appearance();
-        assert_eq!(appearance, Some(Appearance::glass()));
-        assert_eq!(
-            appearance.map(|appearance| appearance.color),
-            Some([0.3, 0.3, 0.3, 1.0_f32])
         );
     }
 }

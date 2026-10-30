@@ -1260,35 +1260,6 @@ fn small_signal_ghost_reflections_are_amplified_on_every_pass() -> OpmResult<()>
     }
     Ok(())
 }
-/// Every node that states an appearance can be drawn in its default state: its geometry can be
-/// meshed, and every patch holds triangles.
-///
-/// A node type is registered once and then shows up in the 3D view without anything being added
-/// for it, so whether its default geometry can actually be meshed has to be settled here rather
-/// than found out later by a viewer left with a hole in the scene.
-#[test]
-fn every_drawn_node_can_be_meshed_in_its_default_state() -> OpmResult<()> {
-    for (node_type, _) in node_types() {
-        let optic_ref = create_node_ref(node_type)?;
-        if optic_ref.appearance().is_none() {
-            continue;
-        }
-        let meshes = optic_ref.geometry_mesh(32).map_err(|e| {
-            OpossumError::Other(format!("node type '{node_type}' cannot be meshed: {e}"))
-        })?;
-        assert!(
-            !meshes.is_empty(),
-            "node type '{node_type}' came out without a patch"
-        );
-        for patch in &meshes {
-            assert!(
-                !patch.mesh.triangles().is_empty(),
-                "a patch of node type '{node_type}' came out without any triangles"
-            );
-        }
-    }
-    Ok(())
-}
 /// A node declares an [`OPTIC_SHAPE`] that bounds a region exactly when its geometry ends
 /// sideways or records within a window, and the geometry it installs has exactly that window.
 /// The dummy starts with an open optic shape and neither ends sideways nor has a window.

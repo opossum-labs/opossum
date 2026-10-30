@@ -10,8 +10,7 @@ use crate::{
     },
     apertures::OpticShape,
     core_optics::{
-        Appearance, NodeAttr, OpticNode, OpticNodeExt, SurfacePorts,
-        optic_node_ext::single_io_port_names,
+        NodeAttr, OpticNode, OpticNodeExt, SurfacePorts, optic_node_ext::single_io_port_names,
     },
     error::OpmResult,
     geometry::{Geometry, body::OPTIC_SHAPE},
@@ -104,10 +103,6 @@ impl AnalysisRayTrace for Dummy {
 impl OpticNode for Dummy {
     fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::plane(self.cross_section()?)))
-    }
-    /// A dummy is only traced at; it is not drawn.
-    fn appearance(&self) -> Option<Appearance> {
-        None
     }
     fn surface_ports(&self) -> SurfacePorts {
         SurfacePorts::SINGLE_SURFACE

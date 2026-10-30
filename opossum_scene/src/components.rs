@@ -320,7 +320,7 @@ mod test {
         light::lightdata::ray_data_builder::RayDataBuilder,
         material::default_reference_wavelength,
         millimeter,
-        nodes::{Lens, SourcePort, ThinMirror},
+        nodes::{Lens, SourcePort, ThinMirror, create_node_ref, node_types},
         opm_document::OpmDocument,
         properties::Proptype,
     };
@@ -462,7 +462,7 @@ mod test {
             .scenery()
             .collect_all_nodes_recursive()?
             .into_iter()
-            .find(|node| node.appearance() == Some(Appearance::glass()))
+            .find(|node| node.node_type() == "lens")
             .expect("a model with lenses has something to draw")
             .node_attr()
             .uuid();
@@ -519,7 +519,7 @@ mod test {
             .scenery()
             .collect_all_nodes_recursive()?
             .into_iter()
-            .find(|node| node.appearance() == Some(Appearance::glass()))
+            .find(|node| node.node_type() == "lens")
             .expect("a model with lenses has something to draw")
             .node_attr()
             .uuid();
@@ -569,6 +569,35 @@ mod test {
                 offset.iter().all(|axis| axis.abs() < 1e-9),
                 "a component's own file placed it away from the origin: {node}"
             );
+        }
+        Ok(())
+    }
+
+    /// Every node type that is drawn can be drawn in its default state: its geometry can be meshed,
+    /// and every patch holds triangles.
+    ///
+    /// A node type is registered once and then shows up in the 3D view without anything being added
+    /// for it, so whether its default geometry can actually be meshed has to be settled here rather
+    /// than found out later by a viewer left with a hole in the scene.
+    #[test]
+    fn every_drawn_node_can_be_meshed_in_its_default_state() -> OpmResult<()> {
+        for (node_type, _) in node_types() {
+            if appearance_of(node_type)?.is_none() {
+                continue;
+            }
+            let meshes = create_node_ref(node_type)?.geometry_mesh(32).map_err(|e| {
+                OpossumError::Other(format!("node type '{node_type}' cannot be meshed: {e}"))
+            })?;
+            assert!(
+                !meshes.is_empty(),
+                "node type '{node_type}' came out without a patch"
+            );
+            for patch in &meshes {
+                assert!(
+                    !patch.mesh.triangles().is_empty(),
+                    "a patch of node type '{node_type}' came out without any triangles"
+                );
+            }
         }
         Ok(())
     }

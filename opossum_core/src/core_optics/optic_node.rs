@@ -11,7 +11,7 @@ use uuid::Uuid;
 use crate::{
     analyzers::{Analyzable, AnalyzerKind, propagation_strategy::PropagationStrategy},
     core_optics::{
-        Appearance, NodeAttrExt, OpticNodeExt, OpticPorts, SurfacePorts,
+        NodeAttrExt, OpticNodeExt, OpticPorts, SurfacePorts,
         node_attr::{HasNodeAttr, NodePositioning},
     },
     error::{OpmResult, OpossumError},
@@ -219,18 +219,6 @@ pub trait OpticNode: VisualNode + HasNodeAttr + OpticNodeAny {
         self.node_attr_mut().set_inverted(inverted);
         Ok(())
     }
-
-    /// Return how this node is drawn in a 3D view.
-    ///
-    /// Every node type answers this itself, so a new one has to decide whether and how it is seen.
-    /// What is drawn is the node's geometry (see [`OpticNodeExt::geometry_mesh`]); the appearance
-    /// only says in what. It never affects a simulation.
-    ///
-    /// # Returns
-    ///
-    /// The [`Appearance`], or `None` for a node that is not drawn: one without a shape of its own,
-    /// such as a group or a reference, or one that is only traced at, such as a source.
-    fn appearance(&self) -> Option<Appearance>;
 
     /// Return [`NodeReportResult`] of the current state of this [`OpticNode`].
     ///

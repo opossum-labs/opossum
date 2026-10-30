@@ -96,13 +96,16 @@ fn geometry_of(drawn: &Drawn<'_>) -> String {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::test_helpers::{a_bit_of_everything, drawn_components, exported, two_lenses};
+    use crate::{
+        appearance::appearance_of,
+        test_helpers::{a_bit_of_everything, drawn_components, exported, two_lenses},
+    };
     use opossum_core::{
         analyzers::{AnalyzerType, RayTraceConfig},
         apertures::{Bore, CircleShape, OpticShape, Outline},
         coatings::CoatingType,
         core_optics::{
-            NodeAttr, OpticNode, OpticNodeExt,
+            NodeAttr, OpticNodeExt,
             node_attr::{HasNodeAttr, NodePositioning},
         },
         degree,
@@ -120,7 +123,7 @@ mod test {
     fn changing_a_coating_changes_the_geometry() -> OpmResult<()> {
         let mut mirror = ThinMirror::default();
         let wavelength = default_reference_wavelength();
-        let appearance = mirror.appearance().expect("a mirror is drawn");
+        let appearance = appearance_of(mirror.node_type())?.expect("a mirror is drawn");
         let before = geometry_of(&Drawn::new(&mirror, appearance, wavelength)?);
         mirror.set_coating(SurfaceGeometry::FACE, &CoatingType::IdealAR)?;
         let after = geometry_of(&Drawn::new(&mirror, appearance, wavelength)?);

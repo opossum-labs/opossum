@@ -8,7 +8,7 @@ use crate::{
     },
     coatings::CoatingConstantR,
     core_optics::{
-        Appearance, NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, SurfacePorts,
+        NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, PortType, SurfacePorts,
         node_attr::HasNodeAttr, surface_effect::Refraction,
     },
     degree,
@@ -384,9 +384,6 @@ impl OpticNode for ParabolicMirror {
             vertex,
             self.cross_section()?,
         )?))
-    }
-    fn appearance(&self) -> Option<Appearance> {
-        Some(Appearance::mirror())
     }
     fn surface_ports(&self) -> SurfacePorts {
         SurfacePorts::SINGLE_SURFACE

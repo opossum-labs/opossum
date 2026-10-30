@@ -18,7 +18,7 @@ use crate::{
         ghostfocus::AnalysisGhostFocus,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{Appearance, NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, SurfacePorts},
+    core_optics::{NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, SurfacePorts},
     error::OpmResult,
     geometry::Geometry,
     light::{LightData, LightResult, Spectrum},
@@ -110,10 +110,6 @@ impl RayPropagationVisualizer {
 impl OpticNode for RayPropagationVisualizer {
     fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::plane(None)))
-    }
-    /// The visualizer records the rays passing it; it is not drawn.
-    fn appearance(&self) -> Option<Appearance> {
-        None
     }
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;

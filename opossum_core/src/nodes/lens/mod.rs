@@ -3,7 +3,7 @@
 
 use crate::{
     analyzers::energy::AnalysisEnergy,
-    core_optics::{Appearance, NodeAttr, OpticNode, OpticNodeExt, SurfacePorts},
+    core_optics::{NodeAttr, OpticNode, OpticNodeExt, SurfacePorts},
     error::{OpmResult, OpossumError},
     geometry::{
         Geometry,
@@ -189,9 +189,6 @@ impl OpticNode for Lens {
             cross_section,
             self.material()?,
         )?))
-    }
-    fn appearance(&self) -> Option<Appearance> {
-        Some(Appearance::glass())
     }
     fn surface_ports(&self) -> SurfacePorts {
         SurfacePorts::THROUGH_SOLID

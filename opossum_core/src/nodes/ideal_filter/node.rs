@@ -8,7 +8,7 @@ use crate::{
         propagation_strategy::PropagationStrategy,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{Appearance, NodeAttr, OpticNodeExt, SurfacePorts, node_attr::HasNodeAttr},
+    core_optics::{NodeAttr, OpticNodeExt, SurfacePorts, node_attr::HasNodeAttr},
     error::{OpmResult, OpossumError},
     geometry::{
         Geometry,
@@ -146,9 +146,6 @@ impl IdealFilter {
 impl OpticNode for IdealFilter {
     fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         Ok(Some(Geometry::plane(self.cross_section()?)))
-    }
-    fn appearance(&self) -> Option<Appearance> {
-        Some(Appearance::transmissive())
     }
     fn surface_ports(&self) -> SurfacePorts {
         SurfacePorts::SINGLE_SURFACE
