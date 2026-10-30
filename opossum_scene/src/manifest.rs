@@ -97,7 +97,7 @@ fn geometry_of(drawn: &Drawn<'_>) -> String {
 mod test {
     use super::*;
     use crate::{
-        appearance::appearance_of,
+        appearance::Appearance,
         test_helpers::{a_bit_of_everything, drawn_components, exported, two_lenses},
     };
     use opossum_core::{
@@ -123,7 +123,7 @@ mod test {
     fn changing_a_coating_changes_the_geometry() -> OpmResult<()> {
         let mut mirror = ThinMirror::default();
         let wavelength = default_reference_wavelength();
-        let appearance = appearance_of(mirror.node_type())?.expect("a mirror is drawn");
+        let appearance = Appearance::of_node_type(mirror.node_type())?.expect("a mirror is drawn");
         let before = geometry_of(&Drawn::new(&mirror, appearance, wavelength)?);
         mirror.set_coating(SurfaceGeometry::FACE, &CoatingType::IdealAR)?;
         let after = geometry_of(&Drawn::new(&mirror, appearance, wavelength)?);

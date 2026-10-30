@@ -4,7 +4,7 @@ use log::warn;
 use nalgebra::{Isometry3, Point3};
 use opossum_core::{
     analyzers::Analyzable,
-    core_optics::{Appearance, NodeAttrExt, OpticNodeExt},
+    core_optics::{NodeAttrExt, OpticNodeExt},
     error::{OpmResult, OpossumError},
     geometry::{Geometry, SurfaceMesh},
     nodes::NodeGroup,
@@ -17,7 +17,7 @@ use optoscene::{
 use uom::si::f64::Length;
 
 use crate::{
-    appearance::appearance_of,
+    appearance::Appearance,
     material::{material_of, refractive_index_of},
 };
 
@@ -145,9 +145,9 @@ impl<'a> Drawn<'a> {
 /// Which components a 3D view shows is one decision, and it is made here rather than twice: the
 /// scene and the manifest that lists it have to agree on the set, or a viewer would be told about
 /// components it can never fetch. A component whose type is not drawn is passed over. A component
-/// that cannot be drawn, including one whose type has no look at all (see [`appearance_of`]), is
-/// reported and skipped rather than failing the whole walk, so one unusual component does not cost
-/// the view of the rest of the setup.
+/// that cannot be drawn, including one whose type has no look at all (see
+/// [`Appearance::of_node_type`]), is reported and skipped rather than failing the whole walk, so one
+/// unusual component does not cost the view of the rest of the setup.
 ///
 /// # Arguments
 ///
@@ -175,7 +175,7 @@ where
 {
     let mut skipped = Vec::new();
     for node_ref in placed.collect_all_nodes_recursive()? {
-        let Some(appearance) = appearance_of(node_ref.node_type()).transpose() else {
+        let Some(appearance) = Appearance::of_node_type(node_ref.node_type()).transpose() else {
             continue;
         };
         if node_ref.node_attr().effective_position().is_none() {
@@ -271,7 +271,7 @@ fn add_at(scene: &mut Scene, drawn: Drawn<'_>, placement: Isometry3<f64>) -> Opm
 /// This function returns an error if no look is defined for the component's type, if the component
 /// cannot be drawn (see [`Drawn::new`]), or if the scene cannot be written.
 pub fn glb_of_node(node: &dyn Analyzable, wavelength: Length) -> OpmResult<Option<Vec<u8>>> {
-    let Some(appearance) = appearance_of(node.node_type())? else {
+    let Some(appearance) = Appearance::of_node_type(node.node_type())? else {
         return Ok(None);
     };
     // Pinned at the coordinate origin. Left to itself the exporter subtracts the centre of the
@@ -582,7 +582,7 @@ mod test {
     #[test]
     fn every_drawn_node_can_be_meshed_in_its_default_state() -> OpmResult<()> {
         for (node_type, _) in node_types() {
-            if appearance_of(node_type)?.is_none() {
+            if Appearance::of_node_type(node_type)?.is_none() {
                 continue;
             }
             let meshes = create_node_ref(node_type)?.geometry_mesh(32).map_err(|e| {

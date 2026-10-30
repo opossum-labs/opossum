@@ -3,12 +3,14 @@
 use log::warn;
 use opossum_core::{
     analyzers::Analyzable,
-    core_optics::{Appearance, NodeAttrExt, SurfaceFinish},
+    core_optics::NodeAttrExt,
     error::{OpmResult, OpossumError},
     geometry::body::Body,
 };
 use optoscene::Material;
 use uom::si::f64::Length;
+
+use crate::appearance::{Appearance, SurfaceFinish};
 
 /// The refractive index used for a material that cannot state one at the asked wavelength.
 ///

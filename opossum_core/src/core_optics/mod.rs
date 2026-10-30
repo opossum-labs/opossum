@@ -1,4 +1,3 @@
-pub mod appearance;
 pub mod hit_map;
 pub mod node_attr;
 pub mod node_attr_ext;
@@ -9,7 +8,6 @@ pub mod optic_ref;
 pub mod optic_surface;
 pub mod surface_config;
 pub mod surface_effect;
-pub use appearance::{Appearance, SurfaceFinish};
 pub use node_attr::NodeAttr;
 pub use node_attr_ext::NodeAttrExt;
 pub use optic_node::Alignable;
