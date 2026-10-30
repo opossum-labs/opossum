@@ -110,6 +110,23 @@ impl ReflectedPart {
             Self::Branch => reflected.reduce_bounce_counter(),
         }
     }
+    /// Hands a ray the surface stopped to the bundle of reflected parts, if that is the bundle the
+    /// ray would have gone on in.
+    ///
+    /// The intended beam of a reflection is its reflected part, so a ray stopped there goes on in
+    /// it - invalid, with its path up to where it stopped. Behind a ghost or the second beam of a
+    /// beam splitter the incoming bundle goes on, which holds the stopped ray already.
+    ///
+    /// # Arguments
+    ///
+    /// * `ray` - the ray that hit or missed the surface; a ray still valid is left out.
+    /// * `reflected` - the bundle of reflected parts.
+    pub fn record_stop(self, ray: &Ray, reflected: &mut Rays) {
+        match self {
+            Self::Main if !ray.valid() => reflected.add_ray(ray.clone()),
+            Self::Main | Self::Ghost | Self::Branch => {}
+        }
+    }
     /// Links the bundle of reflected parts to the bundle the rays came in with.
     ///
     /// A ghost branches off the incoming bundle at its current position, the intended beam of a

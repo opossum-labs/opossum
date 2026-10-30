@@ -344,7 +344,7 @@ impl AnalysisRayTrace for ReflectiveGrating {
                 *config.missed_surface_strategy(),
             )?;
             if let Some(wavelength) = axis_wavelength
-                && diffracted_rays.nr_of_rays(false) == 0
+                && diffracted_rays.nr_of_rays(true) == 0
             {
                 return Err(OpossumError::Analysis(self.lost_axis_message(
                     diffraction_order,
@@ -734,6 +734,22 @@ mod test {
             vec!["rays totally reflected or missed a surface"],
         );
         assert_eq!(diffracted.nr_of_rays(true), 0);
+        Ok(())
+    }
+    /// A ray an evanescent order stops goes on in the outgoing bundle, invalid, with its path up
+    /// to the grating, so a drawing shows where it was lost instead of losing the whole ray.
+    #[test]
+    fn a_ray_an_evanescent_order_stops_ends_on_the_grating() -> OpmResult<()> {
+        let mut node = placed_at_origin::<ReflectiveGrating>()?;
+
+        let (_, diffracted) = diffracted_by(&mut node)?;
+
+        let stopped: Vec<&Ray> = diffracted.iter().collect();
+        assert_eq!(stopped.len(), 1, "the stopped ray goes on");
+        assert!(!stopped[0].valid());
+        let path = stopped[0].position_history_with_current();
+        assert_eq!(path.nrows(), 2, "from its start to the grating");
+        assert_relative_eq!(stopped[0].position().z.value, 0.0, epsilon = 1e-12);
         Ok(())
     }
 }

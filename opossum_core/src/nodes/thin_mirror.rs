@@ -440,4 +440,44 @@ mod test {
         }
         Ok(())
     }
+    /// A ray that misses the mirror is stopped and goes on in the reflected bundle, invalid, where
+    /// it last was: the reflected beam is what goes on, so that is where its path is drawn from.
+    #[test]
+    fn a_ray_that_misses_the_mirror_goes_on_stopped() -> OpmResult<()> {
+        let mut node = ThinMirror::default();
+        node.set_positioning(NodePositioning::Absolute(Isometry::new(
+            millimeter!(0.0, 0.0, 10.0),
+            degree!(0.0, 0.0, 0.0),
+        )?))?;
+        let mut rays = Rays::from(Ray::origin_along_z(nanometer!(1000.0), joule!(1.0))?);
+        // Beside the 12.5 mm radius of the default mirror.
+        rays.add_ray(Ray::new_collimated(
+            millimeter!(20.0, 0.0, 0.0),
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?);
+        let input = LightResult::from([("input_1".into(), LightData::Geometric(rays))]);
+
+        let output = AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default())?;
+
+        let Some(LightData::Geometric(reflected)) = output.get("output_1") else {
+            panic!("could not get LightData");
+        };
+        assert_eq!(
+            reflected.nr_of_rays(true),
+            1,
+            "the ray on the mirror is reflected"
+        );
+        assert_eq!(
+            reflected.nr_of_rays(false),
+            2,
+            "the one beside it goes on stopped"
+        );
+        let stopped = reflected
+            .iter()
+            .find(|ray| !ray.valid())
+            .ok_or_else(|| OpossumError::Other("no stopped ray".to_string()))?;
+        assert_eq!(stopped.position(), millimeter!(20.0, 0.0, 0.0));
+        Ok(())
+    }
 }

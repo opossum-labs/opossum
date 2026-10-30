@@ -334,7 +334,8 @@ impl Geometry {
     ///
     /// # Returns
     ///
-    /// The bundle of reflected parts.
+    /// The bundle of reflected parts. Where that is the intended beam, it also holds the rays the
+    /// surface stopped (see [`ReflectedPart::record_stop`]).
     ///
     /// # Warnings
     ///
@@ -366,6 +367,7 @@ impl Geometry {
             let Some(surface_hit) = self.intersect(face, ray) else {
                 missed.apply_to(ray);
                 rays_missed = true;
+                part.record_stop(ray, &mut reflected_rays);
                 continue;
             };
             if !acts_at(&surface_hit) {
@@ -397,6 +399,7 @@ impl Geometry {
                 reflected_rays.add_ray(reflected);
             } else {
                 rays_missed = true;
+                part.record_stop(ray, &mut reflected_rays);
             }
             if let Some(hit_point) = hit_point {
                 hit_points.push((hit_point, ray.number_of_bounces()));
