@@ -3,7 +3,6 @@ use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
     helper_functions::analyzer_mut_or_404,
-    scene_export::{AXIS_COLOR, glb_of_node, manifest_of, rays_glb, scene_of},
     sse_logger::SENDER,
     undo::{Command, PatchNode, RepositionAnalyzer, SetViewport, capture_old_node_request},
 };
@@ -23,6 +22,7 @@ use opossum_core::{
         SceneAnalyzer, SceneManifest, UndoRedoResponse, UpdateNodeRequest, ViewportChangeRequest,
     },
 };
+use opossum_scene::{AXIS_COLOR, glb_of_node, manifest_of, rays_glb, scene_glb};
 use serde::Deserialize;
 use std::{path::PathBuf, str::FromStr};
 use tokio::sync::mpsc;
@@ -141,9 +141,7 @@ async fn get_scene(
         let document = data.document.lock();
         document.placed_scenery(analyzer_still_there(&document, query.analyzer))?
     };
-    let glb = scene_of(&placed, default_reference_wavelength())?
-        .to_glb()
-        .map_err(|e| OpossumError::Other(format!("the scene could not be written: {e}")))?;
+    let glb = scene_glb(&placed, default_reference_wavelength())?;
     Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
 }
 

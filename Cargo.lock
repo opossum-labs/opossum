@@ -5761,6 +5761,7 @@ dependencies = [
  "opossum_core",
  "opossum_gui",
  "opossum_reporter",
+ "opossum_scene",
 ]
 
 [[package]]
@@ -5775,7 +5776,7 @@ dependencies = [
  "nalgebra",
  "opossum_core",
  "opossum_reporter",
- "optoscene",
+ "opossum_scene",
  "parking_lot 0.13.0",
  "ron",
  "semver",
@@ -5915,6 +5916,19 @@ dependencies = [
  "tempfile",
  "testing_logger",
  "tinytemplate",
+ "uom",
+ "uuid",
+]
+
+[[package]]
+name = "opossum_scene"
+version = "0.8.1"
+dependencies = [
+ "log",
+ "nalgebra",
+ "opossum_core",
+ "optoscene",
+ "serde_json",
  "uom",
  "uuid",
 ]

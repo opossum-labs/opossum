@@ -1,8 +1,10 @@
 //! Turning an optical model into a 3D scene.
 //!
 //! The geometry itself comes from `opossum_core`, which knows the shape of every component, and the
-//! file format from `optoscene`, which knows glTF. This module is only the seam between the two: it
+//! file format from `optoscene`, which knows glTF. This crate is only the seam between the two: it
 //! decides what of a model gets drawn at all, and which material it is drawn in.
+#![deny(missing_docs)]
+#![forbid(unsafe_code)]
 
 use log::warn;
 use nalgebra::{Isometry3, Point3};
@@ -41,7 +43,7 @@ const FALLBACK_REFRACTIVE_INDEX: f64 = 1.5;
 /// handbook's chapter on the 3D view).
 const GLASS_OPACITY: f32 = 0.7;
 
-/// Build a 3D scene of every component of a model that states an appearance.
+/// Build the glTF binary of every component of a model that states an appearance.
 ///
 /// Every node that states how it looks (see
 /// [`OpticNode::appearance`](opossum_core::core_optics::OpticNode::appearance)) is meshed and put
@@ -62,18 +64,20 @@ const GLASS_OPACITY: f32 = 0.7;
 ///
 /// # Returns
 ///
-/// A scene holding one node per drawable component.
+/// The GLB bytes of a scene holding one node per drawable component.
 ///
 /// # Errors
 ///
-/// This function returns an error if the nodes cannot be walked.
-pub fn scene_of(placed: &NodeGroup, wavelength: Length) -> OpmResult<Scene> {
+/// This function returns an error if the nodes cannot be walked, or if the scene cannot be written.
+pub fn scene_glb(placed: &NodeGroup, wavelength: Length) -> OpmResult<Vec<u8>> {
     let mut scene = Scene::new(SceneOptions::default());
     for_each_drawable(placed, wavelength, |drawn| {
         let placement = placement_of(drawn.node);
         add_at(&mut scene, drawn, placement)
     })?;
-    Ok(scene)
+    scene
+        .to_glb()
+        .map_err(|e| OpossumError::Other(format!("the scene could not be written: {e}")))
 }
 
 /// Where a component is drawn: where its node sits, which is where its geometry is traced.
@@ -302,8 +306,8 @@ fn material_of(
             metallic: appearance.metallic,
             roughness: appearance.roughness,
         },
-        // `Appearance` is renderer-agnostic and carries no thin-film parameters, so the
-        // backend supplies sensible defaults here.
+        // `Appearance` is renderer-agnostic and carries no thin-film parameters, so this
+        // crate supplies sensible defaults here.
         SurfaceFinish::Iridescent => Material::Iridescent {
             color: rgb,
             roughness: appearance.roughness,
@@ -502,7 +506,7 @@ fn ray_trace_of(rays: &Rays, uid: String, wavelength: Length) -> RayTrace {
 /// only needs its placement applied, however far it moved, and only one whose shape really changed
 /// has its file fetched again.
 ///
-/// The same walk as [`scene_of`] decides what is in here, so the manifest never names a component
+/// The same walk as [`scene_glb`] decides what is in here, so the manifest never names a component
 /// that cannot be drawn.
 ///
 /// # Arguments
@@ -576,11 +580,6 @@ fn geometry_of(drawn: &Drawn<'_>) -> String {
 }
 
 /// A running 64 bit FNV-1a hash.
-///
-/// Nothing cryptographic is called for — the only question is "the same as last time?" — but the
-/// answer has to mean the same thing from one run to the next, which rules out `DefaultHasher`,
-/// whose output is not promised to be stable between Rust releases. FNV is a dozen lines, so it
-/// costs no new dependency either.
 struct Fnv1a(u64);
 
 impl Fnv1a {
@@ -868,10 +867,10 @@ mod test {
 
     /// Export a model and read back what the exported scene says about itself.
     fn exported(document: &OpmDocument) -> OpmResult<serde_json::Value> {
-        let placed = document.placed_scenery(None)?;
-        let glb = scene_of(&placed, default_reference_wavelength())?
-            .to_glb()
-            .map_err(|e| OpossumError::Other(format!("the scene could not be written: {e}")))?;
+        let glb = scene_glb(
+            &document.placed_scenery(None)?,
+            default_reference_wavelength(),
+        )?;
         assert!(glb.starts_with(b"glTF"));
         Ok(glb_json(&glb))
     }
@@ -1263,7 +1262,7 @@ mod test {
     fn drawing_a_model_leaves_it_alone() -> OpmResult<()> {
         let document = a_bit_of_everything()?;
         let before = document.to_opm_file_string()?;
-        scene_of(
+        scene_glb(
             &document.placed_scenery(None)?,
             default_reference_wavelength(),
         )?;

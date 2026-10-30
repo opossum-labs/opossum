@@ -1,0 +1,28 @@
+[package]
+name = "opossum_scene"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+# `optoscene` below is a path dependency, which crates.io does not accept.
+publish = false
+
+[dependencies]
+opossum_core = { workspace = true }
+
+log.workspace = true
+nalgebra.workspace = true
+uom.workspace = true
+
+# Local path for now: `optoscene` is its own workspace next to this one and is not in this
+# repository yet. Once it has a repository of its own, only this one line changes into a git
+# dependency - see `optoscene_plan.md`.
+optoscene = { path = "../optoscene/crates/optoscene" }
+
+[dev-dependencies]
+serde_json.workspace = true
+uuid.workspace = true
