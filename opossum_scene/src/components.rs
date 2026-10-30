@@ -16,7 +16,10 @@ use optoscene::{
 };
 use uom::si::f64::Length;
 
-use crate::material::{material_of, refractive_index_of};
+use crate::{
+    appearance::appearance_of,
+    material::{material_of, refractive_index_of},
+};
 
 /// How finely the rim of a clear aperture is sampled.
 ///
@@ -24,13 +27,11 @@ use crate::material::{material_of, refractive_index_of};
 /// triangle size limit, how closely the surfaces themselves are followed.
 const RIM_SEGMENTS: usize = 64;
 
-/// Build the glTF binary of every component of a model that states an appearance.
+/// Build the glTF binary of every component of a model whose type is drawn.
 ///
-/// Every node that states how it looks (see
-/// [`OpticNode::appearance`](opossum_core::core_optics::OpticNode::appearance)) is meshed and put
-/// into the scene; every other one is passed over. A component that cannot be meshed is reported
-/// and skipped rather than failing the whole scene, so one unusual lens does not cost the view of
-/// the rest of the setup.
+/// Every node whose type has a look is meshed and put into the scene; every other one is passed
+/// over. A component that cannot be meshed is reported and skipped rather than failing the whole
+/// scene, so one unusual lens does not cost the view of the rest of the setup.
 ///
 /// The model has to be placed already — a component only learns where it is from a positioning run,
 /// see [`OpmDocument::placed_scenery`](opossum_core::opm_document::OpmDocument::placed_scenery).
@@ -143,9 +144,10 @@ impl<'a> Drawn<'a> {
 ///
 /// Which components a 3D view shows is one decision, and it is made here rather than twice: the
 /// scene and the manifest that lists it have to agree on the set, or a viewer would be told about
-/// components it can never fetch. A component that states no appearance is passed over. A
-/// component that cannot be drawn is reported and skipped rather than failing the whole walk, so
-/// one unusual component does not cost the view of the rest of the setup.
+/// components it can never fetch. A component whose type is not drawn is passed over. A component
+/// that cannot be drawn, including one whose type has no look at all (see [`appearance_of`]), is
+/// reported and skipped rather than failing the whole walk, so one unusual component does not cost
+/// the view of the rest of the setup.
 ///
 /// # Arguments
 ///
@@ -173,7 +175,7 @@ where
 {
     let mut skipped = Vec::new();
     for node_ref in placed.collect_all_nodes_recursive()? {
-        let Some(appearance) = node_ref.appearance() else {
+        let Some(appearance) = appearance_of(node_ref.node_type()).transpose() else {
             continue;
         };
         if node_ref.node_attr().effective_position().is_none() {
@@ -186,7 +188,9 @@ where
             });
             continue;
         }
-        let drawn = Drawn::new(&*node_ref, appearance, wavelength).and_then(&mut draw);
+        let drawn = appearance
+            .and_then(|appearance| Drawn::new(&*node_ref, appearance, wavelength))
+            .and_then(&mut draw);
         if let Err(e) = drawn {
             warn!("{node_ref} cannot be drawn and is left out of the scene: {e}");
             skipped.push(SkippedSceneNode {
@@ -259,15 +263,15 @@ fn add_at(scene: &mut Scene, drawn: Drawn<'_>, placement: Isometry3<f64>) -> Opm
 ///
 /// # Returns
 ///
-/// The GLB bytes of a scene holding nothing but this component, or `None` if the component states
-/// no appearance and is not drawn at all.
+/// The GLB bytes of a scene holding nothing but this component, or `None` if its type is not drawn
+/// at all.
 ///
 /// # Errors
 ///
-/// This function returns an error if the component cannot be drawn (see [`Drawn::new`]), or if the
-/// scene cannot be written.
+/// This function returns an error if no look is defined for the component's type, if the component
+/// cannot be drawn (see [`Drawn::new`]), or if the scene cannot be written.
 pub fn glb_of_node(node: &dyn Analyzable, wavelength: Length) -> OpmResult<Option<Vec<u8>>> {
-    let Some(appearance) = node.appearance() else {
+    let Some(appearance) = appearance_of(node.node_type())? else {
         return Ok(None);
     };
     // Pinned at the coordinate origin. Left to itself the exporter subtracts the centre of the

@@ -101,14 +101,18 @@ mod test {
         analyzers::{AnalyzerType, RayTraceConfig},
         apertures::{Bore, CircleShape, OpticShape, Outline},
         coatings::CoatingType,
-        core_optics::{OpticNode, OpticNodeExt},
+        core_optics::{
+            NodeAttr, OpticNode, OpticNodeExt,
+            node_attr::{HasNodeAttr, NodePositioning},
+        },
         degree,
         geometry::{SurfaceGeometry, body::OPTIC_SHAPE},
         light::lightdata::ray_data_builder::RayDataBuilder,
         material::default_reference_wavelength,
         millimeter,
-        nodes::{BoredMirror, EnergyMeter, Lens, SourcePort, ThinMirror, Wedge},
+        nodes::{BoredMirror, Dummy, EnergyMeter, Lens, SourcePort, ThinMirror, Wedge},
         opm_document::OpmDocument,
+        utils::geom_transformation::Isometry,
     };
 
     /// A changed coating changes how a component looks, so the viewer has to fetch it again.
@@ -345,6 +349,30 @@ mod test {
         assert_eq!(m.skipped.len(), 1);
         assert_eq!(m.skipped[0].uid, unreached);
         assert_eq!(m.skipped[0].group, group_id);
+        Ok(())
+    }
+
+    /// A placed component of a type that has no look is listed as skipped with that reason, not
+    /// silently left out.
+    #[test]
+    fn a_component_of_a_type_without_a_look_is_listed_as_skipped() -> OpmResult<()> {
+        let mut attr = NodeAttr::new("no such type");
+        attr.set_positioning(NodePositioning::Absolute(Isometry::identity()));
+        let mut stranger = Dummy::default();
+        *stranger.node_attr_mut() = attr;
+        let mut scenery = NodeGroup::default();
+        let stranger = scenery.add_node(stranger)?;
+
+        let m = manifest_of(&scenery, default_reference_wavelength())?;
+
+        assert!(m.nodes.is_empty());
+        assert_eq!(m.skipped.len(), 1);
+        assert_eq!(m.skipped[0].uid, stranger);
+        assert!(
+            m.skipped[0].reason.contains("no look"),
+            "the reason should name the missing look: '{}'",
+            m.skipped[0].reason
+        );
         Ok(())
     }
 

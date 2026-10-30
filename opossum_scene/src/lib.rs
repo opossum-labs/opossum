@@ -6,6 +6,7 @@
 #![deny(missing_docs)]
 #![forbid(unsafe_code)]
 
+mod appearance;
 mod components;
 mod hash;
 mod manifest;
