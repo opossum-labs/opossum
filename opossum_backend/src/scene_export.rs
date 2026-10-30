@@ -23,8 +23,6 @@ use optoscene::{
 };
 use uom::si::{f64::Length, length::meter};
 
-use crate::helper_functions::parent_group_id_or_self;
-
 /// How finely the rim of a clear aperture is sampled.
 ///
 /// The count carries through the whole mesh: it sets how round a lens looks and, through the
@@ -197,7 +195,7 @@ where
             warn!("{node_ref} has no place in the setup and is left out of the scene");
             skipped.push(SkippedSceneNode {
                 uid: node_ref.uuid(),
-                group: parent_group_id_or_self(placed, node_ref.uuid())?,
+                group: placed.parent_group_id_or_self(node_ref.uuid())?,
                 name: node_ref.name().to_string(),
                 reason: "has no place in the setup".to_string(),
             });
@@ -208,7 +206,7 @@ where
             warn!("{node_ref} cannot be drawn and is left out of the scene: {e}");
             skipped.push(SkippedSceneNode {
                 uid: node_ref.uuid(),
-                group: parent_group_id_or_self(placed, node_ref.uuid())?,
+                group: placed.parent_group_id_or_self(node_ref.uuid())?,
                 name: node_ref.name().to_string(),
                 reason: e.to_string(),
             });
@@ -534,7 +532,7 @@ pub fn manifest_of(placed: &NodeGroup, wavelength: Length) -> OpmResult<SceneMan
         let rotation = transform.rotation.quaternion();
         nodes.push(SceneNodeEntry {
             uid,
-            group: parent_group_id_or_self(placed, uid)?,
+            group: placed.parent_group_id_or_self(uid)?,
             name,
             geometry,
             position: [position.x as f32, position.y as f32, position.z as f32],
@@ -1413,7 +1411,7 @@ mod test {
 
     /// A component inside a nested group is listed with that group's uuid, not the root's. The 3D
     /// view needs the exact graph a click has to reveal the node in, and a subgroup is the case
-    /// `parent_group_id_or_self` has to recurse for rather than answering with the root.
+    /// [`NodeGroup::parent_group_id_or_self`] has to recurse for rather than answering with the root.
     #[test]
     fn a_component_inside_a_group_is_listed_with_that_group() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();

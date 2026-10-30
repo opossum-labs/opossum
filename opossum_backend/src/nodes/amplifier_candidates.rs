@@ -11,7 +11,6 @@ use uuid::Uuid;
 use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
-    helper_functions::parent_group_id_or_self,
     undo::{Command, PatchAmplifierNodes, PatchPumpScenario},
 };
 
@@ -61,7 +60,7 @@ pub async fn put_node_is_amplifier(
     let uuid = path.into_inner();
     let is_amplifier = is_amplifier.into_inner();
     let mut document = data.document.lock();
-    parent_group_id_or_self(document.scenery(), uuid)?;
+    document.scenery().parent_group_id_or_self(uuid)?;
 
     // Snapshot every scenario's state *before* the toggle, so the ones the toggle actually prunes
     // (turning candidacy off) can be told apart from the untouched ones afterward - same shape

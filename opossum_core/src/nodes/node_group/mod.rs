@@ -318,6 +318,19 @@ impl NodeGroup {
         self.graph.node_recursive(node_id, self.node_attr().uuid())
     }
 
+    /// Return the UUID of the group holding the node `node_id`, or `node_id` itself if it names this
+    /// group: the root has no parent to report, so it stands in for its own.
+    ///
+    /// # Errors
+    /// Returns [`OpossumError::OpticScenery`] if the node does not exist.
+    pub fn parent_group_id_or_self(&self, node_id: Uuid) -> OpmResult<Uuid> {
+        if node_id == self.node_attr().uuid() {
+            Ok(node_id)
+        } else {
+            Ok(self.node_recursive(node_id)?.1)
+        }
+    }
+
     /// Execute a read-only operation on the `NodeGroup` identified by `node_id`.
     ///
     /// # Errors
@@ -1121,6 +1134,25 @@ mod test {
         assert_eq!(top_group.connections().len(), 1);
         assert!(top_group.exists(n_inside));
 
+        Ok(())
+    }
+
+    /// The root reports itself, every other node the group holding it however deep it sits, and an
+    /// unknown uuid is an error.
+    #[test]
+    fn parent_group_id_or_self() -> OpmResult<()> {
+        let mut top_group = NodeGroup::new("top_group");
+        let top_id = top_group.node_attr().uuid();
+        let mut inner_group = NodeGroup::new("inner_group");
+        let n_inside = inner_group.add_node(Dummy::new("inside_node"))?;
+        let inner_id = top_group.add_node(inner_group)?;
+        let n_top = top_group.add_node(Dummy::new("top_node"))?;
+
+        assert_eq!(top_group.parent_group_id_or_self(top_id)?, top_id);
+        assert_eq!(top_group.parent_group_id_or_self(n_top)?, top_id);
+        assert_eq!(top_group.parent_group_id_or_self(inner_id)?, top_id);
+        assert_eq!(top_group.parent_group_id_or_self(n_inside)?, inner_id);
+        assert!(top_group.parent_group_id_or_self(Uuid::new_v4()).is_err());
         Ok(())
     }
 }

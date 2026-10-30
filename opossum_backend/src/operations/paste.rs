@@ -20,9 +20,7 @@ use super::upper_left_corner_of_nodes;
 use crate::{
     app_state::{AppState, NodeCacheItem},
     error::BackEndErrorResponse,
-    helper_functions::{
-        build_connect_info, map_port, parent_group_id_or_self, validate_relocated_references,
-    },
+    helper_functions::{build_connect_info, map_port, validate_relocated_references},
     undo::{Command, PatchAmplifierNodes, PatchPumpScenario},
 };
 
@@ -540,7 +538,7 @@ fn collect_optical_node_to_copy(
 
     node_id_link.insert(old_node_id, new_node_ref.uuid());
 
-    let parent_group_id = parent_group_id_or_self(scenery, old_node_id)?;
+    let parent_group_id = scenery.parent_group_id_or_self(old_node_id)?;
 
     let connect = scenery.with_group_node(parent_group_id, |group| {
         group

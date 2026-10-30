@@ -2,7 +2,7 @@
 use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
-    helper_functions::{analyzer_mut_or_404, parent_group_id_or_self},
+    helper_functions::analyzer_mut_or_404,
     scene_export::{AXIS_COLOR, glb_of_node, manifest_of, rays_glb, scene_of},
     sse_logger::SENDER,
     undo::{Command, PatchNode, RepositionAnalyzer, SetViewport, capture_old_node_request},
@@ -552,7 +552,7 @@ fn apply_one_position_update(
             .with_node_attr(update.uuid, |node_attr| {
                 capture_old_node_request(node_attr, &new)
             })?;
-        let parent_group_id = parent_group_id_or_self(document.scenery(), update.uuid)?;
+        let parent_group_id = document.scenery().parent_group_id_or_self(update.uuid)?;
         Command::PatchNode(Box::new(PatchNode {
             uuid: update.uuid,
             parent_group_id,
