@@ -521,6 +521,26 @@ fn a_terminal_evanescent_grating_is_still_placed() -> OpmResult<()> {
     Ok(())
 }
 
+/// The optical axis a terminal grating swallows ends where the grating sits, so a drawing shows
+/// it reach the grating. The grating's failure used to leave no axis at all, not even the part up
+/// to it.
+#[test]
+fn the_axis_a_terminal_grating_swallows_ends_at_the_grating() -> OpmResult<()> {
+    let (scenery, source, grating) = source_then_untilted_grating(false)?;
+    let mut document = OpmDocument::new(scenery);
+    document.add_analyzer(AnalyzerType::RayTrace(single_ray_config(source)?));
+    let grating_at = z_of(&document.placed_scenery(None)?, grating)?
+        .ok_or_else(|| OpossumError::Other("the grating is not placed".into()))?;
+
+    let axes = document.positioning_rays(None)?;
+
+    assert_eq!(axes.len(), 1, "the axis ends at the grating");
+    let ends: Vec<f64> = axes[0].iter().map(|ray| ray.position().z.value).collect();
+    assert_eq!(ends.len(), 1);
+    assert_relative_eq!(ends[0], grating_at, epsilon = 1e-12);
+    Ok(())
+}
+
 /// Any node that lets no light out ends the optical axis, not only a grating. A run that is not
 /// flagged as positioning skips the grating's own check and hands its empty bundle on, which shows
 /// that the graph walk itself says where the axis was lost.

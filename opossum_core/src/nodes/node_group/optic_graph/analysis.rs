@@ -16,7 +16,7 @@ use crate::{
     analyzers::energy::{AnalysisEnergy, EnergyConfig},
     core_optics::{NodeAttrExt, OpticRef, PortType, node_attr::NodePositioning},
     error::{OpmResult, OpossumError},
-    light::{LightData, LightResult},
+    light::{LightData, LightResult, Rays},
     nanometer,
     nodes::NodeGroup,
     radian,
@@ -476,18 +476,12 @@ impl OpticGraph {
             if let Some(group) = node.as_any_mut().downcast_mut::<NodeGroup>() {
                 group.add_input_port_distance(&port_name, distance_from_predecessor);
             }
-            let LightData::Geometric(rays) = incoming else {
-                return Err(OpossumError::Analysis(
-                    "expected LightData::Geometric at input port".into(),
-                ));
-            };
-            let Some(ray) = rays.into_iter().next() else {
+            let arriving = self.axis_arriving_at(node_id, &port_name, incoming)?;
+            let Some(ray) = arriving.iter().next() else {
                 return Err(OpossumError::Analysis(
                     "no rays in this ray bundle. cannot position nodes".into(),
                 ));
             };
-            let mut ray = ray.to_owned();
-            ray.propagate(distance_from_predecessor)?;
             let world_frame = ray.to_isometry()?;
             let entrance_frame = self.axis_entrance_frame_of(node_id, &port_name);
             if let Some(placed_iso) = self.g[idx].positioning().effective_position().copied() {
@@ -515,6 +509,42 @@ impl OpticGraph {
             }
         }
         Ok(())
+    }
+    /// Returns the optical axis arriving at an input port of a node, carried from where its
+    /// predecessor left it up to where the node sits.
+    ///
+    /// # Arguments
+    ///
+    /// * `node_id` - the node the axis arrives at.
+    /// * `port_name` - the input port it arrives through.
+    /// * `incoming` - the light on the edge into that port.
+    ///
+    /// # Returns
+    ///
+    /// The axis bundle with its valid rays propagated by the distance from the predecessor; the
+    /// first of them is the axis itself.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the light is not geometric, if the distance from the
+    /// predecessor cannot be determined or if a ray cannot be propagated.
+    pub(crate) fn axis_arriving_at(
+        &self,
+        node_id: Uuid,
+        port_name: &str,
+        incoming: &LightData,
+    ) -> OpmResult<Rays> {
+        let LightData::Geometric(rays) = incoming else {
+            return Err(OpossumError::Analysis(
+                "expected LightData::Geometric at input port".into(),
+            ));
+        };
+        let distance = self.distance_from_predecessor(node_id, port_name)?;
+        let mut arriving = rays.clone();
+        for ray in arriving.iter_mut().filter(|ray| ray.valid()) {
+            ray.propagate(distance)?;
+        }
+        Ok(arriving)
     }
     /// Returns the axis entrance frame of input port `port_name` of the node `node_id`.
     ///

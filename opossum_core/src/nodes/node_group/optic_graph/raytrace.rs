@@ -294,6 +294,8 @@ fn calculate_single_node_position(
         );
         return Ok(());
     }
+    // Kept only if a failing node without successors may have to end the axis it got.
+    let arriving = ray_ends.is_some().then(|| incoming_edges.clone());
     let output = execute_node_calculation(graph, node_idx, incoming_edges, config);
 
     let outgoing_edges = match output {
@@ -307,6 +309,14 @@ fn calculate_single_node_position(
             warn!(
                 "Calculation of optical axis for terminal node {node_info} failed: {e}. Ignoring as it has no successors."
             );
+            // The axis this node was placed by ends where it sits.
+            if let (Some(ray_ends), Some(arriving)) = (ray_ends.as_deref_mut(), arriving) {
+                for port in graph.g[node_idx].ports().names(&PortType::Input) {
+                    if let Some(light) = arriving.get(&port) {
+                        ray_ends.push(graph.axis_arriving_at(node_id, &port, light)?);
+                    }
+                }
+            }
             LightResult::default()
         }
     };
