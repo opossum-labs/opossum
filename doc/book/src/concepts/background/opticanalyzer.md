@@ -4,18 +4,25 @@
 
 The analyzer is also responsible for deciding which nodes in a graph must be calculated at all. Sometimes the user is only interested in a part of the optical network and in this case, often not all nodes need to be calculated at all. Furthermore, modifications of the model often do not need a complete recalculation of the graph but use results from earlier simulation runs. Finally, the analyzer could also decide, which nodes do not directly depend on each other. In this case, nodes can be calculated in parallel thus saving time on multi-core CPU computers.
 
-There might be different analyzers available such as:
+**Note**:Even in this case, the model might contain inconsistent values, for example, when the defined wavefront is not consistent with the defined rays.
 
-- geometric analysis (Matrix optics)
-- Gauss mode propagation (also matrix based, see LaserCalc)
-- wavefront propagation (Fourier optics)
-- simple calculation of energy / power
-- ghost focus / back reflection analysis
-- ...
+Different analyzers are available in Opossum, such as:
 
-## Sequential Analyzer
+- Ray tracing analyzer
+- Energy analyzer
+- Ghost focus / back reflection analyzer
 
-**Note**: Also in this case the model might contain inconsistent values such as a wavefront that does not fit the set of rays defined. [How do we deal with this?](https://git.gsi.de/phelix/rust/opossum/-/issues/9)
+### Ray Tracing
+
+The Ray Tracing Analyzer provides configuration options for controlling ray propagation through the optical system. These include the maximum number of refractions, the maximum number of bounces and the minimum ray energy. Additionally, a mixed surface strategy and an ambient material can be configured.
+
+### Energy Analysis
+
+The Energy Analyzer provides configuration options for defining the energy source port configuration, the energy type and the wavelength used for the analysis.
+
+### Ghost Focus Analysis
+
+The Ghost Focus Analyzer provides configuration options for the maximum number of bounces, the fluence estimator and the ambient materials used for the analysis.
 
 ## Non-sequential Analyzer
 
