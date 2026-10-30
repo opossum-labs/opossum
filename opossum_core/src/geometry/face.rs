@@ -285,7 +285,7 @@ impl<'a> SurfacePlacement<'a> {
     ///
     /// This function returns an error if the face runs parallel to the frame's axis, so that it
     /// never crosses it and cannot bound anything along it, or if the face has no vertex.
-    pub(crate) fn new(face: &'a Face, frame: &Isometry) -> OpmResult<Self> {
+    pub fn new(face: &'a Face, frame: &Isometry) -> OpmResult<Self> {
         let surface = face.surface();
         let relative =
             Isometry::new_from_transform(frame.get_inv_transform() * face.frame.get_transform());
@@ -368,7 +368,7 @@ impl<'a> SurfacePlacement<'a> {
     ///
     /// This function returns an error if the face does not reach that far out, or if it is both
     /// curved and tilted against the frame.
-    pub(crate) fn above(
+    pub fn above(
         &self,
         transversal_position: &Point2<Length>,
     ) -> OpmResult<(Point3<Length>, Vector3<f64>)> {

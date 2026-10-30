@@ -22,7 +22,7 @@ mod surface;
 
 pub mod body;
 
-pub use face::{Face, FaceIndex};
+pub use face::{Face, FaceIndex, SurfacePlacement};
 pub use mesh::{FacePatch, SurfaceMesh};
 pub use node_geometry::{Geometry, GeometryKind, SurfaceExtent, SurfaceGeometry, SurfaceHit};
 pub use rim::Rim;

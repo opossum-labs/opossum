@@ -66,7 +66,8 @@ impl RectangleShape {
     ///
     /// The outline and the edge of an [`OutlineShape`](super::OutlineShape) are built from these,
     /// so they are named once.
-    pub(super) fn corners(&self) -> [Point2<Length>; 4] {
+    #[must_use]
+    pub fn corners(&self) -> [Point2<Length>; 4] {
         let (half_width, half_height) = (self.width() / 2., self.height() / 2.);
         [
             Point2::new(half_width, half_height),

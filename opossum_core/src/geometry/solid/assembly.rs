@@ -178,25 +178,31 @@ impl Assembly {
             inversion: None,
         })
     }
-    /// Return the number of the part a face of the assembly belongs to, and the number the face has
-    /// in the solid of that part.
+    /// Return the solids of this assembly, each placed where it sits in the assembly, with the
+    /// number its first face has in the assembly.
     ///
     /// The faces of an assembly are those of its parts, part after part.
+    pub fn parts(&self) -> impl Iterator<Item = (usize, &Geometry)> {
+        self.parts.iter().scan(0, |first_face, part| {
+            let first = *first_face;
+            *first_face += part.geometry.kind().face_count();
+            Some((first, &part.geometry))
+        })
+    }
+    /// Return the number of the part a face of the assembly belongs to, and the number the face has
+    /// in the solid of that part (see [`Assembly::parts`]).
     ///
     /// # Arguments
     ///
     /// * `face` - the number of the face in the assembly.
     fn locate(&self, face: FaceIndex) -> Option<(usize, FaceIndex)> {
         let face = usize::from(face);
-        let mut first_face = 0;
-        for (index, part) in self.parts.iter().enumerate() {
-            let count = part.geometry.kind().face_count();
-            if face < first_face + count {
-                return Some((index, FaceIndex::new(face - first_face)));
-            }
-            first_face += count;
-        }
-        None
+        self.parts()
+            .enumerate()
+            .find_map(|(index, (first_face, geometry))| {
+                let own = face.checked_sub(first_face)?;
+                (own < geometry.kind().face_count()).then_some((index, FaceIndex::new(own)))
+            })
     }
 }
 
@@ -639,6 +645,18 @@ mod test {
             vec![crown_part()?, flint_part(millimeter!(-40.0), aside)?],
             vec![],
         )
+    }
+    /// The parts are handed out in their order, each as placed and with the number its first face
+    /// has in the assembly: the second lens starts after the two faces of the first.
+    #[test]
+    fn the_parts_are_numbered_part_after_part() -> OpmResult<()> {
+        let assembly = side_by_side()?;
+        let first_faces: Vec<usize> = assembly.parts().map(|(first_face, _)| first_face).collect();
+        assert_eq!(first_faces, [0, 2]);
+        for ((_, geometry), part) in assembly.parts().zip(&assembly.parts) {
+            assert_eq!(geometry, &part.geometry);
+        }
+        Ok(())
     }
     /// A node frame away from the origin and turned about all three axes.
     fn node_frame() -> OpmResult<Isometry> {

@@ -242,7 +242,8 @@ impl Bore {
             * Rotation3::from_axis_angle(&Vector3::z_axis(), self.rotation.value)
     }
     /// The direction the bore runs along, in the frame of the outline.
-    pub(crate) fn axis(&self) -> Vector3<f64> {
+    #[must_use]
+    pub fn axis(&self) -> Vector3<f64> {
         self.tilting().inverse() * Vector3::z()
     }
     /// The region of this bore as an [`Aperture`] of the given type, placed where the bore is.
@@ -257,7 +258,8 @@ impl Bore {
     /// Move a point of the bore's own cross-section to where the bore crosses the plane of the
     /// outline: turned and tilted, then along the axis of the bore onto the plane, shifted off the
     /// axis of the component.
-    fn placed(&self, point: Point2<Length>) -> Point2<Length> {
+    #[must_use]
+    pub fn placed(&self, point: Point2<Length>) -> Point2<Length> {
         let across = self.turn() * Vector3::new(point.x.value, point.y.value, 0.0);
         let axis = self.axis();
         let onto_plane = across - axis * (across.z / axis.z);
@@ -295,7 +297,7 @@ impl Bore {
     ///
     /// This function returns an error if the surface cannot say how high it lies, or if the line
     /// does not settle on it.
-    pub(crate) fn meeting(
+    pub fn meeting(
         &self,
         start: Point2<Length>,
         height: &impl Fn(Point2<Length>) -> OpmResult<Length>,
@@ -428,7 +430,7 @@ impl Outline {
     ///
     /// * `point` - the point, in the plane of the outline with the axis at its origin.
     #[must_use]
-    pub(crate) fn within_edge(&self, point: Point2<Length>) -> bool {
+    pub fn within_edge(&self, point: Point2<Length>) -> bool {
         self.shape.contains(point)
     }
     /// Return whether a point lies on or within the bore, if there is one, at whatever depth
@@ -439,7 +441,7 @@ impl Outline {
     /// * `point` - the point, in the frame of the outline: its plane at z = 0, the axis of the
     ///   component along z.
     #[must_use]
-    pub(crate) fn in_bore_at(&self, point: Point3<Length>) -> bool {
+    pub fn in_bore_at(&self, point: Point3<Length>) -> bool {
         self.bore
             .as_ref()
             .is_some_and(|bore| bore.contains_at(point))

@@ -689,6 +689,11 @@ impl SurfaceGeometry {
     }
     /// The number of the one face of a surface.
     pub const FACE: FaceIndex = FaceIndex::new(0);
+    /// Return how far this surface reaches sideways (see [`SurfaceExtent`]).
+    #[must_use]
+    pub const fn extent(&self) -> &SurfaceExtent {
+        &self.extent
+    }
 }
 
 /// A surface ends at its edge, if it has one. The window of a detector is no edge: the surface
