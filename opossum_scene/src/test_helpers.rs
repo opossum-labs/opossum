@@ -1,5 +1,6 @@
 //! Models and readers the tests of every module share.
 
+use nalgebra::Point2;
 use opossum_core::{
     analyzers::{AnalyzerType, RayTraceConfig},
     core_optics::OpticNode,
@@ -94,4 +95,19 @@ pub fn two_lenses(spacing: Length) -> OpmResult<OpmDocument> {
     config.map_source(source, RayDataBuilder::default());
     document.add_analyzer(AnalyzerType::RayTrace(config));
     Ok(document)
+}
+
+/// The corners of an L, 20 mm along each arm and 5 mm wide.
+///
+/// Counter-clockwise, and with one corner the outline turns *into* — which is what makes it worth
+/// testing against anything that walks or fills an outline.
+pub fn l_shape_corners() -> Vec<Point2<Length>> {
+    vec![
+        millimeter!(0.0, 0.0),
+        millimeter!(20.0, 0.0),
+        millimeter!(20.0, 5.0),
+        millimeter!(5.0, 5.0),
+        millimeter!(5.0, 20.0),
+        millimeter!(0.0, 20.0),
+    ]
 }

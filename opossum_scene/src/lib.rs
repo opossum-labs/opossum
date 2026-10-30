@@ -11,6 +11,7 @@ mod components;
 mod hash;
 mod manifest;
 mod material;
+mod mesh;
 mod rays;
 #[cfg(test)]
 mod test_helpers;

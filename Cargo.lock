@@ -5924,11 +5924,13 @@ dependencies = [
 name = "opossum_scene"
 version = "0.8.1"
 dependencies = [
+ "approx",
  "log",
  "nalgebra",
  "opossum_core",
  "optoscene",
  "serde_json",
+ "spade",
  "uom",
  "uuid",
 ]
