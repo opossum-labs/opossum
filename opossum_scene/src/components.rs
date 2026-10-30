@@ -7,7 +7,7 @@ use opossum_core::{
     apertures::Outline,
     core_optics::{NodeAttrExt, OpticNodeExt},
     error::{OpmResult, OpossumError},
-    geometry::{Geometry, SurfaceMesh, body::default_optic_shape},
+    geometry::body::default_optic_shape,
     nodes::NodeGroup,
     types::api_types::SkippedSceneNode,
     utils::geom_transformation::Isometry,
@@ -20,6 +20,7 @@ use uom::si::f64::Length;
 use crate::{
     appearance::Appearance,
     material::{material_of, refractive_index_of},
+    mesh::{Meshable, SurfaceMesh},
 };
 
 /// How finely the rim of a clear aperture is sampled.
@@ -116,27 +117,29 @@ impl<'a> Drawn<'a> {
     ///
     /// # Errors
     ///
-    /// This function returns an error if the component cannot be meshed, if the medium of its solid
-    /// cannot be told (see [`refractive_index_of`]), or if a material cannot be described (see
-    /// [`material_of`]).
+    /// This function returns an error if the component has no geometry or it cannot be meshed (see
+    /// [`Meshable::mesh`]), if the medium of its solid cannot be told (see [`refractive_index_of`]),
+    /// or if a material cannot be described (see [`material_of`]).
     pub fn new(
         node: &'a dyn Analyzable,
         appearance: Appearance,
         wavelength: Length,
     ) -> OpmResult<Self> {
-        let geometry = node.create_geometry()?;
-        let kind = geometry.as_ref().map(Geometry::kind);
-        let body = kind.and_then(|kind| kind.as_body());
+        let geometry = node.create_geometry()?.ok_or_else(|| {
+            OpossumError::Other(format!("node '{}' has no geometry to draw", node.name()))
+        })?;
+        let kind = geometry.kind();
+        let body = kind.as_body();
         // Behind a face lies the medium of the solid, or vacuum behind a single surface.
         let ior = body.map_or(Ok(1.0), |body| refractive_index_of(node, body, wavelength))?;
         let coated = |face| -> OpmResult<Appearance> {
             let name = kind
-                .and_then(|kind| kind.face_name(face))
+                .face_name(face)
                 .ok_or_else(|| OpossumError::Other(format!("there is no face {face}")))?;
             appearance.coated(node.surface_config(&name)?.coating(), wavelength, ior)
         };
         let mut patches = Vec::new();
-        for patch in node.geometry_mesh(RIM_SEGMENTS)? {
+        for patch in geometry.mesh(RIM_SEGMENTS, &unbounded_outline()?)? {
             let look = patch.face.map_or(appearance, |face| {
                 coated(face).unwrap_or_else(|e| {
                     warn!("a face of '{}' is drawn uncoated: {e}", node.name());
@@ -596,23 +599,36 @@ mod test {
     #[test]
     fn every_drawn_node_can_be_meshed_in_its_default_state() -> OpmResult<()> {
         for (node_type, _) in node_types() {
-            if Appearance::of_node_type(node_type)?.is_none() {
+            let Some(appearance) = Appearance::of_node_type(node_type)? else {
                 continue;
-            }
-            let meshes = create_node_ref(node_type)?.geometry_mesh(32).map_err(|e| {
-                OpossumError::Other(format!("node type '{node_type}' cannot be meshed: {e}"))
-            })?;
+            };
+            let node = create_node_ref(node_type)?;
+            let drawn =
+                Drawn::new(&*node, appearance, default_reference_wavelength()).map_err(|e| {
+                    OpossumError::Other(format!("node type '{node_type}' cannot be meshed: {e}"))
+                })?;
             assert!(
-                !meshes.is_empty(),
+                !drawn.patches.is_empty(),
                 "node type '{node_type}' came out without a patch"
             );
-            for patch in &meshes {
+            for (mesh, _) in &drawn.patches {
                 assert!(
-                    !patch.mesh.triangles().is_empty(),
+                    !mesh.triangles().is_empty(),
                     "a patch of node type '{node_type}' came out without any triangles"
                 );
             }
         }
+        Ok(())
+    }
+    /// A component without a shape of its own, such as a group, has nothing to draw, and says so.
+    #[test]
+    fn a_component_without_a_geometry_is_not_drawn() -> OpmResult<()> {
+        let group = NodeGroup::default();
+        let Err(error) = Drawn::new(&group, Appearance::glass(), default_reference_wavelength())
+        else {
+            return Err(OpossumError::Other("a group was drawn".into()));
+        };
+        assert!(error.to_string().contains("no geometry"), "{error}");
         Ok(())
     }
 }

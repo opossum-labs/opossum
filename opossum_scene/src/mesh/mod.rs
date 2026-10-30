@@ -74,8 +74,7 @@ mod test {
         geometry::{Extruded, FaceIndex, SurfaceGeometry, body::OPTIC_SHAPE},
         millimeter,
         nodes::{
-            BoredMirror, Dummy, Lens, NodeGroup, ParabolicMirror, ThinMirror, create_node_ref,
-            node_types,
+            BoredMirror, Dummy, Lens, ParabolicMirror, ThinMirror, create_node_ref, node_types,
         },
         properties::Proptype,
         refractive_index::RefrIndexConst,
@@ -90,12 +89,10 @@ mod test {
         })?;
         geometry.mesh(segments, &unbounded_outline()?)
     }
-    /// A node is meshed from its geometry: a group has none of its own and so nothing to mesh, and
-    /// the unbounded plane of a dummy is drawn as far as the default optic shape reaches.
+    /// A node is meshed from its geometry: the unbounded plane of a dummy is drawn as far as the
+    /// default optic shape reaches.
     #[test]
     fn a_node_is_meshed_from_its_geometry() -> OpmResult<()> {
-        let error = node_patches(&NodeGroup::default(), 16).unwrap_err();
-        assert!(error.to_string().contains("no geometry"), "{error}");
         let meshes = node_patches(&Dummy::default(), 16)?;
         assert_eq!(meshes.len(), 1);
         assert_eq!(meshes[0].face, Some(SurfaceGeometry::FACE));

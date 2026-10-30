@@ -1,7 +1,8 @@
 //! A stable hash of what a component looks like.
 
-use opossum_core::geometry::SurfaceMesh;
 use optoscene::Material;
+
+use crate::mesh::SurfaceMesh;
 
 /// A running 64 bit FNV-1a hash.
 pub struct Fnv1a(u64);
