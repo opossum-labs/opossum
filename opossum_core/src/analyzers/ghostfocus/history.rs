@@ -178,10 +178,6 @@ impl GhostFocusHistory {
     }
 
     /// Returns the report string for the critical ray origin in the ghost focus analysis
-    ///
-    /// # Panics
-    ///
-    /// This function might theoretically panic if locking of an internal mutex fails.
     #[must_use]
     pub fn rays_origin_report_str(&self, graph: &OpticGraph) -> String {
         let mut report_str = String::new();

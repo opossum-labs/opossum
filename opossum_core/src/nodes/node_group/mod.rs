@@ -190,20 +190,17 @@ impl NodeGroup {
     }
 
     /// Recursively collects the UUIDs of all nodes contained in this graph.
-    ///
-    /// # Errors
-    /// Returns an error if acquiring a lock on any contained node fails.
-    pub fn collect_all_contained_node_ids_recursive(&self) -> OpmResult<Vec<Uuid>> {
+    pub fn collect_all_contained_node_ids_recursive(&self) -> Vec<Uuid> {
         let mut result = Vec::new();
         for node_ref in self.nodes() {
             let uuid = node_ref.uuid();
             result.push(uuid);
             if let Some(group) = node_ref.as_any().downcast_ref::<Self>() {
-                let mut sub_ids = group.collect_all_contained_node_ids_recursive()?;
+                let mut sub_ids = group.collect_all_contained_node_ids_recursive();
                 result.append(&mut sub_ids);
             }
         }
-        Ok(result)
+        result
     }
 
     /// Recursively collects all optical node references contained in this graph.
@@ -252,7 +249,7 @@ impl NodeGroup {
     /// Returns the hierarchy of nodes starting from `node_id` bottom-up to the root group.
     ///
     /// # Errors
-    /// Returns an error if node resolution or lock acquisition fails.
+    /// Returns an error if node resolution fails.
     pub fn get_node_hierarchy_bottom_up(&self, node_id: Uuid) -> OpmResult<Vec<(Uuid, String)>> {
         let mut group_hierarchy = Vec::<(Uuid, String)>::new();
         self.with_node_attr(node_id, |node_attr| {
@@ -315,7 +312,7 @@ impl NodeGroup {
     /// Execute a read-only operation on the `NodeGroup` identified by `node_id`.
     ///
     /// # Errors
-    /// Returns an error if the node does not exist, cannot be downcast, or locking fails.
+    /// Returns an error if the node does not exist, cannot be downcast.
     pub fn with_group_node<R>(&self, node_id: Uuid, f: impl FnOnce(&Self) -> R) -> OpmResult<R> {
         if self.node_attr().uuid() == node_id {
             return Ok(f(self));
@@ -330,7 +327,7 @@ impl NodeGroup {
     /// Execute a mutable operation on the `NodeGroup` identified by `node_id`.
     ///
     /// # Errors
-    /// Returns an error if the node does not exist, cannot be downcast, or locking fails.
+    /// Returns an error if the node does not exist, cannot be downcast.
     pub fn with_group_node_mut<R>(
         &mut self,
         node_id: Uuid,

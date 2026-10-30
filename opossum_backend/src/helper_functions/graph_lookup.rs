@@ -267,7 +267,7 @@ pub fn validate_relocated_references(
             continue;
         };
         if let Some(group) = optic_ref.as_any().downcast_ref::<NodeGroup>() {
-            relocating_ids.extend(group.collect_all_contained_node_ids_recursive()?);
+            relocating_ids.extend(group.collect_all_contained_node_ids_recursive());
         }
     }
     let relocating_set: HashSet<Uuid> = relocating_ids.iter().copied().collect();
