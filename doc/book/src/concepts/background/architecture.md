@@ -57,8 +57,10 @@ which the viewer draws over the components as they are, without moving them.
 
 The rule behind the split is that the core describes and `opossum_scene` draws. The core holds what
 a simulation needs: faces, outlines, coatings, materials. Everything that serves only the picture
-belongs in `opossum_scene`. Two pieces have not moved yet: the colors and roughness of a node's
-`Appearance`, and the meshing of a geometry into triangles. Both are meant to follow.
+belongs in `opossum_scene`. How each node type looks is decided there, in a table keyed by the
+node type, so the core holds no look at all. One piece has not moved yet: the meshing of a geometry
+into triangles. It is meant to follow, behind a description of each solid's faces and walls that
+the core provides.
 
 `optoscene` does bring a streaming protocol of its own, which computes the minimal set of update
 messages between two scenes. OPOSSUM does not use it. The viewer already performs the same kind of

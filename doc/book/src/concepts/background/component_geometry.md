@@ -59,9 +59,10 @@ The first thing a geometry states is what kind of component it is:
 Whether a node has a *medium* — a material, absorption and possibly gain — is therefore answered by its geometry
 alone (`OpticNodeExt::encloses_volume`): a node whose geometry is a solid has one, every other node has none.
 
-Separate from its geometry, every node states its *appearance*: whether and how it is drawn in the 3D view
-(`OpticNode::appearance`). It only says what a component is drawn in and never affects a simulation. Some nodes are
-traced at a plane but state no appearance, so they are not drawn at all.
+Separate from its geometry, every node type has an *appearance*: whether and how it is drawn in the 3D view. The node
+does not state it. The 3D view looks it up by node type (`Appearance::of_node_type` in `opossum_scene`), so it never
+reaches the core and never affects a simulation. Some nodes are traced at a plane but have no appearance, so they are
+not drawn at all.
 
 | Group | Nodes | Geometry preset | Appearance |
 |---|---|---|---|
@@ -74,8 +75,10 @@ traced at a plane but state no appearance, so they are not drawn at all.
 | Traced, not drawn | source, dummy, ray propagation visualizer | `plane` | none |
 | No shape of its own | group, reference | none | none |
 
-Every node type has to state its geometry and its appearance: neither method has a default, so the compiler forces
-both. Glass takes its refractive index from the material of the solid, so only a solid can be drawn as glass.
+Every node type has to state its geometry: `create_geometry` has no default, so the compiler forces it. Its appearance
+is an entry in the look table of `opossum_scene`, and a test over the node registry fails for a type without one
+(`every_registered_node_type_has_a_look`). Glass takes its refractive index from the material of the solid, so only a
+solid can be drawn as glass.
 
 ### Three kinds of solid
 
@@ -334,7 +337,7 @@ All paths are relative to `opossum_core/src` unless stated otherwise.
 | `ReflectedPart` | `light/rays.rs` | which part of a split is the intended beam: the position history, bounce counter and bundle identity of both parts |
 | `OpticPorts` | `core_optics/optic_ports.rs` | the names of the input and output ports, graph logic only |
 | `SurfacePorts` | `core_optics/optic_ports.rs` | the ports a node declares, each with the face it sits on, and its splitting faces (`OpticNode::surface_ports`); `face_of` looks one up |
-| `Appearance`, `SurfaceFinish` | `core_optics/appearance.rs` | how a node is drawn (`OpticNode::appearance`), with the presets `mirror`, `transmissive`, `detector` and `glass`, and how a coating mirrors one of its faces (`Appearance::coated`) |
+| `Appearance`, `SurfaceFinish` | `opossum_scene/src/appearance.rs`, not in the core | how a node type is drawn, looked up in the look table (`Appearance::of_node_type`), with the presets `mirror`, `transmissive`, `detector`, `glass` and `grating`, and how a coating mirrors one of its faces (`Appearance::coated`) |
 
 ### Example 1: a plano-convex lens
 
@@ -515,8 +518,9 @@ A ray that misses the mirror is lost in every analysis, because only reflected l
 the next node is placed along the reflected axis. If the axis misses the mirror, the run stops with an error that
 names the mirror.
 
-**Draw.** The 3D view (`for_each_drawable` in `opossum_scene/src/components.rs`) asks each node for its
-appearance (`OpticNode::appearance`) and passes over a node that states none. It meshes the node's geometry in the
+**Draw.** The 3D view (`for_each_drawable` in `opossum_scene/src/components.rs`) looks up each node's appearance by
+its type (`Appearance::of_node_type`) and passes over a node whose type has none. A type missing from the look table
+is listed as skipped, with that as the reason. It meshes the node's geometry in the
 node's own frame (`OpticNodeExt::geometry_mesh`) and puts the mesh at the node's current placement
 (`effective_node_iso`), the same placement its surfaces are traced at. Every kind of geometry meshes itself
 (`GeometryKind::mesh`):
@@ -552,7 +556,7 @@ in `opossum_backend/src/document.rs` answers "not found" for a node that is not 
 | Detectors | `Geometry::detector` gives the extent window. A window is no edge: the face reaches everywhere, so all light passes. `SurfaceHit::recorded` decides which hit points are recorded, and `record_within_window` cuts the recorded light to the window of the geometry. With an open optic shape there is no window, and everything is recorded. |
 | Ideal filter, paraxial surface | `Geometry::plane`. Their effects (`FilterType`, `ParaxialLens`) attenuate or deflect at the hit, so a ray or helper ray that misses is neither. The paraxial surface may be unbounded. |
 | Grating | `Geometry::plane`. Its effect, `Diffraction`, sends the whole energy into one order, and the diffracted part is the intended beam (`ReflectedPart::Main`), like the reflection of a mirror. |
-| Source, dummy, ray propagation visualizer | `Geometry::plane`. Source and visualizer are unbounded. A dummy is bounded only if it is given an optic shape, and then acts as an iris. None of them states an appearance, so none is drawn. A source declares only `output_1`. |
+| Source, dummy, ray propagation visualizer | `Geometry::plane`. Source and visualizer are unbounded. A dummy is bounded only if it is given an optic shape, and then acts as an iris. None of them has an appearance, so none is drawn. A source declares only `output_1`. |
 | Group, reference | `create_geometry()` returns `None`, the surface ports are `SurfacePorts::NONE`, and `update_surfaces` does nothing. The nodes inside a group have their own geometry. A reference is traced through the node it refers to. |
 
 ### One analysis run, in order
@@ -592,8 +596,9 @@ analysis's sources. Then the bounce passes follow:
   - In `Default`, declare the `OPTIC_SHAPE` property and the properties the geometry is derived from, then call
     `create_default_surface_properties` before anything installs the surfaces (`update_surfaces`, `set_positioning`,
     `set_coating`), as `ThinMirror::default` does.
-  - Implement `OpticNode::appearance`: an `Appearance` preset, or `None` for a node that is not drawn. The method has
-    no default either.
+  - Add the registered name of the node type to the look table `LOOKS` in `opossum_scene/src/appearance.rs`: an
+    `Appearance` preset, or `None` for a node that is not drawn. The test `every_registered_node_type_has_a_look`
+    fails until it is there.
   - For a solid, pass the material (`OpticNodeExt::material`) to the preset. Whether the node has a medium follows
     from its geometry; a volume node analyzes through `unified_analyze_volume_node` and its ghost focus variant.
 - **A new preset**, such as another kind of lens: add a constructor on `Geometry` next to `singlet` that builds an
