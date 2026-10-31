@@ -7,7 +7,6 @@ use opossum_core::{
     degree,
     error::OpmResult,
     light::lightdata::ray_data_builder::RayDataBuilder,
-    material::default_reference_wavelength,
     millimeter,
     nodes::{
         CylindricLens, EnergyMeter, Lens, NodeGroup, NodeReference, SourcePort, ThinMirror, Wedge,
@@ -62,10 +61,7 @@ pub fn glb_json(glb: &[u8]) -> serde_json::Value {
 
 /// Export a model and read back what the exported scene says about itself.
 pub fn exported(document: &OpmDocument) -> OpmResult<serde_json::Value> {
-    let glb = scene_glb(
-        &document.placed_scenery(None)?,
-        default_reference_wavelength(),
-    )?;
+    let glb = scene_glb(&document.placed_scenery(None)?)?;
     assert!(glb.starts_with(b"glTF"));
     Ok(glb_json(&glb))
 }

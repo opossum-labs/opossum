@@ -6,7 +6,6 @@ use opossum_core::{
     nodes::NodeGroup,
     types::api_types::{SceneManifest, SceneNodeEntry},
 };
-use uom::si::f64::Length;
 
 use crate::components::for_each_drawable;
 
@@ -23,7 +22,6 @@ use crate::components::for_each_drawable;
 /// # Arguments
 ///
 /// - `placed`: a scenery whose nodes carry their placement
-/// - `wavelength`: the wavelength the glass is given its refractive index at
 ///
 /// # Returns
 ///
@@ -32,9 +30,9 @@ use crate::components::for_each_drawable;
 /// # Errors
 ///
 /// This function returns an error if the nodes cannot be walked.
-pub fn manifest_of(placed: &NodeGroup, wavelength: Length) -> OpmResult<SceneManifest> {
+pub fn manifest_of(placed: &NodeGroup) -> OpmResult<SceneManifest> {
     let mut nodes = Vec::new();
-    let skipped = for_each_drawable(placed, wavelength, |drawn, placement| {
+    let skipped = for_each_drawable(placed, |drawn, placement| {
         let uid = drawn.node.node_attr().uuid();
         nodes.push(SceneNodeEntry {
             uid,
@@ -73,7 +71,6 @@ mod test {
         degree,
         geometry::{SurfaceGeometry, body::OPTIC_SHAPE},
         light::lightdata::ray_data_builder::RayDataBuilder,
-        material::default_reference_wavelength,
         millimeter,
         nodes::{BoredMirror, Dummy, EnergyMeter, Lens, SourcePort, ThinMirror, Wedge},
         opm_document::OpmDocument,
@@ -84,11 +81,10 @@ mod test {
     #[test]
     fn changing_a_coating_changes_the_geometry() -> OpmResult<()> {
         let mut mirror = ThinMirror::default();
-        let wavelength = default_reference_wavelength();
         let appearance = Appearance::of_node_type(mirror.node_type())?.expect("a mirror is drawn");
-        let before = Drawn::new(&mirror, appearance, wavelength)?.geometry_hash();
+        let before = Drawn::new(&mirror, appearance)?.geometry_hash();
         mirror.set_coating(SurfaceGeometry::FACE, &CoatingType::IdealAR)?;
-        let after = Drawn::new(&mirror, appearance, wavelength)?.geometry_hash();
+        let after = Drawn::new(&mirror, appearance)?.geometry_hash();
         assert_ne!(before, after);
         Ok(())
     }
@@ -168,10 +164,7 @@ mod test {
 
     /// The list of components of a model, as a viewer would ask for it.
     fn manifest(document: &OpmDocument) -> OpmResult<SceneManifest> {
-        manifest_of(
-            &document.placed_scenery(None)?,
-            default_reference_wavelength(),
-        )
+        manifest_of(&document.placed_scenery(None)?)
     }
 
     /// The whole point of splitting placement from geometry: a component that only moved keeps its
@@ -328,7 +321,7 @@ mod test {
         let mut scenery = NodeGroup::default();
         let stranger = scenery.add_node(stranger)?;
 
-        let m = manifest_of(&scenery, default_reference_wavelength())?;
+        let m = manifest_of(&scenery)?;
 
         assert!(m.nodes.is_empty(), "{:?}", m.nodes);
         assert_eq!(m.skipped.len(), 1);
@@ -350,7 +343,7 @@ mod test {
         let scene = exported(&document)?;
         let drawn = drawn_components(&scene);
 
-        let manifest = manifest_of(&placed, default_reference_wavelength())?;
+        let manifest = manifest_of(&placed)?;
 
         assert_eq!(manifest.nodes.len(), drawn.len());
         Ok(())

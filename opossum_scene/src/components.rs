@@ -8,11 +8,11 @@ use opossum_core::{
     core_optics::{NodeAttrExt, OpticNodeExt},
     error::{OpmResult, OpossumError},
     geometry::body::default_optic_shape,
+    material::default_reference_wavelength,
     nodes::NodeGroup,
     types::api_types::SkippedSceneNode,
 };
 use optoscene::{Layer, Material, Scene, SceneNode, SceneOptions, TriMesh};
-use uom::si::f64::Length;
 
 use crate::{
     appearance::Appearance,
@@ -57,7 +57,6 @@ pub fn unbounded_outline() -> OpmResult<Outline> {
 /// # Arguments
 ///
 /// - `placed`: a scenery whose nodes carry their placement
-/// - `wavelength`: the wavelength the glass of a volume node is given its refractive index at
 ///
 /// # Returns
 ///
@@ -66,9 +65,9 @@ pub fn unbounded_outline() -> OpmResult<Outline> {
 /// # Errors
 ///
 /// This function returns an error if the nodes cannot be walked, or if the scene cannot be written.
-pub fn scene_glb(placed: &NodeGroup, wavelength: Length) -> OpmResult<Vec<u8>> {
+pub fn scene_glb(placed: &NodeGroup) -> OpmResult<Vec<u8>> {
     let mut scene = Scene::new(SceneOptions::default());
-    for_each_drawable(placed, wavelength, |drawn, placement| {
+    for_each_drawable(placed, |drawn, placement| {
         drawn.add_to(&mut scene, placement)
     })?;
     glb(&scene)
@@ -94,23 +93,21 @@ impl<'a> Drawn<'a> {
     /// (see [`SurfaceMesh::flipped`]), as `optoscene`'s `Mirror` and `Opaque` presets do not ask the
     /// renderer to draw both faces of one patch.
     ///
+    /// Glass is given its refractive index, and coatings are evaluated, at the
+    /// [`default_reference_wavelength`]: the picture is the same whichever light runs through it.
+    ///
     /// # Arguments
     ///
     /// - `node`: the component
     /// - `appearance`: what the component asks to be drawn in
-    /// - `wavelength`: the wavelength glass is given its refractive index and coatings are
-    ///   evaluated at
     ///
     /// # Errors
     ///
     /// This function returns an error if the component has no geometry or it cannot be meshed (see
     /// [`Meshable::mesh`]), if the medium of its solid cannot be told (see [`refractive_index_of`]),
     /// or if a material cannot be described (see [`material_of`]).
-    pub fn new(
-        node: &'a dyn Analyzable,
-        appearance: Appearance,
-        wavelength: Length,
-    ) -> OpmResult<Self> {
+    pub fn new(node: &'a dyn Analyzable, appearance: Appearance) -> OpmResult<Self> {
+        let wavelength = default_reference_wavelength();
         let geometry = node.create_geometry()?.ok_or_else(|| {
             OpossumError::Other(format!("node '{}' has no geometry to draw", node.name()))
         })?;
@@ -219,7 +216,6 @@ impl<'a> Drawn<'a> {
 /// # Arguments
 ///
 /// - `placed`: a scenery whose nodes carry their placement
-/// - `wavelength`: the wavelength glass is given its refractive index at
 /// - `draw`: called once per drawable component, as it is drawn and where it is placed
 ///
 /// # Returns
@@ -232,11 +228,7 @@ impl<'a> Drawn<'a> {
 ///
 /// This function returns an error if the nodes cannot be walked, or if the graph of a skipped
 /// component cannot be found. An error from `draw` is reported and skipped, not returned.
-pub fn for_each_drawable<F>(
-    placed: &NodeGroup,
-    wavelength: Length,
-    mut draw: F,
-) -> OpmResult<Vec<SkippedSceneNode>>
+pub fn for_each_drawable<F>(placed: &NodeGroup, mut draw: F) -> OpmResult<Vec<SkippedSceneNode>>
 where
     F: FnMut(Drawn<'_>, Isometry3<f64>) -> OpmResult<()>,
 {
@@ -259,7 +251,7 @@ where
             continue;
         };
         let drawn = appearance
-            .and_then(|appearance| Drawn::new(&*node_ref, appearance, wavelength))
+            .and_then(|appearance| Drawn::new(&*node_ref, appearance))
             .and_then(|drawn| draw(drawn, placement.get_transform()));
         if let Err(e) = drawn {
             warn!("{node_ref} cannot be drawn and is left out of the scene: {e}");
@@ -282,7 +274,6 @@ where
 /// # Arguments
 ///
 /// - `node`: the component to draw
-/// - `wavelength`: the wavelength glass is given its refractive index at
 ///
 /// # Returns
 ///
@@ -293,13 +284,13 @@ where
 ///
 /// This function returns an error if no look is defined for the component's type, if the component
 /// cannot be meshed or the medium of its solid cannot be told, or if the scene cannot be written.
-pub fn glb_of_node(node: &dyn Analyzable, wavelength: Length) -> OpmResult<Option<Vec<u8>>> {
+pub fn glb_of_node(node: &dyn Analyzable) -> OpmResult<Option<Vec<u8>>> {
     let Some(appearance) = Appearance::of_node_type(node.node_type())? else {
         return Ok(None);
     };
     // Pinned, so the file is the component in its own frame and not shifted by its own size.
     let mut scene = pinned_scene();
-    Drawn::new(node, appearance, wavelength)?.add_to(&mut scene, Isometry3::identity())?;
+    Drawn::new(node, appearance)?.add_to(&mut scene, Isometry3::identity())?;
     glb(&scene).map(Some)
 }
 
@@ -313,7 +304,6 @@ mod test {
         analyzers::{AnalyzerType, RayTraceConfig},
         core_optics::{OpticNode, node_attr::NodePositioning},
         light::lightdata::ray_data_builder::RayDataBuilder,
-        material::default_reference_wavelength,
         millimeter,
         nodes::{Lens, SourcePort, ThinMirror, create_node_ref, node_types},
         opm_document::OpmDocument,
@@ -382,7 +372,7 @@ mod test {
     fn a_solid_is_drawn_as_its_closed_shell_once() -> OpmResult<()> {
         let mut lens = Lens::default();
         lens.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
-        let glb = glb_of_node(&lens, default_reference_wavelength())?.expect("a lens is drawn");
+        let glb = glb_of_node(&lens)?.expect("a lens is drawn");
         let scene = glb_json(&glb);
         let drawn = drawn_components(&scene);
         assert_eq!(drawn.len(), 1);
@@ -399,7 +389,7 @@ mod test {
     fn a_surface_nodes_own_file_is_a_valid_glb() -> OpmResult<()> {
         let mut mirror = ThinMirror::default();
         mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
-        let glb = glb_of_node(&mirror, default_reference_wavelength())?.expect("a mirror is drawn");
+        let glb = glb_of_node(&mirror)?.expect("a mirror is drawn");
         assert!(glb.starts_with(b"glTF"));
         Ok(())
     }
@@ -409,7 +399,7 @@ mod test {
     fn a_component_that_is_not_drawn_has_no_file() -> OpmResult<()> {
         let mut source = SourcePort::default();
         source.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
-        assert!(glb_of_node(&source, default_reference_wavelength())?.is_none());
+        assert!(glb_of_node(&source)?.is_none());
         Ok(())
     }
 
@@ -419,10 +409,7 @@ mod test {
     fn drawing_a_model_leaves_it_alone() -> OpmResult<()> {
         let document = a_bit_of_everything()?;
         let before = document.to_opm_file_string()?;
-        scene_glb(
-            &document.placed_scenery(None)?,
-            default_reference_wavelength(),
-        )?;
+        scene_glb(&document.placed_scenery(None)?)?;
         assert_eq!(document.to_opm_file_string()?, before);
         Ok(())
     }
@@ -521,10 +508,7 @@ mod test {
             .uuid();
 
         let placed = document.placed_scenery(None)?;
-        let from_placed = glb_of_node(
-            &*placed.node_recursive(lens)?.0,
-            default_reference_wavelength(),
-        )?;
+        let from_placed = glb_of_node(&*placed.node_recursive(lens)?.0)?;
 
         assert_eq!(
             from_placed,
@@ -536,10 +520,7 @@ mod test {
 
     /// The bytes `GET /scene/node/{uid}.glb` would answer with for one component of a document.
     fn served_geometry_of(document: &OpmDocument, uid: Uuid) -> OpmResult<Option<Vec<u8>>> {
-        glb_of_node(
-            &*document.scenery().node_recursive(uid)?.0,
-            default_reference_wavelength(),
-        )
+        glb_of_node(&*document.scenery().node_recursive(uid)?.0)
     }
 
     /// A component's own file holds it at the origin: that is what lets the same file serve the
@@ -551,7 +532,7 @@ mod test {
         let far = placed
             .collect_all_nodes_recursive()?
             .into_iter()
-            .filter_map(|node| glb_of_node(&*node, default_reference_wavelength()).transpose())
+            .filter_map(|node| glb_of_node(&*node).transpose())
             .next_back()
             .expect("a model with lenses has something to draw")?;
 
@@ -582,10 +563,9 @@ mod test {
                 continue;
             };
             let node = create_node_ref(node_type)?;
-            let drawn =
-                Drawn::new(&*node, appearance, default_reference_wavelength()).map_err(|e| {
-                    OpossumError::Other(format!("node type '{node_type}' cannot be meshed: {e}"))
-                })?;
+            let drawn = Drawn::new(&*node, appearance).map_err(|e| {
+                OpossumError::Other(format!("node type '{node_type}' cannot be meshed: {e}"))
+            })?;
             assert!(
                 !drawn.patches.is_empty(),
                 "node type '{node_type}' came out without a patch"
@@ -603,8 +583,7 @@ mod test {
     #[test]
     fn a_component_without_a_geometry_is_not_drawn() -> OpmResult<()> {
         let group = NodeGroup::default();
-        let Err(error) = Drawn::new(&group, Appearance::glass(), default_reference_wavelength())
-        else {
+        let Err(error) = Drawn::new(&group, Appearance::glass()) else {
             return Err(OpossumError::Other("a group was drawn".into()));
         };
         assert!(error.to_string().contains("no geometry"), "{error}");

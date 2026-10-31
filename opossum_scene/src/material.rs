@@ -176,7 +176,6 @@ mod test {
         geometry::{Extruded, SurfaceGeometry},
         joule,
         light::lightdata::ray_data_builder::RayDataBuilder,
-        material::default_reference_wavelength,
         millimeter, nanometer,
         nodes::{
             BeamSplitter, EnergyMeter, IdealFilter, Lens, NodeGroup, ReflectiveGrating, SourcePort,
@@ -292,7 +291,7 @@ mod test {
 
     /// The materials a component's own file draws its patches in, patch by patch.
     fn patch_materials(node: &dyn Analyzable) -> OpmResult<Vec<serde_json::Value>> {
-        let glb = glb_of_node(node, default_reference_wavelength())?
+        let glb = glb_of_node(node)?
             .ok_or_else(|| OpossumError::Other("the component is not drawn".into()))?;
         let scene = glb_json(&glb);
         let mesh_index = drawn_components(&scene)[0]["mesh"]

@@ -15,7 +15,6 @@ use log::{error, info, warn};
 use opossum_core::{
     core_optics::node_attr::HasNodeAttr,
     error::OpossumError,
-    material::default_reference_wavelength,
     opm_document::OpmDocument,
     types::api_types::{
         DocumentChange, ErrorResponse, JumpTarget, LoadDocumentResponse, PositionUpdate,
@@ -141,7 +140,7 @@ async fn get_scene(
         let document = data.document.lock();
         document.placed_scenery(analyzer_still_there(&document, query.analyzer))?
     };
-    let glb = scene_glb(&placed, default_reference_wavelength())?;
+    let glb = scene_glb(&placed)?;
     Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
 }
 
@@ -192,7 +191,7 @@ async fn get_scene_manifest(
     let mut manifest = match placed {
         Ok(placed) => SceneManifest {
             spectrum: colors.legend(),
-            ..manifest_of(&placed, default_reference_wavelength())?
+            ..manifest_of(&placed)?
         },
         Err(e) => SceneManifest {
             notice: Some(e.to_string()),
@@ -235,8 +234,7 @@ async fn get_scene_node(
             .map_err(|_| BackEndErrorResponse::not_found())?
             .0
     };
-    let glb = glb_of_node(&*node, default_reference_wavelength())?
-        .ok_or_else(BackEndErrorResponse::not_found)?;
+    let glb = glb_of_node(&*node)?.ok_or_else(BackEndErrorResponse::not_found)?;
     Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
 }
 
