@@ -351,7 +351,7 @@ pub fn MenuBar(
                 let simulate_shortcut = SHORTCUTS
                     .get(&ShortCutAction::Simulate)
                     .map_or(String::new(), |s| format!(" ({s})"));
-                let title_str = if is_connected { format!("Simulate{simulate_shortcut}") } else { "Simulation disabled bla (no backend connection)".to_string() };
+                let title_str = if is_connected { format!("Simulate{simulate_shortcut}") } else { "Simulation disabled (no backend connection)".to_string() };
 
                 #[cfg(feature = "desktop")]
                 rsx! {
