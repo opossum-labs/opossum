@@ -8,10 +8,7 @@ use opossum_core::{
 };
 use uom::si::f64::Length;
 
-use crate::{
-    components::{Drawn, for_each_drawable, placement_of},
-    hash::Fnv1a,
-};
+use crate::components::for_each_drawable;
 
 /// List every drawable component of a model with its placement, but without its geometry.
 ///
@@ -35,31 +32,18 @@ use crate::{
 /// # Errors
 ///
 /// This function returns an error if the nodes cannot be walked.
-// Placement is narrowed to `f32` on the way out. Nothing is computed from it - it positions a
-// picture - and `f32` still resolves a metre to well under a micrometre; see
-// [`SceneNodeEntry::position`].
-#[allow(clippy::cast_possible_truncation)]
 pub fn manifest_of(placed: &NodeGroup, wavelength: Length) -> OpmResult<SceneManifest> {
     let mut nodes = Vec::new();
-    let skipped = for_each_drawable(placed, wavelength, |drawn| {
+    let skipped = for_each_drawable(placed, wavelength, |drawn, placement| {
         let uid = drawn.node.node_attr().uuid();
-        let name = drawn.node.name().to_string();
-        let transform = placement_of(drawn.node);
-        let geometry = geometry_of(&drawn);
-        let position = transform.translation.vector;
-        let rotation = transform.rotation.quaternion();
         nodes.push(SceneNodeEntry {
             uid,
             group: placed.parent_group_id_or_self(uid)?,
-            name,
-            geometry,
-            position: [position.x as f32, position.y as f32, position.z as f32],
-            rotation: [
-                rotation.i as f32,
-                rotation.j as f32,
-                rotation.k as f32,
-                rotation.w as f32,
-            ],
+            name: drawn.node.name().to_string(),
+            geometry: drawn.geometry_hash(),
+            // Narrowed to `f32`, as the placement only positions a picture (see the field).
+            position: placement.translation.vector.cast::<f32>().into(),
+            rotation: placement.rotation.coords.cast::<f32>().into(),
         });
         Ok(())
     })?;
@@ -70,34 +54,12 @@ pub fn manifest_of(placed: &NodeGroup, wavelength: Length) -> OpmResult<SceneMan
     })
 }
 
-/// What a component looks like, as a short string that changes when its shape or material does.
-///
-/// Deliberately *not* a hash of the component's exported file. That file carries the node's uuid and
-/// name, so two identical lenses would never agree on one, and a component rebuilt with a fresh uuid
-/// would look reshaped although nothing about it moved or changed. What a viewer has to decide is
-/// whether to fetch the geometry again, and that is a question about shape and material alone.
-///
-/// # Arguments
-///
-/// - `drawn`: the component, as it is drawn
-///
-/// # Returns
-///
-/// A hexadecimal digest of the component's patches and their materials.
-fn geometry_of(drawn: &Drawn<'_>) -> String {
-    let mut hash = Fnv1a::new();
-    for (mesh, material) in &drawn.patches {
-        hash.write_mesh(mesh);
-        hash.write_material(material);
-    }
-    hash.finish()
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::{
         appearance::Appearance,
+        components::Drawn,
         test_helpers::{a_bit_of_everything, drawn_components, exported, two_lenses},
     };
     use opossum_core::{
@@ -124,9 +86,9 @@ mod test {
         let mut mirror = ThinMirror::default();
         let wavelength = default_reference_wavelength();
         let appearance = Appearance::of_node_type(mirror.node_type())?.expect("a mirror is drawn");
-        let before = geometry_of(&Drawn::new(&mirror, appearance, wavelength)?);
+        let before = Drawn::new(&mirror, appearance, wavelength)?.geometry_hash();
         mirror.set_coating(SurfaceGeometry::FACE, &CoatingType::IdealAR)?;
-        let after = geometry_of(&Drawn::new(&mirror, appearance, wavelength)?);
+        let after = Drawn::new(&mirror, appearance, wavelength)?.geometry_hash();
         assert_ne!(before, after);
         Ok(())
     }

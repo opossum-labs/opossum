@@ -6,6 +6,7 @@ use opossum_core::{
     geometry::{Face, FaceIndex, SurfacePlacement},
     utils::geom_transformation::Isometry,
 };
+use optoscene::{MaterialId, SurfacePatch};
 use std::ops::Range;
 use uom::si::f64::Length;
 
@@ -250,6 +251,30 @@ impl SurfaceMesh {
             triangle.swap(1, 2);
         }
         self
+    }
+    /// Turn the mesh into a patch `optoscene` can export.
+    ///
+    /// # Arguments
+    ///
+    /// - `material`: the material the patch is drawn in, registered with the scene
+    ///
+    /// # Returns
+    ///
+    /// The patch, its points in meters.
+    #[must_use]
+    pub fn patch(&self, material: MaterialId) -> SurfacePatch {
+        SurfacePatch {
+            name: None,
+            positions: self
+                .points
+                .iter()
+                .map(|point| point.map(|c| c.value))
+                .collect(),
+            normals: Some(self.normals.clone()),
+            colors: None,
+            indices: self.triangles.clone(),
+            material,
+        }
     }
 }
 

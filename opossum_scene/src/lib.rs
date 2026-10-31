@@ -20,3 +20,27 @@ mod test_helpers;
 pub use components::{glb_of_node, scene_glb};
 pub use manifest::manifest_of;
 pub use rays::{AXIS_COLOR, LineColors, rays_glb};
+
+use nalgebra::Point3;
+use opossum_core::error::{OpmResult, OpossumError};
+use optoscene::{Scene, SceneOptions};
+
+/// Return an empty scene pinned at the coordinate origin, which keeps what it holds where it is
+/// given. Left to itself the exporter would shift it by the center of its bounding box.
+fn pinned_scene() -> Scene {
+    Scene::new(SceneOptions {
+        origin: Some(Point3::origin()),
+        ..SceneOptions::default()
+    })
+}
+
+/// Write a scene as a binary glTF file.
+///
+/// # Errors
+///
+/// This function returns an error if `optoscene` cannot write the scene.
+fn glb(scene: &Scene) -> OpmResult<Vec<u8>> {
+    scene
+        .to_glb()
+        .map_err(|e| OpossumError::Other(format!("the scene could not be written: {e}")))
+}

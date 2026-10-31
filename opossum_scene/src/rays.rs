@@ -10,8 +10,10 @@ use opossum_core::{
     types::api_types::SceneSpectrum,
     utils::{to_f64, try_f64_to_usize},
 };
-use optoscene::{RayStyle, RayTrace, Scene, SceneOptions};
+use optoscene::{RayStyle, RayTrace};
 use uom::si::{f64::Length, length::meter};
+
+use crate::{glb, pinned_scene};
 
 /// The colour the optical axis is drawn in: a bright purple that stands apart from the wavelength
 /// colours real rays are drawn in and from the grey and glass tones of the components.
@@ -160,10 +162,7 @@ fn srgb_to_linear(channel: f32) -> f32 {
 /// This function returns an error if a bundle cannot be split by wavelength, or if the scene
 /// cannot be built or written.
 pub fn rays_glb(bundles: &[Rays], colors: &LineColors, max_lines: usize) -> OpmResult<Vec<u8>> {
-    let mut scene = Scene::new(SceneOptions {
-        origin: Some(Point3::origin()),
-        ..SceneOptions::default()
-    });
+    let mut scene = pinned_scene();
     for (bundle_nr, bundle) in bundles.iter().enumerate() {
         if bundle.nr_of_rays(false) == 0 {
             continue;
@@ -185,9 +184,7 @@ pub fn rays_glb(bundles: &[Rays], colors: &LineColors, max_lines: usize) -> OpmR
                 .map_err(|e| OpossumError::Other(format!("the rays could not be drawn: {e}")))?;
         }
     }
-    scene
-        .to_glb()
-        .map_err(|e| OpossumError::Other(format!("the scene could not be written: {e}")))
+    glb(&scene)
 }
 
 /// The colour infrared light is drawn in: a deep red, next to the visible end of the spectrum it

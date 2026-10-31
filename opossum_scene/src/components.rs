@@ -1,7 +1,7 @@
 //! Meshing the components of a model and writing them out as glTF.
 
 use log::warn;
-use nalgebra::{Isometry3, Point3};
+use nalgebra::Isometry3;
 use opossum_core::{
     analyzers::Analyzable,
     apertures::Outline,
@@ -10,17 +10,17 @@ use opossum_core::{
     geometry::body::default_optic_shape,
     nodes::NodeGroup,
     types::api_types::SkippedSceneNode,
-    utils::geom_transformation::Isometry,
 };
-use optoscene::{
-    Layer, Material, MaterialId, Scene, SceneNode, SceneOptions, SurfacePatch, TriMesh,
-};
+use optoscene::{Layer, Material, Scene, SceneNode, SceneOptions, TriMesh};
 use uom::si::f64::Length;
 
 use crate::{
     appearance::Appearance,
+    glb,
+    hash::Fnv1a,
     material::{material_of, refractive_index_of},
     mesh::{Meshable, SurfaceMesh},
+    pinned_scene,
 };
 
 /// How finely the rim of a clear aperture is sampled.
@@ -68,24 +68,10 @@ pub fn unbounded_outline() -> OpmResult<Outline> {
 /// This function returns an error if the nodes cannot be walked, or if the scene cannot be written.
 pub fn scene_glb(placed: &NodeGroup, wavelength: Length) -> OpmResult<Vec<u8>> {
     let mut scene = Scene::new(SceneOptions::default());
-    for_each_drawable(placed, wavelength, |drawn| {
-        let placement = placement_of(drawn.node);
-        add_at(&mut scene, drawn, placement)
+    for_each_drawable(placed, wavelength, |drawn, placement| {
+        drawn.add_to(&mut scene, placement)
     })?;
-    scene
-        .to_glb()
-        .map_err(|e| OpossumError::Other(format!("the scene could not be written: {e}")))
-}
-
-/// Where a component is drawn: where its node sits, which is where its geometry is traced.
-///
-/// # Arguments
-///
-/// - `node`: the placed component
-pub fn placement_of(node: &(impl OpticNodeExt + ?Sized)) -> Isometry3<f64> {
-    node.effective_node_iso()
-        .unwrap_or_else(Isometry::identity)
-        .get_transform()
+    glb(&scene)
 }
 
 /// A component as it is drawn: its patches, each in the material of the face it lies on.
@@ -155,6 +141,70 @@ impl<'a> Drawn<'a> {
         }
         Ok(Self { node, patches })
     }
+
+    /// Return what the component looks like, as a short string that changes when its shape or
+    /// material does.
+    ///
+    /// Deliberately *not* a hash of the component's exported file. That file carries the node's
+    /// uuid and name, so two identical lenses would never agree on one, and a component rebuilt with
+    /// a fresh uuid would look reshaped although nothing about it moved or changed. What a viewer
+    /// has to decide is whether to fetch the geometry again, and that is a question about shape and
+    /// material alone.
+    ///
+    /// # Returns
+    ///
+    /// A hexadecimal digest of the component's patches and their materials.
+    pub fn geometry_hash(&self) -> String {
+        let mut hash = Fnv1a::new();
+        for (mesh, material) in &self.patches {
+            hash.write_mesh(mesh);
+            hash.write_material(material);
+        }
+        hash.finish()
+    }
+
+    /// Add the component to a scene, placed where the caller says.
+    ///
+    /// The placement is a parameter rather than taken from the component, because the two views of
+    /// a component need different ones: the scene of a whole setup puts it where the positioning
+    /// run found it, while the component's own file holds it at the coordinate origin so that the
+    /// same geometry serves it wherever it later moves.
+    ///
+    /// # Arguments
+    ///
+    /// - `scene`: the scene to add to
+    /// - `placement`: where to put the component
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if `optoscene` rejects the resulting geometry.
+    fn add_to(self, scene: &mut Scene, placement: Isometry3<f64>) -> OpmResult<()> {
+        let Self { node, patches } = self;
+        // One patch per face rather than one for all, so that the hard edge where the faces meet
+        // stays hard: patches do not share vertices. Equal materials are registered once.
+        let patches = patches
+            .into_iter()
+            .map(|(mesh, material)| mesh.patch(scene.add_material(material)))
+            .collect();
+        let mesh_id = scene.add_mesh(TriMesh { patches }).map_err(|e| {
+            OpossumError::Other(format!("the mesh of '{}' was rejected: {e}", node.name()))
+        })?;
+        scene
+            .add_node(SceneNode {
+                uid: node.node_attr().uuid().to_string(),
+                name: node.name().to_string(),
+                mesh: Some(mesh_id),
+                // Built in the component's own frame with the placement beside it, so a move costs
+                // a transform and not a new mesh.
+                transform: placement,
+                layer: Layer::Optics,
+                data: None,
+            })
+            .map_err(|e| {
+                OpossumError::Other(format!("'{}' could not be placed: {e}", node.name()))
+            })?;
+        Ok(())
+    }
 }
 
 /// Walk a model and hand every component that can be drawn, as it is drawn, to `draw`.
@@ -170,7 +220,7 @@ impl<'a> Drawn<'a> {
 ///
 /// - `placed`: a scenery whose nodes carry their placement
 /// - `wavelength`: the wavelength glass is given its refractive index at
-/// - `draw`: called once per drawable component, as it is drawn
+/// - `draw`: called once per drawable component, as it is drawn and where it is placed
 ///
 /// # Returns
 ///
@@ -188,79 +238,35 @@ pub fn for_each_drawable<F>(
     mut draw: F,
 ) -> OpmResult<Vec<SkippedSceneNode>>
 where
-    F: FnMut(Drawn<'_>) -> OpmResult<()>,
+    F: FnMut(Drawn<'_>, Isometry3<f64>) -> OpmResult<()>,
 {
     let mut skipped = Vec::new();
     for node_ref in placed.collect_all_nodes_recursive()? {
         let Some(appearance) = Appearance::of_node_type(node_ref.node_type()).transpose() else {
             continue;
         };
-        if node_ref.node_attr().effective_position().is_none() {
-            warn!("{node_ref} has no place in the setup and is left out of the scene");
-            skipped.push(SkippedSceneNode {
+        let left_out = |reason: String| -> OpmResult<SkippedSceneNode> {
+            Ok(SkippedSceneNode {
                 uid: node_ref.uuid(),
                 group: placed.parent_group_id_or_self(node_ref.uuid())?,
                 name: node_ref.name().to_string(),
-                reason: "has no place in the setup".to_string(),
-            });
+                reason,
+            })
+        };
+        let Some(placement) = node_ref.effective_node_iso() else {
+            warn!("{node_ref} has no place in the setup and is left out of the scene");
+            skipped.push(left_out("has no place in the setup".to_string())?);
             continue;
-        }
+        };
         let drawn = appearance
             .and_then(|appearance| Drawn::new(&*node_ref, appearance, wavelength))
-            .and_then(&mut draw);
+            .and_then(|drawn| draw(drawn, placement.get_transform()));
         if let Err(e) = drawn {
             warn!("{node_ref} cannot be drawn and is left out of the scene: {e}");
-            skipped.push(SkippedSceneNode {
-                uid: node_ref.uuid(),
-                group: placed.parent_group_id_or_self(node_ref.uuid())?,
-                name: node_ref.name().to_string(),
-                reason: e.to_string(),
-            });
+            skipped.push(left_out(e.to_string())?);
         }
     }
     Ok(skipped)
-}
-
-/// Add one drawn component to a scene, placed where the caller says.
-///
-/// The placement is a parameter rather than taken from the component, because the two views of a
-/// component need different ones: the scene of a whole setup puts it where the positioning run
-/// found it, while the component's own file holds it at the coordinate origin so that the same
-/// geometry serves it wherever it later moves.
-///
-/// # Arguments
-///
-/// - `scene`: the scene to add to
-/// - `drawn`: the component, as it is drawn
-/// - `placement`: where to put the component
-///
-/// # Errors
-///
-/// This function returns an error if `optoscene` rejects the resulting geometry.
-fn add_at(scene: &mut Scene, drawn: Drawn<'_>, placement: Isometry3<f64>) -> OpmResult<()> {
-    let Drawn { node, patches } = drawn;
-    // One patch per face rather than one for all, so that the hard edge where the faces meet stays
-    // hard: patches do not share vertices. Equal materials are registered once.
-    let patches = patches
-        .into_iter()
-        .map(|(mesh, material)| patch_of(&mesh, scene.add_material(material)))
-        .collect();
-    let mesh_id = scene.add_mesh(TriMesh { patches }).map_err(|e| {
-        OpossumError::Other(format!("the mesh of '{}' was rejected: {e}", node.name()))
-    })?;
-    scene
-        .add_node(SceneNode {
-            uid: node.node_attr().uuid().to_string(),
-            name: node.name().to_string(),
-            mesh: Some(mesh_id),
-            // The mesh was built in the component's own frame and the placement is handed over
-            // beside it, so moving the component later costs a transform and not a new mesh.
-            transform: placement,
-            layer: Layer::Optics,
-            data: None,
-        })
-        .map_err(|e| OpossumError::Other(format!("'{}' could not be placed: {e}", node.name())))?;
-    Ok(())
 }
 
 /// Build the glTF binary of a single component, in the component's own frame.
@@ -291,38 +297,10 @@ pub fn glb_of_node(node: &dyn Analyzable, wavelength: Length) -> OpmResult<Optio
     let Some(appearance) = Appearance::of_node_type(node.node_type())? else {
         return Ok(None);
     };
-    // Pinned at the coordinate origin. Left to itself the exporter subtracts the centre of the
-    // bounding box of whatever it holds, and the file would then no longer be the component in its
-    // own frame - it would be shifted by an amount that depends on the component's own size.
-    let mut scene = Scene::new(SceneOptions {
-        origin: Some(Point3::origin()),
-        ..SceneOptions::default()
-    });
-    add_at(
-        &mut scene,
-        Drawn::new(node, appearance, wavelength)?,
-        Isometry3::identity(),
-    )?;
-    scene
-        .to_glb()
-        .map(Some)
-        .map_err(|e| OpossumError::Other(format!("the scene could not be written: {e}")))
-}
-
-/// Turn one meshed face into a patch `optoscene` can export.
-fn patch_of(face: &SurfaceMesh, material: MaterialId) -> SurfacePatch {
-    SurfacePatch {
-        name: None,
-        positions: face
-            .points()
-            .iter()
-            .map(|point| Point3::new(point.x.value, point.y.value, point.z.value))
-            .collect(),
-        normals: Some(face.normals().to_vec()),
-        colors: None,
-        indices: face.triangles().to_vec(),
-        material,
-    }
+    // Pinned, so the file is the component in its own frame and not shifted by its own size.
+    let mut scene = pinned_scene();
+    Drawn::new(node, appearance, wavelength)?.add_to(&mut scene, Isometry3::identity())?;
+    glb(&scene).map(Some)
 }
 
 #[cfg(test)]
@@ -340,6 +318,7 @@ mod test {
         nodes::{Lens, SourcePort, ThinMirror, create_node_ref, node_types},
         opm_document::OpmDocument,
         properties::Proptype,
+        utils::geom_transformation::Isometry,
     };
     use uuid::Uuid;
 
