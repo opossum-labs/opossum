@@ -258,6 +258,9 @@ pub struct Ground {
 /// Changes are sent live as a `set_options` op to the renderer. None of these options
 /// touch the camera.
 #[derive(Clone, Debug, PartialEq)]
+// Independent switches the renderer applies one by one. Every combination of them is a legitimate
+// view, so there is nothing to fold into an enum.
+#[allow(clippy::struct_excessive_bools)]
 pub struct ViewerOptions {
     /// Background colour, any CSS colour (e.g. `"#1e1e1e"` or `"transparent"`).
     pub background: String,
