@@ -6,9 +6,10 @@ use opossum_core::{
     apertures::{CircleShape, Outline},
     core_optics::OpticNode,
     degree,
+    distributions::spectral::{LaserLines, SpecDistType},
     error::OpmResult,
     light::lightdata::ray_data_builder::RayDataBuilder,
-    millimeter,
+    millimeter, nanometer,
     nodes::{
         CylindricLens, EnergyMeter, Lens, NodeGroup, NodeReference, SourcePort, ThinMirror, Wedge,
     },
@@ -125,6 +126,14 @@ pub fn two_lenses(spacing: Length) -> OpmResult<OpmDocument> {
     scenery.connect_nodes(source, "output_1", first, "input_1", millimeter!(50.0))?;
     scenery.connect_nodes(first, "output_1", second, "input_1", spacing)?;
     Ok(traced(scenery, source))
+}
+
+/// Ten laser lines of equal power, 10 nm apart from 1000 nm on.
+pub fn ten_lines() -> OpmResult<SpecDistType> {
+    let lines = (0..10)
+        .map(|i| (nanometer!(10.0f64.mul_add(f64::from(i), 1000.0)), 1.0))
+        .collect();
+    Ok(LaserLines::new(lines)?.into())
 }
 
 /// A placement away from the origin and turned about all three axes, to check that something does

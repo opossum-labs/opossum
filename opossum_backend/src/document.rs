@@ -21,7 +21,9 @@ use opossum_core::{
         SceneAnalyzer, SceneManifest, UndoRedoResponse, UpdateNodeRequest, ViewportChangeRequest,
     },
 };
-use opossum_scene::{LineColors, glb_of_node, manifest_of, rays_glb, scene_glb};
+use opossum_scene::{
+    LineColors, glb_of_node, manifest_of, rays_glb, scene_glb, source_wavelength_range, traced_rays,
+};
 use serde::Deserialize;
 use std::{path::PathBuf, str::FromStr};
 use tokio::sync::mpsc;
@@ -185,7 +187,7 @@ async fn get_scene_manifest(
                 uid,
                 name: info.display_name(),
             });
-        let colors = LineColors::Wavelength(document.source_wavelength_range(asked)?);
+        let colors = LineColors::Wavelength(source_wavelength_range(&document, asked)?);
         (document.placed_scenery(asked), analyzer, colors)
     };
     let mut manifest = match placed {
@@ -316,9 +318,9 @@ async fn get_scene_rays(
     };
     let glb = web::block(move || {
         let document = OpmDocument::from_string(&model)?;
-        let colors = LineColors::Wavelength(document.source_wavelength_range(analyzer)?);
+        let colors = LineColors::Wavelength(source_wavelength_range(&document, analyzer)?);
         rays_glb(
-            &document.traced_rays(analyzer, max_rays)?,
+            &traced_rays(&document, analyzer, max_rays)?,
             &colors,
             max_rays,
         )

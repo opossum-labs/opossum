@@ -7,7 +7,7 @@ use crate::{
     meter, millimeter, validated, validated_type,
 };
 
-use super::{Hexapolar, PosDistType, PositionDistribution};
+use super::PositionDistribution;
 use nalgebra::{Point3, Vector3};
 use num_traits::{ToPrimitive, Zero};
 use opm_macros_lib::EnsureValidated;
@@ -130,20 +130,6 @@ impl PositionDistribution for HexagonalTiling {
         }
         points
     }
-    fn coarsened(&self, max_points: usize) -> OpmResult<PosDistType> {
-        // The tiling holds the whole hexagon of as many rings, so no more rings than a hexapolar
-        // distribution of that size can fit.
-        let mut coarse = *self;
-        let mut nr_of_hex = self
-            .nr_of_hex_along_radius
-            .min(Hexapolar::max_rings_for(max_points));
-        coarse.set_nr_of_hex_along_radius(nr_of_hex);
-        while nr_of_hex > 0 && coarse.generate().len() > max_points {
-            nr_of_hex -= 1;
-            coarse.set_nr_of_hex_along_radius(nr_of_hex);
-        }
-        Ok(coarse.into())
-    }
 }
 
 impl From<HexagonalTiling> for super::PosDistType {
@@ -154,33 +140,8 @@ impl From<HexagonalTiling> for super::PosDistType {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        distributions::position::{HexagonalTiling, PosDistType, PositionDistribution},
-        error::OpmResult,
-        millimeter,
-    };
+    use crate::{distributions::position::HexagonalTiling, error::OpmResult, millimeter};
     use approx::assert_relative_eq;
-    use num_traits::Zero;
-    use uom::si::f64::Length;
-
-    #[test]
-    fn coarsened_keeps_the_most_hexagons_that_fit_over_the_same_radius() -> OpmResult<()> {
-        let fine = HexagonalTiling::new(millimeter!(5.0), 7)?;
-        let PosDistType::HexagonalTiling(coarse) = fine.coarsened(50)? else {
-            panic!("a coarsened hexagonal tiling is still a hexagonal tiling");
-        };
-        let points = coarse.generate();
-        assert!(points.len() <= 50);
-        let outermost = points
-            .iter()
-            .map(|point| (point.x * point.x + point.y * point.y).sqrt())
-            .fold(Length::zero(), Length::max);
-        assert_relative_eq!(outermost.value, fine.radius().value, max_relative = 1e-9);
-        let mut finer = coarse;
-        finer.set_nr_of_hex_along_radius(coarse.nr_of_hex_along_radius() + 1);
-        assert!(finer.generate().len() > 50, "one hexagon more does not fit");
-        Ok(())
-    }
 
     #[test]
     fn valid_hexagonal_tiling_creation() -> OpmResult<()> {

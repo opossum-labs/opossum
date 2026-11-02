@@ -631,20 +631,6 @@ fn an_energy_analysis_is_passed_over_for_one_whose_light_is_rays() -> OpmResult<
     Ok(())
 }
 
-/// An energy analysis places a model, but it has no rays of its own to show.
-#[test]
-fn an_energy_analysis_has_no_rays_to_draw() -> OpmResult<()> {
-    let (scenery, source, _) = source_then_untilted_grating(true)?;
-    let mut document = OpmDocument::new(scenery);
-    document.add_analyzer(AnalyzerType::Energy(energy_config_at(
-        source,
-        nanometer!(500.0),
-    )?));
-
-    assert!(document.traced_rays(None, 100)?.is_empty());
-    Ok(())
-}
-
 /// A strand no source feeds - a block pasted next to the setup, say - is left unplaced, and the
 /// rest is placed all the same. A beam splitter in it with something after it used to stop the
 /// whole run, as the only component that fails without an incoming axis.

@@ -8,7 +8,7 @@ use crate::{
     millimeter, validated, validated_type,
 };
 
-use super::{PosDistType, PositionDistribution};
+use super::PositionDistribution;
 use nalgebra::{Point2, Point3, point};
 use num_traits::{ToPrimitive, Zero};
 use opm_macros_lib::EnsureValidated;
@@ -161,11 +161,6 @@ impl PositionDistribution for FibonacciRectangle {
         }
         points
     }
-    fn coarsened(&self, max_points: usize) -> OpmResult<PosDistType> {
-        let mut coarse = *self;
-        coarse.set_nr_of_points(self.nr_of_points().min(max_points))?;
-        Ok(coarse.into())
-    }
 }
 impl From<FibonacciRectangle> for super::PosDistType {
     fn from(f: FibonacciRectangle) -> Self {
@@ -305,11 +300,6 @@ impl PositionDistribution for FibonacciEllipse {
             ]);
         }
         points
-    }
-    fn coarsened(&self, max_points: usize) -> OpmResult<PosDistType> {
-        let mut coarse = *self;
-        coarse.set_nr_of_points(self.nr_of_points().min(max_points))?;
-        Ok(coarse.into())
     }
 }
 

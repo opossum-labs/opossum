@@ -5925,12 +5925,14 @@ name = "opossum_scene"
 version = "0.8.1"
 dependencies = [
  "approx",
+ "fastrand",
  "log",
  "nalgebra",
  "opossum_core",
  "optoscene",
  "serde_json",
  "spade",
+ "strum",
  "uom",
  "uuid",
 ]

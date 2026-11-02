@@ -4,11 +4,7 @@
 use crate::generic_validators::StaticInRange;
 use crate::{
     degree,
-    distributions::{
-        energy::EnergyDistType,
-        position::PosDistType,
-        spectral::{LaserLines, SpecDistType},
-    },
+    distributions::{energy::EnergyDistType, position::PosDistType, spectral::SpecDistType},
     error::{OpmResult, OpossumError},
     generic_validators::{AllFinite, AllNormal, AllPositive, PathValid, StaticBounds},
     joule,
@@ -669,49 +665,6 @@ impl RayDataSource {
         Ok(weighted / total)
     }
 
-    /// Returns the rays of this source, at most `max_rays` of them, for drawing it.
-    ///
-    /// A collimated or point source keeps its energy and the area it covers but gets a coarser
-    /// position distribution (see
-    /// [`PositionDistribution::coarsened`](crate::distributions::position::PositionDistribution::coarsened)),
-    /// and each of its points shines one wavelength of the spectrum instead of all of them (see
-    /// [`Rays::dealt_over_spectrum`]). So every wavelength is still drawn, while the rays do not
-    /// multiply with the samples of the spectrum. Raw rays and images are built and thinned to
-    /// `max_rays` rays instead (see [`Rays::thinned`]).
-    ///
-    /// # Arguments
-    ///
-    /// * `max_rays` - the most rays; zero counts as one.
-    ///
-    /// # Returns
-    ///
-    /// Raw rays, built from the coarser source.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the coarser distribution, the spectrum or the rays cannot
-    /// be built.
-    pub fn coarsened(&self, max_rays: usize) -> OpmResult<Self> {
-        let max = max_rays.max(1);
-        let (Some(pos_dist), Some(spectrum)) = (
-            self.get_position_distribution_type(),
-            self.get_spectral_distribution_type(),
-        ) else {
-            return Ok(Self::Raw(self.clone().build()?.thinned(max)));
-        };
-        let samples = spectrum.generate().generate()?;
-        let Some(&(any_wavelength, _)) = samples.first() else {
-            return Err(OpossumError::Other(
-                "a spectrum without a wavelength cannot be drawn".into(),
-            ));
-        };
-        // Built at one wavelength, one ray per point; the spectrum is dealt out afterwards.
-        let mut one_line = self.clone();
-        one_line.set_pos_dist(pos_dist.generate().coarsened(max)?);
-        one_line.set_spectral_dist(LaserLines::new(vec![(any_wavelength, 1.0)])?.into());
-        Ok(Self::Raw(one_line.build()?.dealt_over_spectrum(&samples)?))
-    }
-
     /// Set the position distribution type for the ray source.
     ///
     /// This function sets the [`PosDistType`] on either a collimated or point source variant
@@ -881,7 +834,7 @@ mod tests {
     use super::*;
     use crate::{
         distributions::{
-            energy::{General2DGaussian, UniformDist},
+            energy::General2DGaussian,
             position::Hexapolar,
             spectral::{Gaussian, LaserLines},
         },
@@ -889,8 +842,6 @@ mod tests {
         millimeter,
     };
     use approx::assert_relative_eq;
-    use std::collections::{BTreeMap, BTreeSet};
-    use strum::IntoEnumIterator;
     use uom::si::length::nanometer;
 
     fn get_length(src: &PointSrc) -> Length {
@@ -985,24 +936,6 @@ mod tests {
             v.is_ok(),
             "Validator combination for reference_length should remain AllPositive && AllNormal"
         );
-    }
-
-    /// Raw rays have no distribution to coarsen, so they are thinned.
-    #[test]
-    fn coarsened_raw_rays_are_thinned() -> OpmResult<()> {
-        let mut rays = Rays::default();
-        for x in 0..10 {
-            rays.add_ray(crate::light::Ray::new_collimated(
-                meter!(f64::from(x), 0.0, 0.0),
-                nanometer!(1000.0),
-                joule!(1.0),
-            )?);
-        }
-        let RayDataSource::Raw(coarse) = RayDataSource::Raw(rays).coarsened(3)? else {
-            panic!("coarsened raw rays are still raw rays");
-        };
-        assert!((1..=3).contains(&coarse.nr_of_rays(false)));
-        Ok(())
     }
 
     /// An image shines its one wavelength; raw rays count only the wavelengths of valid rays.
@@ -1100,192 +1033,6 @@ mod tests {
                 .central_wavelength()
                 .is_err()
         );
-        Ok(())
-    }
-
-    /// Asked for no rays at all, a source still keeps one ray.
-    #[test]
-    fn a_source_coarsened_to_nothing_keeps_one_ray() -> OpmResult<()> {
-        let coarse = RayDataSource::default().coarsened(0)?.build()?;
-        assert_eq!(coarse.nr_of_rays(false), 1);
-        Ok(())
-    }
-
-    /// Ten laser lines of equal power, 10 nm apart from 1000 nm on.
-    fn ten_lines() -> OpmResult<SpecDistType> {
-        let lines = (0..10)
-            .map(|i| (nanometer!(10.0f64.mul_add(f64::from(i), 1000.0)), 1.0))
-            .collect();
-        Ok(LaserLines::new(lines)?.into())
-    }
-
-    /// A collimated source of 1 J spread evenly over `pos_dist`, shining `spectrum`.
-    fn collimated(pos_dist: PosDistType, spectrum: SpecDistType) -> OpmResult<RayDataSource> {
-        Ok(RayDataSource::Collimated(CollimatedSrc::new(
-            pos_dist,
-            UniformDist::new(joule!(1.0))?.into(),
-            spectrum,
-        )))
-    }
-
-    /// How many rays shine each wavelength, keyed by the wavelength's bits.
-    fn rays_per_wavelength(rays: &Rays) -> BTreeMap<u64, usize> {
-        let mut counts = BTreeMap::new();
-        for ray in rays.iter() {
-            *counts.entry(ray.wavelength().value.to_bits()).or_insert(0) += 1;
-        }
-        counts
-    }
-
-    /// Coarsened, a collimated source has at most the asked number of rays and one wavelength at
-    /// each start point, and every line of its spectrum shines about equally often.
-    #[test]
-    fn each_point_of_a_coarsened_source_shines_one_wavelength() -> OpmResult<()> {
-        let fine = Hexapolar::new(millimeter!(1.0), 15)?;
-        let rays = collimated(fine.into(), ten_lines()?)?
-            .coarsened(100)?
-            .build()?;
-
-        assert!(rays.nr_of_rays(false) <= 100);
-        let starts: BTreeSet<_> = rays
-            .iter()
-            .map(|ray| {
-                let p = ray.position();
-                (
-                    p.x.value.to_bits(),
-                    p.y.value.to_bits(),
-                    p.z.value.to_bits(),
-                )
-            })
-            .collect();
-        assert_eq!(
-            starts.len(),
-            rays.nr_of_rays(false),
-            "one ray per start point"
-        );
-        let counts = rays_per_wavelength(&rays);
-        assert_eq!(counts.len(), 10, "every line shines");
-        let fewest = counts.values().min().copied().unwrap_or(0);
-        let most = counts.values().max().copied().unwrap_or(0);
-        assert!(most - fewest <= 1, "{fewest}..{most} rays per line");
-        Ok(())
-    }
-
-    /// The colors follow no pattern of the layout: the center and the two rings around it - the
-    /// first 19 points of a hexapolar distribution - shine many lines, not the shortest ones only.
-    #[test]
-    fn the_wavelengths_do_not_follow_the_layout_of_the_points() -> OpmResult<()> {
-        let fine = Hexapolar::new(millimeter!(1.0), 15)?;
-        let rays = collimated(fine.into(), ten_lines()?)?
-            .coarsened(100)?
-            .build()?;
-
-        let mut by_radius: Vec<_> = rays
-            .iter()
-            .map(|ray| {
-                let p = ray.position();
-                (p.x.value.hypot(p.y.value), ray.wavelength().value.to_bits())
-            })
-            .collect();
-        by_radius.sort_by(|a, b| a.0.total_cmp(&b.0));
-        let inner: BTreeSet<_> = by_radius.iter().take(19).map(|(_, bits)| *bits).collect();
-        assert!(inner.len() >= 5, "{} lines inside", inner.len());
-        Ok(())
-    }
-
-    /// A point source sends one wavelength in each direction.
-    #[test]
-    fn each_direction_of_a_coarsened_point_source_shines_one_wavelength() -> OpmResult<()> {
-        let source = RayDataSource::PointSrc(PointSrc::new(
-            Hexapolar::new(millimeter!(1.0), 15)?.into(),
-            UniformDist::new(joule!(1.0))?.into(),
-            ten_lines()?,
-            meter!(1.0),
-        )?);
-        let rays = source.coarsened(100)?.build()?;
-
-        assert!(rays.nr_of_rays(false) <= 100);
-        let directions: BTreeSet<_> = rays
-            .iter()
-            .map(|ray| {
-                let d = ray.direction();
-                (d.x.to_bits(), d.y.to_bits(), d.z.to_bits())
-            })
-            .collect();
-        assert_eq!(directions.len(), rays.nr_of_rays(false));
-        assert_eq!(rays_per_wavelength(&rays).len(), 10, "every line shines");
-        Ok(())
-    }
-
-    /// However the points are laid out, the rays stay within the asked number and shine as many
-    /// lines as there are lines, or rays if those are fewer.
-    #[test]
-    fn every_distribution_is_coarsened_over_the_spectrum() -> OpmResult<()> {
-        for dist in PosDistType::iter() {
-            let rays = collimated(dist, ten_lines()?)?.coarsened(50)?.build()?;
-            let nr_of_rays = rays.nr_of_rays(false);
-            assert!((1..=50).contains(&nr_of_rays), "{dist}: {nr_of_rays}");
-            assert_eq!(
-                rays_per_wavelength(&rays).len(),
-                nr_of_rays.min(10),
-                "{dist}"
-            );
-        }
-        Ok(())
-    }
-
-    /// With fewer rays than samples in the spectrum, the rays take wavelengths spread over all of
-    /// it: each of as many equal parts of the spectrum as there are rays gives one.
-    #[test]
-    fn fewer_rays_than_wavelengths_spread_over_the_spectrum() -> OpmResult<()> {
-        let spectrum = SpecDistType::from(Gaussian::new(
-            (nanometer!(1000.0), nanometer!(1100.0)),
-            50,
-            nanometer!(1050.0),
-            nanometer!(20.0),
-            1.0,
-        )?);
-        let samples: Vec<_> = spectrum
-            .generate()
-            .generate()?
-            .into_iter()
-            .map(|(wavelength, _)| wavelength)
-            .collect();
-        let rays = collimated(Hexapolar::new(millimeter!(1.0), 1)?.into(), spectrum)?
-            .coarsened(7)?
-            .build()?;
-
-        let nr_of_rays = rays.nr_of_rays(false);
-        assert_eq!(nr_of_rays, 7);
-        let n = samples.len();
-        for part in 0..nr_of_rays {
-            let slice = &samples[part * n / nr_of_rays..(part + 1) * n / nr_of_rays];
-            let in_part = rays
-                .iter()
-                .filter(|ray| slice.contains(&ray.wavelength()))
-                .count();
-            assert_eq!(in_part, 1, "part {part} of the spectrum");
-        }
-        Ok(())
-    }
-
-    /// Each ray carries the energy of its start point, weighted by its wavelength's share of the
-    /// spectrum, as in the full source.
-    #[test]
-    fn a_coarsened_ray_carries_its_wavelengths_share_of_the_energy() -> OpmResult<()> {
-        let lines = LaserLines::new(vec![(nanometer!(500.0), 1.0), (nanometer!(800.0), 3.0)])?;
-        let rays = collimated(Hexapolar::new(millimeter!(1.0), 1)?.into(), lines.into())?
-            .coarsened(7)?
-            .build()?;
-
-        for ray in rays.iter() {
-            let share = if ray.wavelength() == nanometer!(500.0) {
-                0.25
-            } else {
-                0.75
-            };
-            assert_relative_eq!(ray.energy().value, share / 7.0, epsilon = 1e-12);
-        }
         Ok(())
     }
 }

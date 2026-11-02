@@ -5,7 +5,7 @@ use crate::{
     millimeter, validated, validated_type,
 };
 
-use super::{PosDistType, PositionDistribution};
+use super::PositionDistribution;
 use nalgebra::{Point3, point};
 use num_traits::Zero;
 use opm_macros_lib::EnsureValidated;
@@ -84,30 +84,6 @@ impl Hexapolar {
     pub const fn set_nr_of_rings(&mut self, nr_of_rings: u8) {
         self.nr_of_rings = nr_of_rings;
     }
-
-    /// Returns the most rings a hexapolar distribution of at most `max_points` points can have.
-    ///
-    /// With `r` rings it has `1 + 3·r·(r + 1)` points: the center and `6·k` on ring `k`.
-    ///
-    /// # Arguments
-    ///
-    /// * `max_points` - the most points the distribution may have.
-    ///
-    /// # Returns
-    ///
-    /// The number of rings, zero if only the center fits.
-    #[must_use]
-    pub(super) fn max_rings_for(max_points: usize) -> u8 {
-        let mut rings = 0_u8;
-        while rings < u8::MAX {
-            let next = usize::from(rings) + 1;
-            if 1 + 3 * next * (next + 1) > max_points {
-                break;
-            }
-            rings += 1;
-        }
-        rings
-    }
 }
 
 impl Default for Hexapolar {
@@ -138,11 +114,6 @@ impl PositionDistribution for Hexapolar {
             }
         }
         points
-    }
-    fn coarsened(&self, max_points: usize) -> OpmResult<PosDistType> {
-        let mut coarse = *self;
-        coarse.set_nr_of_rings(self.nr_of_rings.min(Self::max_rings_for(max_points)));
-        Ok(coarse.into())
     }
 }
 impl From<Hexapolar> for super::PosDistType {
@@ -188,25 +159,6 @@ mod test {
         assert_eq!(g.generate().len(), 127);
         let g = Hexapolar::new(millimeter!(1.0), 7)?;
         assert_eq!(g.generate().len(), 169);
-        Ok(())
-    }
-    #[test]
-    fn max_rings_for_counts_the_center_and_whole_rings() {
-        // 0, 1, 2, ... rings hold 1, 7, 19, ... points.
-        for (max_points, rings) in [(0, 0), (6, 0), (7, 1), (18, 1), (19, 2), (100, 5)] {
-            assert_eq!(Hexapolar::max_rings_for(max_points), rings, "{max_points}");
-        }
-        assert_eq!(Hexapolar::max_rings_for(usize::MAX), u8::MAX);
-    }
-    #[test]
-    fn coarsened_keeps_fewer_rings_over_the_same_radius() -> OpmResult<()> {
-        let fine = Hexapolar::new(millimeter!(5.0), 15)?;
-        let PosDistType::Hexapolar(coarse) = fine.coarsened(100)? else {
-            panic!("a coarsened hexapolar distribution is still hexapolar");
-        };
-        assert_eq!(coarse.nr_of_rings(), 5);
-        assert_eq!(coarse.radius(), fine.radius());
-        assert_eq!(coarse.generate().len(), 91);
         Ok(())
     }
 }

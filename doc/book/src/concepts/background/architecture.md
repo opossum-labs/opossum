@@ -52,8 +52,11 @@ Drawn light takes the same way with two endpoints of its own, one for the optica
 the rays of the analyzer's sources. Both are traced on a copy of the model, and the core hands back
 the ray bundles that leave the setup, each ray carrying the whole path it took. Keeping those
 bundles is an opt-in of the ray-trace configuration that only these copies switch on, so a real
-analysis never pays for it. `opossum_scene` turns the paths into glTF lines in world coordinates,
-which the viewer draws over the components as they are, without moving them.
+analysis never pays for it. How much of the sources' light is drawn is decided in `opossum_scene`:
+it shares the rays to draw among the sources, coarsens each of them so that every ray shines one
+wavelength of its spectrum, and has the core trace them through the placed model. It then turns
+the paths into glTF lines in world coordinates, which the viewer draws over the components as they
+are, without moving them.
 
 The rule behind the split is that the core describes and `opossum_scene` draws. The core holds what
 a simulation needs: faces, outlines, coatings, materials. Everything that serves only the picture
