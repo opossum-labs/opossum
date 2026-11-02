@@ -2218,15 +2218,18 @@ mod test {
         let ray_trace = first_analyzer(&app_state);
         let first = manifest_drawing_rays(&app_state).await;
 
-        let source = {
-            let mut document = app_state.document.lock();
-            let source = document.scenery().find_source_ports().unwrap()[0];
-            document
-                .scenery_mut()
-                .update_connection_distance(source, "output_1", millimeter!(150.0))
-                .unwrap();
-            source
-        };
+        let source = app_state
+            .document
+            .lock()
+            .scenery()
+            .find_source_ports()
+            .unwrap()[0];
+        app_state
+            .document
+            .lock()
+            .scenery_mut()
+            .update_connection_distance(source, "output_1", millimeter!(150.0))
+            .unwrap();
         let moved = manifest_drawing_rays(&app_state).await;
         assert_ne!(moved.axis, first.axis, "the axis runs on to the moved lens");
         assert_ne!(moved.rays, first.rays, "and so do the rays");
