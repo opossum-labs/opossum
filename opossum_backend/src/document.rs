@@ -21,7 +21,7 @@ use opossum_core::{
         SceneAnalyzer, SceneManifest, UndoRedoResponse, UpdateNodeRequest, ViewportChangeRequest,
     },
 };
-use opossum_scene::{AXIS_COLOR, LineColors, glb_of_node, manifest_of, rays_glb, scene_glb};
+use opossum_scene::{LineColors, glb_of_node, manifest_of, rays_glb, scene_glb};
 use serde::Deserialize;
 use std::{path::PathBuf, str::FromStr};
 use tokio::sync::mpsc;
@@ -267,7 +267,7 @@ async fn get_scene_axis(
         document.positioning_rays(analyzer_still_there(&document, query.analyzer))?
     };
     // One ray per source: nothing to thin out.
-    let glb = rays_glb(&axes, &LineColors::Fixed(AXIS_COLOR), usize::MAX)?;
+    let glb = rays_glb(&axes, &LineColors::Axis, usize::MAX)?;
     Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
 }
 

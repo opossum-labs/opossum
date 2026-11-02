@@ -5,7 +5,7 @@ use std::ops::Range;
 use nalgebra::Point3;
 use opossum_core::{
     error::{OpmResult, OpossumError},
-    light::Rays,
+    light::{Ray, Rays},
     nanometer,
     types::api_types::SceneSpectrum,
     utils::{to_f64, try_f64_to_usize},
@@ -17,7 +17,7 @@ use crate::{glb, pinned_scene};
 
 /// The colour the optical axis is drawn in: a bright purple that stands apart from the wavelength
 /// colours real rays are drawn in and from the grey and glass tones of the components.
-pub const AXIS_COLOR: [f32; 4] = [183. / 255., 17. / 255., 1., 1.0];
+const AXIS_COLOR: [f32; 4] = [183. / 255., 17. / 255., 1., 1.0];
 
 /// The false colors light of several wavelengths is drawn in, from the shortest wavelength to the
 /// longest, as sRGB: blue, cyan, green, yellow and red. Violet is left out: the axis is drawn in it.
@@ -32,8 +32,8 @@ const SPECTRUM_COLORS: [[f32; 3]; 5] = [
 /// How [`rays_glb`] colors the lines it draws.
 #[derive(Debug, Clone, PartialEq)]
 pub enum LineColors {
-    /// Every line in the one color given, as the optical axis is drawn.
-    Fixed([f32; 4]),
+    /// Every line in the purple of the optical axis.
+    Axis,
     /// Each line after its wavelength, within the range of wavelengths the model's sources emit.
     ///
     /// A range of more than one wavelength is spread over false colors from blue to red, so that
@@ -78,8 +78,8 @@ impl LineColors {
     ///
     /// The color, or `None` for visible light that `optoscene` colors after its wavelength.
     fn of(&self, wavelength: Length) -> Option<[f32; 4]> {
-        if let Self::Fixed(color) = self {
-            return Some(*color);
+        if *self == Self::Axis {
+            return Some(AXIS_COLOR);
         }
         let Some(range) = self.false_color_range() else {
             return invisible_light_color(wavelength);
@@ -164,7 +164,7 @@ fn srgb_to_linear(channel: f32) -> f32 {
 pub fn rays_glb(bundles: &[Rays], colors: &LineColors, max_lines: usize) -> OpmResult<Vec<u8>> {
     let mut scene = pinned_scene();
     for (bundle_nr, bundle) in bundles.iter().enumerate() {
-        if bundle.nr_of_rays(false) == 0 {
+        if bundle.is_empty() {
             continue;
         }
         let (parts, wavelengths) = bundle.split_ray_bundle_by_wavelength(nanometer!(1.0), false)?;
@@ -235,27 +235,29 @@ fn invisible_light_color(wavelength: Length) -> Option<[f32; 4]> {
 ///
 /// The ray trace, in metres.
 fn ray_trace_of(rays: &Rays, uid: String, wavelength: Length) -> RayTrace {
-    let paths: Vec<Vec<Point3<f64>>> = rays
+    let paths: Vec<_> = rays
         .iter()
-        .map(|ray| {
-            ray.position_history_with_current()
-                .row_iter()
-                .map(|point| {
+        .map(Ray::position_history_with_current)
+        .collect();
+    let nr_of_stations = paths.iter().map(|path| path.nrows()).max().unwrap_or(0);
+    let station = |k: usize| {
+        paths
+            .iter()
+            .map(|path| {
+                (k < path.nrows()).then(|| {
+                    let point = path.row(k);
                     Point3::new(
                         point[0].get::<meter>(),
                         point[1].get::<meter>(),
                         point[2].get::<meter>(),
                     )
                 })
-                .collect()
-        })
-        .collect();
-    let nr_of_stations = paths.iter().map(Vec::len).max().unwrap_or(0);
+            })
+            .collect()
+    };
     RayTrace {
         uid,
-        stations: (0..nr_of_stations)
-            .map(|k| paths.iter().map(|path| path.get(k).copied()).collect())
-            .collect(),
+        stations: (0..nr_of_stations).map(station).collect(),
         wavelength: Some(wavelength.get::<meter>()),
     }
 }
@@ -264,12 +266,12 @@ fn ray_trace_of(rays: &Rays, uid: String, wavelength: Length) -> RayTrace {
 mod test {
     use super::*;
     use crate::test_helpers::{glb_json, two_lenses};
-    use opossum_core::{joule, light::Ray, millimeter};
+    use opossum_core::{joule, millimeter};
 
     /// Nothing to draw still makes a file, so a viewer can show "no rays" like any other state.
     #[test]
     fn no_rays_are_still_a_file() -> OpmResult<()> {
-        assert!(rays_glb(&[], &LineColors::Fixed(AXIS_COLOR), 10)?.starts_with(b"glTF"));
+        assert!(rays_glb(&[], &LineColors::Axis, 10)?.starts_with(b"glTF"));
         assert!(
             rays_glb(&[Rays::default()], &LineColors::Wavelength(None), 10)?.starts_with(b"glTF")
         );
@@ -405,7 +407,7 @@ mod test {
         let one = nanometer!(1053.0);
         assert_eq!(LineColors::Wavelength(Some(one..one)).legend(), None);
         assert_eq!(LineColors::Wavelength(None).legend(), None);
-        assert_eq!(LineColors::Fixed(AXIS_COLOR).legend(), None);
+        assert_eq!(LineColors::Axis.legend(), None);
     }
 
     /// The same rays give the same bytes, so a viewer can tell an unchanged file from a new one.
@@ -414,8 +416,8 @@ mod test {
         let axes = two_lenses(millimeter!(100.0))?.positioning_rays(None)?;
         assert!(!axes.is_empty(), "the model has an open output");
         assert_eq!(
-            rays_glb(&axes, &LineColors::Fixed(AXIS_COLOR), 10)?,
-            rays_glb(&axes, &LineColors::Fixed(AXIS_COLOR), 10)?
+            rays_glb(&axes, &LineColors::Axis, 10)?,
+            rays_glb(&axes, &LineColors::Axis, 10)?
         );
         Ok(())
     }

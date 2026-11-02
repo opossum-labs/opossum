@@ -19,7 +19,7 @@ mod test_helpers;
 
 pub use components::{glb_of_node, scene_glb};
 pub use manifest::manifest_of;
-pub use rays::{AXIS_COLOR, LineColors, rays_glb};
+pub use rays::{LineColors, rays_glb};
 
 use nalgebra::Point3;
 use opossum_core::error::{OpmResult, OpossumError};

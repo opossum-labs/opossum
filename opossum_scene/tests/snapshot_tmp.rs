@@ -28,7 +28,7 @@ use opossum_core::{
     opm_document::OpmDocument,
     types::api_types::SceneManifest,
 };
-use opossum_scene::{AXIS_COLOR, LineColors, glb_of_node, manifest_of, rays_glb, scene_glb};
+use opossum_scene::{LineColors, glb_of_node, manifest_of, rays_glb, scene_glb};
 use std::path::{Path, PathBuf};
 
 fn source(rings: u8, lines: &[f64]) -> RayDataBuilder {
@@ -213,7 +213,7 @@ fn snapshot(label: &str, build: fn() -> OpmDocument) {
     write(
         &out,
         "axis.glb",
-        &rays_glb(&axes, &LineColors::Fixed(AXIS_COLOR), usize::MAX).unwrap(),
+        &rays_glb(&axes, &LineColors::Axis, usize::MAX).unwrap(),
     );
     let range = document.source_wavelength_range(None).unwrap();
     let rays = document.traced_rays(None, 100).unwrap();
