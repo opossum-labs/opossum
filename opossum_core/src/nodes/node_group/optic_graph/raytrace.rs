@@ -12,7 +12,8 @@ use crate::{
 use log::{info, warn};
 use nalgebra::Point3;
 use num_traits::Zero;
-use petgraph::graph::NodeIndex;
+use petgraph::{Direction, graph::NodeIndex, visit::EdgeRef};
+use std::collections::BTreeSet;
 use uom::si::f64::Length;
 use uuid::Uuid;
 
@@ -96,6 +97,8 @@ impl OpticGraph {
 
     /// Positions nodes in the graph based on optical ray propagation.
     ///
+    /// The nodes are visited in the order of [`placing_order`](OpticGraph::placing_order).
+    ///
     /// # Arguments
     ///
     /// * `incoming_data` - the optical axis entering the graph through its external input ports.
@@ -113,7 +116,7 @@ impl OpticGraph {
         config: &RayTraceConfig,
         mut ray_ends: Option<&mut Vec<Rays>>,
     ) -> OpmResult<LightResult> {
-        let sorted = self.topologically_sorted()?;
+        let sorted = self.placing_order()?;
         let mut light_result = LightResult::default();
 
         for idx in sorted {
@@ -145,6 +148,47 @@ impl OpticGraph {
         }
 
         Ok(light_result)
+    }
+
+    /// Returns the order in which a positioning run visits the nodes of this graph.
+    ///
+    /// It is a topological order that, of the nodes ready to be visited, takes ordinary nodes
+    /// before references. A component reached directly and through a reference is thus placed by
+    /// its own input, whatever order the nodes were added in; a reference only places it when the
+    /// light reaches the reference first on the same path. Ties go by node index.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`OpossumError::Analysis`] if the graph contains a cycle.
+    fn placing_order(&self) -> OpmResult<Vec<NodeIndex>> {
+        let rank = |idx: NodeIndex| (self.g[idx].referenced_node_id().is_some(), idx);
+        let mut waiting: Vec<usize> = self
+            .g
+            .node_indices()
+            .map(|idx| self.g.edges_directed(idx, Direction::Incoming).count())
+            .collect();
+        let mut ready: BTreeSet<(bool, NodeIndex)> = self
+            .g
+            .node_indices()
+            .filter(|idx| waiting.get(idx.index()) == Some(&0))
+            .map(rank)
+            .collect();
+        let mut order = Vec::with_capacity(self.g.node_count());
+        while let Some((_, idx)) = ready.pop_first() {
+            order.push(idx);
+            for edge in self.g.edges_directed(idx, Direction::Outgoing) {
+                if let Some(count) = waiting.get_mut(edge.target().index()) {
+                    *count = count.saturating_sub(1);
+                    if *count == 0 {
+                        ready.insert(rank(edge.target()));
+                    }
+                }
+            }
+        }
+        if order.len() < self.g.node_count() {
+            return Err(OpossumError::Analysis("topological sort failed".into()));
+        }
+        Ok(order)
     }
 }
 
@@ -350,7 +394,9 @@ mod test {
     use crate::{
         analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
         apertures::{CircleShape, OpticShape},
-        core_optics::{Alignable, NodeAttrExt, OpticRef, PortType},
+        core_optics::{
+            Alignable, NodeAttrExt, OpticNode, OpticRef, PortType, node_attr::NodePositioning,
+        },
         degree,
         error::{OpmResult, OpossumError},
         geometry::body::{OPTIC_SHAPE, default_optic_shape},
@@ -358,8 +404,8 @@ mod test {
         light::LightResult,
         millimeter,
         nodes::{
-            BeamSplitter, Dummy, IdealFilter, Lens, NodeGroup, ParaxialSurface, SourcePort,
-            SpotDiagram, ThinMirror,
+            BeamSplitter, Dummy, IdealFilter, Lens, NodeGroup, NodeReference, ParaxialSurface,
+            SourcePort, SpotDiagram, ThinMirror,
             ideal_filter::{FilterConst, FilterTypeBuilder},
             round_collimated_ray_builder,
         },
@@ -659,6 +705,72 @@ mod test {
         let window = OpticRef::new(Box::new(Dummy::new("window")));
         let behind_window = placements(&[window, fold, screen], &ids)?;
         assert_same_placements(&behind_window, &behind_splitter);
+        Ok(())
+    }
+    /// Feed a lens directly by a source at the origin and, through a reference, by a second source
+    /// 5 mm aside, both 100 mm in front of it, and position the model.
+    ///
+    /// # Arguments
+    ///
+    /// * `reference_strand_first` - whether the second source and the reference are added to the
+    ///   model before the first source.
+    ///
+    /// # Returns
+    ///
+    /// Where the lens was placed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if positioning fails or does not place the lens.
+    fn lens_fed_twice(reference_strand_first: bool) -> OpmResult<Isometry> {
+        let mut scenery = NodeGroup::default();
+        let lens = scenery.add_node(Dummy::new("lens"))?;
+        let mut config = RayTraceConfig::default();
+        let strands = if reference_strand_first {
+            [true, false]
+        } else {
+            [false, true]
+        };
+        for through_reference in strands {
+            let (source, target) = if through_reference {
+                let mut aside = SourcePort::new("aside");
+                aside.set_positioning(NodePositioning::Absolute(Isometry::new(
+                    millimeter!(5.0, 0.0, 0.0),
+                    degree!(0.0, 0.0, 0.0),
+                )?))?;
+                let reference = NodeReference::from_node(&scenery.node(lens)?)?;
+                (scenery.add_node(aside)?, scenery.add_node(reference)?)
+            } else {
+                (scenery.add_node(SourcePort::default())?, lens)
+            };
+            scenery.connect_nodes(source, "output_1", target, "input_1", millimeter!(100.0))?;
+            config.map_source(
+                source,
+                round_collimated_ray_builder(millimeter!(1.0), joule!(1.0), 1)?,
+            );
+        }
+        AnalysisRayTrace::calc_node_positions(
+            &mut scenery,
+            LightResult::default(),
+            &config.for_positioning(),
+        )?;
+        scenery
+            .node(lens)?
+            .effective_position()
+            .copied()
+            .ok_or_else(|| OpossumError::Other("the lens was not placed".into()))
+    }
+    /// A component reached directly and through a reference is placed by its own input, whatever
+    /// order the nodes were added in: a second source standing aside does not move it.
+    #[test]
+    fn a_component_is_placed_by_its_own_input_not_through_a_reference() -> OpmResult<()> {
+        for reference_strand_first in [false, true] {
+            let at = lens_fed_twice(reference_strand_first)?.translation();
+            assert!(
+                at.x.value.abs() < 1e-12 && (at.z.value - 0.1).abs() < 1e-12,
+                "reference strand added first: {reference_strand_first}, lens at {at:?}"
+            );
+        }
         Ok(())
     }
 }
