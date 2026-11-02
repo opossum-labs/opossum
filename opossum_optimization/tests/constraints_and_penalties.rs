@@ -1,9 +1,9 @@
 mod common;
 
 use common::build_kepler_setup;
-use opossum_core::{core_optics::NodeAttrExt, error::OpmResult, millimeter};
+use opossum_core::{core_optics::NodeAttrExt, error::OpmResult, micrometer, millimeter};
 use opossum_optimization::{
-    BoxBounds, EvaluationContext, FreeVariable, MaxTotalLengthOperand, MeritFunction, MetricReader,
+    EvaluationContext, FreeVariable, MaxTotalLengthOperand, MeritFunction, MetricReader,
     MinEdgeThicknessOperand, ObservableAddress, Operand, OpticOptimizer, OptimizationAlgorithm,
     ParameterAddress, TargetValueOperand, TransmissionPenaltyOperand,
 };
@@ -35,23 +35,24 @@ fn test_optimize_kepler_with_geometric_length_penalty() -> OpmResult<()> {
     let summary = OpticOptimizer::new(&mut doc)
         .add_variable(
             FreeVariable::new(dist_lens1_to_lens2.clone(), "distance_lens1_lens2")
-                .with_bounds(BoxBounds::new(0.100, 0.150)?),
+                .with_length_bounds(millimeter!(100.0), millimeter!(150.0))?,
         )?
         .add_variable(
             FreeVariable::new(dist_lens2_to_spot.clone(), "distance_lens2_spot")
-                .with_bounds(BoxBounds::new(0.030, 0.080)?),
+                .with_length_bounds(millimeter!(30.0), millimeter!(80.0))?,
         )?
-        .add_operand(TargetValueOperand::new(
+        // Automatic 1.0 µm scaling for spot metrics
+        .add_operand(TargetValueOperand::for_spot_radius(
             "minimize_rms_spot",
             spot_observable_addr.clone(),
-            0.0,
+            micrometer!(0.0),
             1.0,
-            1.0e-3,
         ))
-        .add_operand(MaxTotalLengthOperand::new(
+        // Enforce total system length limit <= 185 mm
+        .add_operand(MaxTotalLengthOperand::for_length(
             "compact_length_limit",
             vec![dist_lens1_to_lens2.clone(), dist_lens2_to_spot.clone()],
-            0.185,
+            millimeter!(185.0),
             50.0,
         ))
         .optimize()?;
@@ -92,23 +93,23 @@ fn test_optimize_kepler_with_min_edge_thickness() -> OpmResult<()> {
     let _summary = OpticOptimizer::new(&mut doc)
         .add_variable(
             FreeVariable::new(front_curvature_addr.clone(), "lens2_front_roc")
-                .with_bounds(BoxBounds::new(0.040, 0.200)?),
+                .with_length_bounds(millimeter!(40.0), millimeter!(200.0))?,
         )?
         .add_variable(
             FreeVariable::new(rear_curvature_addr.clone(), "lens2_rear_roc")
-                .with_bounds(BoxBounds::new(-0.200, -0.040)?),
+                .with_length_bounds(millimeter!(-200.0), millimeter!(-40.0))?,
         )?
-        .add_operand(TargetValueOperand::new(
+        .add_operand(TargetValueOperand::for_spot_radius(
             "minimize_rms_spot",
             spot_observable_addr.clone(),
-            0.0,
+            micrometer!(0.0),
             1.0,
-            1.0e-3,
         ))
-        .add_operand(MinEdgeThicknessOperand::new(
+        // Enforce physical lens edge thickness >= 1.5 mm
+        .add_operand(MinEdgeThicknessOperand::for_thickness(
             "lens2_min_edge_thickness",
             lens2_id,
-            0.0015,
+            millimeter!(1.5),
             500.0,
         ))
         .with_algorithm(
@@ -139,7 +140,8 @@ fn test_optimize_kepler_with_min_edge_thickness() -> OpmResult<()> {
 fn test_min_edge_thickness_rejects_incompatible_node() -> OpmResult<()> {
     let (doc, _analyzer_id, _lens2_id, spot_id) = build_kepler_setup(millimeter!(45.0))?;
 
-    let invalid_operand = MinEdgeThicknessOperand::new("invalid_op", spot_id, 0.005, 1.0);
+    let invalid_operand =
+        MinEdgeThicknessOperand::for_thickness("invalid_op", spot_id, millimeter!(5.0), 1.0);
     let res = MeritFunction::new(doc, vec![], vec![], vec![Arc::new(invalid_operand)]);
 
     assert!(

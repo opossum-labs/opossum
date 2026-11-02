@@ -3,10 +3,10 @@ mod common;
 use common::build_kepler_setup;
 use opossum_core::{
     error::{OpmResult, OpossumError},
-    millimeter,
+    micrometer, millimeter,
 };
 use opossum_optimization::{
-    BoxBounds, FreeVariable, MinEdgeThicknessOperand, ObservableAddress, OptimizationAlgorithm,
+    FreeVariable, MinEdgeThicknessOperand, ObservableAddress, OptimizationAlgorithm,
     OptimizationConfig, ParameterAddress, SchemaExtractor, TargetValueOperand,
     TransmissionPenaltyOperand,
 };
@@ -47,7 +47,6 @@ fn test_schema_discovery_on_kepler_model() -> OpmResult<()> {
         "SpotDiagram must provide 5 scalar observables"
     );
 
-    // Verify discovery of edge thickness candidates
     assert!(
         schema
             .edge_thickness_nodes
@@ -73,23 +72,22 @@ fn test_optimization_config_serde_roundtrip() -> OpmResult<()> {
                 },
                 "front_roc",
             )
-            .with_bounds(BoxBounds::new(0.05, 0.2)?),
+            .with_length_bounds(millimeter!(50.0), millimeter!(200.0))?,
         )
-        .with_operand(TargetValueOperand::new(
+        .with_operand(TargetValueOperand::for_spot_radius(
             "target_spot",
             ObservableAddress {
                 analyzer_id,
                 node_id,
                 metric_name: "rms beam radius".into(),
             },
-            0.0,
+            micrometer!(0.0),
             1.0,
-            1e-3,
         ))
-        .with_operand(MinEdgeThicknessOperand::new(
+        .with_operand(MinEdgeThicknessOperand::for_thickness(
             "edge_limit",
             node_id,
-            0.002,
+            millimeter!(2.0),
             100.0,
         ))
         .with_operand(TransmissionPenaltyOperand::new(

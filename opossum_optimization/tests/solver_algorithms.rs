@@ -1,16 +1,15 @@
 mod common;
 
 use common::build_kepler_setup;
-use opossum_core::{core_optics::NodeAttrExt, error::OpmResult, millimeter};
+use opossum_core::{core_optics::NodeAttrExt, error::OpmResult, micrometer, millimeter};
 use opossum_optimization::{
-    BoxBounds, FreeVariable, MeritFunction, MetricReader, ObservableAddress, OpticOptimizer,
+    FreeVariable, MeritFunction, MetricReader, ObservableAddress, OpticOptimizer,
     OptimizationAlgorithm, ParameterAddress, TargetValueOperand,
 };
 use std::sync::Arc;
 
 #[test]
 fn test_optimize_kepler_focal_position_nelder_mead() -> OpmResult<()> {
-    // Defocused setup: 45 mm instead of ~58 mm
     let (mut doc, analyzer_id, lens2_id, spot_id) = build_kepler_setup(millimeter!(45.0))?;
 
     let dist_address = ParameterAddress::ConnectionDistance {
@@ -26,14 +25,13 @@ fn test_optimize_kepler_focal_position_nelder_mead() -> OpmResult<()> {
     let summary = OpticOptimizer::new(&mut doc)
         .add_variable(
             FreeVariable::new(dist_address.clone(), "image_drift_distance")
-                .with_bounds(BoxBounds::new(0.030, 0.080)?),
+                .with_length_bounds(millimeter!(30.0), millimeter!(80.0))?,
         )?
-        .add_operand(TargetValueOperand::new(
+        .add_operand(TargetValueOperand::for_spot_radius(
             "minimize_rms_spot",
             spot_observable_addr.clone(),
-            0.0,
+            micrometer!(0.0),
             1.0,
-            1.0e-3,
         ))
         .with_algorithm(OptimizationAlgorithm::nelder_mead())
         .optimize()?;
@@ -64,14 +62,14 @@ fn test_optimize_kepler_focal_position_lbfgs() -> OpmResult<()> {
     let summary = OpticOptimizer::new(&mut doc)
         .add_variable(
             FreeVariable::new(dist_address.clone(), "image_drift_distance")
-                .with_bounds(BoxBounds::new(0.030, 0.080)?),
+                .with_length_bounds(millimeter!(30.0), millimeter!(80.0))?,
         )?
-        .add_operand(TargetValueOperand::new(
+        // Millimeter scale matches the initial ~0.5 mm defocused spot size
+        .add_operand(TargetValueOperand::for_length(
             "minimize_rms_spot",
             spot_observable_addr.clone(),
-            0.0,
+            millimeter!(0.0),
             1.0,
-            1.0e-3,
         ))
         .with_algorithm(OptimizationAlgorithm::lbfgs().with_max_iterations(25))
         .optimize()?;
@@ -102,14 +100,13 @@ fn test_optimize_kepler_focal_position_simulated_annealing() -> OpmResult<()> {
     let summary = OpticOptimizer::new(&mut doc)
         .add_variable(
             FreeVariable::new(dist_address.clone(), "image_drift_distance")
-                .with_bounds(BoxBounds::new(0.030, 0.080)?),
+                .with_length_bounds(millimeter!(30.0), millimeter!(80.0))?,
         )?
-        .add_operand(TargetValueOperand::new(
+        .add_operand(TargetValueOperand::for_spot_radius(
             "minimize_rms_spot",
             spot_observable_addr.clone(),
-            0.0,
+            micrometer!(0.0),
             1.0,
-            1.0e-3,
         ))
         .with_algorithm(OptimizationAlgorithm::simulated_annealing().with_temperature(20.0))
         .optimize()?;
@@ -137,7 +134,7 @@ fn test_merit_gradient_calculation() -> OpmResult<()> {
     };
 
     let free_var = FreeVariable::new(dist_addr, "image_distance");
-    let operand = TargetValueOperand::new("spot", spot_addr, 0.0, 1.0, 1e-3);
+    let operand = TargetValueOperand::for_spot_radius("spot", spot_addr, micrometer!(0.0), 1.0);
 
     let merit = MeritFunction::new(doc, vec![free_var], vec![], vec![Arc::new(operand)])?;
 
@@ -199,7 +196,8 @@ fn test_parallel_gradient_thread_execution() -> OpmResult<()> {
         node_id: spot_id,
         metric_name: "rms beam radius".into(),
     };
-    let operand = TargetValueOperand::new("spot", spot_observable, 0.0, 1.0, 1e-3);
+    let operand =
+        TargetValueOperand::for_spot_radius("spot", spot_observable, micrometer!(0.0), 1.0);
 
     let merit = MeritFunction::new(
         doc,

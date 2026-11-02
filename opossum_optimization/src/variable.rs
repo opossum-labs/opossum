@@ -1,6 +1,7 @@
 use crate::address::ParameterAddress;
 use opossum_core::error::{OpmResult, OpossumError};
 use serde::{Deserialize, Serialize};
+use uom::si::{f64::Length, length::meter};
 
 pub const DEFAULT_DELTA_REL: f64 = 1e-4;
 pub const DEFAULT_DELTA_ABS_MIN: f64 = 1e-7;
@@ -12,13 +13,10 @@ pub struct BoxBounds {
 }
 
 impl BoxBounds {
-    /// Creates a new [`BoxBounds`].
+    /// Creates a new [`BoxBounds`] in raw SI base units.
     ///
     /// # Errors
-    ///
-    /// This function will return an error if
-    /// - one of the bounds bound ist NaN
-    /// - min bound is larger than the max bound
+    /// This function returns an error if the underlying [`BoxBounds`] could not be created.
     pub fn new(min: f64, max: f64) -> OpmResult<Self> {
         if min.is_nan() || max.is_nan() {
             return Err(OpossumError::Other("Box bounds cannot be NaN".to_string()));
@@ -29,6 +27,14 @@ impl BoxBounds {
             )));
         }
         Ok(Self { min, max })
+    }
+
+    /// Creates a new [`BoxBounds`] using typed Length quantities.
+    ///
+    /// # Errors
+    /// This function returns an error if the underlying [`BoxBounds`] could not be created.
+    pub fn from_lengths(min: Length, max: Length) -> OpmResult<Self> {
+        Self::new(min.get::<meter>(), max.get::<meter>())
     }
 
     #[must_use]
@@ -60,7 +66,7 @@ impl BoxBounds {
 pub struct FreeVariable {
     pub address: ParameterAddress,
     pub name: String,
-    /// Initial value in SI base units. If None, derived automatically from the model.
+    /// Initial value in SI base units (meters/radians/dimensionless).
     pub initial_value: Option<f64>,
     pub bounds: Option<BoxBounds>,
     pub delta_rel: f64,
@@ -68,7 +74,7 @@ pub struct FreeVariable {
 }
 
 impl FreeVariable {
-    /// Creates a new `FreeVariable` where the initial value is automatically read from the model[cite: 1].
+    /// Creates a new `FreeVariable` where the initial value is automatically read from the model.
     pub fn new(address: ParameterAddress, name: impl Into<String>) -> Self {
         Self {
             address,
@@ -80,10 +86,17 @@ impl FreeVariable {
         }
     }
 
-    /// Explicitly overrides the initial parameter value.
+    /// Explicitly overrides the initial parameter value using raw SI base units.
     #[must_use]
     pub const fn with_initial_value(mut self, value: f64) -> Self {
         self.initial_value = Some(value);
+        self
+    }
+
+    /// Explicitly overrides the initial parameter value using a typed Length.
+    #[must_use]
+    pub fn with_initial_length(mut self, length: Length) -> Self {
+        self.initial_value = Some(length.get::<meter>());
         self
     }
 
@@ -91,6 +104,15 @@ impl FreeVariable {
     pub const fn with_bounds(mut self, bounds: BoxBounds) -> Self {
         self.bounds = Some(bounds);
         self
+    }
+
+    /// Configures variable bounds directly using typed Length quantities.
+    ///
+    /// # Errors
+    /// This function returns an error if the underlying [`BoxBounds`] could not be created.
+    pub fn with_length_bounds(self, min: Length, max: Length) -> OpmResult<Self> {
+        let bounds = BoxBounds::from_lengths(min, max)?;
+        Ok(self.with_bounds(bounds))
     }
 
     #[must_use]

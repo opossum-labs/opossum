@@ -3,14 +3,41 @@ use crate::{
     reader::MetricReader,
 };
 use opossum_core::{
-    core_optics::NodeAttrExt,
+    core_optics::{NodeAttrExt, observable::MetricDimension},
     error::{OpmResult, OpossumError},
     opm_document::OpmDocument,
     utils::to_f64,
 };
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
+use uom::si::{f64::Length, length::meter};
 use uuid::Uuid;
+
+/// Default scale constants for optical observables in SI base units (meters).
+pub const DEFAULT_SPOT_SCALE: f64 = 1.0e-6; // 1.0 micrometer
+pub const DEFAULT_WAVEFRONT_SCALE: f64 = 1.0e-7; // 100.0 nanometers (~ lambda / 10)
+pub const DEFAULT_GEOMETRIC_SCALE: f64 = 1.0e-3; // 1.0 millimeter
+
+/// Resolves a default normalization scale based on dimension and metric naming convention.
+#[must_use]
+pub fn default_scale_for_metric(dimension: MetricDimension, metric_name: &str) -> f64 {
+    match dimension {
+        MetricDimension::Length => {
+            let lower = metric_name.to_lowercase();
+            if lower.contains("wavefront") || lower.contains("ptv") || lower.contains("p-v") {
+                DEFAULT_WAVEFRONT_SCALE
+            } else if lower.contains("spot") || lower.contains("radius") || lower.contains("waist")
+            {
+                DEFAULT_SPOT_SCALE
+            } else {
+                DEFAULT_GEOMETRIC_SCALE
+            }
+        }
+        MetricDimension::Dimensionless => 1.0,
+        MetricDimension::Angle | MetricDimension::Energy => 1.0e-3, // 1.0 mrad / 1.0 mJ
+        MetricDimension::Fluence => 1.0e4,                          // 1.0 J/cm^2 = 10,000 J/m^2
+    }
+}
 
 /// Context provided to operands during merit function evaluation.
 pub struct EvaluationContext<'a> {
@@ -29,8 +56,7 @@ impl<'a> EvaluationContext<'a> {
     ///
     /// # Errors
     ///
-    /// This function returns an error if the given [`MetricSource`] contains an invalid [`ObservableAddress`] or
-    /// [`ParameterAddress`].
+    /// This function returns an error if the given [`MetricSource`] contains invalid data
     pub fn read_source(&self, source: &MetricSource) -> OpmResult<f64> {
         match source {
             MetricSource::Observable(addr) => MetricReader::read_metric(self.doc, addr),
@@ -43,31 +69,26 @@ impl<'a> EvaluationContext<'a> {
 pub trait Operand: Send + Sync + Debug {
     /// Human-readable name or description of the operand.
     fn name(&self) -> &str;
-
     /// Relative weight `w_i` of this operand in the merit function.
     fn weight(&self) -> f64;
-
-    /// Evaluates the operand contribution to the overall cost $\Phi(x)$.
+    /// Evaluates the operand contribution to the overall cost Phi(x).
     ///
     /// # Errors
     ///
-    /// This function returns an error if the evaluation of the concrete implementation failed.
+    /// This function returns an error if the underlying implementation fails.
     fn evaluate(&self, ctx: &EvaluationContext<'_>) -> OpmResult<f64>;
-
     /// Optional pre-flight validation against the pristine document model.
     ///
-    /// Verifies that targeted nodes, analyzers, and required traits exist.
-    ///
     /// # Errors
     ///
-    /// This function returns an error if the validation failed. Check the error message in this case.
+    /// This function returns an error if the validation fails.
     fn validate(&self, _doc: &OpmDocument) -> OpmResult<()> {
         Ok(())
     }
 }
 
 /// Standard operand targeting a specific value:
-/// $\text{cost} = w \cdot \left( \frac{\text{value} - \text{target}}{\text{scale}} \right)^2$
+/// cost = weight * ((value - target) / scale)^2
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TargetValueOperand {
     pub name: String,
@@ -78,7 +99,7 @@ pub struct TargetValueOperand {
 }
 
 impl TargetValueOperand {
-    /// Creates a new target value operand.
+    /// Creates a raw target value operand using SI base units.
     pub fn new(
         name: impl Into<String>,
         source: impl Into<MetricSource>,
@@ -99,17 +120,101 @@ impl TargetValueOperand {
             scale,
         }
     }
+
+    /// Creates an operand targeting a spot size metric with automatic micrometer default scaling.
+    pub fn for_spot_radius(
+        name: impl Into<String>,
+        source: impl Into<MetricSource>,
+        target: Length,
+        weight: f64,
+    ) -> Self {
+        Self::new(
+            name,
+            source,
+            target.get::<meter>(),
+            weight,
+            DEFAULT_SPOT_SCALE,
+        )
+    }
+
+    /// Creates an operand targeting wavefront aberrations with automatic nanometer default scaling.
+    pub fn for_wavefront(
+        name: impl Into<String>,
+        source: impl Into<MetricSource>,
+        target: Length,
+        weight: f64,
+    ) -> Self {
+        Self::new(
+            name,
+            source,
+            target.get::<meter>(),
+            weight,
+            DEFAULT_WAVEFRONT_SCALE,
+        )
+    }
+    /// Creates a target operand for wavefront error specified in waves (lambda).
+    /// Default scale is 0.02 waves (lambda / 50).
+    pub fn for_wavefront_waves(
+        name: impl Into<String>,
+        source: impl Into<MetricSource>,
+        target_waves: f64,
+        weight: f64,
+    ) -> Self {
+        Self::new(name, source, target_waves, weight, 0.02)
+    }
+
+    /// Creates a target operand for wavefront error in waves with a custom scale tolerance.
+    pub fn for_wavefront_waves_with_scale(
+        name: impl Into<String>,
+        source: impl Into<MetricSource>,
+        target_waves: f64,
+        scale_waves: f64,
+        weight: f64,
+    ) -> Self {
+        Self::new(name, source, target_waves, weight, scale_waves)
+    }
+
+    /// Creates a general length operand with automatic millimeter default scaling (e.g. beam spacing, lengths).
+    pub fn for_length(
+        name: impl Into<String>,
+        source: impl Into<MetricSource>,
+        target: Length,
+        weight: f64,
+    ) -> Self {
+        Self::new(
+            name,
+            source,
+            target.get::<meter>(),
+            weight,
+            DEFAULT_GEOMETRIC_SCALE,
+        )
+    }
+
+    /// Creates a typed length operand with an explicit tolerance scale factor.
+    pub fn for_length_with_scale(
+        name: impl Into<String>,
+        source: impl Into<MetricSource>,
+        target: Length,
+        scale: Length,
+        weight: f64,
+    ) -> Self {
+        Self::new(
+            name,
+            source,
+            target.get::<meter>(),
+            weight,
+            scale.get::<meter>(),
+        )
+    }
 }
 
 impl Operand for TargetValueOperand {
     fn name(&self) -> &str {
         &self.name
     }
-
     fn weight(&self) -> f64 {
         self.weight
     }
-
     fn evaluate(&self, ctx: &EvaluationContext<'_>) -> OpmResult<f64> {
         let value = ctx.read_source(&self.source)?;
         let normalized_diff = (value - self.target) / self.scale;
@@ -120,9 +225,9 @@ impl Operand for TargetValueOperand {
 /// Direction for threshold inequality bounds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ThresholdDirection {
-    /// Penalizes values exceeding limit: $\max(0, \text{val} - \text{limit})$.
+    /// Penalizes values exceeding limit: max(0, val - limit).
     Upper,
-    /// Penalizes values falling below limit: $\max(0, \text{limit} - \text{val})$.
+    /// Penalizes values falling below limit: max(0, limit - val).
     Lower,
 }
 
@@ -138,7 +243,7 @@ pub struct ThresholdOperand {
 }
 
 impl ThresholdOperand {
-    /// Creates a new threshold constraint operand.
+    /// Creates a raw threshold constraint operand.
     pub fn new(
         name: impl Into<String>,
         source: impl Into<MetricSource>,
@@ -161,17 +266,51 @@ impl ThresholdOperand {
             scale,
         }
     }
+
+    /// Creates a threshold constraint on a spot size metric with automatic micrometer scaling.
+    pub fn for_spot_radius(
+        name: impl Into<String>,
+        source: impl Into<MetricSource>,
+        limit: Length,
+        direction: ThresholdDirection,
+        weight: f64,
+    ) -> Self {
+        Self::new(
+            name,
+            source,
+            limit.get::<meter>(),
+            direction,
+            weight,
+            DEFAULT_SPOT_SCALE,
+        )
+    }
+
+    /// Creates a threshold constraint on a geometric length with automatic millimeter scaling.
+    pub fn for_length(
+        name: impl Into<String>,
+        source: impl Into<MetricSource>,
+        limit: Length,
+        direction: ThresholdDirection,
+        weight: f64,
+    ) -> Self {
+        Self::new(
+            name,
+            source,
+            limit.get::<meter>(),
+            direction,
+            weight,
+            DEFAULT_GEOMETRIC_SCALE,
+        )
+    }
 }
 
 impl Operand for ThresholdOperand {
     fn name(&self) -> &str {
         &self.name
     }
-
     fn weight(&self) -> f64 {
         self.weight
     }
-
     fn evaluate(&self, ctx: &EvaluationContext<'_>) -> OpmResult<f64> {
         let value = ctx.read_source(&self.source)?;
         let violation = match self.direction {
@@ -184,8 +323,6 @@ impl Operand for ThresholdOperand {
 }
 
 /// Geometric constraint operand penalizing if the sum of multiple parameter values exceeds an upper bound.
-///
-/// $\text{cost} = w \cdot \left( \frac{\max(0, \sum `p_i` - L_{\max})}{\text{scale}} \right)^2$
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MaxTotalLengthOperand {
     pub name: String,
@@ -196,7 +333,7 @@ pub struct MaxTotalLengthOperand {
 }
 
 impl MaxTotalLengthOperand {
-    /// Creates a new total length constraint operand.
+    /// Creates a new total length constraint operand with raw floats.
     pub fn new(
         name: impl Into<String>,
         segments: Vec<ParameterAddress>,
@@ -208,15 +345,26 @@ impl MaxTotalLengthOperand {
             segments,
             max_length,
             weight,
-            scale: 1.0e-3, // Standard scaling of 1 mm
+            scale: DEFAULT_GEOMETRIC_SCALE,
         }
     }
 
-    /// Overrides the normalization scale factor.
+    /// Creates a new total length constraint operand using typed Length quantities.
+    pub fn for_length(
+        name: impl Into<String>,
+        segments: Vec<ParameterAddress>,
+        max_length: Length,
+        weight: f64,
+    ) -> Self {
+        Self::new(name, segments, max_length.get::<meter>(), weight)
+    }
+
+    /// Overrides the normalization scale factor with a typed Length.
     #[must_use]
-    pub fn with_scale(mut self, scale: f64) -> Self {
-        if scale.abs() >= f64::EPSILON {
-            self.scale = scale;
+    pub fn with_length_scale(mut self, scale: Length) -> Self {
+        let scale_m = scale.get::<meter>();
+        if scale_m.abs() >= f64::EPSILON {
+            self.scale = scale_m;
         }
         self
     }
@@ -226,11 +374,9 @@ impl Operand for MaxTotalLengthOperand {
     fn name(&self) -> &str {
         &self.name
     }
-
     fn weight(&self) -> f64 {
         self.weight
     }
-
     fn evaluate(&self, ctx: &EvaluationContext<'_>) -> OpmResult<f64> {
         let mut total = 0.0;
         for seg in &self.segments {
@@ -243,8 +389,6 @@ impl Operand for MaxTotalLengthOperand {
 }
 
 /// Geometric constraint penalizing optical components whose edge thickness drops below a lower bound.
-///
-/// Uses the `EdgeThickness` trait of the target node.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MinEdgeThicknessOperand {
     pub name: String,
@@ -255,7 +399,7 @@ pub struct MinEdgeThicknessOperand {
 }
 
 impl MinEdgeThicknessOperand {
-    /// Creates a new edge thickness constraint operand.
+    /// Creates a new edge thickness constraint operand with raw floats.
     #[must_use]
     pub fn new(name: impl Into<String>, node_id: Uuid, min_thickness: f64, weight: f64) -> Self {
         Self {
@@ -263,15 +407,27 @@ impl MinEdgeThicknessOperand {
             node_id,
             min_thickness,
             weight,
-            scale: 1.0e-3, // Standard scaling of 1 mm
+            scale: DEFAULT_GEOMETRIC_SCALE,
         }
     }
 
-    /// Overrides the normalization scale factor.
+    /// Creates a new edge thickness constraint operand using typed Length.
     #[must_use]
-    pub fn with_scale(mut self, scale: f64) -> Self {
-        if scale.abs() >= f64::EPSILON {
-            self.scale = scale;
+    pub fn for_thickness(
+        name: impl Into<String>,
+        node_id: Uuid,
+        min_thickness: Length,
+        weight: f64,
+    ) -> Self {
+        Self::new(name, node_id, min_thickness.get::<meter>(), weight)
+    }
+
+    /// Overrides the normalization scale factor with a typed Length.
+    #[must_use]
+    pub fn with_length_scale(mut self, scale: Length) -> Self {
+        let scale_m = scale.get::<meter>();
+        if scale_m.abs() >= f64::EPSILON {
+            self.scale = scale_m;
         }
         self
     }
@@ -281,11 +437,9 @@ impl Operand for MinEdgeThicknessOperand {
     fn name(&self) -> &str {
         &self.name
     }
-
     fn weight(&self) -> f64 {
         self.weight
     }
-
     fn validate(&self, doc: &OpmDocument) -> OpmResult<()> {
         let (node_ref, _) = doc.scenery().node_recursive(self.node_id)?;
         if node_ref.as_edge_thickness().is_none() {
@@ -298,7 +452,6 @@ impl Operand for MinEdgeThicknessOperand {
         }
         Ok(())
     }
-
     fn evaluate(&self, ctx: &EvaluationContext<'_>) -> OpmResult<f64> {
         let (node_ref, _) = ctx.doc.scenery().node_recursive(self.node_id)?;
         let edge_thickness = node_ref
@@ -311,7 +464,6 @@ impl Operand for MinEdgeThicknessOperand {
             })?
             .min_edge_thickness()?
             .value;
-
         let violation = (self.min_thickness - edge_thickness).max(0.0);
         let normalized = violation / self.scale;
         Ok(self.weight * normalized * normalized)
@@ -319,8 +471,6 @@ impl Operand for MinEdgeThicknessOperand {
 }
 
 /// Penalizes ray loss at a detector when the number of valid rays drops below the expected count.
-///
-/// $\text{cost} = w \cdot \left( \frac{\max(0, N_{\text{expected}} - N_{\text{valid}})}{N_{\text{expected}}} \right)^2$
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TransmissionPenaltyOperand {
     pub name: String,
@@ -330,7 +480,6 @@ pub struct TransmissionPenaltyOperand {
 }
 
 impl TransmissionPenaltyOperand {
-    /// Creates a new transmission penalty operand targeting a valid-ray detector metric.
     pub fn new(
         name: impl Into<String>,
         address: ObservableAddress,
@@ -350,11 +499,9 @@ impl Operand for TransmissionPenaltyOperand {
     fn name(&self) -> &str {
         &self.name
     }
-
     fn weight(&self) -> f64 {
         self.weight
     }
-
     fn validate(&self, doc: &OpmDocument) -> OpmResult<()> {
         let _ = doc.scenery().node_recursive(self.address.node_id)?;
         if !doc.analyzers().contains_key(&self.address.analyzer_id) {
@@ -365,18 +512,14 @@ impl Operand for TransmissionPenaltyOperand {
         }
         Ok(())
     }
-
     fn evaluate(&self, ctx: &EvaluationContext<'_>) -> OpmResult<f64> {
-        // Guard against division by zero if expected_rays is misconfigured
         if self.expected_rays <= 0.0 {
             return Ok(0.0);
         }
-
         let valid_rays = MetricReader::read_metric(ctx.doc, &self.address)?;
         if valid_rays >= self.expected_rays {
             return Ok(0.0);
         }
-
         let loss_ratio = (self.expected_rays - valid_rays) / self.expected_rays;
         Ok(self.weight * loss_ratio * loss_ratio)
     }
@@ -402,7 +545,6 @@ impl Operand for StandardOperand {
             Self::TransmissionPenalty(op) => op.name(),
         }
     }
-
     fn weight(&self) -> f64 {
         match self {
             Self::Target(op) => op.weight(),
@@ -412,7 +554,6 @@ impl Operand for StandardOperand {
             Self::TransmissionPenalty(op) => op.weight(),
         }
     }
-
     fn validate(&self, doc: &OpmDocument) -> OpmResult<()> {
         match self {
             Self::Target(op) => op.validate(doc),
@@ -422,7 +563,6 @@ impl Operand for StandardOperand {
             Self::TransmissionPenalty(op) => op.validate(doc),
         }
     }
-
     fn evaluate(&self, ctx: &EvaluationContext<'_>) -> OpmResult<f64> {
         match self {
             Self::Target(op) => op.evaluate(ctx),
@@ -439,25 +579,21 @@ impl From<TargetValueOperand> for StandardOperand {
         Self::Target(op)
     }
 }
-
 impl From<ThresholdOperand> for StandardOperand {
     fn from(op: ThresholdOperand) -> Self {
         Self::Threshold(op)
     }
 }
-
 impl From<MaxTotalLengthOperand> for StandardOperand {
     fn from(op: MaxTotalLengthOperand) -> Self {
         Self::MaxTotalLength(op)
     }
 }
-
 impl From<MinEdgeThicknessOperand> for StandardOperand {
     fn from(op: MinEdgeThicknessOperand) -> Self {
         Self::MinEdgeThickness(op)
     }
 }
-
 impl From<TransmissionPenaltyOperand> for StandardOperand {
     fn from(op: TransmissionPenaltyOperand) -> Self {
         Self::TransmissionPenalty(op)

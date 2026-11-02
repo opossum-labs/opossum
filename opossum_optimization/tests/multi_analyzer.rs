@@ -1,70 +1,46 @@
 mod common;
-
-use common::build_dual_analyzer_kepler_setup;
-use opossum_core::error::OpmResult;
+use opossum_core::{error::OpmResult, millimeter};
 use opossum_optimization::{
-    BoxBounds, FreeVariable, MetricReader, ObservableAddress, OpticOptimizer,
-    OptimizationAlgorithm, ParameterAddress, TargetValueOperand,
+    FreeVariable, MetricReader, ObservableAddress, OpticOptimizer, OptimizationAlgorithm,
+    ParameterAddress, TargetValueOperand,
 };
 
+use crate::common::build_kepler_setup;
+
 #[test]
-fn test_optimize_kepler_multi_analyzer() -> OpmResult<()> {
-    let (mut doc, analyzer_wf_id, analyzer_spot_id, lens1_id, wf_id, spot_id) =
-        build_dual_analyzer_kepler_setup()?;
+fn test_optimize_kepler_focal_position_lbfgs() -> OpmResult<()> {
+    let (mut doc, analyzer_id, lens2_id, spot_id) = build_kepler_setup(millimeter!(45.0))?;
 
-    let distance_1 = ParameterAddress::ConnectionDistance {
-        src_id: lens1_id,
+    let dist_address = ParameterAddress::ConnectionDistance {
+        src_id: lens2_id,
         src_port: "output_1".into(),
     };
-    let distance_2 = ParameterAddress::ConnectionDistance {
-        src_id: wf_id,
-        src_port: "output_1".into(),
-    };
-
-    let wf_rms_addr = ObservableAddress {
-        analyzer_id: analyzer_wf_id,
-        node_id: wf_id,
-        metric_name: "Wavefront RMS".into(),
-    };
-    let spot_rms_addr = ObservableAddress {
-        analyzer_id: analyzer_spot_id,
+    let spot_observable_addr = ObservableAddress {
+        analyzer_id,
         node_id: spot_id,
         metric_name: "rms beam radius".into(),
     };
 
     let summary = OpticOptimizer::new(&mut doc)
         .add_variable(
-            FreeVariable::new(distance_1.clone(), "l1 <-> l2")
-                .with_bounds(BoxBounds::new(0.02, 0.3)?),
+            FreeVariable::new(dist_address.clone(), "image_drift_distance")
+                .with_length_bounds(millimeter!(30.0), millimeter!(80.0))?,
         )?
-        .add_variable(
-            FreeVariable::new(distance_2.clone(), "wf <-> sd")
-                .with_bounds(BoxBounds::new(0.02, 0.3)?),
-        )?
-        .add_operand(TargetValueOperand::new(
-            "minimize_wavefront_rms",
-            wf_rms_addr.clone(),
-            0.0,
+        // Use millimeter default scale (1.0 mm) suitable for macroscopic beam diameters
+        .add_operand(TargetValueOperand::for_length(
+            "minimize_rms_spot",
+            spot_observable_addr.clone(),
+            millimeter!(0.0),
             1.0,
-            0.02,
         ))
-        .add_operand(TargetValueOperand::new(
-            "minimize_spot_radius",
-            spot_rms_addr.clone(),
-            0.0,
-            1.0,
-            5.0e-5,
-        ))
-        .with_algorithm(OptimizationAlgorithm::lbfgs().with_max_iterations(30))
+        .with_algorithm(OptimizationAlgorithm::lbfgs().with_max_iterations(25))
         .optimize()?;
 
-    let final_wf_rms = MetricReader::read_metric(&doc, &wf_rms_addr)?;
-    let _final_spot_rms = MetricReader::read_metric(&doc, &spot_rms_addr)?;
+    let best_distance = summary.value(&dist_address).unwrap();
+    let optimized_rms = MetricReader::read_metric(&doc, &spot_observable_addr)?;
 
+    assert!((best_distance - 0.058).abs() < 0.005);
+    assert!(optimized_rms < 1.0e-3);
     assert!(summary.final_cost < summary.initial_cost);
-    assert!(
-        final_wf_rms < 0.25,
-        "Wavefront RMS should improve significantly"
-    );
     Ok(())
 }

@@ -14,14 +14,17 @@ use crate::{
 };
 use opossum_core::{error::OpmResult, opm_document::OpmDocument};
 use rayon::prelude::*;
-/// Default penalty applied for fatal simulation failures (e.g., ray tracing errors)[cite: 1].
+/// Default penalty applied for fatal simulation failures (e.g., ray tracing errors)
 pub const DEFAULT_FATAL_PENALTY: f64 = 1.0e12;
 
-/// Default penalty weight scaling parameter box bound violations[cite: 1].
-pub const DEFAULT_BOUNDS_PENALTY_WEIGHT: f64 = 1.0e4;
+/// Default penalty weight scaling parameter box bound violations.
+///
+/// Set to 1.0e8 to reliably dominate large initial optical merit costs and
+/// prevent solvers (especially quasi-Newton line searches) from escaping bounds.
+pub const DEFAULT_BOUNDS_PENALTY_WEIGHT: f64 = 1.0e8;
 
 /// Central cost function evaluator $\Phi(x)$ managing blueprint cloning, parameter mapping,
-/// simulation execution, and operand evaluation[cite: 1].
+/// simulation execution, and operand evaluation.
 pub struct MeritFunction {
     blueprint: OpmDocument,
     free_variables: Vec<FreeVariable>,
@@ -36,7 +39,7 @@ impl MeritFunction {
     /// Creates a new `MeritFunction` instance.
     ///
     /// # Errors
-    /// Returns an error if the parameter and coupling configuration contains duplicates or cycles[cite: 1].
+    /// Returns an error if the parameter and coupling configuration contains duplicates or cycles.
     pub fn new(
         blueprint: OpmDocument,
         free_variables: Vec<FreeVariable>,
@@ -94,10 +97,10 @@ impl MeritFunction {
         &self.couplings
     }
 
-    /// Evaluates the total merit value $\Phi(x)$ for candidate vector $x$[cite: 1].
+    /// Evaluates the total merit value $\Phi(x)$ for candidate vector `x`
     ///
     /// Adheres to the strict no-panic guarantee: any simulation failure or unresolvable
-    /// metric is caught and converted into a large penalty cost[cite: 1].
+    /// metric is caught and converted into a large penalty cost.
     /// Evaluates the scalar cost Phi(x).
     #[must_use]
     pub fn evaluate(&self, x: &[f64]) -> f64 {
