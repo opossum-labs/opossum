@@ -78,9 +78,10 @@ pub fn NodePort(
     let node_id = node.id();
     let port_class = get_port_class(inverted_node, port_type);
 
+    // read, not peek: a new or removed port map must re-render this port
     let external_port_opt = graph_store
         .mapped_ports()
-        .peek()
+        .read()
         .external_port_of_mapped_port(node.id(), &port_name);
 
     let on_mouse_down_handler =
@@ -96,7 +97,6 @@ pub fn NodePort(
     let on_context_menu_handler = use_on_context_menu(
         workspace,
         graph_store,
-        graph_state.graph_info().peek().clone(),
         node_id,
         port_name.clone(),
         port_type,
