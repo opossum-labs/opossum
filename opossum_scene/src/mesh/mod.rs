@@ -14,7 +14,7 @@ mod surface_mesh;
 
 pub use surface_mesh::{FacePatch, SurfaceMesh};
 
-use opossum_core::{apertures::Outline, error::OpmResult, geometry::Geometry};
+use opossum_core::{error::OpmResult, geometry::Geometry};
 
 /// A kind of geometry that can be drawn as triangle meshes.
 pub trait Meshable {
@@ -29,8 +29,6 @@ pub trait Meshable {
     /// # Arguments
     ///
     /// * `segments` - the number of points to sample the rim of an outline with.
-    /// * `unbounded` - the outline to draw a face over that has no edge of its own, such as an
-    ///   unbounded surface; a face is endless, but a drawing is not.
     ///
     /// # Returns
     ///
@@ -40,31 +38,31 @@ pub trait Meshable {
     ///
     /// This function returns an error if an outline cannot be triangulated, if a face cannot be
     /// laid over it or if this kind of geometry cannot be meshed yet.
-    fn mesh(&self, segments: usize, unbounded: &Outline) -> OpmResult<Vec<FacePatch>>;
+    fn mesh(&self, segments: usize) -> OpmResult<Vec<FacePatch>>;
 }
 
 /// Every kind of geometry is drawn by its own implementation. A new kind in the core stops this
 /// from compiling until it can be drawn.
 impl Meshable for Geometry {
-    fn mesh(&self, segments: usize, unbounded: &Outline) -> OpmResult<Vec<FacePatch>> {
+    fn mesh(&self, segments: usize) -> OpmResult<Vec<FacePatch>> {
         match self {
-            Self::Surface(surface) => surface.mesh(segments, unbounded),
-            Self::Extruded(body) => body.mesh(segments, unbounded),
-            Self::Parametric(solid) => solid.mesh(segments, unbounded),
-            Self::Assembly(assembly) => assembly.mesh(segments, unbounded),
+            Self::Surface(surface) => surface.mesh(segments),
+            Self::Extruded(body) => body.mesh(segments),
+            Self::Parametric(solid) => solid.mesh(segments),
+            Self::Assembly(assembly) => assembly.mesh(segments),
         }
     }
 }
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::{appearance::Appearance, components::unbounded_outline};
+    use super::{surface::unbounded_outline, *};
+    use crate::appearance::Appearance;
     use approx::{assert_abs_diff_eq, assert_relative_eq};
     use nalgebra::Point2;
     use opossum_core::{
         analyzers::Analyzable,
-        apertures::{Bore, CircleShape, OpticShape, OutlineShape},
+        apertures::{Bore, CircleShape, OpticShape, Outline, OutlineShape},
         core_optics::{NodeAttrExt, OpticNode, node_attr::NodePositioning},
         degree,
         error::OpossumError,
@@ -84,7 +82,7 @@ mod test {
         let geometry = node.create_geometry()?.ok_or_else(|| {
             OpossumError::Other(format!("node '{}' has no geometry to draw", node.name()))
         })?;
-        geometry.mesh(segments, &unbounded_outline()?)
+        geometry.mesh(segments)
     }
     /// A node is meshed from its geometry: the unbounded plane of a dummy is drawn as far as the
     /// default optic shape reaches.

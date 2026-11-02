@@ -3,7 +3,7 @@
 use nalgebra::{Point3, Vector3};
 use opossum_core::{
     error::{OpmResult, OpossumError},
-    geometry::{Face, FaceIndex, SurfacePlacement},
+    geometry::{FaceIndex, SurfacePlacement},
     utils::geom_transformation::Isometry,
 };
 use optoscene::{MaterialId, SurfacePatch};
@@ -26,7 +26,8 @@ pub struct FacePatch {
 
 /// A triangle mesh of one piece of surface, with a normal at every point.
 ///
-/// Usually that piece is a [`Face`] laid over an [`OutlineMesh`] (see [`SurfaceMesh::over`]); the
+/// Usually that piece is a [`Face`](opossum_core::geometry::Face) laid over an [`OutlineMesh`] (see
+/// [`SurfaceMesh::over`]); the
 /// lateral face closing a body between two of them is the one exception (see
 /// [`SurfaceMesh::between`]).
 ///
@@ -63,20 +64,18 @@ impl SurfaceMesh {
     ///
     /// # Arguments
     ///
-    /// - `face`: the face to lay the outline mesh onto
-    /// - `outline_mesh`: the triangulated area to lay onto the face, in the xy plane of `frame`
-    /// - `frame`: the frame to express the result in, given in the frame the face is stated in
+    /// - `placement`: the face to lay the outline mesh onto, placed in the frame to express the
+    ///   result in (see [`SurfacePlacement::new`])
+    /// - `outline_mesh`: the triangulated area to lay onto the face, in the xy plane of that frame
     ///
     /// # Returns
     ///
-    /// The meshed face, with all normals facing the +z of `frame`.
+    /// The meshed face, with all normals facing the +z of the frame.
     ///
     /// # Errors
     ///
-    /// This function returns an error if the face runs parallel to the frame's axis, if it does
-    /// not reach as far out as the outline, or if it is both curved and tilted against the frame.
-    pub fn over(face: &Face, outline_mesh: &OutlineMesh, frame: &Isometry) -> OpmResult<Self> {
-        let placement = SurfacePlacement::new(face, frame)?;
+    /// This function returns an error if the face does not reach as far out as the outline.
+    pub fn over(placement: &SurfacePlacement<'_>, outline_mesh: &OutlineMesh) -> OpmResult<Self> {
         let mut points = Vec::with_capacity(outline_mesh.points().len());
         let mut normals = Vec::with_capacity(outline_mesh.points().len());
         for transversal_position in outline_mesh.points() {
@@ -227,14 +226,12 @@ impl SurfaceMesh {
     ///
     /// The same mesh, its points and normals carried through `iso`.
     #[must_use]
-    pub fn transformed(mut self, iso: &Isometry) -> Self {
-        for point in &mut self.points {
-            *point = iso.transform_point(point);
+    pub fn transformed(self, iso: &Isometry) -> Self {
+        Self {
+            points: iso.transform_points(&self.points),
+            normals: iso.transform_vectors_f64(&self.normals),
+            triangles: self.triangles,
         }
-        for normal in &mut self.normals {
-            *normal = iso.transform_vector_f64(normal);
-        }
-        self
     }
     /// Turn the mesh around, so that it faces the other way.
     ///
@@ -287,7 +284,7 @@ mod test {
     use opossum_core::{
         apertures::{CircleShape, Outline},
         degree,
-        geometry::{Cylinder, Parabola, Sphere, SurfaceShape},
+        geometry::{Cylinder, Face, Parabola, Sphere, SurfaceShape},
         millimeter,
     };
 
@@ -298,7 +295,7 @@ mod test {
             SurfaceShape::Sphere(Sphere::new(millimeter!(50.0))?),
             Isometry::identity(),
         );
-        let mesh = SurfaceMesh::over(
+        let mesh = laid(
             &face,
             &OutlineMesh::flat(&outline, 24)?,
             &Isometry::identity(),
@@ -373,6 +370,10 @@ mod test {
             ("tilted plane", tilted(SurfaceShape::Plane, node)?),
         ])
     }
+    /// Lay an outline mesh onto a face placed in the given frame, as the meshers do.
+    fn laid(face: &Face, outline_mesh: &OutlineMesh, frame: &Isometry) -> OpmResult<SurfaceMesh> {
+        SurfaceMesh::over(&SurfacePlacement::new(face, frame)?, outline_mesh)
+    }
     /// Check everything [`SurfaceMesh::over`] promises.
     fn check_mesh_contract(
         name: &str,
@@ -380,7 +381,7 @@ mod test {
         frame: &Isometry,
         outline_mesh: &OutlineMesh,
     ) -> OpmResult<()> {
-        let mesh = SurfaceMesh::over(face, outline_mesh, frame)?;
+        let mesh = laid(face, outline_mesh, frame)?;
         assert_eq!(mesh.points().len(), outline_mesh.points().len());
         assert_eq!(mesh.normals().len(), outline_mesh.points().len());
         assert_eq!(mesh.triangles(), outline_mesh.triangles());
@@ -438,8 +439,8 @@ mod test {
             .into_iter()
             .zip(faces_of_a_node(&there)?)
         {
-            let at_origin = SurfaceMesh::over(&face, &outline_mesh, &here)?;
-            let elsewhere = SurfaceMesh::over(&moved, &outline_mesh, &there)?;
+            let at_origin = laid(&face, &outline_mesh, &here)?;
+            let elsewhere = laid(&moved, &outline_mesh, &there)?;
             assert_eq!(at_origin.triangles(), elsewhere.triangles());
             for (before, after) in at_origin.points().iter().zip(elsewhere.points()) {
                 for axis in 0..3 {
@@ -464,8 +465,8 @@ mod test {
             SurfaceShape::Sphere(Sphere::new(millimeter!(5.0))?),
             Isometry::identity(),
         );
-        assert!(SurfaceMesh::over(&face, &circle_mesh(10.0)?, &Isometry::identity()).is_err());
-        assert!(SurfaceMesh::over(&face, &circle_mesh(2.0)?, &Isometry::identity()).is_ok());
+        assert!(laid(&face, &circle_mesh(10.0)?, &Isometry::identity()).is_err());
+        assert!(laid(&face, &circle_mesh(2.0)?, &Isometry::identity()).is_ok());
         Ok(())
     }
     /// A face standing on edge never crosses the frame's axis, so there is no point "above" any
@@ -476,7 +477,7 @@ mod test {
             SurfaceShape::Plane,
             Isometry::new(millimeter!(0.0, 0.0, 0.0), degree!(0.0, 90.0, 0.0))?,
         );
-        assert!(SurfaceMesh::over(&on_edge, &circle_mesh(10.0)?, &Isometry::identity()).is_err());
+        assert!(laid(&on_edge, &circle_mesh(10.0)?, &Isometry::identity()).is_err());
         Ok(())
     }
     /// Where a curved face tilted against its frame is met cannot be worked out by walking along
@@ -490,7 +491,7 @@ mod test {
             SurfaceShape::Parabola(Parabola::new(millimeter!(60.0))?),
         ] {
             let face = tilted(shape, &node)?;
-            assert!(SurfaceMesh::over(&face, &circle_mesh(10.0)?, &node).is_err());
+            assert!(laid(&face, &circle_mesh(10.0)?, &node).is_err());
         }
         Ok(())
     }

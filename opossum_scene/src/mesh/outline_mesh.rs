@@ -230,7 +230,7 @@ impl OutlineMesh {
             .vertices()
             .map(|vertex| {
                 let position = vertex.position();
-                Point2::new(meter!(position.x), meter!(position.y))
+                meter!(position.x, position.y)
             })
             .collect::<Vec<_>>();
         // The outline was loaded first and the refinement only appends, so the outline points keep
@@ -243,8 +243,7 @@ impl OutlineMesh {
                 ));
             }
         }
-        let in_area =
-            |point: SpadePoint<f64>| inside(Point2::new(meter!(point.x), meter!(point.y)));
+        let in_area = |point: SpadePoint<f64>| inside(meter!(point.x, point.y));
         Ok(Self {
             points,
             triangles: inner_triangles(&triangulation, &refinement.excluded_faces, in_area)?,

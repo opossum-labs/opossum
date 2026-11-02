@@ -47,33 +47,35 @@ impl RingPoints for OutlineShape {
             )));
         }
         match self {
-            Self::Circle(circle) => circle.ring_points(segments),
+            Self::Circle(circle) => circle_ring(circle, segments),
             Self::Rectangle(rectangle) => resample_ring(&rectangle.corners(), segments),
             Self::Polygon(polygon) => resample_ring(polygon.points(), segments),
         }
     }
 }
 
-/// `segments` points evenly spaced on the circle. A circle of radius zero is a single point and has
-/// no outline.
-impl RingPoints for CircleShape {
-    fn ring_points(&self, segments: usize) -> OpmResult<Vec<Point2<Length>>> {
-        let radius = self.radius().get::<meter>();
-        if radius == 0.0 {
-            return Err(OpossumError::Other(
-                "a circle of radius zero has no outline".into(),
-            ));
-        }
-        let num_points = u32::try_from(segments).map_err(|_| {
-            OpossumError::Other(format!(
-                "a circle cannot be sampled with as many as {segments} outline points"
-            ))
-        })?;
-        Ok(ellipse((0.0, 0.0), (radius, radius), num_points)?
-            .into_iter()
-            .map(|point| Point2::new(meter!(point.x), meter!(point.y)))
-            .collect())
+/// Return `segments` points evenly spaced on a circle, counter-clockwise.
+///
+/// # Errors
+///
+/// This function returns an error if the circle has radius zero, a single point without an
+/// outline, or if `segments` is too large to sample with.
+fn circle_ring(circle: &CircleShape, segments: usize) -> OpmResult<Vec<Point2<Length>>> {
+    let radius = circle.radius().get::<meter>();
+    if radius == 0.0 {
+        return Err(OpossumError::Other(
+            "a circle of radius zero has no outline".into(),
+        ));
     }
+    let num_points = u32::try_from(segments).map_err(|_| {
+        OpossumError::Other(format!(
+            "a circle cannot be sampled with as many as {segments} outline points"
+        ))
+    })?;
+    Ok(ellipse((0.0, 0.0), (radius, radius), num_points)?
+        .into_iter()
+        .map(|point| meter!(point.x, point.y))
+        .collect())
 }
 
 /// The edge of a bore, placed where the bore crosses the plane of the outline (see

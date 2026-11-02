@@ -3,7 +3,9 @@
 use opossum_core::{
     apertures::Outline,
     error::{OpmResult, OpossumError},
-    geometry::{GeometryKind, SurfaceExtent, SurfaceGeometry, SurfacePlacement},
+    geometry::{
+        GeometryKind, SurfaceExtent, SurfaceGeometry, SurfacePlacement, body::default_optic_shape,
+    },
 };
 
 use super::{
@@ -12,23 +14,39 @@ use super::{
     surface_mesh::{FacePatch, SurfaceMesh},
 };
 
+/// Return the outline a face without an edge of its own is drawn over: the default optic shape,
+/// around the face's vertex. A face is endless, but a drawing is not.
+///
+/// # Errors
+///
+/// This function returns an error if the default optic shape bounds no region.
+pub(super) fn unbounded_outline() -> OpmResult<Outline> {
+    default_optic_shape()
+        .outline()
+        .cloned()
+        .ok_or_else(|| OpossumError::Other("the default optic shape bounds no region".into()))
+}
+
 /// The face is laid over the outline of its rim, measured along the axis of the rim, with a bore
-/// where it meets the face; an open surface has no rim and is drawn over the given outline around
-/// its own vertex.
+/// where it meets the face; an open surface has no rim and is drawn over the
+/// [`unbounded_outline`] around its own vertex.
 impl Meshable for SurfaceGeometry {
-    fn mesh(&self, segments: usize, unbounded: &Outline) -> OpmResult<Vec<FacePatch>> {
+    fn mesh(&self, segments: usize) -> OpmResult<Vec<FacePatch>> {
         let face = GeometryKind::surface(self, Self::FACE)
             .ok_or_else(|| OpossumError::Other("a surface has no face".into()))?
             .face();
+        let unbounded;
         let (outline, frame) = match self.extent() {
             SurfaceExtent::Edge(rim) | SurfaceExtent::Window(rim) => (rim.outline(), *rim.frame()),
-            SurfaceExtent::Open => (unbounded, *face.frame()),
+            SurfaceExtent::Open => {
+                unbounded = unbounded_outline()?;
+                (&unbounded, *face.frame())
+            }
         };
         let at = SurfacePlacement::new(face, &frame)?;
         let mesh = SurfaceMesh::over(
-            face,
+            &at,
             &OutlineMesh::on(outline, segments, |position| Ok(at.above(&position)?.0.z))?,
-            &frame,
         )?;
         Ok(vec![FacePatch {
             face: Some(Self::FACE),
@@ -134,21 +152,20 @@ mod test {
     #[test]
     fn a_bounded_surface_is_drawn_over_its_rim_around_the_axis_of_the_rim() -> OpmResult<()> {
         let (axis, geometries) = mirror_and_detector()?;
-        // the outline handed in is for unbounded surfaces only
-        let unused = Outline::new(CircleShape::new(millimeter!(1.0))?, None)?;
         for geometry in geometries {
-            let meshes = Meshable::mesh(surface_of(&geometry)?, MESH_SEGMENTS, &unused)?;
+            let meshes = Meshable::mesh(surface_of(&geometry)?, MESH_SEGMENTS)?;
             check_drawn(&geometry, &meshes, &axis, 12.5)?;
         }
         Ok(())
     }
-    /// An unbounded surface has no edge to end the drawing at, so it is drawn over the outline it
-    /// is given, around its own vertex - even where that stands across the axis of the node.
+    /// An unbounded surface has no edge to end the drawing at, so it is drawn over the default
+    /// optic shape of 12.5 mm, around its own vertex - even where that stands across the axis of
+    /// the node.
     #[test]
-    fn an_unbounded_surface_is_drawn_over_the_given_outline_around_its_vertex() -> OpmResult<()> {
+    fn an_unbounded_surface_is_drawn_over_the_default_optic_shape_around_its_vertex()
+    -> OpmResult<()> {
         let (vertex, geometry) = open_plane()?;
-        let drawing = Outline::new(CircleShape::new(millimeter!(5.0))?, None)?;
-        let meshes = Meshable::mesh(surface_of(&geometry)?, MESH_SEGMENTS, &drawing)?;
-        check_drawn(&geometry, &meshes, &vertex, 5.0)
+        let meshes = Meshable::mesh(surface_of(&geometry)?, MESH_SEGMENTS)?;
+        check_drawn(&geometry, &meshes, &vertex, 12.5)
     }
 }

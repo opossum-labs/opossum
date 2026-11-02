@@ -1,7 +1,6 @@
 //! Drawing several solids sharing interfaces.
 
 use opossum_core::{
-    apertures::Outline,
     error::OpmResult,
     geometry::{Assembly, FaceIndex},
 };
@@ -15,10 +14,10 @@ use super::{Meshable, surface_mesh::FacePatch};
 ///
 /// This function returns an error if a part cannot be meshed.
 impl Meshable for Assembly {
-    fn mesh(&self, segments: usize, unbounded: &Outline) -> OpmResult<Vec<FacePatch>> {
+    fn mesh(&self, segments: usize) -> OpmResult<Vec<FacePatch>> {
         let mut patches = Vec::new();
         for (first_face, part) in self.parts() {
-            patches.extend(part.mesh(segments, unbounded)?.into_iter().map(|patch| {
+            patches.extend(part.mesh(segments)?.into_iter().map(|patch| {
                 FacePatch {
                     face: patch
                         .face
@@ -35,7 +34,7 @@ impl Meshable for Assembly {
 mod test {
     use super::*;
     use opossum_core::{
-        apertures::CircleShape,
+        apertures::{CircleShape, Outline},
         degree,
         geometry::{Face, FaceId, Geometry, Interface, ParametricSolid, Part, Side, SurfaceShape},
         material::Material,
@@ -125,8 +124,7 @@ mod test {
     /// leaves the whole assembly undrawn.
     #[test]
     fn an_assembly_is_drawn_as_its_parts() -> OpmResult<()> {
-        let unbounded = circle()?;
-        let meshes = Meshable::mesh(&side_by_side()?, 16, &unbounded)?;
+        let meshes = Meshable::mesh(&side_by_side()?, 16)?;
         assert_eq!(meshes.len(), 6, "each lens is drawn as three patches");
         let faces: Vec<_> = meshes.iter().map(|patch| patch.face).collect();
         let face = |index| Some(FaceIndex::new(index));
@@ -142,7 +140,7 @@ mod test {
                 );
             }
         }
-        let error = Meshable::mesh(&cube()?, 16, &unbounded).unwrap_err();
+        let error = Meshable::mesh(&cube()?, 16).unwrap_err();
         assert!(error.to_string().contains("cannot be meshed"), "{error}");
         Ok(())
     }

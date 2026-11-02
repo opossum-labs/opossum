@@ -2,7 +2,7 @@
 
 use nalgebra::Vector3;
 use opossum_core::{
-    apertures::{Bore, Outline},
+    apertures::Bore,
     core_optics::optic_surface::OpticSurface,
     error::{OpmResult, OpossumError},
     geometry::{Extruded, FaceIndex, GeometryKind, SurfacePlacement, body::Body},
@@ -36,7 +36,7 @@ const SURFACE_TOUCHING_TOLERANCE: f64 = 1e-9;
 /// laid over it (see [`SurfaceMesh::over`]), or if the two faces cross within the profile, so that
 /// there is no body between them.
 impl Meshable for Extruded {
-    fn mesh(&self, segments: usize, _unbounded: &Outline) -> OpmResult<Vec<FacePatch>> {
+    fn mesh(&self, segments: usize) -> OpmResult<Vec<FacePatch>> {
         let face = |index: FaceIndex| {
             GeometryKind::surface(self, index)
                 .map(OpticSurface::face)
@@ -63,18 +63,16 @@ impl Meshable for Extruded {
         }
         // A tilted bore meets each face somewhere else, so each face gets its own rims.
         let front = SurfaceMesh::over(
-            front_face,
+            &front_at,
             &OutlineMesh::on(outline, segments, |position| {
                 Ok(front_at.above(&position)?.0.z)
             })?,
-            &frame,
         )?;
         let rear = SurfaceMesh::over(
-            rear_face,
+            &rear_at,
             &OutlineMesh::on(outline, segments, |position| {
                 Ok(rear_at.above(&position)?.0.z)
             })?,
-            &frame,
         )?;
         // The edge runs along the axis of the body, a bore along its own.
         let axes: Vec<Vector3<f64>> = once(Vector3::z())
@@ -102,7 +100,7 @@ mod test {
     use crate::test_helpers::{l_shape_corners, somewhere_else};
     use nalgebra::Point3;
     use opossum_core::{
-        apertures::{CircleShape, OutlineShape, PolygonShape, RectangleShape},
+        apertures::{CircleShape, Outline, OutlineShape, PolygonShape, RectangleShape},
         degree,
         geometry::{Cylinder, Face, Sphere, SurfaceShape},
         material::Material,
@@ -153,9 +151,9 @@ mod test {
         GeometryKind::move_by(&mut body, &node_frame);
         Ok(body)
     }
-    /// Mesh the given body; a solid is bounded all around, so the unbounded outline goes unused.
+    /// Mesh the given body.
     fn patches_of(body: &Extruded) -> OpmResult<Vec<FacePatch>> {
-        Meshable::mesh(body, SEGMENTS, body.rim().outline())
+        Meshable::mesh(body, SEGMENTS)
     }
     /// The meshes of the given body's patches, without the faces they lie on.
     fn mesh_of(body: &Extruded) -> OpmResult<Vec<SurfaceMesh>> {
