@@ -239,7 +239,7 @@ fn ray_trace_of(rays: &Rays, uid: String, wavelength: Length) -> RayTrace {
         .iter()
         .map(Ray::position_history_with_current)
         .collect();
-    let nr_of_stations = paths.iter().map(|path| path.nrows()).max().unwrap_or(0);
+    let nr_of_stations = paths.iter().map(nalgebra::Matrix::nrows).max().unwrap_or(0);
     let station = |k: usize| {
         paths
             .iter()

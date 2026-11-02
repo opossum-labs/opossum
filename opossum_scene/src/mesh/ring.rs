@@ -47,7 +47,7 @@ impl RingPoints for OutlineShape {
             )));
         }
         match self {
-            Self::Circle(circle) => circle_ring(circle, segments),
+            Self::Circle(circle) => circle_ring(*circle, segments),
             Self::Rectangle(rectangle) => resample_ring(&rectangle.corners(), segments),
             Self::Polygon(polygon) => resample_ring(polygon.points(), segments),
         }
@@ -60,7 +60,7 @@ impl RingPoints for OutlineShape {
 ///
 /// This function returns an error if the circle has radius zero, a single point without an
 /// outline, or if `segments` is too large to sample with.
-fn circle_ring(circle: &CircleShape, segments: usize) -> OpmResult<Vec<Point2<Length>>> {
+fn circle_ring(circle: CircleShape, segments: usize) -> OpmResult<Vec<Point2<Length>>> {
     let radius = circle.radius().get::<meter>();
     if radius == 0.0 {
         return Err(OpossumError::Other(
