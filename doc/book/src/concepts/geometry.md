@@ -76,6 +76,14 @@ When a component is set to `absolute`, OPOSSUM places it at the defined coordina
 
 > **Important Caveat:** When using absolute placement, the distance value specified in the connection *before* the component is **completely ignored**.
 
+### Sources in Front of a Component
+
+A `Sourceport` is placed absolutely at the origin by default. Set its `Position` property to `automatic` instead, and OPOSSUM places it in front of the component it feeds: the source's beam leaves it at the distance of the connection before that component and runs along the component's axis, the way the component sits. This needs the component to be placed by something else — another source, an absolute position or, for a reference node, the component it refers to. The source's `Alignment` then shifts and tilts it from there, so a second beam can, for example, enter a lens slightly off its axis.
+
+A source that cannot be placed this way is not placed at all: OPOSSUM warns, and the source sends out no light. That happens if nothing it feeds is placed, if the light would pass the component against the way it is placed (a reference node turned other than the component it refers to), or if the component has no surface of its own where the light enters it, as a group.
+
+A component that is placed automatically waits for the light of every source feeding it — a beam combiner, say. An automatic source in front of it is then held back: the combiner is placed by its other input first, and the source is placed in front of it afterwards. In the 3D view the optical axis of such a source ends at the combiner.
+
 ## Pitfalls of Relative Positioning
 
 While relative positioning is convenient, it can lead to geometric inconsistencies in complex setups. Below are common edge cases to watch for.
@@ -106,6 +114,8 @@ A beam combiner can also be fed by two independent sources rather than by two ar
 
 To resolve this, give the **second** source an absolute position: in the `Node Editor`, set its `Position` property to `absolute` (see [Absolute Placement](#absolute-placement)). You do not have to work out the pose by hand — the combiner's warning prints the exact start point and direction the `input_2` beam needs; enter those as the second source's absolute position and orientation. The first source stays at the origin as the anchor of the system.
 
+Alternatively, set the second source's `Position` to `automatic`: it is then placed in front of the combiner's `input_2`, at the distance of its connection, and its beam meets the first one by construction (see [Sources in Front of a Component](#sources-in-front-of-a-component)).
+
 ### Misaligned Absolute Components
 
 Care must be taken when mixing absolute positioning with the optical axis logic.
@@ -131,6 +141,6 @@ The same happens if the axis reaches a component but passes it outside its `opti
 
 **Behavior:**
 
-1. **Original Node:** During the positioning run, the "real" node is placed normally.
-2. **Reference Node:** When the reference node is encountered, OPOSSUM attempts to route the beam back to the location of the "real" node.
-3. **Conflict Check:** Similar to the Beam Combiner scenario, if the calculated optical path does not align perfectly with the "real" node's existing position, the placement fails, and a warning is issued.
+1. **Original Node:** During the positioning run, the "real" node is placed by its own input, like any other node — whatever order the nodes were added to the model in. A reference elsewhere does not move it.
+2. **Reference Node:** A reference node takes the placement of the "real" node. The light reaching it passes the "real" node where that node sits; the distance of the connection into the reference is ignored, just as for an absolutely placed component, and the editor does not offer it.
+3. **Forward Reference:** If the light reaches a reference node before the "real" node — the first pass of a double pass whose "real" node only comes later on the path — the reference places the "real" node, by the distance of the connection into the reference. The editor offers that distance, as it does for the connection from an automatic source in front of a reference (see [Sources in Front of a Component](#sources-in-front-of-a-component)).

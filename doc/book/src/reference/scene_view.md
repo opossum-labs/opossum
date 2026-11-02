@@ -119,7 +119,9 @@ through the components to wherever the axis leaves the setup, and shows how the 
 why a component sits where it does, which way a fold turns. Where a beam splitter brings two arms
 back together, as in a Mach-Zehnder interferometer, the axis of both arms runs on through it. A
 component at the end of the setup that the axis cannot pass — a grating whose diffraction order does
-not propagate at that angle, say — ends the axis where it sits.
+not propagate at that angle, say — ends the axis where it sits. An automatic source placed in front of
+a combiner only after the combiner was placed by its other input ends its axis at the combiner (see
+[Geometry → Sources in Front of a Component](../concepts/geometry.md#sources-in-front-of-a-component)).
 
 **The rays** (**Rays**, off by default) are the light of the sources as the analyzer the view
 follows defines it, traced through the setup like a ray trace does. They show what the axis alone
