@@ -1265,7 +1265,7 @@ mod test {
             LightResult::default(),
             &config.for_positioning(),
         )?;
-        assert!(placed_by_distance(&scenery).is_empty());
+        assert_eq!(placed_by_distance(&scenery), Vec::<(Uuid, Uuid)>::new());
         Ok(())
     }
 }

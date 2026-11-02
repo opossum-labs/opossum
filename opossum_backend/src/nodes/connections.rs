@@ -312,7 +312,7 @@ mod test {
             .iter()
             .map(|c| (c.targets_reference(), c.distance()))
             .collect();
-        seen.sort_by(|a, b| a.0.cmp(&b.0));
+        seen.sort_by_key(|(into_reference, _)| *into_reference);
         assert_eq!(seen.len(), 2);
         assert!(!seen[0].0 && (seen[0].1 - 0.1).abs() < 1e-12, "{seen:?}");
         assert!(seen[1].0 && (seen[1].1 - 0.05).abs() < 1e-12, "{seen:?}");
@@ -350,7 +350,7 @@ mod test {
         let resp = request_placing_connections(app_state.clone(), root).await;
         assert_eq!(resp.status(), StatusCode::OK);
         let listed: Vec<ConnectInfo> = test::read_body_json(resp).await;
-        assert!(listed.is_empty());
+        assert_eq!(listed, Vec::<ConnectInfo>::new());
 
         let resp = request_placing_connections(app_state, Uuid::new_v4()).await;
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
