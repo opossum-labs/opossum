@@ -73,10 +73,8 @@ impl<'a> Drawn<'a> {
     /// The lateral face of a solid has no coating and is drawn as the appearance asks. So is a face
     /// whose coating cannot be evaluated, with a warning: drawing it says more than leaving it out.
     ///
-    /// The patches of a solid form a closed shell, so one of them always faces the camera. A single
-    /// surface has no far side of its own: every patch of it is drawn twice, the second turned over
-    /// (see [`SurfaceMesh::flipped`]), as `optoscene`'s `Mirror` and `Opaque` presets do not ask the
-    /// renderer to draw both faces of one patch.
+    /// A single surface has no far side of its own, so every patch of it is drawn twice, the second
+    /// turned over (see [`SurfaceMesh::flipped`]; why both: see the handbook, component geometry).
     ///
     /// Glass is given its refractive index, and coatings are evaluated, at the
     /// [`default_reference_wavelength`]: the picture is the same whichever light runs through it.
@@ -378,7 +376,7 @@ mod test {
         assert!(glb.starts_with(b"glTF"));
         Ok(())
     }
-    /// A component that states no appearance has no file of its own: the endpoint answers it with
+    /// A component whose type is not drawn has no file of its own: the endpoint answers it with
     /// "not found" rather than an empty scene.
     #[test]
     fn a_component_that_is_not_drawn_has_no_file() -> OpmResult<()> {

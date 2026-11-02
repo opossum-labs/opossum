@@ -212,9 +212,8 @@ impl OutlineMesh {
         rims: &[Vec<Point2<Length>>],
         inside: impl Fn(Point2<Length>) -> bool,
     ) -> OpmResult<Self> {
-        // `spade` removes duplicate points before it triangulates, which would shift every index
-        // behind the duplicate and quietly mislabel the rims. Rims visiting a point twice pinch the
-        // area off there anyway.
+        // `spade` drops duplicate points, which would shift every later index and mislabel the
+        // rims; a rim visiting a point twice pinches the area off there anyway.
         let mut seen = HashSet::new();
         for point in rims.iter().flatten() {
             if !seen.insert((point.x.value.to_bits(), point.y.value.to_bits())) {
@@ -255,9 +254,8 @@ impl OutlineMesh {
                  they enclose is undefined"
             )));
         }
-        // A curved face lifted onto this mesh has to be sampled inside, not only along its rim, so
-        // the triangles are held to the size the rim is already sampled at. The most coarsely
-        // sampled rim sets that size; a finer one only makes its own surroundings finer.
+        // A curved face needs points inside, so triangles are held to the spacing of the coarsest
+        // rim; a finer rim only refines its own surroundings.
         let mean_spacing = rims
             .iter()
             .map(|rim| ring_perimeter(rim) / to_f64(rim.len()))
@@ -298,9 +296,8 @@ impl OutlineMesh {
                 meter!(position.x, position.y)
             })
             .collect::<Vec<_>>();
-        // The outline was loaded first and the refinement only appends, so the outline points keep
-        // the indices they went in with — which is what makes the rim a plain prefix at all.
-        // Checked rather than assumed, so a change in `spade` cannot silently mislabel it.
+        // The refinement only appends, so the outline points keep their indices as a prefix; checked,
+        // so that a change in `spade` cannot silently mislabel the rims.
         for (index, point) in outline.iter().enumerate() {
             if points.get(index) != Some(point) {
                 return Err(OpossumError::Other(

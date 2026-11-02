@@ -17,11 +17,8 @@ use crate::appearance::Appearance;
 /// Drawing the component in plain glass says more than leaving it out of the scene.
 const FALLBACK_REFRACTIVE_INDEX: f64 = 1.5;
 
-/// How opaque glass is drawn where nothing mirrors it.
-///
-/// A renderer such as three.js shows only opaque objects through transmissive glass, so a lens
-/// behind another lens would vanish; drawn slightly see-through, it shows through instead (see the
-/// handbook's chapter on the 3D view).
+/// How opaque glass is drawn where nothing mirrors it: slightly see-through, so that a lens behind
+/// another one still shows (why: see the handbook, component geometry).
 const GLASS_OPACITY: f32 = 0.7;
 
 /// Map the [`Appearance`] of one face of a component to the closest [`optoscene::Material`]
@@ -190,9 +187,8 @@ mod test {
         utils::geom_transformation::Isometry,
     };
 
-    /// A mirror is drawn reflective and a detector is drawn as a plain opaque surface - the two
-    /// categories the plan calls for, told apart in the exported glTF by the material name
-    /// `optoscene` gives each preset (`"mirror"`, `"opaque"`).
+    /// A mirror is drawn reflective and a detector as a plain opaque surface, told apart in the
+    /// exported glTF by the material name `optoscene` gives each preset (`"mirror"`, `"opaque"`).
     #[test]
     fn a_mirror_and_a_detector_get_reflective_and_opaque_materials() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
@@ -247,16 +243,14 @@ mod test {
         assert_eq!(material_names, ["translucent"]);
         Ok(())
     }
-    /// A reflective grating overrides its default appearance to look iridescent, and the exported
-    /// glTF must therefore carry the `KHR_materials_iridescence` extension.
+    /// A reflective grating is drawn iridescent, so the exported glTF carries the
+    /// `KHR_materials_iridescence` extension.
     #[test]
     fn a_grating_is_drawn_iridescent() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
         let source = scenery.add_node(SourcePort::default())?;
-        // The default grating (1740 lines/mm, order -1) diffracts 1000 nm light at its Littrow
-        // angle; orient it exactly at Littrow (zero degrees off) for that wavelength so the order
-        // is a valid, non-evanescent reflection and the grating is placed and drawn. The source
-        // emits 1000 nm to match (`round_collimated_ray_builder`).
+        // Turned to Littrow for the 1000 nm the source emits, so its order propagates and the
+        // grating is placed and drawn.
         let grating =
             ReflectiveGrating::default().with_rot_from_littrow(nanometer!(1000.0), degree!(0.0))?;
         let grating = scenery.add_node(grating)?;
@@ -385,9 +379,8 @@ mod test {
 
     /// Glass is only glass to a renderer if it carries an index of refraction.
     ///
-    /// `a_bit_of_everything`'s scene now also draws a detector, whose material is a plain opaque
-    /// one and rightly carries no index of refraction at all - this only inspects the materials
-    /// that state one in the first place, and separately pins down that there is at least one.
+    /// The detector in `a_bit_of_everything` is drawn opaque and rightly carries no index of
+    /// refraction, so this only inspects the materials that state one, and that there is one.
     #[test]
     fn glass_is_exported_with_its_refractive_index() -> OpmResult<()> {
         let document = a_bit_of_everything()?;

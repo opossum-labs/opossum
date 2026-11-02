@@ -142,10 +142,8 @@ impl SurfaceMesh {
         let mut triangles = Vec::with_capacity(2 * rim_points);
         for (rim, axis) in outline_mesh.rims().iter().zip(axes) {
             let len = rim.len();
-            // The outward normal of the rim segment leaving each position. A rim runs with the
-            // body on its left seen from +z, so the segment crossed with the direction the rim runs
-            // along points away from the body. Every one is needed twice — once leaving a position,
-            // once arriving at the next.
+            // The outward normal of the segment leaving each position: the body lies on the rim's
+            // left seen from +z, so the segment crossed with the rim's axis points away from it.
             let segment_normals = (0..len)
                 .map(|step| {
                     let from = outline_mesh.points()[rim.start + step];
@@ -155,9 +153,8 @@ impl SurfaceMesh {
                         .normalize()
                 })
                 .collect::<Vec<_>>();
-            // Where each rim segment begins and ends in the point list. A position the rim merely
-            // curves through carries one pair of points with an averaged normal, so the face reads
-            // as round; one it turns a corner at carries two, so the corner stays sharp.
+            // Where each segment begins and ends in the point list: a smooth position shares one
+            // pair of points with an averaged normal, a corner gets two and stays sharp.
             let mut begins = vec![0_u32; len];
             let mut ends = vec![0_u32; len];
             for step in 0..len {

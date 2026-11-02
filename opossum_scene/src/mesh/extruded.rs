@@ -339,9 +339,8 @@ mod test {
                                 !body.contains(&step(1.0)),
                                 "a point just outside the {name} was taken for being in it"
                             );
-                            // Stepping the other way has to land inside - except from the rim of
-                            // a bounding face, which lies on the edge of the profile too and would
-                            // leave it sideways on the slightest rounding.
+                            // Stepping back lands inside, except from the rim of a bounding face:
+                            // it lies on the profile's edge too and slips out on any rounding.
                             if bounds_the_body && *index >= rim {
                                 assert!(
                                     body.contains(&step(-1.0)),

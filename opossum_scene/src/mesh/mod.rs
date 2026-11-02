@@ -77,7 +77,7 @@ mod test {
     };
     use std::f64::consts::PI;
 
-    /// The patches a node is drawn as, through the scene's own mesher.
+    /// The patches a node is drawn as.
     fn node_patches(node: &dyn Analyzable, segments: usize) -> OpmResult<Vec<FacePatch>> {
         let geometry = node.create_geometry()?.ok_or_else(|| {
             OpossumError::Other(format!("node '{}' has no geometry to draw", node.name()))

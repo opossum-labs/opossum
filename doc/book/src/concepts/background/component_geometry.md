@@ -533,7 +533,8 @@ traced at. Every kind of geometry is meshed by its own implementation of `Meshab
   and with the wall of its bore if it has one (see [Bores](#bores)).
 
 The patches of a solid form a closed shell and are drawn once. A single surface has no far side of its own, so each of
-its patches is drawn a second time, turned over. Glass takes its refractive index from the material of the solid and
+its patches is drawn a second time, turned over: `optoscene`'s `Mirror` and `Opaque` presets do not ask the renderer to
+draw both faces of one patch. Glass takes its refractive index from the material of the solid and
 its thickness from the extent of the solid.
 
 Every patch carries the face it lies on (`FacePatch`) and is drawn in the node's appearance under the coating of that

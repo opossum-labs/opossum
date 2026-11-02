@@ -75,7 +75,7 @@ mod test {
     fn circle() -> OpmResult<Outline> {
         Outline::new(CircleShape::new(millimeter!(12.5))?, None)
     }
-    /// The one surface of a geometry, to mesh with the scene's own code.
+    /// The one surface of a geometry.
     fn surface_of(geometry: &Geometry) -> OpmResult<&SurfaceGeometry> {
         match geometry {
             Geometry::Surface(surface) => Ok(surface),

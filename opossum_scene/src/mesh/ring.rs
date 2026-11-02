@@ -106,8 +106,8 @@ pub fn ring_perimeter(ring: &[Point2<Length>]) -> f64 {
 /// Twice the area a ring of points encloses, in square meters, signed by its orientation.
 ///
 /// Positive for a counter-clockwise ring, negative for a clockwise one, and zero for one whose
-/// points all lie on a line — which is the only reason this is doubled rather than halved: the
-/// factor carries no meaning here, only the sign does.
+/// points all lie on a line. It is left doubled, as the shoelace formula gives it; halved, it is
+/// the area.
 pub fn doubled_signed_area(ring: &[Point2<Length>]) -> f64 {
     (0..ring.len())
         .map(|from| {

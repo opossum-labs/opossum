@@ -90,8 +90,7 @@ mod test {
     }
 
     /// The manifest's geometry hash for a surface node reacts to its clear aperture exactly as a
-    /// volume node's does to its curvature or thickness - the other half of the property this
-    /// module reads to mesh a surface at all.
+    /// volume node's does to its curvature or thickness.
     #[test]
     fn changing_a_surfaces_aperture_changes_its_geometry() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
