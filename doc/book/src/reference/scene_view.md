@@ -134,6 +134,15 @@ How the rays are colored depends on how many wavelengths the sources hold:
   at the shortest wavelength of the sources to red at the longest, whether the light is visible or
   not. The status line then shows the scale (see [The status line](#the-status-line)).
 
+Where rays cross on the screen, how their colors meet is set in the **3D View** menu:
+
+- **By default** the rays are drawn in a fixed order, and a crossing shows the one drawn later, in
+  its own color, from whichever side you look.
+- **With Enable additive ray overlay** the colors add up, as light does. Where every wavelength of a
+  spectrum runs together the bundle turns white, and where many rays crowd — at a focus — it shines
+  brighter. The rays also add onto whatever lies behind them, though, so a single ray looks lighter
+  than its own color.
+
 A ray that is stopped for passing a component outside its optic shape is drawn up to the last
 component it reached before, not up to the one it missed. A ray a grating cannot send into its
 diffraction order is drawn up to the grating.
@@ -141,12 +150,20 @@ diffraction order is drawn up to the grating.
 A few things to know about the rays:
 
 - **They are a picture, not the analysis.** A source may hold far more rays than can be drawn, so
-  each source is drawn coarser: its position distribution gets fewer points over the same area —
-  fewer rings, a coarser grid — until it holds at most **max. rays** (500 by default, at most 5000)
-  of each wavelength. Every wavelength of its spectrum is kept, so a spectrum of many samples is
-  traced with up to that many times **max. rays**. An image source is thinned to at most
-  **max. rays** in all instead, spread evenly over its cross section with its outermost rays kept.
-  A source with fewer rays is drawn in full.
+  the sources are drawn coarser. They share **max. rays** (500 by default, at most 5000) evenly, and
+  each source's position distribution gets fewer points over the same area — fewer rings, a coarser
+  grid — until it fits its share. How its spectrum is laid on those points is set in the menu:
+  - **By default the spectrum is spread over the ray positions.** Each point shines one wavelength;
+    the wavelengths are dealt out evenly and shuffled, so each is drawn about equally often and the
+    colors follow no pattern of the layout. A spectrum of many samples then costs no more rays than
+    a single line.
+  - **With Full spectrum at each ray position** each point shines every wavelength, as in the
+    analysis, so the colors run together until a grating or a wedge separates them. That leaves room
+    for fewer points: the share divided by the number of samples. A spectrum of more samples than
+    the share is thinned evenly.
+
+  An image source is thinned to its share instead, spread evenly over its cross section with its
+  outermost rays kept. A source with fewer rays is drawn in full.
 - **Energies only decide which rays are drawn.** As in the analysis, a ray below the analyzer's
   minimum energy per ray is dropped at its source. A coarser source shares its energy among fewer
   rays, so the faint edges of a spectrum can be drawn where the analysis drops them.
@@ -154,8 +171,10 @@ A few things to know about the rays:
   reflections.
 - **They need an analyzer whose light is rays.** An energy analysis has none of its own, and the
   **Rays** entry shows nothing while the view follows one.
-- **They cost a trace.** While Rays is on, every change to the model traces the sources again. Turn
-  it off when you do not need it; while it is off nothing is traced.
+- **They cost a trace.** While Rays is on, every change to the model traces the sources again, and
+  so does a new **max. rays** or a switch of how the spectrum is laid on the rays; the additive
+  overlay and the opacity only change the picture. Turn Rays off when you do not need it; while it
+  is off nothing is traced.
 - Light that ends in a component without an output is drawn up to the component before it, not into
   it.
 
@@ -167,7 +186,9 @@ again later.
 
 The optical axis is never faded: it is drawn solid whatever the slider says. It is one line per
 source, not a bundle, and it is the line every component is placed on — the one thing in the picture
-that should still be legible once a wide bundle has been faded back.
+that should still be legible once a wide bundle has been faded back. With the additive ray overlay
+on, it adds onto what lies behind it like the rays. Where the axis runs exactly along a ray, which of
+the two shows can still change as you turn the view.
 
 Lines keep their width on screen however far you zoom in or out.
 
@@ -244,25 +265,29 @@ Everything else the view can be told sits in the **3D View** menu in the top nav
 | **Show / Hide World axes** | Show or hide the corner orientation gizmo |
 | **Show / Hide Optical axis** | Show or hide the optical axis |
 | **Show / Hide Rays** | Show or hide the traced rays of the analyzer's sources |
-| **max. rays** | The most rays drawn per source and wavelength; takes effect on Enter or when leaving the field |
+| **Full spectrum at each ray position / Spread spectrum over ray positions** | Give every ray position the whole spectrum of its source, or spread the spectrum over the positions, one wavelength each (the default) |
+| **Enable / Disable additive ray overlay** | Let crossing rays add their colors up like light, or draw them in a fixed order (the default) |
+| **max. rays** | The most rays drawn, of all sources together; takes effect on Enter or when leaving the field |
 | **ray opacity** | How opaque the rays are drawn; the axis is always solid |
 
 See [Light: the optical axis and the rays](#light-the-optical-axis-and-the-rays) for what the last
-four show. Fit view, Reset camera and the four toggles also carry a keyboard shortcut, shown beside
-the entry — see [Keyboard shortcuts](#keyboard-shortcuts).
+six do. Fit view, Reset camera, Table, World axes, Optical axis and Rays also carry a keyboard
+shortcut, shown beside the entry — see [Keyboard shortcuts](#keyboard-shortcuts).
 
 Three things are worth knowing about the menu itself:
 
 - **It stays open while you change things.** A setup is usually judged by trying a few of these in a
   row — show the rays, fade them, then frame them — so the menu only closes on a click outside it.
   Each toggle's entry reads **Hide …** while what it switches is on and **Show …** while it is off, so
-  it always names what a click would do.
+  it always names what a click would do. The two entries that switch how the rays are drawn name the
+  way a click switches to instead.
 - **Everything below the first entry needs an open view** and is greyed out until there is one.
 - **What the view shows is remembered.** Close the view and open it again and the toggles, the ray
   count, the opacity and the analyzer it follows are as you left them. The camera is not — see below.
 
 Refresh, Fit view, and Reset camera move the camera, and so does clicking a gizmo axis in the
-viewport. Table, World axes, Optical axis and Rays are visibility toggles and do not move the camera.
+viewport. Table, World axes, Optical axis and Rays are visibility toggles and, like the two ways of
+drawing the rays, do not move the camera.
 Nothing that happens to the *model* moves it either — see below.
 
 ## When the view updates itself
