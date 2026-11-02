@@ -126,9 +126,7 @@ impl OpmDocument {
     /// This function returns an error if the model has no source port or no analyzer, if the
     /// named analyzer does not exist, or if the positioning run itself fails.
     pub fn placed_scenery(&self, analyzer_id: Option<Uuid>) -> OpmResult<NodeGroup> {
-        let config = self.placing_config(analyzer_id)?;
-        let mut scenery = self.scenery.clone();
-        AnalysisRayTrace::calc_node_positions(&mut scenery, LightResult::default(), &config)?;
+        let mut scenery = self.placed_copy(&self.placing_config(analyzer_id)?)?;
         scenery.reset_data();
         Ok(scenery)
     }
@@ -157,11 +155,39 @@ impl OpmDocument {
     /// [`placed_scenery`](OpmDocument::placed_scenery).
     pub fn positioning_rays(&self, analyzer_id: Option<Uuid>) -> OpmResult<Vec<Rays>> {
         let mut config = self.placing_config(analyzer_id)?;
-        let mut scenery = self.scenery.clone();
         // Only copies collect ray ends, so the scenery the copy came from holds none.
         config.set_collect_ray_ends(true);
-        AnalysisRayTrace::calc_node_positions(&mut scenery, LightResult::default(), &config)?;
-        Ok(scenery.ray_ends().into_iter().cloned().collect())
+        Ok(self
+            .placed_copy(&config)?
+            .ray_ends()
+            .into_iter()
+            .cloned()
+            .collect())
+    }
+
+    /// Returns a copy of this model's scenery, placed by a positioning run.
+    ///
+    /// An edit writes a position or a property into a node without the node rebuilding its
+    /// surfaces, so the copy rebuilds them first, as a ray trace does: a source then sends its axis
+    /// from where it stands now.
+    ///
+    /// # Arguments
+    ///
+    /// - `config`: the configuration of the positioning run
+    ///
+    /// # Returns
+    ///
+    /// The placed copy, with the data the run left on it.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if a node cannot rebuild its surfaces or if the positioning
+    /// run fails.
+    fn placed_copy(&self, config: &RayTraceConfig) -> OpmResult<NodeGroup> {
+        let mut scenery = self.scenery.clone();
+        scenery.rebuild_surfaces()?;
+        AnalysisRayTrace::calc_node_positions(&mut scenery, LightResult::default(), config)?;
+        Ok(scenery)
     }
 
     /// Returns the configuration a positioning run of this model starts from.
@@ -289,6 +315,8 @@ mod tests {
     use super::*;
     use crate::{
         analyzers::{AnalyzerType, energy::EnergyConfig},
+        core_optics::node_attr::NodePositioning,
+        degree,
         gain::{ConstGain, GainModel},
         joule,
         light::{
@@ -506,6 +534,43 @@ mod tests {
                 .with_node_attr(first, |attr| attr.effective_position().is_none())?,
             "the model itself stays unplaced"
         );
+        Ok(())
+    }
+
+    /// An edit moves a source the way the backend does: it writes the new position into the
+    /// source's attributes, and the source does not rebuild its surfaces. The model is placed, and
+    /// its optical axis starts, from where the source stands now.
+    #[test]
+    fn a_source_moved_by_an_edit_places_the_model_from_where_it_stands_now() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let lens = scenery.add_node(Lens::default())?;
+        scenery.connect_nodes(source, "output_1", lens, "input_1", millimeter!(100.0))?;
+        let mut document = OpmDocument::new(scenery);
+        let mut config = RayTraceConfig::default();
+        config.map_source(source, RayDataBuilder::default());
+        document.add_analyzer(AnalyzerType::RayTrace(config));
+        let moved = Isometry::new(millimeter!(0.0, 10.0, 0.0), degree!(0.0, 0.0, 0.0))?;
+        document.scenery_mut().with_node_attr_mut(source, |attr| {
+            attr.set_positioning(NodePositioning::Absolute(moved));
+        })?;
+
+        let lens_at = document
+            .placed_scenery(None)?
+            .with_node_attr(lens, |attr| {
+                attr.effective_position().map(Isometry::translation)
+            })?
+            .ok_or_else(|| OpossumError::Other("lens was not placed".into()))?;
+        assert_relative_eq!(lens_at.y.value, 0.010, epsilon = 1e-12);
+        assert_relative_eq!(lens_at.z.value, 0.100, epsilon = 1e-12);
+
+        let axes = document.positioning_rays(None)?;
+        let path = axes
+            .first()
+            .and_then(|axis| axis.iter().next())
+            .map(Ray::position_history_with_current)
+            .ok_or_else(|| OpossumError::Other("no axis ray".into()))?;
+        assert_relative_eq!(path[(0, 1)].value, 0.010, epsilon = 1e-12);
         Ok(())
     }
 }
