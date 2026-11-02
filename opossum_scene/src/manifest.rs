@@ -58,10 +58,9 @@ mod test {
     use crate::{
         appearance::Appearance,
         components::Drawn,
-        test_helpers::{a_bit_of_everything, drawn_components, exported, two_lenses},
+        test_helpers::{a_bit_of_everything, drawn_components, exported, traced, two_lenses},
     };
     use opossum_core::{
-        analyzers::{AnalyzerType, RayTraceConfig},
         apertures::{Bore, CircleShape, OpticShape, Outline},
         coatings::CoatingType,
         core_optics::{
@@ -70,7 +69,6 @@ mod test {
         },
         degree,
         geometry::{SurfaceGeometry, body::OPTIC_SHAPE},
-        light::lightdata::ray_data_builder::RayDataBuilder,
         millimeter,
         nodes::{BoredMirror, Dummy, EnergyMeter, Lens, SourcePort, ThinMirror, Wedge},
         opm_document::OpmDocument,
@@ -97,10 +95,7 @@ mod test {
         let source = scenery.add_node(SourcePort::default())?;
         let mirror = scenery.add_node(ThinMirror::default())?;
         scenery.connect_nodes(source, "output_1", mirror, "input_1", millimeter!(50.0))?;
-        let mut document = OpmDocument::new(scenery);
-        let mut config = RayTraceConfig::default();
-        config.map_source(source, RayDataBuilder::default());
-        document.add_analyzer(AnalyzerType::RayTrace(config));
+        let mut document = traced(scenery, source);
 
         let before = manifest(&document)?;
         assert_eq!(before.nodes.len(), 1);
@@ -143,10 +138,7 @@ mod test {
             "input_1",
             millimeter!(50.0),
         )?;
-        let mut document = OpmDocument::new(scenery);
-        let mut config = RayTraceConfig::default();
-        config.map_source(source, RayDataBuilder::default());
-        document.add_analyzer(AnalyzerType::RayTrace(config));
+        let mut document = traced(scenery, source);
 
         document
             .scenery_mut()
@@ -202,11 +194,7 @@ mod test {
         let second = scenery.add_node(Wedge::default())?;
         scenery.connect_nodes(source, "output_1", first, "input_1", millimeter!(50.0))?;
         scenery.connect_nodes(first, "output_1", second, "input_1", millimeter!(100.0))?;
-        let mut document = OpmDocument::new(scenery);
-        let mut config = RayTraceConfig::default();
-        config.map_source(source, RayDataBuilder::default());
-        document.add_analyzer(AnalyzerType::RayTrace(config));
-        let reshaped = manifest(&document)?;
+        let reshaped = manifest(&traced(scenery, source))?;
 
         assert_ne!(
             plain.nodes[plain.nodes.len() - 1].geometry,
@@ -242,12 +230,8 @@ mod test {
         let group_id = scenery.add_node(inner)?;
 
         scenery.connect_nodes(source, "output_1", group_id, "input_1", millimeter!(50.0))?;
-        let mut document = OpmDocument::new(scenery);
-        let mut config = RayTraceConfig::default();
-        config.map_source(source, RayDataBuilder::default());
-        document.add_analyzer(AnalyzerType::RayTrace(config));
 
-        let manifest = manifest(&document)?;
+        let manifest = manifest(&traced(scenery, source))?;
 
         assert_eq!(manifest.nodes.len(), 1);
         assert_eq!(manifest.nodes[0].group, group_id);
@@ -263,12 +247,8 @@ mod test {
         let connected = scenery.add_node(Lens::default())?;
         let unconnected = scenery.add_node(Lens::default())?;
         scenery.connect_nodes(source, "output_1", connected, "input_1", millimeter!(50.0))?;
-        let mut document = OpmDocument::new(scenery);
-        let mut config = RayTraceConfig::default();
-        config.map_source(source, RayDataBuilder::default());
-        document.add_analyzer(AnalyzerType::RayTrace(config));
 
-        let m = manifest(&document)?;
+        let m = manifest(&traced(scenery, source))?;
 
         assert_eq!(m.nodes.len(), 1, "only the connected lens is drawn");
         assert_eq!(
@@ -296,12 +276,8 @@ mod test {
         let mut inner = NodeGroup::new("inner");
         let unreached = inner.add_node(Lens::default())?;
         let group_id = scenery.add_node(inner)?;
-        let mut document = OpmDocument::new(scenery);
-        let mut config = RayTraceConfig::default();
-        config.map_source(source, RayDataBuilder::default());
-        document.add_analyzer(AnalyzerType::RayTrace(config));
 
-        let m = manifest(&document)?;
+        let m = manifest(&traced(scenery, source))?;
 
         assert_eq!(m.skipped.len(), 1);
         assert_eq!(m.skipped[0].uid, unreached);

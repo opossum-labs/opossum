@@ -275,7 +275,7 @@ impl SurfaceMesh {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::test_helpers::somewhere_else;
+    use crate::test_helpers::{MESH_SEGMENTS, somewhere_else};
     use approx::assert_abs_diff_eq;
     use nalgebra::Point2;
     use opossum_core::{
@@ -294,7 +294,7 @@ mod test {
         );
         let mesh = laid(
             &face,
-            &OutlineMesh::flat(&outline, 24)?,
+            &OutlineMesh::flat(&outline, MESH_SEGMENTS)?,
             &Isometry::identity(),
         )?;
         let flipped = mesh.clone().flipped();
@@ -312,9 +312,6 @@ mod test {
         );
         Ok(())
     }
-
-    /// The number of points the rim of an outline is sampled with in the mesh tests.
-    const MESH_SEGMENTS: usize = 24;
 
     /// A circle of the given radius in millimeter, triangulated.
     fn circle_mesh(radius: f64) -> OpmResult<OutlineMesh> {

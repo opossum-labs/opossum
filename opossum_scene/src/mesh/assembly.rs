@@ -33,8 +33,8 @@ impl Meshable for Assembly {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::test_helpers::round_outline;
     use opossum_core::{
-        apertures::{CircleShape, Outline},
         degree,
         geometry::{Face, FaceId, Geometry, Interface, ParametricSolid, Part, Side, SurfaceShape},
         material::Material,
@@ -44,9 +44,6 @@ mod test {
     };
     use uom::si::{f64::Length, length::millimeter};
 
-    fn circle() -> OpmResult<Outline> {
-        Outline::new(CircleShape::new(millimeter!(12.5))?, None)
-    }
     /// Glass with a refractive index of 1.5, the material of every part below.
     fn glass() -> OpmResult<Material> {
         Ok(Material::from(&RefrIndexConst::new(1.5)?))
@@ -59,7 +56,7 @@ mod test {
                 millimeter!(60.0),
                 millimeter!(-40.0),
                 millimeter!(5.0),
-                circle()?,
+                round_outline()?,
                 glass()?,
             )?,
         )
@@ -72,7 +69,7 @@ mod test {
                 front_radius,
                 millimeter!(f64::INFINITY),
                 millimeter!(5.0),
-                circle()?,
+                round_outline()?,
                 glass()?,
             )?,
         )

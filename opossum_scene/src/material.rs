@@ -167,7 +167,10 @@ mod test {
     use super::*;
     use crate::{
         glb_of_node,
-        test_helpers::{a_bit_of_everything, drawn_components, exported, glb_json},
+        test_helpers::{
+            a_bit_of_everything, exported, glb_json, material_names, patches_of_the_only_component,
+            traced,
+        },
     };
     use opossum_core::{
         analyzers::{AnalyzerType, RayTraceConfig},
@@ -175,9 +178,7 @@ mod test {
         core_optics::{OpticNode, OpticNodeExt, node_attr::NodePositioning},
         degree,
         geometry::{Extruded, SurfaceGeometry},
-        joule,
-        light::lightdata::ray_data_builder::RayDataBuilder,
-        millimeter, nanometer,
+        joule, millimeter, nanometer,
         nodes::{
             BeamSplitter, EnergyMeter, IdealFilter, Lens, NodeGroup, ReflectiveGrating, SourcePort,
             ThinMirror, round_collimated_ray_builder,
@@ -197,18 +198,9 @@ mod test {
         let detector = scenery.add_node(EnergyMeter::default())?;
         scenery.connect_nodes(source, "output_1", mirror, "input_1", millimeter!(50.0))?;
         scenery.connect_nodes(mirror, "output_1", detector, "input_1", millimeter!(50.0))?;
-        let mut document = OpmDocument::new(scenery);
-        let mut config = RayTraceConfig::default();
-        config.map_source(source, RayDataBuilder::default());
-        document.add_analyzer(AnalyzerType::RayTrace(config));
 
-        let scene = exported(&document)?;
-        let material_names: Vec<&str> = scene["materials"]
-            .as_array()
-            .expect("a scene has materials")
-            .iter()
-            .map(|material| material["name"].as_str().expect("a named material"))
-            .collect();
+        let scene = exported(&traced(scenery, source))?;
+        let material_names = material_names(&scene);
         assert!(
             material_names.contains(&"mirror"),
             "the mirror was not drawn reflective: {material_names:?}"
@@ -228,19 +220,9 @@ mod test {
         let source = scenery.add_node(SourcePort::default())?;
         let filter = scenery.add_node(IdealFilter::default())?;
         scenery.connect_nodes(source, "output_1", filter, "input_1", millimeter!(50.0))?;
-        let mut document = OpmDocument::new(scenery);
-        let mut config = RayTraceConfig::default();
-        config.map_source(source, RayDataBuilder::default());
-        document.add_analyzer(AnalyzerType::RayTrace(config));
 
-        let scene = exported(&document)?;
-        let material_names: Vec<&str> = scene["materials"]
-            .as_array()
-            .expect("a scene has materials")
-            .iter()
-            .map(|material| material["name"].as_str().expect("a named material"))
-            .collect();
-        assert_eq!(material_names, ["translucent"]);
+        let scene = exported(&traced(scenery, source))?;
+        assert_eq!(material_names(&scene), ["translucent"]);
         Ok(())
     }
     /// A reflective grating is drawn iridescent, so the exported glTF carries the
@@ -266,12 +248,7 @@ mod test {
         document.add_analyzer(AnalyzerType::RayTrace(config));
 
         let scene = exported(&document)?;
-        let material_names: Vec<&str> = scene["materials"]
-            .as_array()
-            .expect("a scene has materials")
-            .iter()
-            .map(|material| material["name"].as_str().expect("a named material"))
-            .collect();
+        let material_names = material_names(&scene);
         assert!(
             material_names.contains(&"iridescent"),
             "the grating was not drawn iridescent: {material_names:?}"
@@ -292,12 +269,7 @@ mod test {
         let glb = glb_of_node(node)?
             .ok_or_else(|| OpossumError::Other("the component is not drawn".into()))?;
         let scene = glb_json(&glb);
-        let mesh_index = drawn_components(&scene)[0]["mesh"]
-            .as_u64()
-            .expect("a drawn component has a mesh");
-        Ok(scene["meshes"][mesh_index as usize]["primitives"]
-            .as_array()
-            .expect("a mesh has primitives")
+        Ok(patches_of_the_only_component(&scene)
             .iter()
             .map(|primitive| {
                 let index = primitive["material"]

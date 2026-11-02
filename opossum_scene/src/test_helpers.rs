@@ -3,6 +3,7 @@
 use nalgebra::Point2;
 use opossum_core::{
     analyzers::{AnalyzerType, RayTraceConfig},
+    apertures::{CircleShape, Outline},
     core_optics::OpticNode,
     degree,
     error::OpmResult,
@@ -15,6 +16,7 @@ use opossum_core::{
     utils::geom_transformation::Isometry,
 };
 use uom::si::f64::Length;
+use uuid::Uuid;
 
 use crate::scene_glb;
 
@@ -41,12 +43,16 @@ pub fn a_bit_of_everything() -> OpmResult<OpmDocument> {
     // Passed backwards, the lens is entered through what is its output port.
     scenery.connect_nodes(mirror, "output_1", lens_again, "output_1", hop)?;
     scenery.connect_nodes(lens_again, "input_1", detector, "input_1", hop)?;
+    Ok(traced(scenery, source))
+}
 
+/// A model of the given scenery whose source is traced by a ray-trace analyzer with default rays.
+pub fn traced(scenery: NodeGroup, source: Uuid) -> OpmDocument {
     let mut document = OpmDocument::new(scenery);
     let mut config = RayTraceConfig::default();
     config.map_source(source, RayDataBuilder::default());
     document.add_analyzer(AnalyzerType::RayTrace(config));
-    Ok(document)
+    document
 }
 
 /// Read the JSON chunk out of a binary glTF file.
@@ -79,6 +85,37 @@ pub fn drawn_components(scene: &serde_json::Value) -> Vec<&serde_json::Value> {
         .collect()
 }
 
+/// The patches the one component a scene draws is meshed as.
+pub fn patches_of_the_only_component(scene: &serde_json::Value) -> &[serde_json::Value] {
+    let drawn = drawn_components(scene);
+    assert_eq!(drawn.len(), 1, "the scene draws one component");
+    let mesh = drawn[0]["mesh"]
+        .as_u64()
+        .and_then(|mesh| usize::try_from(mesh).ok())
+        .expect("the component has a mesh");
+    scene["meshes"][mesh]["primitives"]
+        .as_array()
+        .expect("a mesh has primitives")
+}
+
+/// The names of the materials a scene draws in, in order.
+pub fn material_names(scene: &serde_json::Value) -> Vec<&str> {
+    scene["materials"]
+        .as_array()
+        .expect("a scene has materials")
+        .iter()
+        .map(|material| material["name"].as_str().expect("a named material"))
+        .collect()
+}
+
+/// How finely the rim of an outline is sampled in the mesh tests.
+pub const MESH_SEGMENTS: usize = 24;
+
+/// A round outline of 12.5 mm radius, the size of a one-inch optic.
+pub fn round_outline() -> OpmResult<Outline> {
+    Outline::new(CircleShape::new(millimeter!(12.5))?, None)
+}
+
 /// Two lenses a given distance apart, so that moving one is a one-line change.
 pub fn two_lenses(spacing: Length) -> OpmResult<OpmDocument> {
     let mut scenery = NodeGroup::default();
@@ -87,12 +124,7 @@ pub fn two_lenses(spacing: Length) -> OpmResult<OpmDocument> {
     let second = scenery.add_node(Lens::default())?;
     scenery.connect_nodes(source, "output_1", first, "input_1", millimeter!(50.0))?;
     scenery.connect_nodes(first, "output_1", second, "input_1", spacing)?;
-
-    let mut document = OpmDocument::new(scenery);
-    let mut config = RayTraceConfig::default();
-    config.map_source(source, RayDataBuilder::default());
-    document.add_analyzer(AnalyzerType::RayTrace(config));
-    Ok(document)
+    Ok(traced(scenery, source))
 }
 
 /// A placement away from the origin and turned about all three axes, to check that something does

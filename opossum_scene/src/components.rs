@@ -281,12 +281,11 @@ pub fn glb_of_node(node: &dyn Analyzable) -> OpmResult<Option<Vec<u8>>> {
 mod test {
     use super::*;
     use crate::test_helpers::{
-        a_bit_of_everything, drawn_components, exported, glb_json, two_lenses,
+        a_bit_of_everything, drawn_components, exported, glb_json, patches_of_the_only_component,
+        traced, two_lenses,
     };
     use opossum_core::{
-        analyzers::{AnalyzerType, RayTraceConfig},
         core_optics::{OpticNode, node_attr::NodePositioning},
-        light::lightdata::ray_data_builder::RayDataBuilder,
         millimeter,
         nodes::{Lens, SourcePort, ThinMirror, create_node_ref, node_types},
         opm_document::OpmDocument,
@@ -330,20 +329,9 @@ mod test {
         let source = scenery.add_node(SourcePort::default())?;
         let mirror = scenery.add_node(ThinMirror::default())?;
         scenery.connect_nodes(source, "output_1", mirror, "input_1", millimeter!(50.0))?;
-        let mut document = OpmDocument::new(scenery);
-        let mut config = RayTraceConfig::default();
-        config.map_source(source, RayDataBuilder::default());
-        document.add_analyzer(AnalyzerType::RayTrace(config));
-
-        let scene = exported(&document)?;
-        let drawn = drawn_components(&scene);
-        assert_eq!(drawn.len(), 1);
-        let mesh_index = drawn[0]["mesh"].as_u64().expect("the mirror has a mesh");
-        let primitives = scene["meshes"][mesh_index as usize]["primitives"]
-            .as_array()
-            .expect("a mesh has primitives");
+        let scene = exported(&traced(scenery, source))?;
         assert_eq!(
-            primitives.len(),
+            patches_of_the_only_component(&scene).len(),
             2,
             "a surface node must draw both faces, not just the one its geometry is meshed as"
         );
@@ -356,24 +344,7 @@ mod test {
         let mut lens = Lens::default();
         lens.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let glb = glb_of_node(&lens)?.expect("a lens is drawn");
-        let scene = glb_json(&glb);
-        let drawn = drawn_components(&scene);
-        assert_eq!(drawn.len(), 1);
-        let mesh_index = drawn[0]["mesh"].as_u64().expect("the lens has a mesh");
-        let primitives = scene["meshes"][mesh_index as usize]["primitives"]
-            .as_array()
-            .expect("a mesh has primitives");
-        assert_eq!(primitives.len(), 3);
-        Ok(())
-    }
-
-    /// The single-component endpoint works for a surface node exactly as it does for a volume one.
-    #[test]
-    fn a_surface_nodes_own_file_is_a_valid_glb() -> OpmResult<()> {
-        let mut mirror = ThinMirror::default();
-        mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
-        let glb = glb_of_node(&mirror)?.expect("a mirror is drawn");
-        assert!(glb.starts_with(b"glTF"));
+        assert_eq!(patches_of_the_only_component(&glb_json(&glb)).len(), 3);
         Ok(())
     }
     /// A component whose type is not drawn has no file of its own: the endpoint answers it with

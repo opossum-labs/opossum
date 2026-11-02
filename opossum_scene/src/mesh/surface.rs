@@ -58,10 +58,10 @@ impl Meshable for SurfaceGeometry {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::test_helpers::{MESH_SEGMENTS, round_outline};
     use approx::assert_abs_diff_eq;
     use nalgebra::{Point2, Vector3};
     use opossum_core::{
-        apertures::CircleShape,
         degree,
         geometry::{Geometry, Parabola, SurfaceShape},
         millimeter,
@@ -69,12 +69,6 @@ mod test {
     };
     use uom::si::length::millimeter;
 
-    /// The number of points the rim of an outline is sampled with in the mesh tests.
-    const MESH_SEGMENTS: usize = 24;
-
-    fn circle() -> OpmResult<Outline> {
-        Outline::new(CircleShape::new(millimeter!(12.5))?, None)
-    }
     /// The one surface of a geometry.
     fn surface_of(geometry: &Geometry) -> OpmResult<&SurfaceGeometry> {
         match geometry {
@@ -134,8 +128,8 @@ mod test {
         let axis = Isometry::new_translation(millimeter!(50.0, 0.0, 0.0))?;
         let beside = Isometry::new_translation(millimeter!(-50.0, 0.0, 0.0))?;
         let parabola = SurfaceShape::Parabola(Parabola::new(millimeter!(100.0))?);
-        let mirror = Geometry::surface(axis, parabola, beside, Some(circle()?))?;
-        let mut detector = Geometry::detector(SurfaceShape::Plane, Some(circle()?))?;
+        let mirror = Geometry::surface(axis, parabola, beside, Some(round_outline()?))?;
+        let mut detector = Geometry::detector(SurfaceShape::Plane, Some(round_outline()?))?;
         detector.move_by(&axis);
         Ok((axis, [mirror, detector]))
     }
