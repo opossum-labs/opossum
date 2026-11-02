@@ -575,35 +575,40 @@ mod tests {
         );
     }
 
-    /// The viewer reloads an object exactly when its URL changes, so the axis URL has to change
-    /// with every fetch of the model.
+    /// The viewer reloads an object exactly when its URL changes, so the axis URL is the same for
+    /// the same digest - an edit that does not move the axis reloads nothing - and new for a new
+    /// one.
     #[test]
-    fn every_fetch_gives_the_axis_a_new_url() {
+    fn the_axis_url_changes_exactly_with_its_digest() {
         let base = "http://localhost:8001";
-        assert_ne!(
-            crate::api::scene_axis_url(base, 1, None),
-            crate::api::scene_axis_url(base, 2, None)
+        assert_eq!(
+            crate::api::scene_axis_url(base, "a", None),
+            crate::api::scene_axis_url(base, "a", None)
         );
-        assert!(crate::api::scene_axis_url(base, 1, None).starts_with(base));
+        assert_ne!(
+            crate::api::scene_axis_url(base, "a", None),
+            crate::api::scene_axis_url(base, "b", None)
+        );
+        assert!(crate::api::scene_axis_url(base, "a", None).starts_with(base));
     }
 
-    /// A new number of rays, or a new way of drawing their spectrum, has to be a new URL, or the
-    /// viewer would keep showing the old rays.
+    /// The same holds for the rays, whose URL is also new for a new number of rays or a new way of
+    /// drawing their spectrum, or the viewer would keep showing the old rays.
     #[test]
-    fn a_new_ray_count_gives_the_rays_a_new_url() {
-        let base = "http://localhost:8001";
-        assert_ne!(
-            crate::api::scene_rays_url(base, 1, 500, false, None),
-            crate::api::scene_rays_url(base, 1, 50, false, None)
-        );
-        assert_ne!(
-            crate::api::scene_rays_url(base, 1, 500, false, None),
-            crate::api::scene_rays_url(base, 2, 500, false, None)
-        );
-        assert_ne!(
-            crate::api::scene_rays_url(base, 1, 500, false, None),
-            crate::api::scene_rays_url(base, 1, 500, true, None)
-        );
+    fn the_rays_url_changes_exactly_with_their_digest_and_settings() {
+        let url = |digest, max_rays, full_spectrum| {
+            crate::api::scene_rays_url(
+                "http://localhost:8001",
+                digest,
+                max_rays,
+                full_spectrum,
+                None,
+            )
+        };
+        assert_eq!(url("a", 500, false), url("a", 500, false));
+        assert_ne!(url("a", 500, false), url("b", 500, false));
+        assert_ne!(url("a", 500, false), url("a", 50, false));
+        assert_ne!(url("a", 500, false), url("a", 500, true));
     }
 
     /// The axis and the rays follow the analyzer the components were placed after, so their URLs
@@ -613,8 +618,8 @@ mod tests {
         let base = "http://localhost:8001";
         let analyzer = Uuid::new_v4();
         let named = format!("analyzer={analyzer}");
-        assert!(crate::api::scene_axis_url(base, 1, Some(analyzer)).contains(&named));
-        assert!(crate::api::scene_rays_url(base, 1, 500, false, Some(analyzer)).contains(&named));
-        assert!(!crate::api::scene_axis_url(base, 1, None).contains("analyzer"));
+        assert!(crate::api::scene_axis_url(base, "a", Some(analyzer)).contains(&named));
+        assert!(crate::api::scene_rays_url(base, "a", 500, false, Some(analyzer)).contains(&named));
+        assert!(!crate::api::scene_axis_url(base, "a", None).contains("analyzer"));
     }
 }

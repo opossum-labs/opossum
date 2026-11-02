@@ -85,25 +85,16 @@ pub fn SceneView() -> Element {
     // below is made focusable and its handle kept here to focus it on a click - see its `onkeydown`.
     let mut viewport = use_signal(|| None::<std::rc::Rc<MountedData>>);
 
-    // How often the model has been fetched. The axis URL carries it, so every fetch of the
-    // components fetches the axis again too; see `api::scene_axis_url`.
+    // How often the model has been fetched; only the first fetch is not debounced.
     let mut fetches = use_signal(|| 0_usize);
-    // The rays object as the current fetch and the menu's ray count and opacity describe it.
-    let rays_object = move || {
-        let controls = *SCENE_VIEW_CONTROLS.peek();
-        ray_object(
-            RAYS_OBJECT_ID,
-            api::scene_rays_url(
-                HTTP_API_CLIENT().base_url(),
-                *fetches.peek(),
-                controls.max_rays,
-                controls.full_spectrum,
-                drawn_after.peek().as_ref().map(|analyzer| analyzer.uid),
-            ),
-            true,
-            controls.opacity,
-        )
-    };
+    // The rays as the menu has them drawn - how many, and whether every wavelength at each start
+    // point - or `None` while they are hidden. The manifest digests the rays only for these.
+    let drawn_rays = use_memo(move || {
+        let controls = SCENE_VIEW_CONTROLS();
+        controls
+            .rays
+            .then_some((controls.max_rays, controls.full_spectrum))
+    });
 
     let mut options = use_signal(|| {
         let mut options = ViewerOptions {
@@ -127,11 +118,13 @@ pub fn SceneView() -> Element {
     });
 
     // Reading `SCENE_REVISION` inside is what keeps the view live: the resource re-runs on every
-    // model change, on every other choice of analyzer, and once on mount so the tab is never shown
-    // empty. It only exists while the tab is open, so a closed 3D view costs the backend nothing.
+    // model change, on every other choice of analyzer or of drawn rays, and once on mount so the tab
+    // is never shown empty. It only exists while the tab is open, so a closed 3D view costs the
+    // backend nothing. The rays asked for are kept with the manifest, as its digest is theirs.
     let mut manifest = use_resource(move || async move {
         SCENE_REVISION();
         let analyzer = SCENE_VIEW_ANALYZER();
+        let rays = drawn_rays();
         // A burst of edits - dragging a value through a range, or a paste that touches several
         // nodes - would otherwise re-mesh the whole model once per step. Restarting the resource
         // drops the sleeping future, so only the last edit of a burst survives to fetch anything.
@@ -139,7 +132,9 @@ pub fn SceneView() -> Element {
         if *fetches.peek() > 0 {
             debounce().await;
         }
-        api::get_scene_manifest(analyzer).await
+        api::get_scene_manifest(analyzer, rays)
+            .await
+            .map(|manifest| (manifest, rays))
     });
 
     use_effect(move || {
@@ -148,7 +143,7 @@ pub fn SceneView() -> Element {
             // the write to `objects`.
             eval_action_run(
                 fetched.clone(),
-                Some(move |fetched: SceneManifest| {
+                Some(move |(fetched, rays): (SceneManifest, _)| {
                     let fetch = *fetches.peek() + 1;
                     fetches.set(fetch);
                     drawn_after.set(fetched.analyzer.clone());
@@ -161,32 +156,38 @@ pub fn SceneView() -> Element {
                             s.name, s.reason
                         ));
                     }
-                    // Nothing is placed, so there is no axis or light to fetch either: asking for
-                    // them would only fail again.
-                    if fetched.notice.is_some() {
-                        objects.set(Vec::new());
-                        return;
-                    }
                     // Handing over a whole new list is the point: the viewer compares it against
-                    // what it already draws and moves, reloads or removes only what differs.
+                    // what it already draws and moves, reloads or removes only what differs. The
+                    // light is named by its digests, so light that did not change is not fetched
+                    // again; a model that cannot be placed has none.
                     let base_url = HTTP_API_CLIENT().base_url().to_owned();
                     let controls = *SCENE_VIEW_CONTROLS.peek();
+                    let analyzer = fetched.analyzer.as_ref().map(|analyzer| analyzer.uid);
                     let mut list = objects_of(&fetched, &base_url);
-                    list.push(ray_object(
-                        AXIS_OBJECT_ID,
-                        api::scene_axis_url(
-                            &base_url,
-                            fetch,
-                            fetched.analyzer.as_ref().map(|analyzer| analyzer.uid),
-                        ),
-                        controls.beam_axis,
-                        // Always solid, whatever the rays are set to: the axis is the single line the
-                        // whole setup is built on, and it is one line per source rather than a bundle
-                        // that needs thinning out to be read.
-                        1.0,
-                    ));
-                    if controls.rays {
-                        list.push(rays_object());
+                    if let Some(axis) = &fetched.axis {
+                        list.push(ray_object(
+                            AXIS_OBJECT_ID,
+                            api::scene_axis_url(&base_url, axis, analyzer),
+                            controls.beam_axis,
+                            // Always solid, whatever the rays are set to: the axis is the single
+                            // line the whole setup is built on, and it is one line per source
+                            // rather than a bundle that needs thinning out to be read.
+                            1.0,
+                        ));
+                    }
+                    if let (Some(digest), Some((max_rays, full_spectrum))) = (&fetched.rays, rays) {
+                        list.push(ray_object(
+                            RAYS_OBJECT_ID,
+                            api::scene_rays_url(
+                                &base_url,
+                                digest,
+                                max_rays,
+                                full_spectrum,
+                                analyzer,
+                            ),
+                            controls.rays,
+                            controls.opacity,
+                        ));
                     }
                     // Box whatever the graph has selected right now, so the selection box survives a
                     // model refetch while a node stays selected. Read by `peek`, so this effect stays
@@ -216,20 +217,18 @@ pub fn SceneView() -> Element {
         if *options.peek() != wanted {
             options.set(wanted);
         }
-        // Built from the list on screen rather than from the manifest: which components are drawn is
-        // whatever the last fetch produced, and only the light over them is the menu's business. The
-        // rays object is dropped and rebuilt so that a changed ray count comes out as a new URL, and
-        // with it the opacity - which is the rays' alone, the axis staying solid.
+        // Built from the list on screen rather than from the manifest: what is drawn is whatever the
+        // last fetch produced, and the menu only shows, hides and fades the light over it. A new
+        // number of rays or way of drawing their spectrum fetches the model again instead (see
+        // `drawn_rays`). The opacity is the rays' alone, the axis staying solid.
         let mut list = objects.peek().clone();
-        list.retain(|object| object.id != RAYS_OBJECT_ID);
         for object in &mut list {
             if object.id == AXIS_OBJECT_ID {
                 object.visible = controls.beam_axis;
+            } else if object.id == RAYS_OBJECT_ID {
+                object.visible = controls.rays;
+                object.opacity = controls.opacity;
             }
-        }
-        // A model that cannot be placed has no light to draw either.
-        if controls.rays && notice.peek().is_none() {
-            list.push(rays_object());
         }
         if list != *objects.peek() {
             objects.set(list);
@@ -441,7 +440,7 @@ pub fn SceneView() -> Element {
                         object.selected =
                             !is_ray_object(&object.id) && Some(&object.id) == picked.id.as_ref();
                     }
-                    if let Some(Ok(fetched)) = &*manifest.read()
+                    if let Some(Ok((fetched, _))) = &*manifest.read()
                         && let Some(action) = action_for_pick(&picked, fetched)
                     {
                         workspace_processor.send(action);

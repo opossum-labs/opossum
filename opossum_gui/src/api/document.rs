@@ -104,23 +104,34 @@ pub async fn post_viewport_change(
 ///
 /// This is the cheap half of the 3D view and the one that is refetched whenever the model changes;
 /// the geometry of a component is fetched separately, and only when its `geometry` hash says its
-/// shape actually changed. See [`crate::components::scene_view::objects_of`].
+/// shape actually changed. See [`crate::components::scene_view::objects_of`]. The axis and the
+/// rays are fetched the same way, by the digests the manifest names for them.
 ///
 /// # Arguments
 ///
 /// - `analyzer`: the analyzer to take the placement from, or `None` for the one the model is drawn
 ///   after by default
+/// - `rays`: the most rays drawn and whether each start point shines every wavelength, or `None`
+///   while no rays are drawn; only then does the manifest digest the rays, which costs a trace
 ///
 /// # Errors
 ///
 /// This function will return an error if the components cannot be listed. A model that cannot be
 /// placed is no error: the manifest's `notice` says why.
-pub async fn get_scene_manifest(analyzer: Option<Uuid>) -> Result<SceneManifest, String> {
-    let route = analyzer.map_or_else(
-        || "/api/document/scene/manifest".to_owned(),
-        |id| format!("/api/document/scene/manifest?analyzer={id}"),
-    );
-    HTTP_API_CLIENT().get(&route).await
+pub async fn get_scene_manifest(
+    analyzer: Option<Uuid>,
+    rays: Option<(usize, bool)>,
+) -> Result<SceneManifest, String> {
+    let query: Vec<String> = analyzer
+        .map(|id| format!("analyzer={id}"))
+        .into_iter()
+        .chain(rays.map(|(max_rays, full_spectrum)| {
+            format!("max_rays={max_rays}&full_spectrum={full_spectrum}")
+        }))
+        .collect();
+    HTTP_API_CLIENT()
+        .get(&format!("/api/document/scene/manifest?{}", query.join("&")))
+        .await
 }
 
 /// The URL the 3D viewer fetches one component's geometry from.
@@ -149,38 +160,36 @@ pub fn scene_node_url(base_url: &str, uid: Uuid, geometry: &str) -> String {
 
 /// The URL the 3D viewer fetches the model's optical axis from.
 ///
-/// Unlike a component, the axis has no hash to say whether it changed: any edit can reroute it.
-/// So the URL carries a counter of how often the view has fetched the model instead, and a new
-/// value makes the viewer, which reloads an object exactly when its URL changes, fetch the axis
-/// again along with every refresh of the components.
+/// The axis's digest from the [`SceneManifest`] rides along like a component's geometry hash in
+/// [`scene_node_url`], so the URL changes exactly when the axis does, and the viewer, which reloads
+/// an object exactly when its URL changes, fetches it again only then.
 ///
 /// # Arguments
 ///
 /// - `base_url`: the backend's root, from [`crate::api::http_client::HTTPClient::base_url`]
-/// - `fetch`: how many times the view has fetched the model so far
+/// - `version`: the axis's digest, from the manifest's `axis`
 /// - `analyzer`: the analyzer the components were placed after, so the axis follows the same one
 ///
 /// # Returns
 ///
 /// An absolute URL the webview can fetch.
 #[must_use]
-pub fn scene_axis_url(base_url: &str, fetch: usize, analyzer: Option<Uuid>) -> String {
+pub fn scene_axis_url(base_url: &str, version: &str, analyzer: Option<Uuid>) -> String {
     format!(
-        "{base_url}/api/document/scene/axis.glb?v={fetch}{}",
+        "{base_url}/api/document/scene/axis.glb?v={version}{}",
         analyzer_param(analyzer)
     )
 }
 
 /// The URL the 3D viewer fetches the light of the model's sources from.
 ///
-/// Versioned by the fetch counter exactly like [`scene_axis_url`], and additionally by how many
-/// rays are asked for and how their spectrum is drawn, so a new setting is a new URL and the
-/// viewer fetches the rays again.
+/// Versioned by the rays' digest like [`scene_axis_url`], and naming the ray settings the manifest
+/// digested them for, so the file fetched is the one digested.
 ///
 /// # Arguments
 ///
 /// - `base_url`: the backend's root, from [`crate::api::http_client::HTTPClient::base_url`]
-/// - `fetch`: how many times the view has fetched the model so far
+/// - `version`: the rays' digest, from the manifest's `rays`
 /// - `max_rays`: the most rays drawn, of all sources together; the backend caps it
 /// - `full_spectrum`: whether each start point shines every wavelength rather than one
 /// - `analyzer`: the analyzer the components were placed after, so the rays are its light
@@ -191,13 +200,13 @@ pub fn scene_axis_url(base_url: &str, fetch: usize, analyzer: Option<Uuid>) -> S
 #[must_use]
 pub fn scene_rays_url(
     base_url: &str,
-    fetch: usize,
+    version: &str,
     max_rays: usize,
     full_spectrum: bool,
     analyzer: Option<Uuid>,
 ) -> String {
     format!(
-        "{base_url}/api/document/scene/rays.glb?max_rays={max_rays}&full_spectrum={full_spectrum}&v={fetch}{}",
+        "{base_url}/api/document/scene/rays.glb?max_rays={max_rays}&full_spectrum={full_spectrum}&v={version}{}",
         analyzer_param(analyzer)
     )
 }
