@@ -35,7 +35,9 @@ pub struct GlbObject {
     ///
     /// When `true`, all materials are moved to the transparent render pass
     /// (`material.transparent = true`, `depthWrite = false`) so they are never captured in
-    /// Three.js's glass-transmission buffer and never appear refracted through lenses.
+    /// Three.js's glass-transmission buffer and never appear refracted through lenses. They are
+    /// drawn additively, as light adds up: overlapping lines mix their colors the same whatever
+    /// order they are drawn in, so an overlap does not change color as the view turns.
     pub overlay: bool,
 }
 

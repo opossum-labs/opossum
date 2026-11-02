@@ -693,6 +693,8 @@ export async function createViewer(canvasId, options, send, threeBase) {
                     transparent: src.transparent,
                     opacity:     src.opacity,
                     depthWrite:  src.depthWrite,
+                    depthTest:   src.depthTest,
+                    blending:    src.blending,
                 }),
             );
             fat.name = line.name;
@@ -704,10 +706,11 @@ export async function createViewer(canvasId, options, send, threeBase) {
             fat.raycast = () => {};
             fat.castShadow = false;
             // Keep what the file gave the line, so a later opacity change still scales that and
-            // not the value an earlier change left behind (see setOpacity).
+            // not the value an earlier change left behind, and keeps an overlay one (see setOpacity).
             if (src.userData.ownOpacity) {
                 fat.material.userData.ownOpacity = src.userData.ownOpacity;
             }
+            if (src.userData.overlay) fat.material.userData.overlay = src.userData.overlay;
             line.parent.add(fat);
             line.parent.remove(line);
             line.geometry.dispose();
@@ -722,7 +725,8 @@ export async function createViewer(canvasId, options, send, threeBase) {
      * An overlay material is forced into the transparent render pass by `setOpacity`, so it draws
      * after the glass-transmission buffer is captured and never appears refracted through a lens.
      * The flag is stored on the material and read back by `setOpacity`, which owns the actual
-     * `transparent`/`depthWrite` state - this only records the intent. Call it before `setOpacity`.
+     * transparency, depth and blending state - this only records the intent. Call it before
+     * `setOpacity`.
      */
     function setOverlay(root, overlay) {
         root.traverse((o) => {
@@ -743,7 +747,10 @@ export async function createViewer(canvasId, options, send, threeBase) {
      * each other in draw order instead of adding up. An overlay material (see `setOverlay`) is kept
      * transparent at any opacity - so it stays out of the glass-transmission buffer and is never
      * refracted - and has depth testing off too, so it draws over a lens rather than being clipped
-     * by the glass surface bulging in front of it.
+     * by the glass surface bulging in front of it. An overlay also adds its color to what lies
+     * behind it, as light does: without depth, overlapping lines in normal blending would show the
+     * one drawn last, and three.js draws them in the order of their distance to the camera, so the
+     * color of an overlap would jump as the view turns. A sum has no order.
      */
     function setOpacity(root, factor) {
         root.traverse((o) => {
@@ -751,7 +758,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
             for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
                 m.userData.ownOpacity ??= {
                     opacity: m.opacity, transparent: m.transparent,
-                    depthWrite: m.depthWrite, depthTest: m.depthTest,
+                    depthWrite: m.depthWrite, depthTest: m.depthTest, blending: m.blending,
                 };
                 const own = m.userData.ownOpacity;
                 const overlay = m.userData.overlay ?? false;
@@ -762,6 +769,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
                 m.opacity     = own.opacity * factor;
                 m.depthWrite  = (factor < 1 || overlay) ? false : own.depthWrite;
                 m.depthTest   = overlay ? false : own.depthTest;
+                m.blending    = overlay ? THREE.AdditiveBlending : own.blending;
             }
         });
     }

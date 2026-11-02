@@ -132,7 +132,8 @@ pub fn apply_node_selection(objects: &mut [GlbObject], selected: &HashSet<Uuid>)
 /// components in, so the object keeps the identity transform.
 ///
 /// Drawn as an overlay: its lines render in the transparent pass so a lens's glass never refracts
-/// them into ghost copies (see [`GlbObject::overlay`]).
+/// them into ghost copies, and add their colors up like light where they overlap (see
+/// [`GlbObject::overlay`]).
 ///
 /// # Arguments
 ///

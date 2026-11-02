@@ -26,7 +26,7 @@ One model in the scene.
 | `visible` | `bool` | Hidden objects stay in the scene graph. |
 | `selected` | `bool` | Draws a wireframe box around the object, turned with it rather than fitted to the world axes. |
 | `opacity` | `f32` | `0.0`–`1.0`, scaling the opacity the file gave each material; `1.0` draws the model as it is. |
-| `overlay` | `bool` | Marks an annotation (e.g. a line): its materials render in the transparent pass with depth testing off, so a transmissive lens never refracts them into ghost copies. |
+| `overlay` | `bool` | Marks an annotation (e.g. a line): its materials render in the transparent pass with depth testing off, so a transmissive lens never refracts them into ghost copies, and are blended additively, so overlapping lines mix their colors the same from every side instead of showing whichever was drawn last. |
 
 The `id` is what [`PickEvent`](./picking.md) reports back, and it is how the diff
 recognises an object across renders: a stable `id` whose `transform` changed produces a
