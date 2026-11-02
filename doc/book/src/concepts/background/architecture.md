@@ -58,6 +58,12 @@ wavelength of its spectrum, and has the core trace them through the placed model
 the paths into glTF lines in world coordinates, which the viewer draws over the components as they
 are, without moving them.
 
+The manifest names that light by a digest as well, one for each of the two files as its endpoint
+would serve it, and the view puts the digest into the file's address. So the axis or the rays are
+fetched again only when they came out different, and an edit that leaves the light as it was — an
+analyzer the view does not follow, an amplifier — redraws nothing. The digest of the rays costs a
+trace of its own, which is why the manifest only computes it while the view draws rays.
+
 The rule behind the split is that the core describes and `opossum_scene` draws. The core holds what
 a simulation needs: faces, outlines, coatings, materials. Everything that serves only the picture
 belongs in `opossum_scene`. How each node type looks is decided there, in a table keyed by the

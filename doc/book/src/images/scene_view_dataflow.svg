@@ -4,7 +4,8 @@
   <title>How a model reaches the 3D view</title>
   <desc>The model is meshed by opossum_scene and its light traced, both run by the backend, and
         travels over four HTTP endpoints to the viewer component: the manifest and one geometry file
-        per component, plus the optical axis and the traced rays as lines. optoscene and dioxus_glb_viewer have no dependency on each
+        per component, plus the optical axis and the traced rays as lines, which the manifest names
+        by their digests. optoscene and dioxus_glb_viewer have no dependency on each
         other; the GUI is the only seam between them.</desc>
 
   <defs>
@@ -41,8 +42,9 @@
   <line x1="824" y1="142" x2="824" y2="180" stroke="#4a5568" marker-end="url(#arrow)"/>
 
   <rect x="24" y="180" width="220" height="56" rx="6" fill="#fefcbf" stroke="#b7791f"/>
-  <text x="134" y="203" font-size="13" text-anchor="middle" fill="#1a202c">GET &#8230;/scene/manifest</text>
-  <text x="134" y="222" font-size="11" text-anchor="middle" fill="#744210">uid, geometry hash, placement</text>
+  <text x="134" y="199" font-size="13" text-anchor="middle" fill="#1a202c">GET &#8230;/scene/manifest</text>
+  <text x="134" y="215" font-size="11" text-anchor="middle" fill="#744210">uid, geometry hash, placement,</text>
+  <text x="134" y="229" font-size="11" text-anchor="middle" fill="#744210">digests of axis and rays</text>
 
   <rect x="254" y="180" width="220" height="56" rx="6" fill="#fefcbf" stroke="#b7791f"/>
   <text x="364" y="203" font-size="13" text-anchor="middle" fill="#1a202c">GET &#8230;/scene/node/{uid}.glb</text>

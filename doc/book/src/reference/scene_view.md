@@ -174,7 +174,8 @@ A few things to know about the rays:
 - **They cost a trace.** While Rays is on, every change to the model traces the sources again, and
   so does a new **max. rays** or a switch of how the spectrum is laid on the rays; the additive
   overlay and the opacity only change the picture. Turn Rays off when you do not need it; while it
-  is off nothing is traced.
+  is off nothing is traced. The rays are only drawn anew when the trace came out different; see
+  [When the view updates itself](#when-the-view-updates-itself).
 - Light that ends in a component without an output is drawn up to the component before it, not into
   it.
 
@@ -297,8 +298,14 @@ a lens radius or thickness, grouping, pasting, undo and redo all reach it within
 edits is collected so that holding a spinner costs one update rather than dozens. The optical axis
 and, while shown, the rays follow along with the components.
 
-Two things are worth knowing about how it updates:
+Three things are worth knowing about how it updates:
 
+- **Only what changed is drawn again.** A component is fetched again only when its shape or its look
+  changed, the optical axis and the rays only when they came out different. An edit that leaves the
+  picture as it was — an analyzer the view does not follow, marking a component as an amplifier, a
+  pump scenario — redraws nothing. While **Rays** is on, every edit still costs a trace to find that
+  out, and a source whose rays start at random points comes out different on every trace, so its
+  rays are drawn anew each time.
 - **The camera never moves by itself.** Whatever changes in the model, the view you set up stays.
   Only **Refresh**, **Fit view** and **Reset camera** in the menu, and clicking a gizmo axis, move the
   camera.
