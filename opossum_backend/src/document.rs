@@ -14,7 +14,7 @@ use futures_util::StreamExt;
 use log::{error, info, warn};
 use opossum_core::{
     core_optics::node_attr::HasNodeAttr,
-    error::OpossumError,
+    error::{OpmResult, OpossumError},
     opm_document::OpmDocument,
     types::api_types::{
         DocumentChange, ErrorResponse, JumpTarget, LoadDocumentResponse, PositionUpdate,
@@ -22,7 +22,7 @@ use opossum_core::{
     },
 };
 use opossum_scene::{
-    LineColors, SpectrumDrawing, axis_glb, glb_of_node, light_glb, manifest_of, scene_glb,
+    LineColors, SpectrumDrawing, axis_glb, digest, glb_of_node, light_glb, manifest_of, scene_glb,
     source_wavelength_range,
 };
 use serde::Deserialize;
@@ -61,6 +61,83 @@ struct RaysQuery {
     /// Whether each start point shines every wavelength of its source's spectrum, as in the
     /// analysis, rather than one (default false).
     full_spectrum: Option<bool>,
+}
+
+/// Which analyzer a 3D view of the model should follow, and which of its rays the view draws.
+#[derive(Debug, Deserialize, IntoParams)]
+struct ManifestQuery {
+    /// Uuid of the analyzer to take the placement from, or none to follow the first analyzer whose
+    /// light is rays, else the first. One the document no longer has is ignored.
+    analyzer: Option<Uuid>,
+    /// The most rays drawn, as asked of `/scene/rays.glb`. Without it the manifest digests no
+    /// rays, and nothing is traced for them.
+    max_rays: Option<usize>,
+    /// Whether each start point shines every wavelength, as asked of `/scene/rays.glb`.
+    full_spectrum: Option<bool>,
+}
+
+/// Draw the light of a model's sources, off the request thread.
+///
+/// The trace is the long part, so it must hold neither the document nor the request thread: the
+/// model comes as its file, the only copy that shares nothing with the live document.
+///
+/// # Arguments
+///
+/// - `model`: the model as its OPM file
+/// - `analyzer`: the analyzer to take the sources from, or `None` for the default
+/// - `max_rays`: the most rays drawn, 500 if not given, at most 5000
+/// - `full_spectrum`: whether each start point shines every wavelength rather than one
+///
+/// # Returns
+///
+/// The GLB bytes `/scene/rays.glb` serves for these parameters.
+///
+/// # Errors
+///
+/// This function returns an error if the model cannot be read back or its light not drawn.
+async fn traced_light(
+    model: String,
+    analyzer: Option<Uuid>,
+    max_rays: Option<usize>,
+    full_spectrum: Option<bool>,
+) -> OpmResult<Vec<u8>> {
+    let max_rays = max_rays
+        .unwrap_or(DEFAULT_DISPLAY_RAYS)
+        .min(MAX_DISPLAY_RAYS);
+    let drawing = if full_spectrum.unwrap_or(false) {
+        SpectrumDrawing::Full
+    } else {
+        SpectrumDrawing::Dealt
+    };
+    web::block(move || {
+        light_glb(
+            &OpmDocument::from_string(&model)?,
+            analyzer,
+            max_rays,
+            drawing,
+        )
+    })
+    .await
+    .map_err(|e| OpossumError::Other(format!("the rays could not be traced: {e}")))?
+}
+
+/// Digest what an endpoint of drawn light answers: its file, or why it has none.
+///
+/// A failure is digested by its reason, so a viewer still asks for the file and is told why it
+/// failed - once, until the reason changes.
+///
+/// # Arguments
+///
+/// - `answer`: the file, or why it could not be drawn
+///
+/// # Returns
+///
+/// The digest, see [`digest`].
+fn digest_of(answer: &OpmResult<Vec<u8>>) -> String {
+    match answer {
+        Ok(glb) => digest(glb),
+        Err(e) => digest(e.to_string().as_bytes()),
+    }
 }
 
 /// The analyzer a 3D view asked to follow, if the document still has it.
@@ -166,10 +243,16 @@ async fn get_scene(
 /// follow when the model has more than one. The list names the analyzer it followed, and the false
 /// colors `/scene/rays.glb` draws that analyzer's light in if it holds several wavelengths.
 ///
+/// The drawn light takes the same way: the list holds a digest of what `/scene/axis.glb` serves
+/// for the same analyzer, and, if `max_rays` is given, of what `/scene/rays.glb` serves for the
+/// same parameters. A viewer that names the digest in the address fetches the light again only when
+/// it changed, so an edit that draws nothing new - another analyzer, an amplifier - redraws
+/// nothing. The rays are traced for their digest only when asked for.
+///
 /// A model that cannot be placed is answered with an empty list whose `notice` says why: that is
 /// a state of the model a viewer has to show, not a failed request.
 #[utoipa::path(tag = "document",
-    params(SceneQuery),
+    params(ManifestQuery),
     responses(
         (status = 200, description = "the drawable components of the model, or why there are none", body = SceneManifest),
         (status = 400, description = "the components could not be listed", body = ErrorResponse)
@@ -178,11 +261,11 @@ async fn get_scene(
 #[get("/scene/manifest")]
 async fn get_scene_manifest(
     data: web::Data<AppState>,
-    query: web::Query<SceneQuery>,
+    query: web::Query<ManifestQuery>,
 ) -> Result<impl Responder, BackEndErrorResponse> {
     // Same split as `get_scene`: only the copy needs the live model, and the meshing that follows
     // must not block every other edit for as long as it takes.
-    let (placed, analyzer, colors) = {
+    let (placed, asked, analyzer, colors, axis, model) = {
         let document = data.document.lock();
         let asked = analyzer_still_there(&document, query.analyzer);
         let analyzer = document
@@ -192,7 +275,23 @@ async fn get_scene_manifest(
                 name: info.display_name(),
             });
         let colors = LineColors::Wavelength(source_wavelength_range(&document, asked)?);
-        (document.placed_scenery(asked), analyzer, colors)
+        let placed = document.placed_scenery(asked);
+        // Light is only drawn over a placed model, and the rays only while a view asks for them.
+        let axis = placed
+            .is_ok()
+            .then(|| digest_of(&axis_glb(&document, asked)));
+        let model = if placed.is_ok() && query.max_rays.is_some() {
+            Some(document.to_opm_file_string()?)
+        } else {
+            None
+        };
+        (placed, asked, analyzer, colors, axis, model)
+    };
+    let rays = match model {
+        Some(model) => Some(digest_of(
+            &traced_light(model, asked, query.max_rays, query.full_spectrum).await,
+        )),
+        None => None,
     };
     let mut manifest = match placed {
         Ok(placed) => SceneManifest {
@@ -205,6 +304,8 @@ async fn get_scene_manifest(
         },
     };
     manifest.analyzer = analyzer;
+    manifest.axis = axis;
+    manifest.rays = rays;
     Ok(Json(manifest))
 }
 
@@ -306,17 +407,6 @@ async fn get_scene_rays(
     data: web::Data<AppState>,
     query: web::Query<RaysQuery>,
 ) -> Result<impl Responder, BackEndErrorResponse> {
-    let max_rays = query
-        .max_rays
-        .unwrap_or(DEFAULT_DISPLAY_RAYS)
-        .min(MAX_DISPLAY_RAYS);
-    let drawing = if query.full_spectrum.unwrap_or(false) {
-        SpectrumDrawing::Full
-    } else {
-        SpectrumDrawing::Dealt
-    };
-    // The trace is the long part, so it must hold neither the document nor the request thread. The
-    // model is taken as its file, the only copy that shares nothing with the live document.
     let (model, analyzer) = {
         let document = data.document.lock();
         (
@@ -324,16 +414,7 @@ async fn get_scene_rays(
             analyzer_still_there(&document, query.analyzer),
         )
     };
-    let glb = web::block(move || {
-        light_glb(
-            &OpmDocument::from_string(&model)?,
-            analyzer,
-            max_rays,
-            drawing,
-        )
-    })
-    .await
-    .map_err(|e| OpossumError::Other(format!("the rays could not be traced: {e}")))??;
+    let glb = traced_light(model, analyzer, query.max_rays, query.full_spectrum).await?;
     Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
 }
 
@@ -2007,7 +2088,7 @@ mod test {
 
     /// A model that cannot be placed is answered with an empty list that says why, not with a
     /// failed request: the untilted grating swallows the optical axis at 1000 nm, so the mirror
-    /// behind it has no place.
+    /// behind it has no place. Nor is there any light to draw, even with rays asked for.
     #[actix_web::test]
     async fn the_manifest_of_a_model_that_cannot_be_placed_says_why() {
         use opossum_core::{
@@ -2038,7 +2119,7 @@ mod test {
         let app_state = Data::new(AppState::default());
         *app_state.document.lock() = document;
 
-        let resp = request_manifest(&app_state, "").await;
+        let resp = request_manifest(&app_state, "?max_rays=50").await;
 
         assert_eq!(resp.status(), StatusCode::OK);
         let manifest: SceneManifest = test::read_body_json(resp).await;
@@ -2047,10 +2128,127 @@ mod test {
             manifest.analyzer.is_some(),
             "the analyzer that cannot place the model is still named, so another can be chosen"
         );
+        assert_eq!((manifest.axis, manifest.rays), (None, None));
         let notice = manifest
             .notice
             .expect("the manifest says why nothing is drawn");
         assert!(notice.contains("evanescent"), "{notice}");
+    }
+
+    /// Light that cannot be drawn is digested by the reason, so another reason is another digest
+    /// and none is mistaken for a file.
+    #[actix_web::test]
+    async fn a_failure_is_digested_by_its_reason() {
+        let failed = |reason: &str| digest_of(&Err(OpossumError::Other(reason.to_owned())));
+
+        assert_eq!(failed("no light"), failed("no light"));
+        assert_ne!(failed("no light"), failed("no rays"));
+        assert_ne!(failed(""), digest_of(&Ok(Vec::new())));
+    }
+
+    /// The manifest of `app_state` for a view that draws 50 rays.
+    async fn manifest_drawing_rays(app_state: &Data<AppState>) -> SceneManifest {
+        test::read_body_json(request_manifest(app_state, "?max_rays=50").await).await
+    }
+
+    /// The manifest digests exactly the files the axis and the rays are served as for the same
+    /// parameters, which is what lets a viewer fetch them by their digest.
+    #[actix_web::test]
+    async fn the_manifest_digests_the_files_the_light_is_served_as() {
+        let app_state = state_with_a_traced_source();
+        let axis = test::read_body(request_axis(&app_state, "").await).await;
+        for query in ["?max_rays=50", "?max_rays=50&full_spectrum=true"] {
+            let manifest: SceneManifest =
+                test::read_body_json(request_manifest(&app_state, query).await).await;
+            let rays = test::read_body(request_rays(&app_state, query).await).await;
+
+            assert_eq!(manifest.axis, Some(digest(&axis)), "{query}");
+            assert_eq!(manifest.rays, Some(digest(&rays)), "{query}");
+        }
+    }
+
+    /// Without a number of rays the manifest digests none: a view that shows no rays must not pay
+    /// for a trace.
+    #[actix_web::test]
+    async fn the_manifest_digests_no_rays_unless_asked_for() {
+        let manifest: SceneManifest =
+            test::read_body_json(request_manifest(&state_with_a_traced_source(), "").await).await;
+
+        assert!(manifest.axis.is_some());
+        assert_eq!(manifest.rays, None);
+    }
+
+    /// Edits that draw nothing new leave the manifest as it was, digests included, so a 3D view
+    /// redraws nothing: analyzers the view does not follow, an amplifier candidate, a pump
+    /// scenario's gain. The axis and the rays used to be fetched again after every one of them.
+    #[actix_web::test]
+    async fn edits_that_draw_nothing_new_leave_the_manifest_as_it_was() {
+        use opossum_core::gain::{ConstGain, GainModel};
+
+        let app_state = state_with_a_traced_source();
+        let before = manifest_drawing_rays(&app_state).await;
+        assert!(before.axis.is_some() && before.rays.is_some());
+        let lens = before.nodes[0].uid;
+
+        analyze_two_more_ways(&app_state);
+        {
+            let mut document = app_state.document.lock();
+            document.set_is_amplifier_node(lens, true);
+            let scenario = document.add_pump_scenario("pumped");
+            document
+                .pump_scenario_mut(scenario)
+                .unwrap()
+                .set_gain_model(lens, GainModel::Const(ConstGain::new(2.0).unwrap()));
+        }
+
+        assert_eq!(manifest_drawing_rays(&app_state).await, before);
+    }
+
+    /// An edit that does change the light changes its digests: a new distance moves the axis and
+    /// the rays, a narrower source changes the rays but not the axis.
+    #[actix_web::test]
+    async fn edits_that_change_the_light_change_its_digests() {
+        use opossum_core::{
+            analyzers::{AnalyzerType, RayTraceConfig},
+            joule, millimeter,
+            nodes::round_collimated_ray_builder,
+        };
+
+        let app_state = state_with_a_traced_source();
+        let ray_trace = first_analyzer(&app_state);
+        let first = manifest_drawing_rays(&app_state).await;
+
+        let source = {
+            let mut document = app_state.document.lock();
+            let source = document.scenery().find_source_ports().unwrap()[0];
+            document
+                .scenery_mut()
+                .update_connection_distance(source, "output_1", millimeter!(150.0))
+                .unwrap();
+            source
+        };
+        let moved = manifest_drawing_rays(&app_state).await;
+        assert_ne!(moved.axis, first.axis, "the axis runs on to the moved lens");
+        assert_ne!(moved.rays, first.rays, "and so do the rays");
+
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(2.0), joule!(1.0), 15).unwrap(),
+        );
+        app_state
+            .document
+            .lock()
+            .analyzers_mut()
+            .get_mut(&ray_trace)
+            .unwrap()
+            .set_analyzer_type(&AnalyzerType::RayTrace(config));
+        let narrower = manifest_drawing_rays(&app_state).await;
+        assert_ne!(
+            narrower.rays, moved.rays,
+            "a narrower source draws other rays"
+        );
+        assert_eq!(narrower.axis, moved.axis, "on the same axis");
     }
 
     /// Every component the manifest names has to be fetchable, or a viewer would be left asking for

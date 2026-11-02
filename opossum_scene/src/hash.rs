@@ -116,6 +116,25 @@ impl Fnv1a {
     }
 }
 
+/// Return a short string that changes whenever `bytes` do.
+///
+/// A viewer names it in the address of a file it fetches, so that an unchanged file keeps its
+/// address and is not fetched again.
+///
+/// # Arguments
+///
+/// - `bytes`: what to digest, a drawn file say
+///
+/// # Returns
+///
+/// The 64 bit FNV-1a hash of `bytes`, as 16 hexadecimal digits.
+#[must_use]
+pub fn digest(bytes: &[u8]) -> String {
+    let mut hash = Fnv1a::new();
+    hash.write(bytes);
+    hash.finish()
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -196,5 +215,14 @@ mod test {
             .collect();
         let expected: Vec<&str> = materials.iter().map(|(_, digest)| *digest).collect();
         assert_eq!(digests, expected);
+    }
+
+    /// A digest is the FNV-1a hash of the bytes: nothing digested is the hash's starting value, and
+    /// one changed byte is another digest.
+    #[test]
+    fn a_digest_is_the_hash_of_the_bytes() {
+        assert_eq!(digest(b""), "cbf29ce484222325");
+        assert_eq!(digest(b"glTF"), digest(b"glTF"));
+        assert_ne!(digest(b"glTF"), digest(b"glTG"));
     }
 }

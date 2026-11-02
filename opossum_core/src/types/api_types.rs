@@ -1066,4 +1066,15 @@ pub struct SceneManifest {
     /// in the colors of its wavelength - light of a single wavelength, or no light at all.
     #[serde(default)]
     pub spectrum: Option<SceneSpectrum>,
+    /// A digest of what the optical axis is served as for the same analyzer, or `None` if the
+    /// model cannot be placed.
+    ///
+    /// It changes exactly when the axis does, so a viewer that names it in the axis's address
+    /// fetches the axis again only then, as `geometry` does for a component.
+    #[serde(default)]
+    pub axis: Option<String>,
+    /// A digest of what the rays are served as for the same analyzer and ray settings, like
+    /// `axis`; `None` if no rays were asked for or the model cannot be placed.
+    #[serde(default)]
+    pub rays: Option<String>,
 }
