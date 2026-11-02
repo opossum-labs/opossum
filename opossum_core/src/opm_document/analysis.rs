@@ -171,19 +171,19 @@ impl OpmDocument {
     ///
     /// The sources are the ones the analyzer defines, and the model is placed exactly as
     /// [`placed_scenery`](OpmDocument::placed_scenery) places it, so the rays run through the
-    /// components where the 3D view shows them. Each source is coarsened to at most `max_rays` rays
-    /// of each wavelength first (see
-    /// [`RayDataSource::coarsened`](crate::light::lightdata::ray_data_source::RayDataSource::coarsened)),
-    /// which keeps the trace cheap
-    /// however many rays the source holds, while every wavelength of its spectrum is still traced.
-    /// Only the primary path is traced: a ghost focus analyzer contributes its sources, not its
-    /// reflections. As everywhere else, this runs on a copy and leaves the model untouched.
+    /// components where the 3D view shows them. The sources share `max_rays` evenly, and each is
+    /// coarsened to its share first, every ray shining one wavelength of its spectrum (see
+    /// [`RayDataSource::coarsened`](crate::light::lightdata::ray_data_source::RayDataSource::coarsened)).
+    /// That keeps the trace cheap however many rays and spectral samples the sources hold, while
+    /// every wavelength is still traced. Only the primary path is traced: a ghost focus analyzer
+    /// contributes its sources, not its reflections. As everywhere else, this runs on a copy and
+    /// leaves the model untouched.
     ///
     /// # Arguments
     ///
     /// - `analyzer_id`: the analyzer to take the sources from, or `None` to follow the one chosen
     ///   exactly as for [`placed_scenery`](OpmDocument::placed_scenery)
-    /// - `max_rays`: the most rays traced per source and wavelength
+    /// - `max_rays`: the most rays traced from all sources together; each source keeps at least one
     ///
     /// # Returns
     ///
@@ -214,6 +214,7 @@ impl OpmDocument {
         config.set_positioning_run(false);
         // Only copies collect ray ends, so the scenery the copy came from holds none.
         config.set_collect_ray_ends(true);
+        let per_source = max_rays / config.source_map().len().max(1);
         // A coarsened source keeps its builder's isometry and is aligned like the full one, whose
         // central wavelength stands in for a missing alignment wavelength.
         let coarsened = config
@@ -226,7 +227,7 @@ impl OpmDocument {
                     None => builder.source().central_wavelength()?,
                 };
                 coarse.set_alignment_wavelength(Some(axis_wavelength));
-                coarse.set_source(builder.source().coarsened(max_rays)?);
+                coarse.set_source(builder.source().coarsened(per_source)?);
                 Ok((*source, coarse))
             })
             .collect::<OpmResult<_>>()?;
@@ -699,24 +700,50 @@ mod tests {
         Ok(())
     }
 
-    /// Every laser line of a source is traced, each with at most the asked number of rays. Thinning
-    /// the built rays used to keep the first line only: all lines of a point start there.
-    #[test]
-    fn every_wavelength_of_a_source_is_traced() -> OpmResult<()> {
+    /// Ten laser lines of equal power, 10 nm apart from 1000 nm on.
+    fn ten_lines() -> OpmResult<SpecDistType> {
         let lines = (0..10)
             .map(|i| (nanometer!(10.0f64.mul_add(f64::from(i), 1000.0)), 1.0))
             .collect();
-        let document =
-            source_then_open_dummy(collimated_source(15, LaserLines::new(lines)?.into())?)?;
+        Ok(LaserLines::new(lines)?.into())
+    }
+
+    /// Every laser line of a source is traced, with at most the asked number of rays for all of
+    /// them together. Thinning the built rays used to keep the first line only: all lines of a
+    /// point start there.
+    #[test]
+    fn every_wavelength_of_a_source_is_traced() -> OpmResult<()> {
+        let document = source_then_open_dummy(collimated_source(15, ten_lines()?)?)?;
 
         let ends = document.traced_rays(None, 100)?;
 
         assert_eq!(ends.len(), 1, "one open output");
+        assert!(ends[0].nr_of_rays(false) <= 100);
         let (lines, _) = ends[0].split_ray_bundle_by_wavelength(nanometer!(1.0), true)?;
         assert_eq!(lines.len(), 10, "every line arrives");
-        for line in &lines {
-            assert!(line.nr_of_rays(true) <= 100);
+        Ok(())
+    }
+
+    /// The asked number of rays is shared by all sources, and each of them is drawn.
+    #[test]
+    fn max_rays_counts_the_rays_of_all_sources_together() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let mut config = RayTraceConfig::default();
+        for _ in 0..2 {
+            let source = scenery.add_node(SourcePort::default())?;
+            let dummy = scenery.add_node(Dummy::default())?;
+            scenery.connect_nodes(source, "output_1", dummy, "input_1", millimeter!(50.0))?;
+            config.map_source(source, collimated_source(15, ten_lines()?)?);
         }
+        let mut document = OpmDocument::new(scenery);
+        document.add_analyzer(AnalyzerType::RayTrace(config));
+
+        let ends = document.traced_rays(None, 100)?;
+
+        assert_eq!(ends.len(), 2, "one open output per source");
+        assert!(ends.iter().all(|end| end.nr_of_rays(false) > 0));
+        let total: usize = ends.iter().map(|end| end.nr_of_rays(false)).sum();
+        assert!(total <= 100, "{total} rays");
         Ok(())
     }
 

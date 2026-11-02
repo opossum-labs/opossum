@@ -29,7 +29,7 @@ pub struct SceneViewControls {
     /// real trace on every model change. While off, the rays object is not in the view's object list
     /// at all, so nothing is fetched for it.
     pub rays: bool,
-    /// The most rays drawn per source and wavelength; the backend caps it. A new number is a new
+    /// The most rays drawn, of all sources together; the backend caps it. A new number is a new
     /// trace, which is why the control that sets it commits on Enter rather than per keystroke.
     pub max_rays: usize,
     /// How opaque the drawn rays are. Faint by default, because a dense bundle reads as a solid block

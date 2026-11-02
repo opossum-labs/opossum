@@ -41,10 +41,10 @@ struct SceneQuery {
     analyzer: Option<Uuid>,
 }
 
-/// How many rays per source and wavelength `/scene/rays.glb` draws unless asked for another number.
+/// How many rays of all sources together `/scene/rays.glb` draws unless asked for another number.
 const DEFAULT_DISPLAY_RAYS: usize = 500;
-/// The most rays per source and wavelength `/scene/rays.glb` draws, whatever is asked for: a
-/// mistyped number must not keep the server tracing for minutes.
+/// The most rays of all sources together `/scene/rays.glb` draws, whatever is asked for: a
+/// mistyped number must not keep the server tracing for minutes, nor the view drawing them.
 const MAX_DISPLAY_RAYS: usize = 5000;
 
 /// Which analyzer's light a 3D view of the model should draw, and how much of it.
@@ -53,7 +53,7 @@ struct RaysQuery {
     /// Uuid of the analyzer to take the sources from, or none to follow the first analyzer whose
     /// light is rays, else the first. One the document no longer has is ignored.
     analyzer: Option<Uuid>,
-    /// The most rays drawn per source and wavelength (default 500, at most 5000).
+    /// The most rays drawn, of all sources together (default 500, at most 5000).
     max_rays: Option<usize>,
 }
 
@@ -280,9 +280,10 @@ async fn get_scene_axis(
 /// which `/scene/manifest` names as its `spectrum`. Rays an aperture stops are drawn up to where
 /// they stop.
 ///
-/// Each source is coarsened to at most `max_rays` rays of each wavelength before the trace, spread
-/// evenly over its cross section, so a source of millions of rays costs no more than one of a few
-/// hundred, while every wavelength of its spectrum is still drawn. Only the
+/// The sources share `max_rays` rays, and each is coarsened to its share before the trace: its rays
+/// are spread evenly over its cross section, and each shines one wavelength of its spectrum. So a
+/// source of millions of rays and many spectral samples costs no more than one of a few hundred,
+/// while every wavelength of its spectrum is still drawn. Only the
 /// primary path is traced; a ghost focus analyzer contributes its sources, not its reflections.
 /// Without an analyzer whose light is rays - none at all, or an energy analysis - the file is
 /// empty. The trace runs on a copy, off the request thread, and the `analyzer` parameter picks

@@ -1528,6 +1528,57 @@ impl Rays {
                 .collect()
         }
     }
+    /// Returns these rays with the wavelengths of a spectrum dealt out among them, one to each.
+    ///
+    /// This is for drawing a source, not for analyzing it: a source of many spectral samples
+    /// drawn with all of them at every point would multiply its rays by their number. Dealt out,
+    /// every wavelength is still drawn:
+    ///
+    /// - Each wavelength goes to equally many rays, give or take one. With fewer rays than
+    ///   wavelengths, the spectrum is cut into as many equal parts as there are rays, and each
+    ///   ray takes the wavelength in the middle of its part.
+    /// - Which ray gets which wavelength is shuffled with a fixed seed. The colors then follow no
+    ///   pattern of how the rays were laid out - rings, a grid, a Fibonacci spiral - and the same
+    ///   rays always get the same wavelengths.
+    ///
+    /// Each ray is made anew where it starts and in its direction, with its energy weighted by
+    /// its wavelength's share, as the full source would weight it. Anything else a ray carries is
+    /// dropped, so these are meant to be rays fresh from a source.
+    ///
+    /// # Arguments
+    ///
+    /// - `spectrum`: the wavelengths and their shares, as a spectral distribution samples them
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the spectrum holds no wavelength while there are rays,
+    /// or if a ray cannot be made at its wavelength.
+    pub(crate) fn dealt_over_spectrum(mut self, spectrum: &[(Length, f64)]) -> OpmResult<Self> {
+        /// Any seed does, as long as it stays the same.
+        const SHUFFLE_SEED: u64 = 0x5eed;
+        let nr_of_rays = self.ray_bundle.len();
+        let mut picks: Vec<usize> = (0..nr_of_rays)
+            .map(|k| (2 * k + 1) * spectrum.len() / (2 * nr_of_rays))
+            .collect();
+        fastrand::Rng::with_seed(SHUFFLE_SEED).shuffle(&mut picks);
+        self.ray_bundle = self
+            .ray_bundle
+            .iter()
+            .zip(picks)
+            .map(|(ray, pick)| {
+                let (wavelength, share) = spectrum.get(pick).ok_or_else(|| {
+                    OpossumError::Other("a spectrum without a wavelength cannot be dealt".into())
+                })?;
+                Ray::new(
+                    ray.position(),
+                    ray.direction(),
+                    *wavelength,
+                    ray.energy() * *share,
+                )
+            })
+            .collect::<OpmResult<_>>()?;
+        Ok(self)
+    }
     /// Return a ray bundle transformed by a given [`Isometry`].
     #[must_use]
     pub fn transformed_by_iso(&self, isometry: &Isometry) -> Self {
