@@ -214,12 +214,18 @@ impl OpmDocument {
         config.set_positioning_run(false);
         // Only copies collect ray ends, so the scenery the copy came from holds none.
         config.set_collect_ray_ends(true);
-        // A coarsened source keeps its builder's alignment wavelength and isometry.
+        // A coarsened source keeps its builder's isometry and is aligned like the full one, whose
+        // central wavelength stands in for a missing alignment wavelength.
         let coarsened = config
             .source_map()
             .iter()
             .map(|(source, builder)| {
                 let mut coarse = builder.clone();
+                let axis_wavelength = match builder.alignment_wavelength() {
+                    Some(wavelength) => wavelength,
+                    None => builder.source().central_wavelength()?,
+                };
+                coarse.set_alignment_wavelength(Some(axis_wavelength));
                 coarse.set_source(builder.source().coarsened(max_rays)?);
                 Ok((*source, coarse))
             })
@@ -749,6 +755,31 @@ mod tests {
             1,
             "the light reaches the open output behind the mirror"
         );
+        Ok(())
+    }
+
+    /// Two lines either side of a grating's Littrow wavelength, few rays, and a mirror far behind
+    /// it. The trace re-runs the positioning, so the coarsened source must put its axis where the
+    /// full one did: a few nanometers off, it would leave the grating beside the mirror.
+    #[test]
+    fn a_coarsened_source_is_aligned_like_the_full_one() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let grating = scenery.add_node(
+            ReflectiveGrating::default().with_rot_from_littrow(nanometer!(1050.0), degree!(0.0))?,
+        )?;
+        let mirror = scenery.add_node(ThinMirror::default())?;
+        let screen = scenery.add_node(Dummy::default())?;
+        scenery.connect_nodes(source, "output_1", grating, "input_1", millimeter!(50.0))?;
+        scenery.connect_nodes(grating, "output_1", mirror, "input_1", millimeter!(2000.0))?;
+        scenery.connect_nodes(mirror, "output_1", screen, "input_1", millimeter!(50.0))?;
+        let mut document = OpmDocument::new(scenery);
+        let lines = LaserLines::new(vec![(nanometer!(1000.0), 1.0), (nanometer!(1100.0), 1.0)])?;
+        let mut config = RayTraceConfig::default();
+        config.map_source(source, collimated_source(1, lines.into())?);
+        document.add_analyzer(AnalyzerType::RayTrace(config));
+
+        document.traced_rays(None, 7)?;
         Ok(())
     }
 
