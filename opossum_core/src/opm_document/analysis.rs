@@ -215,18 +215,13 @@ impl OpmDocument {
         // Only copies collect ray ends, so the scenery the copy came from holds none.
         config.set_collect_ray_ends(true);
         let per_source = max_rays / config.source_map().len().max(1);
-        // A coarsened source keeps its builder's isometry and is aligned like the full one, whose
-        // central wavelength stands in for a missing alignment wavelength.
+        // A coarsened source keeps its builder's isometry and is aligned like the full one.
         let coarsened = config
             .source_map()
             .iter()
             .map(|(source, builder)| {
                 let mut coarse = builder.clone();
-                let axis_wavelength = match builder.alignment_wavelength() {
-                    Some(wavelength) => wavelength,
-                    None => builder.source().central_wavelength()?,
-                };
-                coarse.set_alignment_wavelength(Some(axis_wavelength));
+                coarse.set_alignment_wavelength(Some(builder.axis_wavelength()?));
                 coarse.set_source(builder.source().coarsened(per_source)?);
                 Ok((*source, coarse))
             })
