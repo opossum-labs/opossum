@@ -1,4 +1,4 @@
-use log::info;
+use log::{info, warn};
 
 use crate::{
     analyzers::{propagation_strategy::PropagationStrategy, raytrace::AnalysisRayTrace},
@@ -21,6 +21,10 @@ impl AnalysisRayTrace for SourcePort {
         if self.inverted() {
             return Ok(LightResult::default());
         }
+        if self.effective_node_iso().is_none() {
+            warn!("{self} is not placed, so it sends out no light");
+            return Ok(LightResult::default());
+        }
         let mut rays = config
             .get_source(&self.node_attr().uuid())
             .ok_or_else(|| {
@@ -32,10 +36,8 @@ impl AnalysisRayTrace for SourcePort {
         // Apply the ambient refractive index to all newly created rays
         rays.set_refractive_index(&config.ambient_refractive_index())?;
 
-        if let Ok(iso) = self.effective_surface_iso("output_1") {
-            rays = rays.transformed_by_iso(&iso);
-            rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
-        }
+        rays = rays.transformed_by_iso(&self.effective_surface_iso("output_1")?);
+        rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
         Ok(LightResult::from([(
             "output_1".into(),
             LightData::Geometric(rays),
@@ -83,6 +85,7 @@ impl AnalysisRayTrace for SourcePort {
 mod test {
     use super::*;
     use crate::{
+        core_optics::{OpticNode, node_attr::NodePositioning},
         distributions::{energy::UniformDist, position::Hexapolar, spectral::LaserLines},
         light::lightdata::ray_data_builder::RayDataBuilder,
         nanometer,
@@ -175,6 +178,26 @@ mod test {
         let config = feeding(&node, builder);
         let axis = axis_ray_of(&mut node, &config)?;
         assert_relative_eq!(axis.wavelength().get::<nanometer>(), 500.0, epsilon = 1e-9);
+        Ok(())
+    }
+
+    /// A source that is not placed sends out no light, and says so, rather than shining from the
+    /// origin.
+    #[test]
+    fn a_source_without_a_placement_sends_out_no_light() -> OpmResult<()> {
+        let mut node = SourcePort::default();
+        node.set_positioning(NodePositioning::Automatic(None))?;
+        let config = feeding(&node, collimated_at(nanometer!(1000.0))?);
+        testing_logger::setup();
+        let output = AnalysisRayTrace::analyze(&mut node, LightResult::default(), &config)?;
+        assert!(output.is_empty(), "{output:?}");
+        testing_logger::validate(|logs| {
+            assert!(
+                logs.iter()
+                    .any(|log| log.level == log::Level::Warn && log.body.contains("is not placed")),
+                "no warning"
+            );
+        });
         Ok(())
     }
 

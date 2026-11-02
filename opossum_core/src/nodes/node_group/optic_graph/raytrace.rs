@@ -3,7 +3,7 @@
 use super::{InvertGraphGuard, OpticGraph};
 use crate::{
     analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
-    core_optics::{NodeAttrExt, PortType, node_attr::NodePositioning},
+    core_optics::{NodeAttrExt, OpticNodeExt, PortType, node_attr::NodePositioning},
     error::{OpmResult, OpossumError},
     light::{LightData, LightResult, Rays},
     radian,
@@ -15,7 +15,6 @@ use num_traits::Zero;
 use petgraph::{Direction, graph::NodeIndex, visit::EdgeRef};
 use std::collections::BTreeSet;
 use uom::si::f64::Length;
-use uuid::Uuid;
 
 fn filter_ray_limits(light_result: &mut LightResult, r_config: &RayTraceConfig) {
     for lr in light_result {
@@ -120,17 +119,7 @@ impl OpticGraph {
         let mut light_result = LightResult::default();
 
         for idx in sorted {
-            let node_id = self
-                .node_by_idx(idx)
-                .map_or_else(|_| Uuid::nil(), |node| node.uuid());
-            let has_no_input_connections = !self.has_input_connections(node_id)?;
-
-            let already_placed = match self.g[idx].node_attr().positioning() {
-                NodePositioning::Absolute(_) => true,
-                NodePositioning::Automatic(cached) => cached.is_some(),
-            };
-
-            if has_no_input_connections && !already_placed {
+            if self.is_unreached_and_unplaced(idx)? && !self.place_in_front_of_successor(idx)? {
                 let node_info = format!("{}", self.g[idx]);
                 warn!(
                     "{node_info} has no incoming connections and can thus not being placed. Skipping."
@@ -153,21 +142,37 @@ impl OpticGraph {
     /// Returns the order in which a positioning run visits the nodes of this graph.
     ///
     /// It is a topological order that, of the nodes ready to be visited, takes ordinary nodes
-    /// before references. A component reached directly and through a reference is thus placed by
-    /// its own input, whatever order the nodes were added in; a reference only places it when the
-    /// light reaches the reference first on the same path. Ties go by node index.
+    /// first, then references, and last the nodes no axis reaches that are not placed yet. A
+    /// component reached directly and through a reference is thus placed by its own input,
+    /// whatever order the nodes were added in; a reference only places it when the light reaches
+    /// the reference first on the same path. And a node no axis reaches finds what it feeds
+    /// placed, if anything places it, so it can be placed in front of it (see
+    /// [`place_in_front_of_successor`](OpticGraph::place_in_front_of_successor)). Ties go by node
+    /// index.
     ///
     /// # Errors
     ///
-    /// Returns an [`OpossumError::Analysis`] if the graph contains a cycle.
+    /// Returns an [`OpossumError::Analysis`] if the graph contains a cycle, or if a node cannot be
+    /// found in it.
     fn placing_order(&self) -> OpmResult<Vec<NodeIndex>> {
-        let rank = |idx: NodeIndex| (self.g[idx].referenced_node_id().is_some(), idx);
+        let classes = self
+            .g
+            .node_indices()
+            .map(|idx| {
+                Ok(if self.is_unreached_and_unplaced(idx)? {
+                    2
+                } else {
+                    u8::from(self.g[idx].referenced_node_id().is_some())
+                })
+            })
+            .collect::<OpmResult<Vec<u8>>>()?;
+        let rank = |idx: NodeIndex| (classes.get(idx.index()).copied().unwrap_or_default(), idx);
         let mut waiting: Vec<usize> = self
             .g
             .node_indices()
             .map(|idx| self.g.edges_directed(idx, Direction::Incoming).count())
             .collect();
-        let mut ready: BTreeSet<(bool, NodeIndex)> = self
+        let mut ready: BTreeSet<(u8, NodeIndex)> = self
             .g
             .node_indices()
             .filter(|idx| waiting.get(idx.index()) == Some(&0))
@@ -189,6 +194,83 @@ impl OpticGraph {
             return Err(OpossumError::Analysis("topological sort failed".into()));
         }
         Ok(order)
+    }
+
+    /// Returns whether no axis reaches the node at `idx` - it has no input connection - and it is
+    /// not placed yet, neither absolutely nor by an earlier run.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the node cannot be found in the graph.
+    fn is_unreached_and_unplaced(&self, idx: NodeIndex) -> OpmResult<bool> {
+        Ok(!self.has_input_connections(self.g[idx].uuid())?
+            && self.g[idx].positioning().effective_position().is_none())
+    }
+
+    /// Places the node at `idx`, which no axis reaches, in front of the first of its successors
+    /// that is placed: the face of its output port at the connection's distance before where the
+    /// axis enters that successor, facing it. Its alignment then moves it from there.
+    ///
+    /// A placed successor is passed over, with a warning, if the light would pass it against the
+    /// way it is placed - a reference turned other than its target - or if it has no surface at
+    /// the port to tell where the light enters it, as a group.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the node was placed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the target of a reference cannot be found, if the geometry of the node
+    /// cannot be built, or if its placement cannot be set.
+    fn place_in_front_of_successor(&mut self, idx: NodeIndex) -> OpmResult<bool> {
+        let node_info = format!("{}", self.g[idx]);
+        let connections = self.get_outgoing_connection_info_of_node(self.g[idx].uuid());
+        let geometry = self.g[idx].create_geometry()?;
+        for port in self.g[idx].ports().names(&PortType::Output) {
+            let Some(connection) = connections.iter().find(|c| c.src_port == port) else {
+                continue;
+            };
+            let Some(successor) = self.node_idx_by_uuid(connection.target_id) else {
+                continue;
+            };
+            let inverted = self.g[successor].inverted();
+            let passed = match self.g[successor].referenced_node_id() {
+                Some(target) => self.reference_target_mut(target)?,
+                None => &mut self.g[successor],
+            };
+            let Some(placed) = passed.positioning().effective_position().copied() else {
+                continue;
+            };
+            if passed.inverted() != inverted {
+                warn!(
+                    "{node_info} cannot be placed in front of {passed}: the light would pass it against the way it is placed"
+                );
+                continue;
+            }
+            if passed.face_of_port(&connection.target_port).is_err() {
+                warn!(
+                    "{node_info} cannot be placed in front of {passed}: it has no surface at port '{}' to tell where the light enters it",
+                    connection.target_port
+                );
+                continue;
+            }
+            let Some(exit) = self.g[idx]
+                .face_of_port(&port)
+                .ok()
+                .and_then(|face| geometry.as_ref()?.face(face))
+                .map(|face| *face.frame())
+            else {
+                continue;
+            };
+            let in_front = placed
+                .append(&self.axis_entrance_frame_of(connection.target_id, &connection.target_port))
+                .append(&Isometry::new_along_z(-connection.distance)?)
+                .append(&Isometry::new_from_transform(exit.get_inv_transform()));
+            self.g[idx].set_positioning(NodePositioning::Automatic(Some(in_front)))?;
+            return Ok(true);
+        }
+        Ok(false)
     }
 }
 
@@ -395,7 +477,8 @@ mod test {
         analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
         apertures::{CircleShape, OpticShape},
         core_optics::{
-            Alignable, NodeAttrExt, OpticNode, OpticRef, PortType, node_attr::NodePositioning,
+            Alignable, NodeAttrExt, OpticNode, OpticNodeExt, OpticRef, PortType,
+            node_attr::NodePositioning,
         },
         degree,
         error::{OpmResult, OpossumError},
@@ -707,43 +790,48 @@ mod test {
         assert_same_placements(&behind_window, &behind_splitter);
         Ok(())
     }
-    /// Feed a lens directly by a source at the origin and, through a reference, by a second source
-    /// 5 mm aside, both 100 mm in front of it, and position the model.
+    /// Feed a lens directly by `first` and, through a reference, by `second`, both 100 mm in front
+    /// of it, and position the model.
     ///
     /// # Arguments
     ///
-    /// * `reference_strand_first` - whether the second source and the reference are added to the
-    ///   model before the first source.
+    /// * `first` - the source feeding the lens directly.
+    /// * `second` - the source feeding the reference.
+    /// * `reference_inverted` - whether the reference passes the lens backwards.
+    /// * `reference_strand_first` - whether `second` and the reference are added to the model
+    ///   before `first`.
     ///
     /// # Returns
     ///
-    /// Where the lens was placed.
+    /// The positioned model, the uuid of the lens and the uuid of `second`.
     ///
     /// # Errors
     ///
-    /// Returns an error if positioning fails or does not place the lens.
-    fn lens_fed_twice(reference_strand_first: bool) -> OpmResult<Isometry> {
+    /// Returns an error if the model cannot be built or positioning fails.
+    fn lens_fed_twice(
+        first: SourcePort,
+        second: SourcePort,
+        reference_inverted: bool,
+        reference_strand_first: bool,
+    ) -> OpmResult<(NodeGroup, Uuid, Uuid)> {
         let mut scenery = NodeGroup::default();
         let lens = scenery.add_node(Dummy::new("lens"))?;
-        let mut config = RayTraceConfig::default();
-        let strands = if reference_strand_first {
-            [true, false]
+        let mut reference = NodeReference::from_node(&scenery.node(lens)?)?;
+        reference.set_inverted(reference_inverted)?;
+        let entrance = reference.ports().names(&PortType::Input)[0].clone();
+        let (first, second, reference) = if reference_strand_first {
+            let second = scenery.add_node(second)?;
+            let reference = scenery.add_node(reference)?;
+            (scenery.add_node(first)?, second, reference)
         } else {
-            [false, true]
+            let first = scenery.add_node(first)?;
+            let second = scenery.add_node(second)?;
+            (first, second, scenery.add_node(reference)?)
         };
-        for through_reference in strands {
-            let (source, target) = if through_reference {
-                let mut aside = SourcePort::new("aside");
-                aside.set_positioning(NodePositioning::Absolute(Isometry::new(
-                    millimeter!(5.0, 0.0, 0.0),
-                    degree!(0.0, 0.0, 0.0),
-                )?))?;
-                let reference = NodeReference::from_node(&scenery.node(lens)?)?;
-                (scenery.add_node(aside)?, scenery.add_node(reference)?)
-            } else {
-                (scenery.add_node(SourcePort::default())?, lens)
-            };
-            scenery.connect_nodes(source, "output_1", target, "input_1", millimeter!(100.0))?;
+        scenery.connect_nodes(first, "output_1", lens, "input_1", millimeter!(100.0))?;
+        scenery.connect_nodes(second, "output_1", reference, &entrance, millimeter!(100.0))?;
+        let mut config = RayTraceConfig::default();
+        for source in [first, second] {
             config.map_source(
                 source,
                 round_collimated_ray_builder(millimeter!(1.0), joule!(1.0), 1)?,
@@ -754,23 +842,148 @@ mod test {
             LightResult::default(),
             &config.for_positioning(),
         )?;
+        Ok((scenery, lens, second))
+    }
+    /// Where the node `id` of `scenery` was placed.
+    fn placement(scenery: &NodeGroup, id: Uuid) -> OpmResult<Isometry> {
         scenery
-            .node(lens)?
+            .node(id)?
             .effective_position()
             .copied()
-            .ok_or_else(|| OpossumError::Other("the lens was not placed".into()))
+            .ok_or_else(|| OpossumError::Other(format!("node {id} was not placed")))
+    }
+    /// A source whose position is left to the positioning run.
+    fn automatic_source(name: &str) -> OpmResult<SourcePort> {
+        let mut source = SourcePort::new(name);
+        source.set_positioning(NodePositioning::Automatic(None))?;
+        Ok(source)
     }
     /// A component reached directly and through a reference is placed by its own input, whatever
     /// order the nodes were added in: a second source standing aside does not move it.
     #[test]
     fn a_component_is_placed_by_its_own_input_not_through_a_reference() -> OpmResult<()> {
         for reference_strand_first in [false, true] {
-            let at = lens_fed_twice(reference_strand_first)?.translation();
+            let mut aside = SourcePort::new("aside");
+            aside.set_positioning(NodePositioning::Absolute(Isometry::new(
+                millimeter!(5.0, 0.0, 0.0),
+                degree!(0.0, 0.0, 0.0),
+            )?))?;
+            let (scenery, lens, _) =
+                lens_fed_twice(SourcePort::default(), aside, false, reference_strand_first)?;
+            let at = placement(&scenery, lens)?.translation();
             assert!(
                 at.x.value.abs() < 1e-12 && (at.z.value - 0.1).abs() < 1e-12,
                 "reference strand added first: {reference_strand_first}, lens at {at:?}"
             );
         }
+        Ok(())
+    }
+    /// An automatic source feeding a reference stands 100 mm in front of the lens it refers to,
+    /// along the lens's axis, whatever order the nodes were added in. Its alignment moves it from
+    /// there.
+    #[test]
+    fn an_automatic_source_stands_in_front_of_the_component_it_feeds() -> OpmResult<()> {
+        let decenter = millimeter!(0.0, 2.0, 0.0);
+        for reference_strand_first in [false, true] {
+            let mut tilted = SourcePort::new("tilted");
+            tilted.set_positioning(NodePositioning::Absolute(Isometry::new(
+                millimeter!(0.0, 0.0, 0.0),
+                degree!(0.0, 30.0, 0.0),
+            )?))?;
+            let automatic = automatic_source("automatic")?.with_decenter(decenter)?;
+            let (scenery, lens, automatic) =
+                lens_fed_twice(tilted, automatic, false, reference_strand_first)?;
+            let in_front =
+                placement(&scenery, lens)?.append(&Isometry::new_along_z(millimeter!(-100.0))?);
+            let aligned = in_front.append(&Isometry::new(decenter, degree!(0.0, 0.0, 0.0))?);
+            let source = scenery.node(automatic)?;
+            assert_same_placements(
+                &[in_front, aligned],
+                &[
+                    placement(&scenery, automatic)?,
+                    source.effective_surface_iso("output_1")?,
+                ],
+            );
+        }
+        Ok(())
+    }
+    /// An automatic source feeding the second input of an absolutely placed beam splitter stands
+    /// 50 mm in front of it on the side that input faces, aimed at the splitter's center.
+    #[test]
+    fn an_automatic_source_faces_the_second_input_of_a_splitter() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let center = Isometry::new_along_z(millimeter!(100.0))?;
+        let mut splitter = BeamSplitter::default().with_tilt(degree!(45.0, 0.0, 0.0))?;
+        splitter.set_positioning(NodePositioning::Absolute(center))?;
+        let splitter = scenery.add_node(splitter)?;
+        let source = scenery.add_node(automatic_source("second")?)?;
+        scenery.connect_nodes(source, "output_1", splitter, "input_2", millimeter!(50.0))?;
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(1.0), joule!(1.0), 1)?,
+        );
+        AnalysisRayTrace::calc_node_positions(
+            &mut scenery,
+            LightResult::default(),
+            &config.for_positioning(),
+        )?;
+        let placed = placement(&scenery, source)?;
+        let (from, to) = (placed.translation(), center.translation());
+        let offset = Vector3::new(
+            (to.x - from.x).value,
+            (to.y - from.y).value,
+            (to.z - from.z).value,
+        );
+        let direction = placed.transform_vector_f64(&Vector3::z());
+        assert_relative_eq!(offset.norm(), 0.05, epsilon = 1e-12);
+        assert_relative_eq!(offset.normalize(), direction, epsilon = 1e-12);
+        assert_relative_eq!(direction.z, 0.0, epsilon = 1e-12);
+        Ok(())
+    }
+    /// An automatic source is not placed in front of a component the light would pass against the
+    /// way it is placed - a reference turned other than the lens it refers to - nor in front of a
+    /// group, which has no surface of its own to tell where the light enters it. It says why.
+    #[test]
+    fn an_automatic_source_is_not_placed_where_its_light_cannot_enter() -> OpmResult<()> {
+        testing_logger::setup();
+        let (scenery, _, automatic) = lens_fed_twice(
+            SourcePort::default(),
+            automatic_source("backwards")?,
+            true,
+            false,
+        )?;
+        assert!(scenery.node(automatic)?.effective_position().is_none());
+
+        let mut group = NodeGroup::new("group");
+        let inner = group.add_node(Dummy::default())?;
+        group.map_input_port(inner, "input_1", "input_1")?;
+        group.set_positioning(NodePositioning::Absolute(Isometry::new_along_z(
+            millimeter!(100.0),
+        )?))?;
+        let mut scenery = NodeGroup::default();
+        let group = scenery.add_node(group)?;
+        let source = scenery.add_node(automatic_source("into group")?)?;
+        scenery.connect_nodes(source, "output_1", group, "input_1", millimeter!(50.0))?;
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(1.0), joule!(1.0), 1)?,
+        );
+        AnalysisRayTrace::calc_node_positions(
+            &mut scenery,
+            LightResult::default(),
+            &config.for_positioning(),
+        )?;
+        assert!(scenery.node(source)?.effective_position().is_none());
+        testing_logger::validate(|logs| {
+            let warned = |about: &str| {
+                logs.iter()
+                    .any(|log| log.level == log::Level::Warn && log.body.contains(about))
+            };
+            assert!(warned("against the way it is placed"), "inverted reference");
+            assert!(warned("no surface at port"), "group");
+        });
         Ok(())
     }
 }

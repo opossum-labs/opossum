@@ -552,7 +552,7 @@ impl OpticGraph {
     /// [`AnalysisRayTrace::axis_entrance_frame`]). It is the identity for ordinary single-input
     /// nodes. For a reference proxy the referenced target answers, since the proxy has no geometry
     /// of its own. Returns the identity if the node cannot be found.
-    fn axis_entrance_frame_of(&mut self, node_id: Uuid, port_name: &str) -> Isometry {
+    pub(super) fn axis_entrance_frame_of(&mut self, node_id: Uuid, port_name: &str) -> Isometry {
         let Some(idx) = self.node_idx_by_uuid(node_id) else {
             return Isometry::identity();
         };
