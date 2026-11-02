@@ -8,7 +8,7 @@ use crate::{
     core_optics::OpticNode,
     error::{OpmResult, OpossumError},
     light::{Rays, light_result::LightResult},
-    nodes::NodeGroup,
+    nodes::{ConnectionInfo, NodeGroup},
     reporting::analysis_report::AnalysisReport,
 };
 use log::info;
@@ -165,6 +165,38 @@ impl OpmDocument {
             .collect())
     }
 
+    /// Returns the connections of a group of this model whose distance places a node when the
+    /// model is placed.
+    ///
+    /// A distance places a node when the node it leads to is placed along it, or when the node it
+    /// comes from stands in front of where it leads. A distance into a node placed absolutely, or
+    /// into a reference taking the placement of the node it refers to, places nothing. The model
+    /// is placed on a copy, as for [`placed_scenery`](OpmDocument::placed_scenery).
+    ///
+    /// # Arguments
+    ///
+    /// - `analyzer_id`: the analyzer to take the sources from, or `None` to follow the one chosen
+    ///   as for [`placed_scenery`](OpmDocument::placed_scenery)
+    /// - `group_id`: the group whose connections to look at; the scenery itself is a group too
+    ///
+    /// # Returns
+    ///
+    /// The connections of that group, not of the groups nested in it, whose distance places a
+    /// node.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error in the same cases as
+    /// [`placed_scenery`](OpmDocument::placed_scenery), or if the model has no group `group_id`.
+    pub fn placing_connections(
+        &self,
+        analyzer_id: Option<Uuid>,
+        group_id: Uuid,
+    ) -> OpmResult<Vec<ConnectionInfo>> {
+        self.placed_copy(&self.placing_config(analyzer_id)?)?
+            .with_group_node(group_id, |group| group.graph().placing_connections())
+    }
+
     /// Returns a copy of this model's scenery, placed by a positioning run.
     ///
     /// An edit writes a position or a property into a node without the node rebuilding its
@@ -315,7 +347,10 @@ mod tests {
     use super::*;
     use crate::{
         analyzers::{AnalyzerType, energy::EnergyConfig},
-        core_optics::node_attr::NodePositioning,
+        core_optics::{
+            OpticNode,
+            node_attr::{HasNodeAttr, NodePositioning},
+        },
         degree,
         gain::{ConstGain, GainModel},
         joule,
@@ -327,7 +362,7 @@ mod tests {
             },
         },
         millimeter, nanometer,
-        nodes::{EnergyMeter, Lens, NodeGroup, SourcePort},
+        nodes::{EnergyMeter, Lens, NodeGroup, NodeReference, SourcePort},
         utils::{geom_transformation::Isometry, test_helper::helper::metered_energy},
     };
     use approx::assert_relative_eq;
@@ -571,6 +606,41 @@ mod tests {
             .map(Ray::position_history_with_current)
             .ok_or_else(|| OpossumError::Other("no axis ray".into()))?;
         assert_relative_eq!(path[(0, 1)].value, 0.010, epsilon = 1e-12);
+        Ok(())
+    }
+
+    /// A model asked for the connections of one of its groups whose distance places a node, when
+    /// the model is placed: here the one into the lens and the one into a reference to it, which
+    /// an automatic source stands in front of. A group it does not have is an error.
+    #[test]
+    fn a_model_tells_which_distances_of_a_group_place_a_node() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let first = scenery.add_node(SourcePort::default())?;
+        let lens = scenery.add_node(Lens::default())?;
+        let reference = scenery.add_node(NodeReference::from_node(&scenery.node(lens)?)?)?;
+        let mut second = SourcePort::default();
+        second.set_positioning(NodePositioning::Automatic(None))?;
+        let second = scenery.add_node(second)?;
+        scenery.connect_nodes(first, "output_1", lens, "input_1", millimeter!(100.0))?;
+        scenery.connect_nodes(second, "output_1", reference, "input_1", millimeter!(50.0))?;
+        let root = scenery.node_attr().uuid();
+        let mut document = OpmDocument::new(scenery);
+        let mut config = RayTraceConfig::default();
+        for source in [first, second] {
+            config.map_source(source, RayDataBuilder::default());
+        }
+        document.add_analyzer(AnalyzerType::RayTrace(config));
+
+        let mut placing: Vec<(Uuid, Uuid)> = document
+            .placing_connections(None, root)?
+            .into_iter()
+            .map(|connection| (connection.src_id, connection.target_id))
+            .collect();
+        placing.sort();
+        let mut expected = vec![(first, lens), (second, reference)];
+        expected.sort();
+        assert_eq!(placing, expected);
+        assert!(document.placing_connections(None, Uuid::new_v4()).is_err());
         Ok(())
     }
 }

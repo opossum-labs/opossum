@@ -123,6 +123,9 @@ impl OpticGraph {
     ) -> OpmResult<LightResult> {
         let mut order = PlacingOrder::new(self)?;
         let mut light_result = LightResult::default();
+        for flow in self.g.edge_weights_mut() {
+            flow.set_placed_by_distance(false);
+        }
 
         while let Some((idx, last_offer)) = order.next() {
             if self.is_unreached_and_unplaced(idx)? {
@@ -278,6 +281,7 @@ impl OpticGraph {
                 .append(&Isometry::new_along_z(-connection.distance)?)
                 .append(&Isometry::new_from_transform(exit.get_inv_transform()));
             self.g[idx].set_positioning(NodePositioning::Automatic(Some(in_front)))?;
+            self.mark_placed_by_distance(successor, &connection.target_port);
             return Ok(InFront::Placed);
         }
         Ok(if refused {
@@ -285,6 +289,20 @@ impl OpticGraph {
         } else {
             InFront::NothingPlaced
         })
+    }
+
+    /// Marks the connection into port `port` of the node at `idx` as one whose distance placed a
+    /// node in this positioning run (see
+    /// [`LightFlow::placed_by_distance`](crate::light::LightFlow::placed_by_distance)).
+    pub(super) fn mark_placed_by_distance(&mut self, idx: NodeIndex, port: &str) {
+        let edge = self
+            .g
+            .edges_directed(idx, Direction::Incoming)
+            .find(|edge| edge.weight().target_port() == port)
+            .map(|edge| edge.id());
+        if let Some(flow) = edge.and_then(|edge| self.g.edge_weight_mut(edge)) {
+            flow.set_placed_by_distance(true);
+        }
     }
 }
 
@@ -1168,6 +1186,86 @@ mod test {
             assert!(warned("against the way it is placed"), "inverted reference");
             assert!(warned("no surface at port"), "group");
         });
+        Ok(())
+    }
+    /// The source and target of every connection of `scenery` whose distance placed a node.
+    fn placed_by_distance(scenery: &NodeGroup) -> Vec<(Uuid, Uuid)> {
+        scenery
+            .graph()
+            .placing_connections()
+            .into_iter()
+            .map(|connection| (connection.src_id, connection.target_id))
+            .collect()
+    }
+    /// A connection's distance places a node when the node is placed along it, or when the node
+    /// it comes from stands in front of where it leads. A reference taking the placement of its
+    /// lens, or a source placed absolutely, is placed by no distance.
+    #[test]
+    fn the_connections_whose_distance_places_a_node_are_known() -> OpmResult<()> {
+        let (scenery, lens, automatic) = lens_fed_twice(
+            SourcePort::default(),
+            automatic_source("automatic")?,
+            false,
+            false,
+        )?;
+        let placing = placed_by_distance(&scenery);
+        assert!(placing.iter().any(|(_, to)| *to == lens), "{placing:?}");
+        assert!(
+            placing.iter().any(|(from, _)| *from == automatic),
+            "{placing:?}"
+        );
+
+        let mut aside = SourcePort::new("aside");
+        aside.set_positioning(NodePositioning::Absolute(Isometry::new(
+            millimeter!(5.0, 0.0, 0.0),
+            degree!(0.0, 0.0, 0.0),
+        )?))?;
+        let (scenery, lens, aside) = lens_fed_twice(SourcePort::default(), aside, false, false)?;
+        let placing = placed_by_distance(&scenery);
+        assert!(placing.iter().any(|(_, to)| *to == lens), "{placing:?}");
+        assert!(
+            !placing.iter().any(|(from, _)| *from == aside),
+            "{placing:?}"
+        );
+        Ok(())
+    }
+    /// A reference the light reaches before the lens it refers to places that lens by the distance
+    /// into it. The lens, reached again behind a mirror, is placed already: the distance into it
+    /// places nothing.
+    #[test]
+    fn the_distance_into_a_forward_reference_places_its_lens() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let mut lens = Dummy::new("lens");
+        let ahead = NodeReference::from_node(&OpticRef::new(Box::new(lens.clone())))?;
+        lens.set_inverted(true)?;
+        let lens = scenery.add_node(lens)?;
+        let ahead = scenery.add_node(ahead)?;
+        let mirror =
+            scenery.add_node(ThinMirror::new("mirror").with_tilt(degree!(1.0, 0.0, 0.0))?)?;
+        scenery.connect_nodes(source, "output_1", ahead, "input_1", millimeter!(100.0))?;
+        scenery.connect_nodes(ahead, "output_1", mirror, "input_1", millimeter!(100.0))?;
+        scenery.connect_nodes(mirror, "output_1", lens, "output_1", millimeter!(100.0))?;
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(1.0), joule!(1.0), 1)?,
+        );
+        AnalysisRayTrace::calc_node_positions(
+            &mut scenery,
+            LightResult::default(),
+            &config.for_positioning(),
+        )?;
+        let placing = placed_by_distance(&scenery);
+        assert!(placing.contains(&(source, ahead)), "{placing:?}");
+        assert!(!placing.contains(&(mirror, lens)), "{placing:?}");
+        // A second run, as a ray trace makes, finds every node placed: no distance places one.
+        AnalysisRayTrace::calc_node_positions(
+            &mut scenery,
+            LightResult::default(),
+            &config.for_positioning(),
+        )?;
+        assert!(placed_by_distance(&scenery).is_empty());
         Ok(())
     }
 }

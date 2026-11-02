@@ -28,6 +28,9 @@ pub struct LightFlow {
     #[serde(skip)]
     /// the (straight) Euclidian distance between the anchor points of source and target node
     distance: Length,
+    #[serde(skip)]
+    /// whether the last positioning run placed a node by this distance
+    placed_by_distance: bool,
 }
 impl LightFlow {
     /// Create a new [`LightFlow`] instance.
@@ -44,6 +47,7 @@ impl LightFlow {
             target_port: target_port.into(),
             data: None,
             distance,
+            placed_by_distance: false,
         })
     }
     /// Returns a reference to the src port of this [`LightFlow`].
@@ -91,6 +95,18 @@ impl LightFlow {
         }
         self.distance = distance;
         Ok(())
+    }
+    /// Returns whether the last positioning run placed a node by the distance of this
+    /// [`LightFlow`]: the node it leads to, placed along it, or the node it comes from, standing in
+    /// front of where it leads.
+    #[must_use]
+    pub const fn placed_by_distance(&self) -> bool {
+        self.placed_by_distance
+    }
+    /// Sets whether a positioning run placed a node by the distance of this [`LightFlow`] (see
+    /// [`LightFlow::placed_by_distance`]).
+    pub const fn set_placed_by_distance(&mut self, placed: bool) {
+        self.placed_by_distance = placed;
     }
 }
 

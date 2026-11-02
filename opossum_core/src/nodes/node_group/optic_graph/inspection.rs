@@ -230,6 +230,22 @@ impl OpticGraph {
         connections
     }
 
+    /// Returns the connections of this [`OpticGraph`] whose distance placed a node in the last
+    /// positioning run (see [`LightFlow::placed_by_distance`](crate::light::LightFlow::placed_by_distance)).
+    ///
+    /// A distance into a node placed absolutely, or into a reference taking the placement of the
+    /// node it refers to, places nothing: such a connection is not listed.
+    #[must_use]
+    pub fn placing_connections(&self) -> Vec<ConnectionInfo> {
+        // Both iterate the edges in the order of their index.
+        self.connections()
+            .into_iter()
+            .zip(self.g.edge_weights())
+            .filter(|(_, flow)| flow.placed_by_distance())
+            .map(|(connection, _)| connection)
+            .collect()
+    }
+
     /// Returns all outgoing connections from the node with the given [`Uuid`].
     ///
     /// Each outgoing connection is represented as a [`ConnectionInfo`], including

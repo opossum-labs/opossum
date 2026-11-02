@@ -438,7 +438,8 @@ impl OpticGraph {
     /// The node is placed from the first connected input port (in the ports' deterministic declared
     /// order) that carries axis data, turned about the axis by the up direction the axis ray carries.
     /// Every further connected port is only checked against that placement: an inconsistent one is
-    /// reported as a warning (with a suggested fix), not an error, and the placement is kept.
+    /// reported as a warning (with a suggested fix), not an error, and the placement is kept. The
+    /// connection into every port read is marked as one whose distance placed the node.
     ///
     /// # Errors
     ///
@@ -471,6 +472,7 @@ impl OpticGraph {
                 continue;
             };
             let distance_from_predecessor = self.distance_from_predecessor(node_id, &port_name)?;
+            self.mark_placed_by_distance(idx, &port_name);
             let node = &mut self.g[idx];
 
             if let Some(group) = node.as_any_mut().downcast_mut::<NodeGroup>() {
