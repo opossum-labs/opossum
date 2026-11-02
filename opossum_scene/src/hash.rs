@@ -50,76 +50,62 @@ impl Fnv1a {
     /// Written out variant by variant on purpose: were `optoscene` to grow another material, this
     /// stops compiling rather than quietly giving two different materials the same hash.
     pub fn write_material(&mut self, material: &Material) {
-        // Iridescent carries five numbers, more than the uniform (color, [f32; 2]) shape the
-        // other variants share below, so it is folded in on its own path.
-        if let Material::Iridescent {
-            color,
-            roughness,
-            iridescence,
-            iridescence_ior,
-            iridescence_thickness_min,
-            iridescence_thickness_max,
-        } = material
-        {
-            self.write(&[5]);
-            for value in color.iter().copied().chain([
-                *roughness,
-                *iridescence,
-                *iridescence_ior,
-                *iridescence_thickness_min,
-                *iridescence_thickness_max,
-            ]) {
-                self.write(&value.to_le_bytes());
-            }
-            return;
-        }
-        // Textured carries image bytes plus five numbers, so it too is folded in on its own path.
-        if let Material::Textured {
-            image_png,
-            tint,
-            metallic,
-            roughness,
-            uv_scale,
-        } = material
-        {
-            self.write(&[6]);
-            self.write(image_png);
-            for value in tint
-                .iter()
-                .copied()
-                .chain([*metallic, *roughness, *uv_scale])
-            {
-                self.write(&value.to_le_bytes());
-            }
-            return;
-        }
-        let (tag, color, numbers): (u8, &[f32], [f32; 4]) = match material {
+        // The zeros pad some materials as they always did, which keeps the hashes viewers hold.
+        match material {
             Material::Glass {
                 color,
                 ior,
                 thickness,
                 metallic,
                 opacity,
-            } => (0, color, [*ior, *thickness, *metallic, *opacity]),
+            } => self.write_tagged(0, &[], color, &[*ior, *thickness, *metallic, *opacity]),
             Material::Mirror {
                 color,
                 roughness,
                 metallic,
                 opacity,
-            } => (1, color, [*roughness, *metallic, *opacity, 0.0]),
+            } => self.write_tagged(1, &[], color, &[*roughness, *metallic, *opacity, 0.0]),
             Material::Opaque {
                 color,
                 metallic,
                 roughness,
-            } => (2, color, [*metallic, *roughness, 0.0, 0.0]),
-            Material::Unlit { color } => (3, color, [0.0; 4]),
-            Material::Translucent { color } => (4, color, [0.0; 4]),
-            // Handled above by the early returns; these arms keep the match exhaustive, so a future
-            // material variant still fails to compile here rather than colliding hashes.
-            Material::Iridescent { .. } | Material::Textured { .. } => return,
-        };
+            } => self.write_tagged(2, &[], color, &[*metallic, *roughness, 0.0, 0.0]),
+            Material::Unlit { color } => self.write_tagged(3, &[], color, &[0.0; 4]),
+            Material::Translucent { color } => self.write_tagged(4, &[], color, &[0.0; 4]),
+            Material::Iridescent {
+                color,
+                roughness,
+                iridescence,
+                iridescence_ior,
+                iridescence_thickness_min,
+                iridescence_thickness_max,
+            } => self.write_tagged(
+                5,
+                &[],
+                color,
+                &[
+                    *roughness,
+                    *iridescence,
+                    *iridescence_ior,
+                    *iridescence_thickness_min,
+                    *iridescence_thickness_max,
+                ],
+            ),
+            Material::Textured {
+                image_png,
+                tint,
+                metallic,
+                roughness,
+                uv_scale,
+            } => self.write_tagged(6, image_png, tint, &[*metallic, *roughness, *uv_scale]),
+        }
+    }
+
+    /// Fold one material into the hash: its tag, the bytes it carries, its color and its numbers.
+    fn write_tagged(&mut self, tag: u8, bytes: &[u8], color: &[f32], numbers: &[f32]) {
         self.write(&[tag]);
-        for value in color.iter().chain(numbers.iter()) {
+        self.write(bytes);
+        for value in color.iter().chain(numbers) {
             self.write(&value.to_le_bytes());
         }
     }
@@ -127,5 +113,88 @@ impl Fnv1a {
     /// The hash so far, as hexadecimal.
     pub fn finish(&self) -> String {
         format!("{:016x}", self.0)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    /// Every kind of material keeps the hash it always had: viewers compare it, and fetch a
+    /// component again whenever it changes.
+    #[test]
+    fn every_material_keeps_its_hash() {
+        let materials = [
+            (
+                Material::Glass {
+                    color: [0.1, 0.2, 0.3],
+                    ior: 1.5,
+                    thickness: 0.004,
+                    metallic: 0.04,
+                    opacity: 0.7,
+                },
+                "2fc12a3a86509701",
+            ),
+            (
+                Material::Mirror {
+                    color: [0.0, 0.5, 0.5],
+                    roughness: 0.05,
+                    metallic: 1.0,
+                    opacity: 0.6,
+                },
+                "68252b0aa1f10ee6",
+            ),
+            (
+                Material::Opaque {
+                    color: [0.25, 0.25, 0.28, 1.0],
+                    metallic: 0.0,
+                    roughness: 0.7,
+                },
+                "b15db7f24f341aac",
+            ),
+            (
+                Material::Unlit {
+                    color: [0.7, 0.07, 1.0, 1.0],
+                },
+                "b848cc81603aa91f",
+            ),
+            (
+                Material::Translucent {
+                    color: [0.85, 0.9, 0.85, 0.4],
+                },
+                "4983b7e15fbc85b7",
+            ),
+            (
+                Material::Iridescent {
+                    color: [0.85, 0.85, 0.9],
+                    roughness: 0.15,
+                    iridescence: 1.0,
+                    iridescence_ior: 1.3,
+                    iridescence_thickness_min: 100.0,
+                    iridescence_thickness_max: 400.0,
+                },
+                "2bab1bcff687f3c8",
+            ),
+            (
+                Material::Textured {
+                    image_png: vec![1, 2, 3],
+                    tint: [1.0, 0.9, 0.8, 1.0],
+                    metallic: 0.1,
+                    roughness: 0.9,
+                    uv_scale: 2.0,
+                },
+                "c136882f8828cc8d",
+            ),
+        ];
+        let digests: Vec<String> = materials
+            .iter()
+            .map(|(material, _)| {
+                let mut hash = Fnv1a::new();
+                hash.write_material(material);
+                hash.finish()
+            })
+            .collect();
+        let expected: Vec<&str> = materials.iter().map(|(_, digest)| *digest).collect();
+        assert_eq!(digests, expected);
     }
 }
