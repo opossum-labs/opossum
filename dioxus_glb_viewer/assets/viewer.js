@@ -698,6 +698,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
                 }),
             );
             fat.name = line.name;
+            fat.renderOrder = line.renderOrder;
             fat.position.copy(line.position);
             fat.quaternion.copy(line.quaternion);
             fat.scale.copy(line.scale);
@@ -727,10 +728,16 @@ export async function createViewer(canvasId, options, send, threeBase) {
      * The flag is stored on the material and read back by `setOpacity`, which owns the actual
      * transparency, depth and blending state - this only records the intent. Call it before
      * `setOpacity`.
+     *
+     * An overlay's lines are drawn in the order the file lists them. Without depth the line drawn
+     * last covers the others, and three.js would otherwise order them by their distance to the
+     * camera, so the color of a crossing would jump as the view turns.
      */
     function setOverlay(root, overlay) {
+        let order = 0;
         root.traverse((o) => {
             if (!o.material) return;
+            o.renderOrder = overlay ? ++order : 0;
             for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
                 m.userData.overlay = overlay;
             }
@@ -747,10 +754,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
      * each other in draw order instead of adding up. An overlay material (see `setOverlay`) is kept
      * transparent at any opacity - so it stays out of the glass-transmission buffer and is never
      * refracted - and has depth testing off too, so it draws over a lens rather than being clipped
-     * by the glass surface bulging in front of it. An overlay also adds its color to what lies
-     * behind it, as light does: without depth, overlapping lines in normal blending would show the
-     * one drawn last, and three.js draws them in the order of their distance to the camera, so the
-     * color of an overlap would jump as the view turns. A sum has no order.
+     * by the glass surface bulging in front of it. How an overlay blends is `setBlending`'s.
      */
     function setOpacity(root, factor) {
         root.traverse((o) => {
@@ -769,7 +773,27 @@ export async function createViewer(canvasId, options, send, threeBase) {
                 m.opacity     = own.opacity * factor;
                 m.depthWrite  = (factor < 1 || overlay) ? false : own.depthWrite;
                 m.depthTest   = overlay ? false : own.depthTest;
-                m.blending    = overlay ? THREE.AdditiveBlending : own.blending;
+            }
+        });
+        setBlending(root);
+    }
+
+    /**
+     * Blends every overlay material under `root` as the `overlay_blending` option says.
+     *
+     * Additive, an overlay adds its color to what lies behind it, as light does, and a crossing
+     * mixes the same whatever order its lines are drawn in. Ordered, it keeps the blending the file
+     * gave it, and `setOverlay`'s drawing order decides which line shows. Other materials always
+     * keep their own. Reads what `setOpacity` remembered, so call it after that.
+     */
+    function setBlending(root) {
+        const additive = currentOptions.overlay_blending === 'additive';
+        root.traverse((o) => {
+            if (!o.material) return;
+            for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+                const own = m.userData.ownOpacity;
+                if (!own) continue;
+                m.blending = (m.userData.overlay && additive) ? THREE.AdditiveBlending : own.blending;
             }
         });
     }
@@ -1012,9 +1036,10 @@ export async function createViewer(canvasId, options, send, threeBase) {
             if (entry.helper) {
                 entry.helper.material.color.set(opts.selection_color);
             }
-            // Line width applies to models already on screen too.
+            // Line width and overlay blending apply to models already on screen too.
             thickenLines(entry.root).catch((e) => send({ event: 'error',
                 message: `lines could not be widened: ${(e && e.message) || e}` }));
+            setBlending(entry.root);
         }
     }
 

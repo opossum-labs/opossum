@@ -26,7 +26,7 @@ One model in the scene.
 | `visible` | `bool` | Hidden objects stay in the scene graph. |
 | `selected` | `bool` | Draws a wireframe box around the object, turned with it rather than fitted to the world axes. |
 | `opacity` | `f32` | `0.0`–`1.0`, scaling the opacity the file gave each material; `1.0` draws the model as it is. |
-| `overlay` | `bool` | Marks an annotation (e.g. a line): its materials render in the transparent pass with depth testing off, so a transmissive lens never refracts them into ghost copies, and are blended additively, so overlapping lines mix their colors the same from every side instead of showing whichever was drawn last. |
+| `overlay` | `bool` | Marks an annotation (e.g. a line): its materials render in the transparent pass with depth testing off, so a transmissive lens never refracts them into ghost copies. Where its lines cross, they mix as `ViewerOptions::overlay_blending` says, the same from every side. |
 
 The `id` is what [`PickEvent`](./picking.md) reports back, and it is how the diff
 recognises an object across renders: a stable `id` whose `transform` changed produces a
@@ -99,6 +99,7 @@ Scene-wide settings. The prop is optional; leaving it out uses these defaults.
 | `orientation_gizmo` | Show a corner orientation gizmo (three.js `ViewHelper`) in the bottom-right corner. Coloured axes reflect the current camera orientation; clicking an axis snaps the camera to that view. | `false` |
 | `ground` | A floor reaching to the horizon: an image tiled at a given height (`Ground { height, tile_url, tile_size }`). Never framed by `fit_view`, never hit by a click. See [the ground](./renderer.md#the-ground). | `None` |
 | `line_width` | Width of line primitives (glTF `LINES`) in screen pixels. WebGL draws lines one pixel wide whatever is asked for, so above `1.0` lines are redrawn as three.js fat lines (`LineSegments2`), which keep their pixel width at any zoom, cast no shadow and are never hit by a click. | `1.0` |
+| `overlay_blending` | How the lines of overlays mix where they cross. `Ordered`: each covers those its file lists before it, so a crossing shows the same line in its own color. `Additive`: the colors add up like light, so crossings mix and brighten, but lines also add onto what lies behind them and look lighter. | `Ordered` |
 
 Colour values are handed to `new THREE.Color(...)`, so they must be something three.js
 can parse: `"#1e1e1e"`, `"rgb(30,30,30)"`, or a CSS colour name. A *transparent*
@@ -116,6 +117,7 @@ the camera**. They do not all apply at the same moment, though:
 | `environment` | Immediately, but asynchronously: the map is imported and rendered on first use. |
 | `orientation_gizmo` | Immediately, but asynchronously: the gizmo is imported on first use. |
 | `line_width` | Immediately, for the models on screen and every one loaded later. Widening past one pixel imports the fat-line add-on on first use, so that step is asynchronous. |
+| `overlay_blending` | Immediately, for the overlays on screen and every one loaded later. Nothing is loaded again. |
 | `ground` | Immediately. A new `height` moves the floor; a new `tile_url` or `tile_size` fetches the image again, which then appears once it has loaded. |
 | `initial_camera`, `initial_target` | On the next `reset_camera()` call. |
 | `fit_on_first_load` | Checked on every successful load, until an auto-fit has actually happened once. |

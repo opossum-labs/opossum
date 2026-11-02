@@ -132,7 +132,7 @@ pub fn apply_node_selection(objects: &mut [GlbObject], selected: &HashSet<Uuid>)
 /// components in, so the object keeps the identity transform.
 ///
 /// Drawn as an overlay: its lines render in the transparent pass so a lens's glass never refracts
-/// them into ghost copies, and add their colors up like light where they overlap (see
+/// them into ghost copies, and mix where they cross as the viewer options say (see
 /// [`GlbObject::overlay`]).
 ///
 /// # Arguments
@@ -587,17 +587,22 @@ mod tests {
         assert!(crate::api::scene_axis_url(base, 1, None).starts_with(base));
     }
 
-    /// A new number of rays has to be a new URL, or the viewer would keep showing the old rays.
+    /// A new number of rays, or a new way of drawing their spectrum, has to be a new URL, or the
+    /// viewer would keep showing the old rays.
     #[test]
     fn a_new_ray_count_gives_the_rays_a_new_url() {
         let base = "http://localhost:8001";
         assert_ne!(
-            crate::api::scene_rays_url(base, 1, 500, None),
-            crate::api::scene_rays_url(base, 1, 50, None)
+            crate::api::scene_rays_url(base, 1, 500, false, None),
+            crate::api::scene_rays_url(base, 1, 50, false, None)
         );
         assert_ne!(
-            crate::api::scene_rays_url(base, 1, 500, None),
-            crate::api::scene_rays_url(base, 2, 500, None)
+            crate::api::scene_rays_url(base, 1, 500, false, None),
+            crate::api::scene_rays_url(base, 2, 500, false, None)
+        );
+        assert_ne!(
+            crate::api::scene_rays_url(base, 1, 500, false, None),
+            crate::api::scene_rays_url(base, 1, 500, true, None)
         );
     }
 
@@ -609,7 +614,7 @@ mod tests {
         let analyzer = Uuid::new_v4();
         let named = format!("analyzer={analyzer}");
         assert!(crate::api::scene_axis_url(base, 1, Some(analyzer)).contains(&named));
-        assert!(crate::api::scene_rays_url(base, 1, 500, Some(analyzer)).contains(&named));
+        assert!(crate::api::scene_rays_url(base, 1, 500, false, Some(analyzer)).contains(&named));
         assert!(!crate::api::scene_axis_url(base, 1, None).contains("analyzer"));
     }
 }

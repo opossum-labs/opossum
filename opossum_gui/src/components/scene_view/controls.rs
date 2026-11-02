@@ -32,6 +32,14 @@ pub struct SceneViewControls {
     /// The most rays drawn, of all sources together; the backend caps it. A new number is a new
     /// trace, which is why the control that sets it commits on Enter rather than per keystroke.
     pub max_rays: usize,
+    /// Whether each start point of a source shines every wavelength of its spectrum, as in the
+    /// analysis, rather than one. Off by default: in full, a spectrum of many samples leaves room
+    /// for few start points. A change is a new trace, like a new ray count.
+    pub full_spectrum: bool,
+    /// Whether rays add their colors up where they cross, as light does, rather than the one
+    /// drawn last covering the others. Off by default: added up, the rays also add onto what lies
+    /// behind them and look lighter than their own color. Mirrors `ViewerOptions::overlay_blending`.
+    pub additive_rays: bool,
     /// How opaque the drawn rays are. Faint by default, because a dense bundle reads as a solid block
     /// at full opacity; `0.0` draws no rays at all. The optical axis is not affected - it is always
     /// drawn solid, being the one line every component is placed on.
@@ -47,6 +55,8 @@ impl Default for SceneViewControls {
             beam_axis: true,
             rays: false,
             max_rays: 500,
+            full_spectrum: false,
+            additive_rays: false,
             opacity: 0.2,
         }
     }

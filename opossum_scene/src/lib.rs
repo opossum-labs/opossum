@@ -21,7 +21,7 @@ mod test_helpers;
 pub use components::{glb_of_node, scene_glb};
 pub use manifest::manifest_of;
 pub use rays::{LineColors, rays_glb};
-pub use sources::{source_wavelength_range, traced_rays};
+pub use sources::{SpectrumDrawing, source_wavelength_range, traced_rays};
 
 use nalgebra::Point3;
 use opossum_core::error::{OpmResult, OpossumError};

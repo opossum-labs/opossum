@@ -130,6 +130,24 @@ pub fn SceneViewMenu(on_menu_action: EventHandler<AppCommand>, is_connected: boo
                         controls.rays = !controls.rays;
                     },
                 }
+                // These two switch between two ways of drawing rather than show or hide something, so
+                // each names the way a click switches to.
+                SceneViewMenuEntry {
+                    label: if controls.full_spectrum { "Spread spectrum over ray positions" } else { "Full spectrum at each ray position" },
+                    disabled: !open,
+                    on_click: move |()| {
+                        let mut controls = SCENE_VIEW_CONTROLS.write();
+                        controls.full_spectrum = !controls.full_spectrum;
+                    },
+                }
+                SceneViewMenuEntry {
+                    label: if controls.additive_rays { "Disable additive ray overlay" } else { "Enable additive ray overlay" },
+                    disabled: !open,
+                    on_click: move |()| {
+                        let mut controls = SCENE_VIEW_CONTROLS.write();
+                        controls.additive_rays = !controls.additive_rays;
+                    },
+                }
                 li {
                     hr { class: "dropdown-divider" }
                 }

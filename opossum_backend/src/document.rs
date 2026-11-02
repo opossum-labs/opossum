@@ -22,7 +22,8 @@ use opossum_core::{
     },
 };
 use opossum_scene::{
-    LineColors, glb_of_node, manifest_of, rays_glb, scene_glb, source_wavelength_range, traced_rays,
+    LineColors, SpectrumDrawing, glb_of_node, manifest_of, rays_glb, scene_glb,
+    source_wavelength_range, traced_rays,
 };
 use serde::Deserialize;
 use std::{path::PathBuf, str::FromStr};
@@ -57,6 +58,9 @@ struct RaysQuery {
     analyzer: Option<Uuid>,
     /// The most rays drawn, of all sources together (default 500, at most 5000).
     max_rays: Option<usize>,
+    /// Whether each start point shines every wavelength of its source's spectrum, as in the
+    /// analysis, rather than one (default false).
+    full_spectrum: Option<bool>,
 }
 
 /// The analyzer a 3D view asked to follow, if the document still has it.
@@ -283,7 +287,8 @@ async fn get_scene_axis(
 /// they stop.
 ///
 /// The sources share `max_rays` rays, and each is coarsened to its share before the trace: its rays
-/// are spread evenly over its cross section, and each shines one wavelength of its spectrum. So a
+/// are spread evenly over its cross section, and each shines one wavelength of its spectrum - or,
+/// with `full_spectrum`, every wavelength, as in the analysis, from as many fewer start points. So a
 /// source of millions of rays and many spectral samples costs no more than one of a few hundred,
 /// while every wavelength of its spectrum is still drawn. Only the
 /// primary path is traced; a ghost focus analyzer contributes its sources, not its reflections.
@@ -307,6 +312,11 @@ async fn get_scene_rays(
         .max_rays
         .unwrap_or(DEFAULT_DISPLAY_RAYS)
         .min(MAX_DISPLAY_RAYS);
+    let drawing = if query.full_spectrum.unwrap_or(false) {
+        SpectrumDrawing::Full
+    } else {
+        SpectrumDrawing::Dealt
+    };
     // The trace is the long part, so it must hold neither the document nor the request thread. The
     // model is taken as its file, the only copy that shares nothing with the live document.
     let (model, analyzer) = {
@@ -320,7 +330,7 @@ async fn get_scene_rays(
         let document = OpmDocument::from_string(&model)?;
         let colors = LineColors::Wavelength(source_wavelength_range(&document, analyzer)?);
         rays_glb(
-            &traced_rays(&document, analyzer, max_rays)?,
+            &traced_rays(&document, analyzer, max_rays, drawing)?,
             &colors,
             max_rays,
         )
@@ -1778,11 +1788,17 @@ mod test {
     }
 
     /// An analyzer's source is traced through the model and drawn as lines, coarsened to the number
-    /// asked for.
+    /// asked for, with its spectrum dealt out or in full.
     #[actix_web::test]
     async fn the_rays_of_a_source_are_drawn_as_lines() {
         let app_state = state_with_a_traced_source();
-        for query in ["", "?max_rays=50", "?max_rays=100000"] {
+        for query in [
+            "",
+            "?max_rays=50",
+            "?max_rays=100000",
+            "?full_spectrum=true",
+            "?max_rays=50&full_spectrum=false",
+        ] {
             let resp = request_rays(&app_state, query).await;
 
             assert_eq!(resp.status(), StatusCode::OK, "{query}");
@@ -1790,6 +1806,29 @@ mod test {
             assert!(body.starts_with(b"glTF"), "{query}");
             assert!(holds_lines(&body), "{query}");
         }
+    }
+
+    /// Asked for the full spectrum, a source of two lines is drawn with both at every start point,
+    /// which are other rays than one line dealt to each.
+    #[actix_web::test]
+    async fn the_full_spectrum_is_drawn_when_asked_for() {
+        use opossum_core::{
+            distributions::spectral::LaserLines, joule, millimeter, nanometer,
+            nodes::round_collimated_ray_builder,
+        };
+
+        let mut builder = round_collimated_ray_builder(millimeter!(5.0), joule!(1.0), 3).unwrap();
+        let mut source = builder.source().clone();
+        let lines = vec![(nanometer!(1000.0), 1.0), (nanometer!(1100.0), 1.0)];
+        source.set_spectral_dist(LaserLines::new(lines).unwrap().into());
+        builder.set_source(source);
+        let app_state = state_tracing(builder);
+
+        let dealt = request_rays(&app_state, "?full_spectrum=false").await;
+        assert_eq!(dealt.status(), StatusCode::OK);
+        let full = request_rays(&app_state, "?full_spectrum=true").await;
+        assert_eq!(full.status(), StatusCode::OK);
+        assert_ne!(test::read_body(dealt).await, test::read_body(full).await);
     }
 
     /// Without an analyzer there is no light of the setup's own to draw: an empty file, not an

@@ -4,7 +4,8 @@ use std::collections::HashSet;
 
 use dioxus::prelude::*;
 use dioxus_glb_viewer::{
-    GlbObject, GlbViewer, PickEvent, ViewerEvent, ViewerOptions, use_glb_viewer_handle,
+    GlbObject, GlbViewer, OverlayBlending, PickEvent, ViewerEvent, ViewerOptions,
+    use_glb_viewer_handle,
 };
 use opossum_core::types::api_types::{
     AnalyzerItemDto, SceneAnalyzer, SceneManifest, SceneSpectrum, SkippedSceneNode,
@@ -96,6 +97,7 @@ pub fn SceneView() -> Element {
                 HTTP_API_CLIENT().base_url(),
                 *fetches.peek(),
                 controls.max_rays,
+                controls.full_spectrum,
                 drawn_after.peek().as_ref().map(|analyzer| analyzer.uid),
             ),
             true,
@@ -205,6 +207,11 @@ pub fn SceneView() -> Element {
         let mut wanted = options.peek().clone();
         wanted.ground = controls.table.then(table_ground);
         wanted.orientation_gizmo = controls.axes;
+        wanted.overlay_blending = if controls.additive_rays {
+            OverlayBlending::Additive
+        } else {
+            OverlayBlending::Ordered
+        };
         set_environment(&mut wanted, controls.hdr_environment);
         if *options.peek() != wanted {
             options.set(wanted);

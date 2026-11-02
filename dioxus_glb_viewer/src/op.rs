@@ -154,8 +154,9 @@ impl Serialize for ViewerOptions {
             orientation_gizmo,
             ground,
             line_width,
+            overlay_blending,
         } = self;
-        let mut st = s.serialize_struct("ViewerOptions", 15)?;
+        let mut st = s.serialize_struct("ViewerOptions", 16)?;
         st.serialize_field("background", background)?;
         st.serialize_field("grid", grid)?;
         st.serialize_field("ambient_intensity", ambient_intensity)?;
@@ -171,6 +172,7 @@ impl Serialize for ViewerOptions {
         st.serialize_field("orientation_gizmo", orientation_gizmo)?;
         st.serialize_field("ground", ground)?;
         st.serialize_field("line_width", line_width)?;
+        st.serialize_field("overlay_blending", overlay_blending)?;
         st.end()
     }
 }
@@ -227,9 +229,24 @@ mod tests {
                 "initial_target",
                 "line_width",
                 "orientation_gizmo",
+                "overlay_blending",
                 "selection_color",
             ]
         );
+    }
+
+    /// `viewer.js` compares the blending of overlays with the string `"additive"`, so both ways have
+    /// to arrive as exactly the snake-case names it knows, and the default as `"ordered"`.
+    #[test]
+    fn the_overlay_blending_reaches_the_wire() {
+        let json = serde_json::to_value(ViewerOptions::default()).expect("options serialise");
+        assert_eq!(json["overlay_blending"], "ordered");
+        let opts = ViewerOptions {
+            overlay_blending: crate::model::OverlayBlending::Additive,
+            ..ViewerOptions::default()
+        };
+        let json = serde_json::to_value(opts).expect("options serialise");
+        assert_eq!(json["overlay_blending"], "additive");
     }
 
     /// `viewer.js` hands the strength straight to three.js, so the default has to arrive as `1.0` -

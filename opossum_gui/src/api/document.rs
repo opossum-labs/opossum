@@ -174,13 +174,15 @@ pub fn scene_axis_url(base_url: &str, fetch: usize, analyzer: Option<Uuid>) -> S
 /// The URL the 3D viewer fetches the light of the model's sources from.
 ///
 /// Versioned by the fetch counter exactly like [`scene_axis_url`], and additionally by how many
-/// rays are asked for, so a new number is a new URL and the viewer fetches the rays again.
+/// rays are asked for and how their spectrum is drawn, so a new setting is a new URL and the
+/// viewer fetches the rays again.
 ///
 /// # Arguments
 ///
 /// - `base_url`: the backend's root, from [`crate::api::http_client::HTTPClient::base_url`]
 /// - `fetch`: how many times the view has fetched the model so far
 /// - `max_rays`: the most rays drawn, of all sources together; the backend caps it
+/// - `full_spectrum`: whether each start point shines every wavelength rather than one
 /// - `analyzer`: the analyzer the components were placed after, so the rays are its light
 ///
 /// # Returns
@@ -191,10 +193,11 @@ pub fn scene_rays_url(
     base_url: &str,
     fetch: usize,
     max_rays: usize,
+    full_spectrum: bool,
     analyzer: Option<Uuid>,
 ) -> String {
     format!(
-        "{base_url}/api/document/scene/rays.glb?max_rays={max_rays}&v={fetch}{}",
+        "{base_url}/api/document/scene/rays.glb?max_rays={max_rays}&full_spectrum={full_spectrum}&v={fetch}{}",
         analyzer_param(analyzer)
     )
 }

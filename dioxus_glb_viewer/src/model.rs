@@ -35,9 +35,8 @@ pub struct GlbObject {
     ///
     /// When `true`, all materials are moved to the transparent render pass
     /// (`material.transparent = true`, `depthWrite = false`) so they are never captured in
-    /// Three.js's glass-transmission buffer and never appear refracted through lenses. They are
-    /// drawn additively, as light adds up: overlapping lines mix their colors the same whatever
-    /// order they are drawn in, so an overlap does not change color as the view turns.
+    /// Three.js's glass-transmission buffer and never appear refracted through lenses. Where its
+    /// lines cross, they mix as [`ViewerOptions::overlay_blending`] says, the same from every side.
     pub overlay: bool,
 }
 
@@ -231,6 +230,25 @@ pub enum Environment {
         url: String,
     },
 }
+
+// ─── OverlayBlending ─────────────────────────────────────────────────────────
+
+/// How the lines of [overlays](GlbObject::overlay) mix where they cross.
+///
+/// An overlay has no depth, so where its lines cross on screen nothing says which is in front.
+/// Either way, the color of a crossing no longer depends on where the camera stands.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OverlayBlending {
+    /// Each line covers those drawn before it, in the order its file lists them, so a crossing
+    /// always shows the same line, in its own color.
+    #[default]
+    Ordered,
+    /// The colors add up, as light does. Crossings mix and brighten whatever order they are drawn
+    /// in, but a line also adds onto what lies behind it and looks lighter than its own color.
+    Additive,
+}
+
 // ─── Ground ──────────────────────────────────────────────────────────────────
 
 /// A flat floor under the scene that reaches to the horizon.
@@ -313,6 +331,8 @@ pub struct ViewerOptions {
     /// redrawn as three.js fat lines, which keep their pixel width at any zoom. At the default
     /// `1.0` lines are drawn exactly as the file holds them and the add-on is never loaded.
     pub line_width: f32,
+    /// How the lines of overlays mix where they cross; see [`OverlayBlending`].
+    pub overlay_blending: OverlayBlending,
 }
 
 impl Default for ViewerOptions {
@@ -333,6 +353,7 @@ impl Default for ViewerOptions {
             orientation_gizmo: false,
             ground: None,
             line_width: 1.0,
+            overlay_blending: OverlayBlending::default(),
         }
     }
 }

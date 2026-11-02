@@ -2,8 +2,8 @@
 //!
 //! A source may hold far more rays than a view can draw, and a spectrum of many samples would
 //! multiply them again. So before the trace every source is coarsened to its share of the rays to
-//! draw, each ray shining one wavelength of its spectrum. How a source is coarsened is drawing,
-//! not simulation, which is why it is done here and not in the core.
+//! draw, with its spectrum dealt out among the rays or laid in full on fewer of them. How a source
+//! is coarsened is drawing, not simulation, which is why it is done here and not in the core.
 
 mod coarsen;
 mod distributions;
@@ -11,6 +11,7 @@ mod thinning;
 
 use std::ops::Range;
 
+pub use coarsen::SpectrumDrawing;
 use coarsen::coarsened;
 use opossum_core::{
     analyzers::{
@@ -30,9 +31,9 @@ use uuid::Uuid;
 /// The sources are the ones the analyzer defines, and the model is placed exactly as
 /// [`OpmDocument::placed_scenery`] places it, so the rays run through the components where the 3D
 /// view shows them. The sources share `max_rays` evenly, and each is coarsened to its share first:
-/// its rays are spread over its cross section, and each shines one wavelength of its spectrum. That
-/// keeps the trace cheap however many rays and spectral samples the sources hold, while every
-/// wavelength is still traced. Only the primary path is traced: a ghost focus analyzer
+/// its rays are spread over its cross section, and its spectrum is laid on them as `drawing` says.
+/// That keeps the trace cheap however many rays and spectral samples the sources hold, while
+/// every wavelength is still traced. Only the primary path is traced: a ghost focus analyzer
 /// contributes its sources, not its reflections. The trace runs on a copy and leaves the model
 /// untouched.
 ///
@@ -42,6 +43,7 @@ use uuid::Uuid;
 /// - `analyzer_id`: the analyzer to take the sources from, or `None` to follow the one chosen
 ///   exactly as for [`OpmDocument::placed_scenery`]
 /// - `max_rays`: the most rays traced from all sources together; each source keeps at least one
+/// - `drawing`: whether each start point shines one wavelength or all of them
 ///
 /// # Returns
 ///
@@ -58,6 +60,7 @@ pub fn traced_rays(
     document: &OpmDocument,
     analyzer_id: Option<Uuid>,
     max_rays: usize,
+    drawing: SpectrumDrawing,
 ) -> OpmResult<Vec<Rays>> {
     let Some((_, analyzer)) = document
         .drawing_analyzer(analyzer_id)?
@@ -84,7 +87,7 @@ pub fn traced_rays(
         .map(|(source, builder)| {
             let mut coarse = builder.clone();
             coarse.set_alignment_wavelength(Some(builder.axis_wavelength()?));
-            coarse.set_source(coarsened(builder.source(), per_source)?);
+            coarse.set_source(coarsened(builder.source(), per_source, drawing)?);
             Ok((*source, coarse))
         })
         .collect::<OpmResult<_>>()?;
@@ -218,14 +221,15 @@ mod test {
         let source = scenery.add_node(SourcePort::default())?;
         let lens = scenery.add_node(Lens::default())?;
         scenery.connect_nodes(source, "output_1", lens, "input_1", millimeter!(100.0))?;
-        assert!(traced_rays(&OpmDocument::new(scenery), None, 100)?.is_empty());
+        let document = OpmDocument::new(scenery);
+        assert!(traced_rays(&document, None, 100, SpectrumDrawing::Dealt)?.is_empty());
         Ok(())
     }
 
     /// An energy analysis places a model, but it has no rays of its own to show.
     #[test]
     fn an_energy_analysis_has_no_rays_to_draw() -> OpmResult<()> {
-        assert!(traced_rays(&energy_analyzed()?, None, 100)?.is_empty());
+        assert!(traced_rays(&energy_analyzed()?, None, 100, SpectrumDrawing::Dealt)?.is_empty());
         Ok(())
     }
 
@@ -239,7 +243,7 @@ mod test {
             15,
         )?)?;
 
-        let ends = traced_rays(&document, None, 100)?;
+        let ends = traced_rays(&document, None, 100, SpectrumDrawing::Dealt)?;
 
         assert_eq!(ends.len(), 1, "one open output");
         assert!(ends[0].nr_of_rays(false) <= 100);
@@ -256,22 +260,25 @@ mod test {
     }
 
     /// Every laser line of a source is traced, with at most the asked number of rays for all of
-    /// them together. Thinning the built rays used to keep the first line only: all lines of a
-    /// point start there.
+    /// them together, however the spectrum is drawn. Thinning the built rays used to keep the
+    /// first line only: all lines of a point start there.
     #[test]
     fn every_wavelength_of_a_source_is_traced() -> OpmResult<()> {
         let document = source_then_open_dummy(collimated_source(15, ten_lines()?)?)?;
 
-        let ends = traced_rays(&document, None, 100)?;
+        for drawing in [SpectrumDrawing::Dealt, SpectrumDrawing::Full] {
+            let ends = traced_rays(&document, None, 100, drawing)?;
 
-        assert_eq!(ends.len(), 1, "one open output");
-        assert!(ends[0].nr_of_rays(false) <= 100);
-        let (lines, _) = ends[0].split_ray_bundle_by_wavelength(nanometer!(1.0), true)?;
-        assert_eq!(lines.len(), 10, "every line arrives");
+            assert_eq!(ends.len(), 1, "{drawing:?}: one open output");
+            assert!(ends[0].nr_of_rays(false) <= 100, "{drawing:?}");
+            let (lines, _) = ends[0].split_ray_bundle_by_wavelength(nanometer!(1.0), true)?;
+            assert_eq!(lines.len(), 10, "{drawing:?}: every line arrives");
+        }
         Ok(())
     }
 
-    /// The asked number of rays is shared by all sources, and each of them is drawn.
+    /// The asked number of rays is shared by all sources, and each of them is drawn, however the
+    /// spectrum is drawn.
     #[test]
     fn max_rays_counts_the_rays_of_all_sources_together() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
@@ -285,12 +292,17 @@ mod test {
         let mut document = OpmDocument::new(scenery);
         document.add_analyzer(AnalyzerType::RayTrace(config));
 
-        let ends = traced_rays(&document, None, 100)?;
+        for drawing in [SpectrumDrawing::Dealt, SpectrumDrawing::Full] {
+            let ends = traced_rays(&document, None, 100, drawing)?;
 
-        assert_eq!(ends.len(), 2, "one open output per source");
-        assert!(ends.iter().all(|end| end.nr_of_rays(false) > 0));
-        let total: usize = ends.iter().map(|end| end.nr_of_rays(false)).sum();
-        assert!(total <= 100, "{total} rays");
+            assert_eq!(ends.len(), 2, "{drawing:?}: one open output per source");
+            assert!(
+                ends.iter().all(|end| end.nr_of_rays(false) > 0),
+                "{drawing:?}"
+            );
+            let total: usize = ends.iter().map(|end| end.nr_of_rays(false)).sum();
+            assert!(total <= 100, "{drawing:?}: {total} rays");
+        }
         Ok(())
     }
 
@@ -322,7 +334,7 @@ mod test {
         config.map_source(source, collimated_source(7, spectrum.into())?);
         document.add_analyzer(AnalyzerType::RayTrace(config));
 
-        let ends = traced_rays(&document, None, 100)?;
+        let ends = traced_rays(&document, None, 100, SpectrumDrawing::Dealt)?;
 
         assert_eq!(
             ends.len(),
@@ -353,7 +365,7 @@ mod test {
         config.map_source(source, collimated_source(1, lines.into())?);
         document.add_analyzer(AnalyzerType::RayTrace(config));
 
-        traced_rays(&document, None, 7)?;
+        traced_rays(&document, None, 7, SpectrumDrawing::Dealt)?;
         Ok(())
     }
 
@@ -437,7 +449,7 @@ mod test {
         );
         document.add_analyzer(AnalyzerType::RayTrace(config));
 
-        let ends = traced_rays(&document, None, 100)?;
+        let ends = traced_rays(&document, None, 100, SpectrumDrawing::Dealt)?;
         assert_eq!(ends.len(), 1, "one open output");
         let rays = &ends[0];
         assert!(rays.nr_of_rays(false) <= 100);
