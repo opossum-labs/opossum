@@ -722,11 +722,17 @@ mod test {
     #[test]
     fn test_lens_edge_thickness_biconvex() -> OpmResult<()> {
         // Biconvex lens: R1 = 100 mm, R2 = -100 mm, d = 10 mm, aperture radius = 12.5 mm
-        let lens = Lens::default();
+        let lens = Lens::new(
+            "biconvex_test",
+            millimeter!(100.0),
+            millimeter!(-100.0),
+            millimeter!(10.0),
+            RefrIndexConst::new(1.5)?,
+        )?;
         let edge_thickness = lens.min_edge_thickness()?;
 
         // Sagitta s = R - sqrt(R^2 - y^2) = 100 - sqrt(100^2 - 12.5^2) = 0.7843 mm
-        // Edge thickness = d - 2*s = 10.0 - 2 * 0.7843 = 8.4314 mm
+        // Edge thickness = d - 2*s = 10.0 - 2 * 0.7843 = 8.43135 mm
         let expected_sag = 100.0 - (100.0_f64.powi(2) - 12.5_f64.powi(2)).sqrt();
         let expected_edge = 10.0 - 2.0 * expected_sag;
 

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use opossum_core::{
     apertures::CircleShape,
     core_optics::NodeAttrExt,

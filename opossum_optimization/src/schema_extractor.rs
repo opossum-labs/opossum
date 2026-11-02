@@ -5,14 +5,13 @@ use super::{
         ModelOptimizationSchema,
     },
 };
-use opossum_core::{
-    core_optics::NodeAttrExt, nodes::NodeGroup, opm_document::OpmDocument,
-};
+use opossum_core::{core_optics::NodeAttrExt, nodes::NodeGroup, opm_document::OpmDocument};
 
 pub struct SchemaExtractor;
 
 impl SchemaExtractor {
     /// Extracts all controllable variables, observable metrics, and constraint candidates from an `OpmDocument`.
+    #[must_use]
     pub fn extract(doc: &OpmDocument) -> ModelOptimizationSchema {
         let mut schema = ModelOptimizationSchema::default();
 

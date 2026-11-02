@@ -190,6 +190,7 @@ impl NodeGroup {
     }
 
     /// Recursively collects the UUIDs of all nodes contained in this graph.
+    #[must_use]
     pub fn collect_all_contained_node_ids_recursive(&self) -> Vec<Uuid> {
         let mut result = Vec::new();
         for node_ref in self.nodes() {
@@ -204,6 +205,7 @@ impl NodeGroup {
     }
 
     /// Recursively collects all optical node references contained in this graph.
+    #[must_use]
     pub fn collect_all_nodes_recursive(&self) -> Vec<OpticRef> {
         let mut result = Vec::new();
         for node_ref in self.nodes() {

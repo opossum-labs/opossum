@@ -14,9 +14,10 @@ use uuid::Uuid;
 use super::types::{AssetCategory, AssetSyncRow, NodeUsageInfo, determine_sync_status};
 
 /// Extracts all inline materials and their node usage occurrences from an optical document.
+#[must_use]
 pub fn extract_materials_from_document(
     document: &OpmDocument,
-) -> Result<HashMap<Uuid, (Material, Vec<NodeUsageInfo>)>, String> {
+) -> HashMap<Uuid, (Material, Vec<NodeUsageInfo>)> {
     let mut materials_map: HashMap<Uuid, (Material, Vec<NodeUsageInfo>)> = HashMap::new();
 
     let all_nodes = document.scenery().collect_all_nodes_recursive();
@@ -39,8 +40,7 @@ pub fn extract_materials_from_document(
             }
         }
     }
-
-    Ok(materials_map)
+    materials_map
 }
 
 /// Compares a map of extracted model materials against the catalog index and generates sorted sync rows.
@@ -84,7 +84,7 @@ pub async fn fetch_and_scan_model(
     let document =
         OpmDocument::from_string(&opm_str).map_err(|e| format!("Failed to parse document: {e}"))?;
 
-    let materials_map = extract_materials_from_document(&document)?;
+    let materials_map = extract_materials_from_document(&document);
     Ok(build_sync_rows(materials_map, registry))
 }
 

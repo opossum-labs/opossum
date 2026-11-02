@@ -26,6 +26,11 @@ impl<'a> EvaluationContext<'a> {
     }
 
     /// Evaluates any quantity source (either detector observable or model parameter).
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the given [`MetricSource`] contains an invalid [`ObservableAddress`] or
+    /// [`ParameterAddress`].
     pub fn read_source(&self, source: &MetricSource) -> OpmResult<f64> {
         match source {
             MetricSource::Observable(addr) => MetricReader::read_metric(self.doc, addr),
@@ -43,11 +48,19 @@ pub trait Operand: Send + Sync + Debug {
     fn weight(&self) -> f64;
 
     /// Evaluates the operand contribution to the overall cost $\Phi(x)$.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the evaluation of the concrete implementation failed.
     fn evaluate(&self, ctx: &EvaluationContext<'_>) -> OpmResult<f64>;
 
     /// Optional pre-flight validation against the pristine document model.
     ///
     /// Verifies that targeted nodes, analyzers, and required traits exist.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the validation failed. Check the error message in this case.
     fn validate(&self, _doc: &OpmDocument) -> OpmResult<()> {
         Ok(())
     }

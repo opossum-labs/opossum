@@ -6,6 +6,10 @@ pub struct ParameterApplier;
 
 impl ParameterApplier {
     /// Applies a scalar value to the specified target address in the document.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the underlying properties oder node attributes could not be set.
     pub fn set_value(
         doc: &mut OpmDocument,
         address: &ParameterAddress,
@@ -35,6 +39,10 @@ impl ParameterApplier {
     }
 
     /// Rebuilds all optical surfaces across the model after parameters have been updated.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the underlying node surfaces of the model could not created.
     pub fn finalize_update(doc: &mut OpmDocument) -> OpmResult<()> {
         doc.scenery_mut().rebuild_surfaces()
     }

@@ -11,7 +11,11 @@ use opossum_core::error::{OpmResult, OpossumError};
 pub struct ParameterResolver;
 
 impl ParameterResolver {
-    /// Validates configuration integrity:
+    /// Validates configuration integrity
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if
     /// - No parameter can be both a free variable and a coupling target.
     /// - No target parameter can be claimed by multiple couplings.
     /// - `TotalLengthLock` cannot reference its own target.
@@ -58,7 +62,13 @@ impl ParameterResolver {
         Ok(())
     }
 
-    /// Evaluates the solver parameter vector `x` and all couplings to produce the final parameter map[cite: 1].
+    /// Evaluates the solver parameter vector `x` and all couplings to produce the final parameter map
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if
+    /// - the number of free variables does not match the number of parameters
+    /// - unresolved or cyclic parameter couplings are detected
     pub fn resolve(
         free_vars: &[FreeVariable],
         couplings: &[ParameterCoupling],

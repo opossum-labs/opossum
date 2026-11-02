@@ -72,14 +72,18 @@ impl ParameterCoupling {
     }
 
     /// Creates a total length lock coupling
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the given total length `<= 0.0` or not finite.
     pub fn total_length_lock(
         target: ParameterAddress,
         total_length: f64,
         other_segments: Vec<ParameterAddress>,
     ) -> OpmResult<Self> {
-        if total_length <= 0.0 {
+        if total_length <= 0.0 || total_length.is_infinite() {
             return Err(OpossumError::Other(
-                "Total length must be positive".to_string(),
+                "Total length must be positive and finite".to_string(),
             ));
         }
         Ok(Self {

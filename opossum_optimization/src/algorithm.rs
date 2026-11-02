@@ -109,6 +109,12 @@ impl OptimizationAlgorithm {
     }
 
     /// Automatically generates a non-degenerate, bound-respecting initial simplex.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if
+    /// - no free variable were given
+    /// - a free variable has no start value
     pub fn build_initial_simplex(free_vars: &[FreeVariable]) -> OpmResult<Vec<Vec<f64>>> {
         let n = free_vars.len();
         if n == 0 {

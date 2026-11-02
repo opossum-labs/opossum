@@ -8,6 +8,12 @@ pub struct MetricReader;
 
 impl MetricReader {
     /// Reads a scalar metric produced by a specific analyzer on a detector node.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if
+    /// - the detector node in the given [`ObservableAddress`] was not found.
+    /// - the given detector observable name was not found.
     pub fn read_metric(doc: &OpmDocument, address: &ObservableAddress) -> OpmResult<f64> {
         // 1. Primary: Fast lookup in MetricStore by (analyzer_id, node_id, metric_name)
         let key = (
@@ -38,6 +44,12 @@ impl MetricReader {
     }
 
     /// Reads the current scalar value of any parameter address from the document.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if
+    /// - the node defined in [`ParameterAddress`] cannot be found.
+    /// - the connection between nodes defined in [`ParameterAddress`] cannot be found.
     pub fn read_parameter_value(doc: &OpmDocument, address: &ParameterAddress) -> OpmResult<f64> {
         match address {
             ParameterAddress::NodeProperty {
