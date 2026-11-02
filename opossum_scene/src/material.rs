@@ -10,7 +10,7 @@ use opossum_core::{
 use optoscene::Material;
 use uom::si::f64::Length;
 
-use crate::appearance::{Appearance, SurfaceFinish};
+use crate::appearance::Appearance;
 
 /// The refractive index used for a material that cannot state one at the asked wavelength.
 ///
@@ -52,34 +52,37 @@ pub fn material_of(
     body: Option<&dyn Body>,
     ior: f64,
 ) -> OpmResult<Material> {
-    let [red, green, blue, alpha] = appearance.color;
-    let rgb = [red, green, blue];
-    Ok(match appearance.finish {
-        SurfaceFinish::Reflective => Material::Mirror {
-            color: rgb,
-            roughness: appearance.roughness,
-            metallic: appearance.metallic,
+    Ok(match appearance {
+        Appearance::Mirror {
+            color: [red, green, blue, alpha],
+            roughness,
+            metallic,
+        } => Material::Mirror {
+            color: [red, green, blue],
+            roughness,
+            metallic,
             opacity: alpha,
         },
-        SurfaceFinish::Transmissive => Material::Translucent {
-            color: appearance.color,
+        Appearance::Translucent { color } => Material::Translucent { color },
+        Appearance::Opaque {
+            color,
+            metallic,
+            roughness,
+        } => Material::Opaque {
+            color,
+            metallic,
+            roughness,
         },
-        SurfaceFinish::Opaque => Material::Opaque {
-            color: appearance.color,
-            metallic: appearance.metallic,
-            roughness: appearance.roughness,
-        },
-        // `Appearance` is renderer-agnostic and carries no thin-film parameters, so this
-        // crate supplies sensible defaults here.
-        SurfaceFinish::Iridescent => Material::Iridescent {
-            color: rgb,
-            roughness: appearance.roughness,
+        // The thin film whose interference colors make a grating shimmer.
+        Appearance::Iridescent { color, roughness } => Material::Iridescent {
+            color,
+            roughness,
             iridescence: 1.0,
             iridescence_ior: 1.3,
             iridescence_thickness_min: 100.0,
             iridescence_thickness_max: 400.0,
         },
-        SurfaceFinish::Glass => glass_of(node, appearance, body, ior)?,
+        Appearance::Glass { color, metallic } => glass_of(node, color, metallic, body, ior)?,
     })
 }
 
@@ -128,7 +131,8 @@ pub fn refractive_index_of(
 /// # Arguments
 ///
 /// - `node`: the component, named in errors
-/// - `appearance`: the tint of the glass and how mirrored the face is
+/// - `color`: the tint of the glass
+/// - `metallic`: how mirrored the face is
 /// - `body`: the volume the component's geometry encloses, if any
 /// - `ior`: the refractive index of the medium that volume is filled with
 ///
@@ -140,7 +144,8 @@ pub fn refractive_index_of(
 #[allow(clippy::cast_possible_truncation)]
 fn glass_of(
     node: &dyn Analyzable,
-    appearance: Appearance,
+    color: [f32; 3],
+    metallic: f32,
     body: Option<&dyn Body>,
     ior: f64,
 ) -> OpmResult<Material> {
@@ -151,13 +156,12 @@ fn glass_of(
         ))
     })?;
     let thickness = body.bounding_box()?.z_range();
-    let [red, green, blue, _] = appearance.color;
     Ok(Material::Glass {
-        color: [red, green, blue],
+        color,
         ior: ior as f32,
         thickness: (thickness.end - thickness.start).value as f32,
-        metallic: appearance.metallic,
-        opacity: (1.0 - GLASS_OPACITY).mul_add(appearance.metallic, GLASS_OPACITY),
+        metallic,
+        opacity: (1.0 - GLASS_OPACITY).mul_add(metallic, GLASS_OPACITY),
     })
 }
 

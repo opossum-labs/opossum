@@ -340,7 +340,7 @@ All paths are relative to `opossum_core/src` unless stated otherwise.
 | `ReflectedPart` | `light/rays.rs` | which part of a split is the intended beam: the position history, bounce counter and bundle identity of both parts |
 | `OpticPorts` | `core_optics/optic_ports.rs` | the names of the input and output ports, graph logic only |
 | `SurfacePorts` | `core_optics/optic_ports.rs` | the ports a node declares, each with the face it sits on, and its splitting faces (`OpticNode::surface_ports`); `face_of` looks one up |
-| `Appearance`, `SurfaceFinish` | `opossum_scene/src/appearance.rs`, not in the core | how a node type is drawn, looked up in the look table (`Appearance::of_node_type`), with the presets `mirror`, `transmissive`, `detector`, `glass` and `grating`, and how a coating mirrors one of its faces (`Appearance::coated`) |
+| `Appearance` | `opossum_scene/src/appearance.rs`, not in the core | how a node type is drawn, one variant per look (`Mirror`, `Translucent`, `Opaque`, `Iridescent`, `Glass`), looked up in the look table (`Appearance::of_node_type`), with the presets `mirror`, `transmissive`, `detector`, `glass` and `grating`, and how a coating mirrors one of its faces (`Appearance::coated`) |
 
 ### Example 1: a plano-convex lens
 
@@ -539,7 +539,7 @@ its thickness from the extent of the solid.
 Every patch carries the face it lies on (`FacePatch`) and is drawn in the node's appearance under the coating of that
 face (`Appearance::coated`, read from the face's `SurfaceConfig`). The share the coating reflects at normal incidence
 makes a glass or a reflecting face that much metallic, and a reflecting one that much opaque; a mirror's bare surface
-is a pale pane. Other finishes keep their look, because those nodes do not act through their coating. The lateral face
+is a pale pane. The other looks stay as they are, because those nodes do not act through their coating. The lateral face
 of a solid has no coating and is drawn as the appearance asks. Glass is drawn at an opacity of 0.7 (`GLASS_OPACITY` in
 `opossum_scene`), rising to 1 the more its face is mirrored, because three.js shows only opaque objects through
 transmissive glass (see the 3D view reference).

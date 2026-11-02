@@ -9,42 +9,36 @@ use opossum_core::{
     error::{OpmResult, OpossumError},
     joule,
     light::Ray,
-    millimeter,
 };
 use uom::si::f64::Length;
 
-/// The rendering finish of a drawable component.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SurfaceFinish {
-    /// A shiny, mirror-like surface that specularly reflects light.
-    Reflective,
-    /// A partially transparent surface that light passes through (e.g. a filter or paraxial lens).
-    Transmissive,
-    /// A matte surface that absorbs or terminates light (e.g. a detector or beam dump).
-    Opaque,
-    /// An iridescent surface exhibiting interference colors, typical of a diffraction grating.
-    Iridescent,
-    /// Clear glass: the body of a lens or a wedge, drawn with the refractive index of the material
-    /// its solid is filled with.
-    Glass,
-}
-
-/// How a drawable component should look, independent of any particular renderer.
+/// How a drawable component looks: one variant per kind of look, each with only what it is drawn by.
 ///
-/// Carries four cosmetic properties: a linear RGBA base color, a roughness value, a metallic share
-/// and a [`SurfaceFinish`]. These are hints to the renderer; they have no physical meaning and do
-/// not affect any simulation result.
+/// These are hints to the renderer; they have no physical meaning and do not affect any simulation
+/// result. A `color` is linear RGB or RGBA, each component in \[0, 1\], its alpha how see-through
+/// the surface is. A `roughness` runs from 0, smooth like a mirror, to 1, matte; a `metallic`
+/// share of 1 reflects like a mirror coating.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Appearance {
-    /// Linear RGBA base color, with each component in \[0, 1\]. For glass, its tint.
-    pub color: [f32; 4],
-    /// Surface roughness in \[0, 1\]; 0 is perfectly smooth (mirror-like), 1 is fully rough
-    /// (diffuse/matte).
-    pub roughness: f32,
-    /// How metallic the surface looks, in \[0, 1\]; 1 reflects like a mirror coating.
-    pub metallic: f32,
-    /// The rendering finish that determines the overall look of the surface.
-    pub finish: SurfaceFinish,
+pub enum Appearance {
+    /// A shiny surface that specularly reflects light.
+    Mirror {
+        color: [f32; 4],
+        roughness: f32,
+        metallic: f32,
+    },
+    /// A partially transparent surface light passes through, such as a filter or a paraxial lens.
+    Translucent { color: [f32; 4] },
+    /// A matte surface that absorbs or terminates light, such as a detector.
+    Opaque {
+        color: [f32; 4],
+        metallic: f32,
+        roughness: f32,
+    },
+    /// A surface showing interference colors, as a diffraction grating does.
+    Iridescent { color: [f32; 3], roughness: f32 },
+    /// Clear glass, the body of a lens or a wedge, drawn with the refractive index of the material
+    /// its solid is filled with; `color` is its tint.
+    Glass { color: [f32; 3], metallic: f32 },
 }
 
 /// How opaque a thin reflecting surface is drawn where its coating reflects nothing: faint, but
@@ -82,52 +76,43 @@ impl Appearance {
     /// that a face shows, its coating says (see [`Appearance::coated`]).
     #[must_use]
     pub const fn mirror() -> Self {
-        Self {
+        Self::Mirror {
             color: [0.0, 0.5, 0.5, 0.6],
             roughness: 0.05,
             metallic: 1.0,
-            finish: SurfaceFinish::Reflective,
         }
     }
     /// A surface light passes through without entering a body of material, such as an idealized
     /// filter: pale and partly transparent.
     #[must_use]
     pub const fn transmissive() -> Self {
-        Self {
+        Self::Translucent {
             color: [0.85, 0.9, 0.85, 0.4],
-            roughness: 0.5,
-            metallic: 0.0,
-            finish: SurfaceFinish::Transmissive,
         }
     }
     /// A detector: a matte, dark grey surface.
     #[must_use]
     pub const fn detector() -> Self {
-        Self {
+        Self::Opaque {
             color: [0.25, 0.25, 0.28, 1.0],
-            roughness: 0.7,
             metallic: 0.0,
-            finish: SurfaceFinish::Opaque,
+            roughness: 0.7,
         }
     }
     /// Neutral glass, for the body of a lens or a wedge.
     #[must_use]
     pub const fn glass() -> Self {
-        Self {
-            color: [0.3, 0.3, 0.3, 1.0],
-            roughness: 0.0,
+        Self::Glass {
+            color: [0.3, 0.3, 0.3],
             metallic: 0.0,
-            finish: SurfaceFinish::Glass,
         }
     }
     /// A reflective grating: a shiny surface showing interference colors.
     #[must_use]
     pub const fn grating() -> Self {
-        Self {
-            color: [0.85, 0.85, 0.9, 1.0],
+        Self::Iridescent {
+            color: [0.85, 0.85, 0.9],
             roughness: 0.15,
-            metallic: 1.0,
-            finish: SurfaceFinish::Iridescent,
         }
     }
     /// Return how nodes of a type are drawn.
@@ -160,8 +145,8 @@ impl Appearance {
     /// mirror. On glass, the coating lays a mirror over the glass: the metallic share rises towards
     /// 1 with it. A reflecting surface shows its appearance as far as its coating reflects: its
     /// metallic share and its opacity rise from a bare surface, not metallic and drawn faint but
-    /// still visible, to the appearance's own. Any other finish keeps its look: a grating diffracts regardless of its
-    /// coating, and a detector or a filter acts by its own model.
+    /// still visible, to the appearance's own. Any other look stays as it is: a grating diffracts
+    /// regardless of its coating, and a detector or a filter acts by its own model.
     ///
     /// # Arguments
     ///
@@ -181,7 +166,7 @@ impl Appearance {
     #[allow(clippy::cast_possible_truncation)]
     pub fn coated(&self, coating: &CoatingType, wavelength: Length, n2: f64) -> OpmResult<Self> {
         let reflectivity = || -> OpmResult<f32> {
-            let ray = Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), wavelength, joule!(1.0))?;
+            let ray = Ray::origin_along_z(wavelength, joule!(1.0))?;
             let reflectivity = <Box<dyn Coating>>::try_from(coating)?.calc_reflectivity(
                 &ray,
                 -Vector3::z(),
@@ -190,25 +175,25 @@ impl Appearance {
             Ok(reflectivity.value as f32)
         };
         let from_to = |from: f32, to: f32, share: f32| (to - from).mul_add(share, from);
-        Ok(match self.finish {
-            SurfaceFinish::Glass => {
+        Ok(match *self {
+            Self::Glass { color, metallic } => Self::Glass {
+                color,
+                metallic: from_to(metallic, 1.0, reflectivity()?),
+            },
+            Self::Mirror {
+                color: [red, green, blue, alpha],
+                roughness,
+                metallic,
+            } => {
                 let share = reflectivity()?;
-                Self {
-                    metallic: from_to(self.metallic, 1.0, share),
-                    ..*self
-                }
-            }
-            SurfaceFinish::Reflective => {
-                let share = reflectivity()?;
-                let [red, green, blue, alpha] = self.color;
-                Self {
+                Self::Mirror {
                     color: [red, green, blue, from_to(UNCOATED_ALPHA, alpha, share)],
-                    metallic: from_to(0.0, self.metallic, share),
-                    ..*self
+                    roughness,
+                    metallic: from_to(0.0, metallic, share),
                 }
             }
-            SurfaceFinish::Opaque | SurfaceFinish::Transmissive | SurfaceFinish::Iridescent => {
-                *self
+            other @ (Self::Translucent { .. } | Self::Opaque { .. } | Self::Iridescent { .. }) => {
+                other
             }
         })
     }
@@ -270,31 +255,45 @@ mod test {
             1.0,
         )?;
         assert_eq!(full, Appearance::mirror());
-        let half = Appearance::mirror().coated(
+        let (half_color, half_metallic) = mirror_parts(Appearance::mirror().coated(
             &CoatingType::Separator(SplittingConfigBuilder::FixedRatio(0.5)),
             green(),
             1.0,
-        )?;
-        assert!((half.metallic - 0.5).abs() < 1e-6);
-        assert!((half.color[3] - 0.45).abs() < 1e-6);
-        let none = Appearance::mirror().coated(&CoatingType::IdealAR, green(), 1.0)?;
-        assert!(none.metallic.abs() < 1e-6);
-        assert!((none.color[3] - UNCOATED_ALPHA).abs() < 1e-6);
-        assert_eq!(none.color[..3], Appearance::mirror().color[..3]);
+        )?);
+        assert!((half_metallic - 0.5).abs() < 1e-6);
+        assert!((half_color[3] - 0.45).abs() < 1e-6);
+        let (none_color, none_metallic) =
+            mirror_parts(Appearance::mirror().coated(&CoatingType::IdealAR, green(), 1.0)?);
+        assert!(none_metallic.abs() < 1e-6);
+        assert!((none_color[3] - UNCOATED_ALPHA).abs() < 1e-6);
+        assert_eq!(none_color[..3], mirror_parts(Appearance::mirror()).0[..3]);
         Ok(())
+    }
+    /// The color and the metallic share of a mirror's look.
+    fn mirror_parts(appearance: Appearance) -> ([f32; 4], f32) {
+        let Appearance::Mirror {
+            color, metallic, ..
+        } = appearance
+        else {
+            panic!("a coated mirror is still a mirror");
+        };
+        (color, metallic)
     }
     /// An uncoated glass face reflects by the index behind it: about 4 % for n = 1.5.
     #[test]
     fn a_glass_face_is_as_mirrored_as_it_reflects() -> OpmResult<()> {
-        let glass = Appearance::glass().coated(&CoatingType::Fresnel, green(), 1.5)?;
-        assert!((glass.metallic - 0.04).abs() < 1e-6);
-        assert!((glass.color[3] - 1.0).abs() < 1e-6);
+        let Appearance::Glass { metallic, .. } =
+            Appearance::glass().coated(&CoatingType::Fresnel, green(), 1.5)?
+        else {
+            panic!("coated glass is still glass");
+        };
+        assert!((metallic - 0.04).abs() < 1e-6);
         Ok(())
     }
     /// A grating, a detector and a filter do not act through their coating, so it does not change
     /// their look.
     #[test]
-    fn other_finishes_keep_their_look_under_a_coating() -> OpmResult<()> {
+    fn other_looks_stay_as_they_are_under_a_coating() -> OpmResult<()> {
         let mirroring: CoatingType = CoatingConstantR::new(percent!(100.0))?.into();
         for appearance in [
             Appearance::grating(),
