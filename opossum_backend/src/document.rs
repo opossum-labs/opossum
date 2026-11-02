@@ -22,8 +22,8 @@ use opossum_core::{
     },
 };
 use opossum_scene::{
-    LineColors, SpectrumDrawing, glb_of_node, manifest_of, rays_glb, scene_glb,
-    source_wavelength_range, traced_rays,
+    LineColors, SpectrumDrawing, axis_glb, glb_of_node, light_glb, manifest_of, scene_glb,
+    source_wavelength_range,
 };
 use serde::Deserialize;
 use std::{path::PathBuf, str::FromStr};
@@ -268,12 +268,10 @@ async fn get_scene_axis(
     data: web::Data<AppState>,
     query: web::Query<SceneQuery>,
 ) -> Result<impl Responder, BackEndErrorResponse> {
-    let axes = {
+    let glb = {
         let document = data.document.lock();
-        document.positioning_rays(analyzer_still_there(&document, query.analyzer))?
+        axis_glb(&document, analyzer_still_there(&document, query.analyzer))?
     };
-    // One ray per source: nothing to thin out.
-    let glb = rays_glb(&axes, &LineColors::Axis, usize::MAX)?;
     Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
 }
 
@@ -327,12 +325,11 @@ async fn get_scene_rays(
         )
     };
     let glb = web::block(move || {
-        let document = OpmDocument::from_string(&model)?;
-        let colors = LineColors::Wavelength(source_wavelength_range(&document, analyzer)?);
-        rays_glb(
-            &traced_rays(&document, analyzer, max_rays, drawing)?,
-            &colors,
+        light_glb(
+            &OpmDocument::from_string(&model)?,
+            analyzer,
             max_rays,
+            drawing,
         )
     })
     .await

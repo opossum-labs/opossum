@@ -7,13 +7,18 @@ use opossum_core::{
     error::{OpmResult, OpossumError},
     light::{Ray, Rays},
     nanometer,
+    opm_document::OpmDocument,
     types::api_types::SceneSpectrum,
     utils::{to_f64, try_f64_to_usize},
 };
 use optoscene::{RayStyle, RayTrace};
 use uom::si::{f64::Length, length::meter};
+use uuid::Uuid;
 
-use crate::{glb, pinned_scene};
+use crate::{
+    glb, pinned_scene,
+    sources::{SpectrumDrawing, source_wavelength_range, traced_rays},
+};
 
 /// The colour the optical axis is drawn in: a bright purple that stands apart from the wavelength
 /// colours real rays are drawn in and from the grey and glass tones of the components.
@@ -185,6 +190,69 @@ pub fn rays_glb(bundles: &[Rays], colors: &LineColors, max_lines: usize) -> OpmR
         }
     }
     glb(&scene)
+}
+
+/// Build the glTF binary of a model's optical axis.
+///
+/// The axis is the one ray per source the positioning run follows (see
+/// [`OpmDocument::positioning_rays`]), drawn in the purple of the axis. One ray per source leaves
+/// nothing to thin out.
+///
+/// # Arguments
+///
+/// - `document`: the model whose axis to draw
+/// - `analyzer_id`: the analyzer to take the sources from, or `None` to follow the one chosen as
+///   for [`OpmDocument::placed_scenery`]
+///
+/// # Returns
+///
+/// The GLB bytes of the axis, in world coordinates.
+///
+/// # Errors
+///
+/// This function returns an error if the model cannot be placed, or if the lines cannot be drawn.
+pub fn axis_glb(document: &OpmDocument, analyzer_id: Option<Uuid>) -> OpmResult<Vec<u8>> {
+    rays_glb(
+        &document.positioning_rays(analyzer_id)?,
+        &LineColors::Axis,
+        usize::MAX,
+    )
+}
+
+/// Build the glTF binary of the light of a model's sources.
+///
+/// The sources are traced as [`traced_rays`] describes and drawn after their wavelength, in false
+/// colors if they emit several (see [`LineColors::Wavelength`]).
+///
+/// # Arguments
+///
+/// - `document`: the model whose light to draw
+/// - `analyzer_id`: the analyzer to take the sources from, or `None` to follow the one chosen as
+///   for [`OpmDocument::placed_scenery`]
+/// - `max_rays`: the most rays drawn from all sources together
+/// - `drawing`: whether each start point shines one wavelength or all of them
+///
+/// # Returns
+///
+/// The GLB bytes of the rays, in world coordinates; a valid but empty file if there is no light of
+/// the setup's own to draw.
+///
+/// # Errors
+///
+/// This function returns an error in the same cases as [`traced_rays`] and
+/// [`source_wavelength_range`], or if the lines cannot be drawn.
+pub fn light_glb(
+    document: &OpmDocument,
+    analyzer_id: Option<Uuid>,
+    max_rays: usize,
+    drawing: SpectrumDrawing,
+) -> OpmResult<Vec<u8>> {
+    let colors = LineColors::Wavelength(source_wavelength_range(document, analyzer_id)?);
+    rays_glb(
+        &traced_rays(document, analyzer_id, max_rays, drawing)?,
+        &colors,
+        max_rays,
+    )
 }
 
 /// The colour infrared light is drawn in: a deep red, next to the visible end of the spectrum it
@@ -419,6 +487,35 @@ mod test {
             rays_glb(&axes, &LineColors::Axis, 10)?,
             rays_glb(&axes, &LineColors::Axis, 10)?
         );
+        Ok(())
+    }
+
+    /// The axis and the light of an unchanged model are the same bytes every time they are drawn,
+    /// trace included, so that a viewer can tell from the file alone whether anything changed.
+    #[test]
+    fn the_light_of_an_unchanged_model_is_the_same_file_twice() -> OpmResult<()> {
+        let document = two_lenses(millimeter!(100.0))?;
+        for drawing in [SpectrumDrawing::Dealt, SpectrumDrawing::Full] {
+            let light = light_glb(&document, None, 50, drawing)?;
+            assert!(
+                glb_json(&light)["meshes"]
+                    .as_array()
+                    .is_some_and(|m| !m.is_empty()),
+                "{drawing:?}: the light is drawn"
+            );
+            assert_eq!(
+                light,
+                light_glb(&document, None, 50, drawing)?,
+                "{drawing:?}"
+            );
+        }
+        let axis = axis_glb(&document, None)?;
+        assert!(
+            glb_json(&axis)["meshes"]
+                .as_array()
+                .is_some_and(|m| !m.is_empty())
+        );
+        assert_eq!(axis, axis_glb(&document, None)?);
         Ok(())
     }
 }
