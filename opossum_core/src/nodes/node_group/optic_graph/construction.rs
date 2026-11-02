@@ -236,7 +236,7 @@ impl OpticGraph {
 
                 // If deleting a group, cascade reference search to its internal nodes
                 if let Some(group) = node_ref.as_any().downcast_ref::<NodeGroup>()
-                    && let Ok(sub_ids) = group.collect_all_contained_node_ids_recursive()
+                    && let sub_ids = group.collect_all_contained_node_ids_recursive()
                 {
                     for id in sub_ids {
                         deletion_queue.push(id);

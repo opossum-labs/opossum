@@ -7,7 +7,8 @@ use opossum_core::prelude::*;
 use std::path::PathBuf;
 
 use crate::{
-    backend_status::BackendStatus, components::{
+    backend_status::BackendStatus,
+    components::{
         menu_bar::{
             file_path_display::FilePathDisplay,
             help::about::About,
@@ -59,7 +60,7 @@ pub fn MenuBar(
     // Read backend connectivity status from context
     let backend_status = use_context::<Signal<BackendStatus>>();
     let is_connected = backend_status.read().is_connected();
-    
+
     let maximize_symbol: Signal<Result<VNode, RenderError>> = use_signal(|| {
         rsx! {
             Icon { width: 25, icon: FaWindowMaximize }
@@ -346,8 +347,11 @@ pub fn MenuBar(
                 let simulate_shortcut = SHORTCUTS
                     .get(&ShortCutAction::Simulate)
                     .map_or(String::new(), |s| format!(" ({s})"));
-                let title_str = if is_connected { format!("Simulate{simulate_shortcut}") } else { "Simulation disabled bla (no backend connection)".to_string() };
-                
+                let title_str = if is_connected {
+                    format!("Simulate{simulate_shortcut}")
+                } else {
+                    "Simulation disabled bla (no backend connection)".to_string()
+                };
                 #[cfg(feature = "desktop")]
                 rsx! {
                     div { class: "d-flex align-items-center",
@@ -355,8 +359,8 @@ pub fn MenuBar(
                             class: if is_connected { "btn btn-success me-4" } else { "btn btn-secondary me-4 disabled pe-none" },
                             disabled: !is_connected,
                             "data-mdb-ripple-init": "",
-                            "data-mdb-tooltip-init": format!("{}", title_str),
-                            "data-mdb-original-title": format!("{}", title_str),
+                            "data-mdb-tooltip-init": title_str.clone(),
+                            "data-mdb-original-title": title_str,
                             // title: title_str(),
                             onclick: move |_| {
                                 if is_connected {

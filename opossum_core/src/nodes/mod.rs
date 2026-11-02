@@ -64,6 +64,7 @@ pub use source_port::SourcePort;
 pub use spectrometer::{Spectrometer, SpectrometerType};
 pub use spot_diagram::{SpotDiagram, SpotDiagramData};
 pub use thin_mirror::ThinMirror;
+use uom::si::f64::Length;
 pub use wavefront::WaveFront;
 pub use wavefront::wavefront_data::{WaveFrontData, WaveFrontMap};
 pub use wavefront::zernike::WavefrontDecomposition;
@@ -167,6 +168,18 @@ static VOLUME_NODE_TYPES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
 pub fn is_volume_node_type(node_type: &str) -> bool {
     VOLUME_NODE_TYPES.contains(node_type)
 }
+/// Trait for dealing with nodes providing an edge thickness (`Lens` & `CylindricLens`)
+///
+/// This trait is necessary for implementing optimization operands such as "mininum edge thickness" etc.
+pub trait EdgeThickness: Send + Sync {
+    /// Computes the minimal edge thickness of the component at its clear rim.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the undelying concrete implementation returns an error.
+    fn min_edge_thickness(&self) -> OpmResult<Length>;
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

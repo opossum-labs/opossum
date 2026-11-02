@@ -2,16 +2,18 @@
 
 use super::OpmDocument;
 use crate::{
-    analyzers::{Analyzer, AnalyzerRegistration, AnalyzerType},
+    analyzers::{AnalyzerKind, AnalyzerRegistration, AnalyzerType},
     core_optics::OpticNode,
     error::{OpmResult, OpossumError},
     reporting::analysis_report::AnalysisReport,
 };
 use log::info;
+use uuid::Uuid;
 
 /// Internal description of a single planned analysis run.
 #[derive(Debug, Clone)]
 struct AnalysisRun {
+    analyzer_id: Uuid,
     analyzer_nr: usize,
     analyzer_type: AnalyzerType,
     scenario_name: Option<String>,
@@ -19,6 +21,61 @@ struct AnalysisRun {
 }
 
 impl OpmDocument {
+    /// Executes the optical simulation without generating reports or resetting node data.
+    ///
+    /// This is optimized for numerical inner loops (e.g. solvers, optimizers) where
+    /// intermediate reports are unnecessary and detector nodes must retain their light data
+    /// for direct metric querying.
+    ///
+    /// # Errors
+    ///
+    /// This function returns errors similar to the "regular" `analyze` function.
+    pub fn analyze_headless(&mut self) -> OpmResult<()> {
+        if self.analyzers.is_empty() {
+            return Ok(());
+        }
+
+        self.metric_store.clear();
+
+        let runs = self.analysis_runs()?;
+
+        for AnalysisRun {
+            analyzer_id,
+            analyzer_type,
+            ..
+        } in runs
+        {
+            let analyzer_kind: AnalyzerKind = analyzer_type.kind();
+            let analyzer_box = inventory::iter::<AnalyzerRegistration>
+                .into_iter()
+                .find_map(|reg| (reg.builder)(&analyzer_type))
+                .ok_or_else(|| {
+                    OpossumError::Other(format!(
+                        "No analyzer implementation found for type: {analyzer_type:?}"
+                    ))
+                })?;
+
+            // 1. Vorherige Strahlengänge aus dem Graphen entfernen
+            self.scenery.clear_edges();
+
+            // 2. Raw physics/raytracing direkt auf der Scenery ausführen
+            analyzer_box.analyze(&mut self.scenery)?;
+
+            // 3. Observablen aller Detektorknoten für diesen Run einsammeln
+            let nodes = self.scenery.collect_all_nodes_recursive();
+            for node in nodes {
+                let node_id = node.uuid();
+                for desc in node.observable_metrics(analyzer_kind) {
+                    if let Some(val) = node.read_observable(&desc.name) {
+                        self.metric_store
+                            .insert((analyzer_id, node_id, desc.name.clone()), val);
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
     /// Performs an analysis run of this [`OpmDocument`].
     ///
     /// Executes the defined analyzers in the order they were registered.
@@ -39,6 +96,7 @@ impl OpmDocument {
         let mut reports = Vec::new();
 
         for AnalysisRun {
+            analyzer_id: _,
             analyzer_nr,
             analyzer_type,
             scenario_name,
@@ -53,26 +111,10 @@ impl OpmDocument {
                         "No analyzer implementation found for type: {analyzer_type:?}"
                     ))
                 })?;
-            let analyzer: &dyn Analyzer = &*analyzer_box;
 
-            match (&analyzer_name, &scenario_name) {
-                (Some(name), Some(scenario)) => {
-                    info!("Analysis #{analyzer_nr} '{name}', pump scenario '{scenario}'");
-                }
-                (Some(name), None) => {
-                    info!("Analysis #{analyzer_nr} '{name}'");
-                }
-                (None, Some(scenario)) => {
-                    info!("Analysis #{analyzer_nr}, pump scenario '{scenario}'");
-                }
-                (None, None) => {
-                    info!("Analysis #{analyzer_nr}");
-                }
-            }
-
-            analyzer.analyze(&mut self.scenery)?;
+            analyzer_box.analyze(&mut self.scenery)?;
             info!("Generating report #{analyzer_nr}");
-            let mut report = analyzer.report(&self.scenery)?;
+            let mut report = analyzer_box.report(&self.scenery)?;
 
             if let Some(name) = &scenario_name {
                 report.set_analysis_type(&format!("{} - {name}", report.analysis_type()));
@@ -100,11 +142,12 @@ impl OpmDocument {
     fn analysis_runs(&self) -> OpmResult<Vec<AnalysisRun>> {
         let mut runs = Vec::new();
 
-        for (analyzer_nr, (_, analyzer_info)) in self.analyzers.iter().enumerate() {
+        for (analyzer_nr, (&analyzer_id, analyzer_info)) in self.analyzers.iter().enumerate() {
             let analyzer_name = analyzer_info.name().map(ToString::to_string);
 
             if analyzer_info.pump_scenarios().is_empty() {
                 runs.push(AnalysisRun {
+                    analyzer_id,
                     analyzer_nr,
                     analyzer_type: analyzer_info.analyzer_type().clone(),
                     scenario_name: None,
@@ -125,6 +168,7 @@ impl OpmDocument {
                 analyzer_type.set_active_pump_scenario(Some(scenario.clone()));
 
                 runs.push(AnalysisRun {
+                    analyzer_id,
                     analyzer_nr,
                     analyzer_type,
                     scenario_name: Some(scenario.name().to_string()),

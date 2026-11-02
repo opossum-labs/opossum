@@ -774,7 +774,7 @@ mod tests {
         let reloaded_doc = OpmDocument::from_string(&ron_str)?;
         assert_eq!(reloaded_doc.embedded_materials.len(), 1);
 
-        let all_reloaded_nodes = reloaded_doc.scenery().collect_all_nodes_recursive()?;
+        let all_reloaded_nodes = reloaded_doc.scenery().collect_all_nodes_recursive();
         let mut found_restored_material = false;
 
         for node_ref in all_reloaded_nodes {
