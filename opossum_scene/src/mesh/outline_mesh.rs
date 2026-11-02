@@ -97,24 +97,89 @@ impl OutlineMesh {
         segments: usize,
         height: impl Fn(Point2<Length>) -> OpmResult<Length>,
     ) -> OpmResult<Self> {
+        Self::from_rims(
+            &Self::rims_on(outline, segments, &height)?,
+            Self::area_on(outline, &height),
+        )
+    }
+    /// Lay this triangulation of an outline's plane onto a surface above it: the area of the
+    /// outline where it meets the surface (see [`OutlineMesh::on`]).
+    ///
+    /// Where the outline meets the surface right above its rims in the plane - without a bore, or
+    /// with a bore along the axis - this very triangulation serves the surface as it is. Only a
+    /// tilted bore, which meets the surface beside where it crosses the plane, has the area
+    /// triangulated anew.
+    ///
+    /// # Arguments
+    ///
+    /// - `outline`: the outline this mesh triangulates the plane of
+    /// - `segments`: the number of points this mesh was sampled with on each rim
+    /// - `height`: how far above a position of the plane the surface lies, along the axis of the
+    ///   component
+    ///
+    /// # Returns
+    ///
+    /// The triangulated area, its points the positions in the plane right below the surface.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error in the same cases as [`OutlineMesh::on`].
+    pub fn laid_on(
+        &self,
+        outline: &Outline,
+        segments: usize,
+        height: impl Fn(Point2<Length>) -> OpmResult<Length>,
+    ) -> OpmResult<Self> {
+        let rims = Self::rims_on(outline, segments, &height)?;
+        let same_rims = self.rims.len() == rims.len()
+            && self
+                .rims
+                .iter()
+                .zip(&rims)
+                .all(|(range, rim)| self.points.get(range.clone()) == Some(rim.as_slice()));
+        if same_rims {
+            return Ok(self.clone());
+        }
+        Self::from_rims(&rims, Self::area_on(outline, &height))
+    }
+    /// Return the rims of an outline where it meets a surface above its plane: the edge
+    /// counter-clockwise right above where it lies, the bore clockwise where it meets the surface.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if an edge cannot be sampled, or if the surface cannot be
+    /// told where the bore meets it.
+    fn rims_on(
+        outline: &Outline,
+        segments: usize,
+        height: &impl Fn(Point2<Length>) -> OpmResult<Length>,
+    ) -> OpmResult<Vec<Vec<Point2<Length>>>> {
         let mut rims = vec![outline.shape().ring_points(segments)?];
         if let Some(bore) = outline.bore() {
             let mut rim = bore
                 .ring_points(segments)?
                 .into_iter()
-                .map(|point| bore.meeting(point, &height))
+                .map(|point| bore.meeting(point, height))
                 .collect::<OpmResult<Vec<_>>>()?;
             // The bore takes its area away, so its rim runs clockwise.
             rim.reverse();
             rims.push(rim);
         }
-        Self::from_rims(&rims, |point| {
+        Ok(rims)
+    }
+    /// Return whether a point of an outline's plane lies in its area where it meets a surface
+    /// above the plane: within its edge and outside its bore.
+    fn area_on<'a>(
+        outline: &'a Outline,
+        height: &'a impl Fn(Point2<Length>) -> OpmResult<Length>,
+    ) -> impl Fn(Point2<Length>) -> bool + 'a {
+        move |point| {
             outline.within_edge(point)
                 && !(outline.bore().is_some()
                     && height(point).is_ok_and(|above| {
                         outline.in_bore_at(Point3::new(point.x, point.y, above))
                     }))
-        })
+        }
     }
     /// Triangulate the area the given rims enclose.
     ///
@@ -343,6 +408,7 @@ mod test {
         degree, millimeter,
     };
     use std::f64::consts::PI;
+    use uom::si::f64::Angle;
 
     /// How finely the test outlines are sampled along their rim.
     const SEGMENTS: usize = 48;
@@ -552,6 +618,53 @@ mod test {
                 OutlineMesh::flat(&one, SEGMENTS)?,
                 OutlineMesh::flat(&other, SEGMENTS)?,
                 "two equal {name}s were triangulated differently"
+            );
+        }
+        Ok(())
+    }
+
+    /// Laid onto a curved surface, the triangulation of the plane is the very mesh the surface
+    /// would be triangulated into on its own. Without a bore, or with a bore along the axis, that
+    /// is the plane's mesh unchanged; a tilted bore meets the surface elsewhere and changes it.
+    #[test]
+    fn the_plane_laid_on_a_surface_is_the_mesh_of_the_surface() -> OpmResult<()> {
+        let radius = millimeter!(60.0);
+        let height =
+            |point: Point2<Length>| Ok((point.x * point.x + point.y * point.y) / (2.0 * radius));
+        let bored = |tilt: Angle| -> OpmResult<Outline> {
+            Outline::new(
+                CircleShape::new(millimeter!(12.5))?,
+                Some(
+                    Bore::new(
+                        CircleShape::new(millimeter!(3.0))?,
+                        millimeter!(5.0, 1.0),
+                        degree!(0.0),
+                    )
+                    .with_tilt(tilt, tilt / 2.0),
+                ),
+            )
+        };
+        for (name, outline, unchanged) in [
+            (
+                "circle",
+                Outline::new(CircleShape::new(millimeter!(12.5))?, None)?,
+                true,
+            ),
+            ("bore along the axis", bored(degree!(0.0))?, true),
+            ("tilted bore", bored(degree!(10.0))?, false),
+        ] {
+            let plane = OutlineMesh::flat(&outline, SEGMENTS)?;
+            let laid = plane.laid_on(&outline, SEGMENTS, height)?;
+            assert_eq!(
+                laid,
+                OutlineMesh::on(&outline, SEGMENTS, height)?,
+                "{name}: laid on the surface, the plane is not the surface's own mesh"
+            );
+            assert_eq!(
+                laid == plane,
+                unchanged,
+                "{name}: unchanged {}",
+                laid == plane
             );
         }
         Ok(())

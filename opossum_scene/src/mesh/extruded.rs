@@ -26,9 +26,10 @@ use super::{
 /// micrometres or metres.
 const SURFACE_TOUCHING_TOLERANCE: f64 = 1e-9;
 
-/// The profile is triangulated once and both faces are laid over that same mesh, which is what
-/// makes their rims agree point for point; the lateral face is then drawn between those rims and
-/// closes the body. All three face outwards.
+/// The profile is triangulated once and both faces are laid over that same mesh (see
+/// [`OutlineMesh::laid_on`]); only a tilted bore has a face triangulated anew. Their rims agree point
+/// for point either way, so the lateral face is then drawn between those rims and closes the body.
+/// All three face outwards.
 ///
 /// # Errors
 ///
@@ -61,16 +62,16 @@ impl Meshable for Extruded {
                 )));
             }
         }
-        // A tilted bore meets each face somewhere else, so each face gets its own rims.
+        // Both faces lie over the profile; only a tilted bore, meeting each elsewhere, redoes it.
         let front = SurfaceMesh::over(
             &front_at,
-            &OutlineMesh::on(outline, segments, |position| {
+            &in_plane.laid_on(outline, segments, |position| {
                 Ok(front_at.above(&position)?.0.z)
             })?,
         )?;
         let rear = SurfaceMesh::over(
             &rear_at,
-            &OutlineMesh::on(outline, segments, |position| {
+            &in_plane.laid_on(outline, segments, |position| {
                 Ok(rear_at.above(&position)?.0.z)
             })?,
         )?;
