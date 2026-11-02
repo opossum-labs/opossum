@@ -623,6 +623,9 @@ mod test {
         assert!(config.get_source(&uuid2).is_none());
         Ok(())
     }
+    /// Neither dummy is placed: no axis reaches the first, so it waits to stand in front of the
+    /// second, which gets no axis from it. The first is offered once more at the end and still has
+    /// nothing placed to stand in front of.
     #[test]
     fn test_no_optical_axis_warning() -> OpmResult<()> {
         let mut scenery = NodeGroup::new("OpticScenery demo");
@@ -635,8 +638,8 @@ mod test {
         check_logs(
             log::Level::Warn,
             vec![
-                "'dummy1' (dummy) has no incoming connections and can thus not being placed. Skipping.",
                 "'dummy2' (dummy) got no valid optical axis data from previous node and can thus not being placed. Skipping.",
+                "'dummy1' (dummy) has no incoming connections and can thus not being placed. Skipping.",
             ],
         );
         Ok(())
