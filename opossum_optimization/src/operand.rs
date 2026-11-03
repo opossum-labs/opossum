@@ -10,7 +10,12 @@ use opossum_core::{
 };
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
-use uom::si::{f64::Length, length::meter};
+use uom::si::{
+    energy::joule,
+    f64::{Energy, Length, RadiantExposure},
+    length::meter,
+    radiant_exposure::joule_per_square_meter,
+};
 use uuid::Uuid;
 
 /// Default scale constants for optical observables in SI base units (meters).
@@ -206,6 +211,70 @@ impl TargetValueOperand {
             scale.get::<meter>(),
         )
     }
+    /// Creates a target operand for optical energy observables with automatic 1.0 mJ default scaling.
+    pub fn for_energy(
+        name: impl Into<String>,
+        source: impl Into<MetricSource>,
+        target: Energy,
+        weight: f64,
+    ) -> Self {
+        Self::new(
+            name,
+            source,
+            target.get::<joule>(),
+            weight,
+            1.0e-3, // 1.0 mJ default normalization scale
+        )
+    }
+
+    /// Creates a target operand for optical energy with explicit tolerance scaling.
+    pub fn for_energy_with_scale(
+        name: impl Into<String>,
+        source: impl Into<MetricSource>,
+        target: Energy,
+        scale: Energy,
+        weight: f64,
+    ) -> Self {
+        Self::new(
+            name,
+            source,
+            target.get::<joule>(),
+            weight,
+            scale.get::<joule>(),
+        )
+    }
+
+    /// Creates a target operand for physical optical path difference (OPD).
+    /// Default scale is 100 nm (0.1 um).
+    pub fn for_wavefront_opd(
+        name: impl Into<String>,
+        source: impl Into<MetricSource>,
+        target_opd: Length,
+        weight: f64,
+    ) -> Self {
+        Self::new(
+            name,
+            source,
+            target_opd.get::<uom::si::length::meter>(),
+            weight,
+            DEFAULT_WAVEFRONT_SCALE, // 1.0e-7 m
+        )
+    }
+    /// Creates a target operand for fluence metrics with automatic default scaling (1.0 J/cm² = 10,000 J/m²).
+    pub fn for_fluence(
+        name: impl Into<String>,
+        source: impl Into<MetricSource>,
+        target: RadiantExposure,
+        weight: f64,
+    ) -> Self {
+        Self::new(
+            name,
+            source,
+            target.get::<joule_per_square_meter>(),
+            weight,
+            1.0e4, // 1.0 J/cm^2 default normalization scale
+        )
+    }
 }
 
 impl Operand for TargetValueOperand {
@@ -300,6 +369,22 @@ impl ThresholdOperand {
             direction,
             weight,
             DEFAULT_GEOMETRIC_SCALE,
+        )
+    }
+    /// Creates an upper threshold constraint for fluence (e.g. enforcing LIDT laser damage thresholds).
+    pub fn for_max_fluence(
+        name: impl Into<String>,
+        source: impl Into<MetricSource>,
+        limit: RadiantExposure,
+        weight: f64,
+    ) -> Self {
+        Self::new(
+            name,
+            source,
+            limit.get::<joule_per_square_meter>(),
+            ThresholdDirection::Upper,
+            weight,
+            1.0e4, // 1.0 J/cm^2 scale
         )
     }
 }
