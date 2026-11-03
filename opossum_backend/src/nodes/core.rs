@@ -18,7 +18,7 @@ use opossum_core::{
 use uuid::Uuid;
 
 use crate::{
-    analyzers::{create_default_energy_builder, create_default_ray_builder},
+    analyzers::light_new_source,
     app_state::AppState,
     error::BackEndErrorResponse,
     helper_functions::{
@@ -104,40 +104,16 @@ pub async fn post_children(
     let (_, delta) = scenery
         .with_group_node_mut(uuid, |g| g.add_node_ref_with_delta(new_node_ref.clone()))??;
 
-    // --- AUTOMATICALLY INJECT MAPPINGS INTO ALL ANALYZERS IF NEW NODE IS A SOURCE PORT ---
-    let node_type_str = new_node_ref.node_attr().node_type().to_string();
     let new_node_uuid = new_node_ref.node_attr().uuid();
-
-    let mut analyzer_inverses: Vec<Command> = Vec::new();
-    if node_type_str == "source port" {
-        let analyzer_keys: Vec<Uuid> = document.analyzers().keys().copied().collect();
-        for az_uuid in analyzer_keys {
-            if let Some(analyzer_info) = document.analyzer_mut(az_uuid) {
-                let default_wvl = analyzer_info.default_wavelength();
-                let old_type = analyzer_info.analyzer_type().clone();
-                let mut a_type = old_type.clone();
-                match &mut a_type {
-                    AnalyzerType::Energy(cfg) => {
-                        cfg.map_source(new_node_uuid, create_default_energy_builder(default_wvl));
-                    }
-                    AnalyzerType::RayTrace(cfg) => {
-                        cfg.map_source(new_node_uuid, create_default_ray_builder(default_wvl));
-                    }
-                    AnalyzerType::GhostFocus(cfg) => {
-                        cfg.map_source(new_node_uuid, create_default_ray_builder(default_wvl));
-                    }
-                }
-                if a_type != old_type {
-                    analyzer_info.set_analyzer_type(&a_type);
-                    analyzer_inverses.push(Command::PatchAnalyzer(Box::new(PatchAnalyzer {
-                        id: az_uuid,
-                        old: a_type,
-                        new: old_type,
-                    })));
-                }
-            }
-        }
-    }
+    let analyzer_inverses = if document
+        .scenery()
+        .find_source_ports()?
+        .contains(&new_node_uuid)
+    {
+        light_new_source(&mut document, new_node_uuid, None)
+    } else {
+        Vec::new()
+    };
     drop(document);
 
     let remove_node = Command::UndoGraph(Box::new(delta));
