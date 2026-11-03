@@ -655,6 +655,102 @@ impl Spectrum {
                 .collect::<Vec<(f64, f64)>>(),
         );
     }
+    /// Returns the wavelength corresponding to the maximum spectral intensity.
+    ///
+    /// Returns `None` if all spectral values are zero or non-positive.
+    #[must_use]
+    pub fn peak_wavelength(&self) -> Option<Length> {
+        let max_entry = self
+            .data
+            .iter()
+            .filter(|(_, val)| *val > 0.0)
+            .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))?;
+        Some(micrometer!(max_entry.0))
+    }
+
+    /// Returns the spectral bandwidth as root-mean-square (standard deviation about the center wavelength).
+    ///
+    /// Returns `None` if the total integrated energy is zero or non-finite.
+    #[must_use]
+    pub fn spectral_bandwidth_rms(&self) -> Option<Length> {
+        let mut weighted_sum = 0.0;
+        let mut total_weight = 0.0;
+        for bin in self.data.get().windows(2) {
+            let bin_width = bin[1].0 - bin[0].0;
+            let bin_center = bin[0].0;
+            let bin_weight = bin[0].1 * bin_width;
+            weighted_sum = bin_center.mul_add(bin_weight, weighted_sum);
+            total_weight += bin_weight;
+        }
+
+        if total_weight <= 0.0 || !total_weight.is_finite() {
+            return None;
+        }
+
+        let center = weighted_sum / total_weight;
+        let mut variance_sum = 0.0;
+        for bin in self.data.get().windows(2) {
+            let bin_width = bin[1].0 - bin[0].0;
+            let bin_center = bin[0].0;
+            let bin_weight = bin[0].1 * bin_width;
+            let diff = bin_center - center;
+            variance_sum = (diff * diff).mul_add(bin_weight, variance_sum);
+        }
+
+        let variance = variance_sum / total_weight;
+        Some(micrometer!(variance.sqrt()))
+    }
+    /// Returns the full width at half maximum (FWHM) of the spectrum.
+    ///
+    /// Returns `None` if no distinct peak exists or if the spectrum has fewer than 2 data points.
+    #[must_use]
+    pub fn fwhm(&self) -> Option<Length> {
+        let max_val = self.data.iter().map(|(_, val)| *val).fold(0.0f64, f64::max);
+
+        if max_val <= 0.0 || !max_val.is_finite() {
+            return None;
+        }
+
+        let half_max = 0.5 * max_val;
+        let data = self.data.get();
+        if data.len() < 2 {
+            return None;
+        }
+
+        // Locate the interpolated left crossing at half maximum
+        let left_idx = data.iter().position(|(_, val)| *val >= half_max)?;
+        let left_lambda = if left_idx == 0 {
+            data[0].0
+        } else {
+            let (x0, y0) = data[left_idx - 1];
+            let (x1, y1) = data[left_idx];
+            if (y1 - y0).abs() < f64::EPSILON {
+                x0
+            } else {
+                x0 + (half_max - y0) * (x1 - x0) / (y1 - y0)
+            }
+        };
+
+        // Locate the interpolated right crossing at half maximum
+        let right_idx = data.iter().rposition(|(_, val)| *val >= half_max)?;
+        let right_lambda = if right_idx >= data.len() - 1 {
+            data[data.len() - 1].0
+        } else {
+            let (x0, y0) = data[right_idx];
+            let (x1, y1) = data[right_idx + 1];
+            if (y1 - y0).abs() < f64::EPSILON {
+                x0
+            } else {
+                x0 + (half_max - y0) * (x1 - x0) / (y1 - y0)
+            }
+        };
+
+        if right_lambda >= left_lambda {
+            Some(micrometer!(right_lambda - left_lambda))
+        } else {
+            None
+        }
+    }
 }
 
 impl<'a> IntoIterator for &'a Spectrum {

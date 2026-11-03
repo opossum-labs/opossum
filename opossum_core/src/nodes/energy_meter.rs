@@ -256,10 +256,11 @@ impl OpticNode for EnergyMeter {
                 .with_default_target(0.0),
         ]
     }
+
     fn read_observable(&self, metric_name: &str) -> Option<f64> {
         match metric_name {
             // Return raw scalar value in fundamental SI base unit (Joules)
-            "Energy" => self.get_energy().map(|e| e.value),
+            "Energy" | "energy" => self.get_energy().map(|e| e.value),
             _ => None,
         }
     }
@@ -475,6 +476,40 @@ mod test {
         }
         assert_eq!(report.notes().len(), 1);
         assert_eq!(report.notes()[0].level, ReportLevel::Warning);
+        Ok(())
+    }
+    #[test]
+    fn observable_metrics_energy_meter() {
+        let meter = EnergyMeter::default();
+        // EnergyMeter provides Energy metrics across all analyzer kinds
+        for kind in [
+            AnalyzerKind::Energy,
+            AnalyzerKind::RayTrace,
+            AnalyzerKind::GhostFocus,
+        ] {
+            let metrics = meter.observable_metrics(kind);
+            assert_eq!(metrics.len(), 1);
+            assert_eq!(metrics[0].name, "Energy");
+            assert_eq!(metrics[0].dimension, MetricDimension::Energy);
+        }
+    }
+
+    #[test]
+    fn read_observable_energy_meter() -> OpmResult<()> {
+        let mut meter = EnergyMeter::default();
+        assert_eq!(meter.read_observable("Energy"), None);
+
+        // 1. Test with spectral energy data
+        meter.set_light_data(Some(LightData::Energy(create_he_ne_spec(1.5)?)));
+        assert_eq!(meter.read_observable("Energy"), Some(1.5));
+        assert_eq!(meter.read_observable("energy"), Some(1.5)); // Case-insensitive alias
+
+        // 2. Test with geometric ray data
+        let ray = Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), nanometer!(1064.0), joule!(3.0))?;
+        meter.set_light_data(Some(LightData::Geometric(Rays::from(ray))));
+        assert_eq!(meter.read_observable("Energy"), Some(3.0));
+
+        assert_eq!(meter.read_observable("unknown_metric"), None);
         Ok(())
     }
 }

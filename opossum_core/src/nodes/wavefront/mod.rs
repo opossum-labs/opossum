@@ -310,15 +310,42 @@ impl OpticNode for WaveFront {
     fn observable_metrics(&self, analyzer: AnalyzerKind) -> Vec<ObservableDescriptor> {
         match analyzer {
             AnalyzerKind::RayTrace | AnalyzerKind::GhostFocus => vec![
+                // Wavefront error in fractions of wavelength lambda (waves)
                 ObservableDescriptor::new(
                     "Wavefront RMS",
-                    "Wavefront root mean square error relative to chief ray in waves",
+                    "Wavefront root mean square error relative to chief ray (waves)",
                     MetricDimension::Dimensionless,
                 )
                 .with_default_target(0.0),
                 ObservableDescriptor::new(
                     "Wavefront PtV",
-                    "Wavefront peak-to-valley error in waves",
+                    "Wavefront peak-to-valley error (waves)",
+                    MetricDimension::Dimensionless,
+                )
+                .with_default_target(0.0),
+                // Optical path difference (OPD) in SI base units (meters)
+                ObservableDescriptor::new(
+                    "Wavefront RMS OPD",
+                    "Wavefront root mean square optical path difference (meters)",
+                    MetricDimension::Length,
+                )
+                .with_default_target(0.0),
+                ObservableDescriptor::new(
+                    "Wavefront PtV OPD",
+                    "Wavefront peak-to-valley optical path difference (meters)",
+                    MetricDimension::Length,
+                )
+                .with_default_target(0.0),
+                // Primary aberration modes (Zernike coefficients in waves)
+                ObservableDescriptor::new(
+                    "Zernike Defocus",
+                    "Z4 Defocus coefficient (waves)",
+                    MetricDimension::Dimensionless,
+                )
+                .with_default_target(0.0),
+                ObservableDescriptor::new(
+                    "Zernike Spherical",
+                    "Z11 Primary spherical aberration coefficient (waves)",
                     MetricDimension::Dimensionless,
                 )
                 .with_default_target(0.0),
@@ -328,34 +355,53 @@ impl OpticNode for WaveFront {
     }
 
     fn read_observable(&self, metric_name: &str) -> Option<f64> {
-        if let Some(LightData::Geometric(rays)) = &self.light_data {
-            let iso = self
-                .effective_surface_iso("input_1")
-                .unwrap_or_else(|_| Isometry::identity());
+        let LightData::Geometric(rays) = self.light_data.as_ref()? else {
+            return None;
+        };
 
-            // Tilt-Flag aus Properties lesen (Default: false)
-            let remove_tilt = self
-                .node_attr
-                .get_property("remove tilt")
-                .ok()
-                .and_then(|p| match p {
-                    Proptype::Bool(b) => Some(*b),
-                    _ => None,
-                })
-                .unwrap_or(false);
+        let iso = self
+            .effective_surface_iso("input_1")
+            .unwrap_or_else(|_| Isometry::identity());
 
-            if let Ok(wf_data) =
-                wavefront_data::WaveFrontData::from_rays(rays, true, false, &iso, remove_tilt)
-                && let Some(map) = wf_data.wavefront_error_maps.first()
-            {
-                return match metric_name {
-                    "Wavefront RMS" => Some(map.rms()),
-                    "Wavefront PtV" => Some(map.ptv()),
-                    _ => None,
-                };
+        let remove_tilt = self
+            .node_attr
+            .get_property("remove tilt")
+            .ok()
+            .and_then(|p| match p {
+                Proptype::Bool(b) => Some(*b),
+                _ => None,
+            })
+            .unwrap_or(false);
+
+        let wf_data =
+            wavefront_data::WaveFrontData::from_rays(rays, true, false, &iso, remove_tilt).ok()?;
+        let map = wf_data.wavefront_error_maps.first()?;
+        let wvl_m = map.wavelength().get::<uom::si::length::meter>();
+
+        let lower = metric_name.to_lowercase();
+        match lower.as_str() {
+            // Metrics in waves (dimensionless)
+            "wavefront rms" | "rms" => Some(map.rms()),
+            "wavefront ptv" | "ptv" => Some(map.ptv()),
+
+            // Metrics in meters (Length)
+            "wavefront rms opd" | "rms opd" => Some(map.rms() * wvl_m),
+            "wavefront ptv opd" | "ptv opd" => Some(map.ptv() * wvl_m),
+
+            // Zernike coefficients on-demand
+            "zernike defocus" | "z4" => {
+                let norm_r = map.max_radius();
+                let basis = ZernikeNoll::new(2, norm_r);
+                map.decompose(&basis).ok().map(|d| d.modes[3].coefficient)
             }
+            "zernike spherical" | "z11" => {
+                let norm_r = map.max_radius();
+                let basis = ZernikeNoll::new(4, norm_r);
+                map.decompose(&basis).ok().map(|d| d.modes[10].coefficient)
+            }
+
+            _ => None,
         }
-        None
     }
 }
 impl From<WaveFrontMap> for Proptype {
