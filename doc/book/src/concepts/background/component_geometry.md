@@ -383,7 +383,10 @@ It then calls `calc_node_positions` with `RayTraceConfig::for_positioning`. Plac
 position or a property into a node without rebuilding them. The run visits the nodes in a topological order that takes
 ordinary nodes before references and nodes no axis reaches last (`PlacingOrder` in
 `nodes/node_group/optic_graph/raytrace.rs`); it marks every connection whose distance places a node
-(`LightFlow::placed_by_distance`). For the lens,
+(`LightFlow::placed_by_distance`). A node no axis reaches is put back and, once every other node was visited, placed
+in front of what it feeds, back to front: a node light passes through by its own response to the axis
+(`OpticGraph::axis_response` sends the axis through a copy of the node at the origin, alignment included), a source
+by the face of its output port. The nodes put back are then traced front to back. For the lens,
 `OpticGraph::set_node_isometry` (`nodes/node_group/optic_graph/analysis.rs`) does the following:
 
 1. It propagates the axis ray by the 100 mm of the connection.
