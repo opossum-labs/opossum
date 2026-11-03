@@ -5781,6 +5781,7 @@ dependencies = [
  "opossum_cli",
  "opossum_core",
  "opossum_gui",
+ "opossum_optimization",
  "opossum_reporter",
 ]
 
@@ -5795,6 +5796,7 @@ dependencies = [
  "log",
  "nalgebra",
  "opossum_core",
+ "opossum_optimization",
  "opossum_reporter",
  "parking_lot 0.13.0",
  "ron",
@@ -8270,6 +8272,7 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]

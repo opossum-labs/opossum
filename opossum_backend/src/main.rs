@@ -8,6 +8,7 @@ mod general;
 mod helper_functions;
 mod nodes;
 mod operations;
+mod optimization;
 mod pages;
 mod payload_logger;
 mod pump_scenarios;

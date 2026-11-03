@@ -10,6 +10,7 @@ opossum_backend = { workspace = true }
 opossum_cli = { workspace = true }
 opossum_gui = { workspace = true }
 opossum_reporter = { workspace = true }
+opossum_optimization = { workspace = true }
 
 [workspace]
 members = [
@@ -20,7 +21,9 @@ members = [
     "opossum_gui",
     "opossum_core/opm_macros_lib",
     "xtask",
-    "opossum_registry", "schott_converter", "opossum_optimization",
+    "opossum_registry",
+    "schott_converter",
+    "opossum_optimization",
 ]
 # default-members = ["opossum_backend", "opossum_cli", "opossum_gui", "opossum_core", "opossum_core/opm_macros_lib"]
 # default-members = ["opossum_backend", "opossum_cli", "opossum_gui", "opossum_core", "opossum_registry"]
@@ -47,6 +50,7 @@ opossum_backend = { version = "0.8.1", path = "opossum_backend" }
 opossum_cli = { version = "0.8.1", path = "opossum_cli" }
 opossum_gui = { version = "0.8.1", path = "opossum_gui" }
 opossum_registry = { version = "0.8.1", path = "opossum_registry" }
+opossum_optimization = { version = "0.8.1", path = "opossum_optimization" }
 
 approx = "0.5"
 chrono = { version = "0.4.45", features = ["serde"] }

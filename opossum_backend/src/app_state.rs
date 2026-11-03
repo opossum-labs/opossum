@@ -1,11 +1,16 @@
-use std::collections::VecDeque;
+use std::{
+    collections::VecDeque,
+    sync::{Arc, atomic::AtomicBool},
+};
 
 use actix_web::dev::ServerHandle;
 use opossum_core::{
     core_optics::OpticRef, opm_document::OpmDocument, types::api_types::AnalyzerItemDto,
 };
+use opossum_optimization::progress::OptimizationProgressEvent;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
+use tokio::sync::broadcast;
 
 use crate::undo::Command;
 
@@ -14,13 +19,45 @@ use crate::undo::Command;
 /// memory budget the way a whole-document-snapshot approach would have needed.
 pub const MAX_UNDO_DEPTH: usize = 100;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub enum OptimizationStatus {
+    Idle,
+    Running,
+    Finished,
+    Aborted,
+    Failed,
+}
+#[derive(Clone)]
+pub struct OptimizationManager {
+    pub cancel_flag: Arc<AtomicBool>,
+    pub event_sender: broadcast::Sender<OptimizationProgressEvent>,
+    pub status: Arc<parking_lot::RwLock<OptimizationStatus>>,
+}
+impl Default for OptimizationManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl OptimizationManager {
+    pub fn new() -> Self {
+        let (tx, _) = broadcast::channel(100);
+        Self {
+            cancel_flag: Arc::new(AtomicBool::new(false)),
+            event_sender: tx,
+            status: Arc::new(parking_lot::RwLock::new(OptimizationStatus::Idle)),
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct AppState {
-    pub document: Mutex<OpmDocument>,
+    pub document: parking_lot::Mutex<OpmDocument>,
     pub server_handle: Mutex<Option<ServerHandle>>,
     pub node_copy_cache: Mutex<Vec<NodeCacheItem>>,
     pub undo_stack: Mutex<VecDeque<Command>>,
     pub redo_stack: Mutex<VecDeque<Command>>,
+    pub optimization: OptimizationManager,
 }
 impl AppState {
     /// Sets the server handle to stop.
@@ -55,6 +92,7 @@ impl Clone for AppState {
             node_copy_cache: Mutex::new(Vec::new()),
             undo_stack: Mutex::new(VecDeque::new()),
             redo_stack: Mutex::new(VecDeque::new()),
+            optimization: self.optimization.clone(),
         }
     }
 }
