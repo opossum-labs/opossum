@@ -3,7 +3,7 @@ use log::{info, warn};
 use crate::{
     analyzers::{propagation_strategy::PropagationStrategy, raytrace::AnalysisRayTrace},
     core_optics::{NodeAttrExt, OpticNodeExt, node_attr::HasNodeAttr},
-    error::{OpmResult, OpossumError},
+    error::OpmResult,
     joule,
     light::{LightData, LightResult, Ray, Rays},
     millimeter,
@@ -25,13 +25,12 @@ impl AnalysisRayTrace for SourcePort {
             warn!("{self} is not placed, so it sends out no light");
             return Ok(LightResult::default());
         }
-        let mut rays = config
-            .get_source(&self.node_attr().uuid())
-            .ok_or_else(|| {
-                OpossumError::Analysis(format!("No source data found in analyzer for {self}"))
-            })?
-            .clone()
-            .build()?;
+        let Some(ray_data_builder) =
+            self.light_or_warn(config.get_source(&self.node_attr().uuid()))
+        else {
+            return Ok(LightResult::default());
+        };
+        let mut rays = ray_data_builder.clone().build()?;
 
         // Apply the ambient refractive index to all newly created rays
         rays.set_refractive_index(&config.ambient_refractive_index())?;
@@ -50,9 +49,11 @@ impl AnalysisRayTrace for SourcePort {
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
         // Retrieve the source builder to read the alignment wavelength
-        let ray_data_builder = config.get_source(&self.node_attr().uuid()).ok_or_else(|| {
-            OpossumError::Analysis(format!("No source data found in analyzer for {self}"))
-        })?;
+        let Some(ray_data_builder) =
+            self.light_or_warn(config.get_source(&self.node_attr().uuid()))
+        else {
+            return Ok(LightResult::default());
+        };
         // The axis is a single ray: the source's rays are only built when no alignment wavelength
         // is given and their central wavelength has to stand in for it.
         let mut axis_ray = if let Some(alignment_wvl) = ray_data_builder.alignment_wavelength() {
@@ -87,9 +88,11 @@ mod test {
     use crate::{
         core_optics::{OpticNode, node_attr::NodePositioning},
         distributions::{energy::UniformDist, position::Hexapolar, spectral::LaserLines},
+        error::OpossumError,
         light::lightdata::ray_data_builder::RayDataBuilder,
         nanometer,
         prelude::{CollimatedSrc, ImageSrc, RayDataSource},
+        utils::test_helper::helper::assert_warned,
     };
     use approx::assert_relative_eq;
     use uom::si::{f64::Length, length::nanometer};
@@ -191,30 +194,24 @@ mod test {
         testing_logger::setup();
         let output = AnalysisRayTrace::analyze(&mut node, LightResult::default(), &config)?;
         assert!(output.is_empty(), "{output:?}");
-        testing_logger::validate(|logs| {
-            assert!(
-                logs.iter()
-                    .any(|log| log.level == log::Level::Warn && log.body.contains("is not placed")),
-                "no warning"
-            );
-        });
+        assert_warned("is not placed");
         Ok(())
     }
 
+    /// A source the analysis defines no light for sends out none, neither rays nor an optical
+    /// axis, and says so.
     #[test]
-    fn analyze_raytrace_no_source_definition() {
+    fn analyze_raytrace_no_source_definition() -> OpmResult<()> {
         let mut node = SourcePort::default();
-        let output_error = AnalysisRayTrace::analyze(
-            &mut node,
-            LightResult::default(),
-            &RayTraceConfig::default(),
-        )
-        .unwrap_err();
+        let config = RayTraceConfig::default();
+        testing_logger::setup();
+        assert!(AnalysisRayTrace::analyze(&mut node, LightResult::default(), &config)?.is_empty());
         assert!(
-            output_error
-                .to_string()
-                .contains("No source data found in analyzer for")
+            AnalysisRayTrace::calc_node_positions(&mut node, LightResult::default(), &config)?
+                .is_empty()
         );
+        assert_warned("has no light in this analysis");
+        Ok(())
     }
 
     #[test]

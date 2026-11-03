@@ -63,6 +63,18 @@ pub mod helper {
         });
     }
 
+    /// Assert that a warning containing `part` was logged since `testing_logger::setup()`.
+    pub fn assert_warned(part: &str) {
+        testing_logger::validate(|logs| {
+            assert!(
+                logs.iter()
+                    .any(|log| log.level == log::Level::Warn && log.body.contains(part)),
+                "no warning containing '{part}' in {:?}",
+                logs.iter().map(|log| log.body.as_str()).collect::<Vec<_>>()
+            );
+        });
+    }
+
     /// A frame well away from the origin and turned about all three axes.
     ///
     /// Geometry expressed in a component's own frame must not depend on where that component sits,

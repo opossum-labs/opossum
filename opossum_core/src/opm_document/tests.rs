@@ -332,8 +332,9 @@ fn a_model_without_a_source_port_is_not_placed() -> OpmResult<()> {
 }
 
 /// Two analyses can place the same model differently, so a drawing follows the one named, or else
-/// the first. Named, a ghost focus analysis that defines no light for the source stops the run;
-/// unnamed, the ray trace added before it places the model.
+/// the first. Named, a ghost focus analysis that defines no light for the source sends out no
+/// optical axis, so nothing after the source is placed; unnamed, the ray trace added before it
+/// places the model.
 #[test]
 fn a_model_analyzed_several_ways_is_drawn_after_its_first_analysis_unless_one_is_named()
 -> OpmResult<()> {
@@ -346,7 +347,8 @@ fn a_model_analyzed_several_ways_is_drawn_after_its_first_analysis_unless_one_is
     let placed = document.placed_scenery(None)?;
     assert_relative_eq!(placed_at(&placed, first)?, 0.1, epsilon = 1e-12);
 
-    assert!(document.placed_scenery(Some(ghost_focus)).is_err());
+    let placed = document.placed_scenery(Some(ghost_focus))?;
+    assert_eq!(z_of(&placed, first)?, None);
     Ok(())
 }
 
