@@ -170,7 +170,7 @@ impl Command {
                         .map(|(addr, (old_val, new_val))| (addr.clone(), (*new_val, *old_val)))
                         .collect(),
                 };
-                Ok(Command::ApplyOptimization(inverse))
+                Ok(Self::ApplyOptimization(inverse))
             }
         }
     }

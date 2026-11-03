@@ -131,7 +131,12 @@ impl<'a> OpticOptimizer<'a> {
     /// Executes the optimization, updates the model in-place, and refreshes detector states.
     ///
     /// # Errors
-    /// Returns an error if validation fails or the optimization solver encounters a fatal error.
+    ///
+    /// This function returns an error if
+    /// - no free variables were specified for the optimization
+    /// - no operands were specified for the merit function
+    /// - the free variable or operands definitions are invalid
+    /// - the optimization solver encounters a fatal error.
     pub fn optimize(self) -> OpmResult<OptimizationSummary> {
         if self.free_variables.is_empty() {
             return Err(OpossumError::Other(
@@ -179,6 +184,18 @@ impl<'a> OpticOptimizer<'a> {
         })
     }
 
+    /// Executes the optimization, updates the model in-place, and refreshes detector states.
+    ///
+    /// This function is similar to [`OpticOptimizer::optimize`] but allows for adding an observer function and an
+    /// abort functionality.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if
+    /// - no free variables were specified for the optimization
+    /// - no operands were specified for the merit function
+    /// - the free variable or operands definitions are invalid
+    /// - the optimization solver encounters a fatal error.
     pub fn optimize_with_observer<F>(
         self,
         cancel_flag: Arc<AtomicBool>,

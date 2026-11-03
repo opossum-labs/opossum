@@ -4,10 +4,12 @@ use crate::{
     undo::{Command, OptimizationUndo},
 };
 use actix_web::{HttpResponse, Responder, get, http::header, post, web};
+use opossum_core::opm_document::OpmDocument;
 use opossum_optimization::{
-    OpticOptimizer, OptimizationConfig, OptimizationProgressEvent, ParameterApplier,
-    SchemaExtractor,
+    OpticOptimizer, OptimizationConfig, OptimizationProgressEvent, ParameterAddress,
+    ParameterApplier, SchemaExtractor,
 };
+use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 use utoipa_actix_web::service_config::ServiceConfig;
 
@@ -17,6 +19,7 @@ use utoipa_actix_web::service_config::ServiceConfig;
 pub async fn get_schema(data: web::Data<AppState>) -> impl Responder {
     let doc = data.document.lock();
     let schema = SchemaExtractor::extract(&doc);
+    drop(doc);
     HttpResponse::Ok().json(schema)
 }
 
@@ -47,41 +50,116 @@ pub async fn start_optimization(
             )
         })?;
 
-    let mut status = data.optimization.status.write();
-    if *status == OptimizationStatus::Running {
-        return Err(BackEndErrorResponse::new(
-            409,
-            "Conflict",
-            "An optimization job is already running",
-        ));
+    {
+        let mut status = data.optimization.status.write();
+        if *status == OptimizationStatus::Running {
+            return Err(BackEndErrorResponse::new(
+                409,
+                "Conflict",
+                "An optimization job is already running",
+            ));
+        }
+        *status = OptimizationStatus::Running;
     }
-    *status = OptimizationStatus::Running;
     data.optimization.cancel_flag.store(false, Ordering::SeqCst);
 
-    // Snapshot des aktuellen Blueprints & Parameterextraktion für Undo
-    let (mut working_doc, original_values) = {
+    let (working_doc, original_values) = {
         let doc = data.document.lock();
-        let mut original_values = std::collections::HashMap::new();
-        for var in &opt_config.free_variables {
-            if let Ok(val) =
-                opossum_optimization::MetricReader::read_parameter_value(&doc, &var.address)
-            {
-                original_values.insert(var.address.clone(), val);
-            }
-        }
-        for c in &opt_config.couplings {
-            if let Ok(val) =
-                opossum_optimization::MetricReader::read_parameter_value(&doc, &c.target)
-            {
-                original_values.insert(c.target.clone(), val);
-            }
-        }
-        (doc.clone(), original_values)
+        snapshot_blueprint_and_values(&doc, &opt_config)
     };
 
-    let cancel_flag = data.optimization.cancel_flag.clone();
-    let tx = data.optimization.event_sender.clone();
-    let app_state = data.clone();
+    spawn_optimization_worker(data, working_doc, opt_config, original_values);
+
+    Ok(HttpResponse::Accepted().json("Optimization started"))
+}
+
+/// Abort a running optimization job
+#[utoipa::path(responses((status = OK, description = "abort a running optimization process")), tag="optimization")]
+#[post("/abort")]
+pub async fn abort_optimization(data: web::Data<AppState>) -> impl Responder {
+    data.optimization.cancel_flag.store(true, Ordering::SeqCst);
+    HttpResponse::Ok().json("Abort requested")
+}
+
+/// Receive live updates of the optimization progress
+#[utoipa::path(responses((status = OK, description = "get live events during the optimization process")), tag="optimization")]
+#[get("/events")]
+pub async fn optimization_events(data: web::Data<AppState>) -> impl Responder {
+    let rx = data.optimization.event_sender.subscribe();
+    let stream = futures_util::stream::unfold(rx, |mut rx| async move {
+        loop {
+            match rx.recv().await {
+                Ok(event) => {
+                    let json = serde_json::to_string(&event).unwrap_or_default();
+                    let bytes = web::Bytes::from(format!("data: {json}\n\n"));
+                    return Some((Ok::<_, actix_web::Error>(bytes), rx));
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => return None,
+            }
+        }
+    });
+
+    HttpResponse::Ok()
+        .insert_header((header::CONTENT_TYPE, "text/event-stream"))
+        .insert_header((header::CACHE_CONTROL, "no-cache"))
+        .streaming(stream)
+}
+
+fn snapshot_blueprint_and_values(
+    doc: &OpmDocument,
+    config: &OptimizationConfig,
+) -> (OpmDocument, HashMap<ParameterAddress, f64>) {
+    let mut original_values = HashMap::new();
+    for var in &config.free_variables {
+        if let Ok(val) = opossum_optimization::MetricReader::read_parameter_value(doc, &var.address)
+        {
+            original_values.insert(var.address.clone(), val);
+        }
+    }
+    for c in &config.couplings {
+        if let Ok(val) = opossum_optimization::MetricReader::read_parameter_value(doc, &c.target) {
+            original_values.insert(c.target.clone(), val);
+        }
+    }
+    (doc.clone(), original_values)
+}
+
+fn apply_results_and_record_undo(
+    app_state: &AppState,
+    optimized_parameters: &HashMap<ParameterAddress, f64>,
+    original_values: &HashMap<ParameterAddress, f64>,
+) {
+    let mut diff = HashMap::new();
+    {
+        let mut doc = app_state.document.lock();
+        for (addr, new_val) in optimized_parameters {
+            let old_val = original_values.get(addr).copied().unwrap_or(*new_val);
+            diff.insert(addr.clone(), (old_val, *new_val));
+            let _ = ParameterApplier::set_value(&mut doc, addr, *new_val);
+        }
+        let _ = ParameterApplier::finalize_update(&mut doc);
+        let _ = doc.analyze_headless();
+    }
+
+    let inverse_diff: HashMap<_, _> = diff
+        .into_iter()
+        .map(|(addr, (old_val, new_val))| (addr, (new_val, old_val)))
+        .collect();
+
+    app_state.push_undo(Command::ApplyOptimization(OptimizationUndo {
+        parameter_diff: inverse_diff,
+    }));
+}
+
+fn spawn_optimization_worker(
+    app_state: web::Data<AppState>,
+    mut working_doc: OpmDocument,
+    opt_config: OptimizationConfig,
+    original_values: HashMap<ParameterAddress, f64>,
+) {
+    let cancel_flag = app_state.optimization.cancel_flag.clone();
+    let tx = app_state.optimization.event_sender.clone();
 
     tokio::task::spawn_blocking(move || {
         let optimizer = match OpticOptimizer::from_config(&mut working_doc, opt_config) {
@@ -103,26 +181,11 @@ pub async fn start_optimization(
 
         match opt_result {
             Ok(summary) => {
-                let mut doc = app_state.document.lock();
-                let mut diff = std::collections::HashMap::new();
-
-                for (addr, new_val) in &summary.optimized_parameters {
-                    let old_val = original_values.get(addr).copied().unwrap_or(*new_val);
-                    diff.insert(addr.clone(), (old_val, *new_val));
-                    let _ = ParameterApplier::set_value(&mut doc, addr, *new_val);
-                }
-                let _ = ParameterApplier::finalize_update(&mut doc);
-                let _ = doc.analyze_headless();
-
-                // Inverse für Undo-Stack bereitstellen (stellt Ursprungswerte wieder her)
-                let inverse_diff: std::collections::HashMap<_, _> = diff
-                    .iter()
-                    .map(|(addr, (old_val, new_val))| (addr.clone(), (*new_val, *old_val)))
-                    .collect();
-
-                app_state.push_undo(Command::ApplyOptimization(OptimizationUndo {
-                    parameter_diff: inverse_diff,
-                }));
+                apply_results_and_record_undo(
+                    &app_state,
+                    &summary.optimized_parameters,
+                    &original_values,
+                );
 
                 let is_aborted = cancel_flag.load(Ordering::SeqCst);
                 if is_aborted {
@@ -149,7 +212,7 @@ pub async fn start_optimization(
                     let _ = tx.send(OptimizationProgressEvent::Aborted {
                         last_cost: f64::NAN,
                         iterations: 0,
-                        best_parameters: std::collections::HashMap::new(),
+                        best_parameters: HashMap::new(),
                     });
                 } else {
                     *app_state.optimization.status.write() = OptimizationStatus::Failed;
@@ -158,41 +221,6 @@ pub async fn start_optimization(
             }
         }
     });
-
-    Ok(HttpResponse::Accepted().json("Optimization started"))
-}
-
-/// Abort a running optimization job
-#[utoipa::path(responses((status = OK, description = "abort a running optimization process")), tag="optimization")]
-#[post("/abort")]
-pub async fn abort_optimization(data: web::Data<AppState>) -> impl Responder {
-    data.optimization.cancel_flag.store(true, Ordering::SeqCst);
-    HttpResponse::Ok().json("Abort requested")
-}
-
-/// Receive live updates of the optimization progress
-#[utoipa::path(responses((status = OK, description = "get live events during the optimization process")), tag="optimization")]
-#[get("/events")]
-pub async fn optimization_events(data: web::Data<AppState>) -> impl Responder {
-    let rx = data.optimization.event_sender.subscribe();
-    let stream = futures_util::stream::unfold(rx, |mut rx| async move {
-        loop {
-            match rx.recv().await {
-                Ok(event) => {
-                    let json = serde_json::to_string(&event).unwrap_or_default();
-                    let bytes = web::Bytes::from(format!("data: {json}\n\n"));
-                    return Some((Ok::<_, actix_web::Error>(bytes), rx));
-                }
-                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
-                Err(tokio::sync::broadcast::error::RecvError::Closed) => return None,
-            }
-        }
-    });
-
-    HttpResponse::Ok()
-        .insert_header((header::CONTENT_TYPE, "text/event-stream"))
-        .insert_header((header::CACHE_CONTROL, "no-cache"))
-        .streaming(stream)
 }
 
 pub fn config(cfg: &mut ServiceConfig<'_>) {
@@ -329,7 +357,6 @@ mod test {
             opossum_optimization::MetricReader::read_parameter_value(&doc, &dist_addr).unwrap()
         };
 
-        // Konfiguration für Nelder-Mead mit wenigen Schritten
         let config = OptimizationConfig::new()
             .with_variable(
                 FreeVariable::new(dist_addr.clone(), "image_dist")
@@ -348,10 +375,8 @@ mod test {
             ))
             .with_algorithm(OptimizationAlgorithm::nelder_mead().with_max_iterations(15));
 
-        // 1. Broadcast-Receiver vor dem Start abonnieren
         let mut rx = app_state.optimization.event_sender.subscribe();
 
-        // 2. Optimierung starten
         let req = test::TestRequest::post()
             .uri("/start")
             .set_payload(serde_json::to_string(&config).unwrap())
@@ -361,12 +386,10 @@ mod test {
         let resp = app.call(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::ACCEPTED);
 
-        // 3. Events prüfen (mindestens Started und Finished abwarten)
         let mut got_started = false;
         let mut got_iteration = false;
         let mut got_finished = false;
 
-        // Maximal 50 Events lesen oder bis Finished eintrifft
         for _ in 0..50 {
             if let Ok(event) = rx.recv().await {
                 match event {
@@ -385,13 +408,9 @@ mod test {
         }
 
         assert!(got_started, "should receive start event");
-        assert!(
-            got_iteration,
-            "should receive at least on iteration event"
-        );
+        assert!(got_iteration, "should receive at least on iteration event");
         assert!(got_finished, "should receive finished event");
 
-        // 4. Prüfen, ob der optimierte Wert ins Hauptdokument geschrieben wurde
         let new_dist = {
             let doc = app_state.document.lock();
             opossum_optimization::MetricReader::read_parameter_value(&doc, &dist_addr).unwrap()
@@ -401,7 +420,6 @@ mod test {
             "distance should have been optimized"
         );
 
-        // 5. Undo ausführen und prüfen, ob initial_dist exakt wiederhergestellt wird
         let undo_req = test::TestRequest::post().uri("/undo").to_request();
         let undo_resp = app.call(undo_req).await.unwrap();
         assert_eq!(undo_resp.status(), StatusCode::OK);
