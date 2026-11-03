@@ -31,6 +31,21 @@ use crate::{
 /// than by a literal.
 pub const MATERIAL: &str = "Material";
 
+/// The wavelength a material is characterised at when nothing else is given.
+///
+/// A refractive index is only a number once a wavelength is named, and some readers need one
+/// without an analysis to take it from — a drawing of a setup has to pick some colour of light to
+/// render its glass at. 1053 nm is the design wavelength of the laser systems OPOSSUM is built
+/// around, so it is the one at which the numbers mean what their users expect.
+///
+/// # Returns
+///
+/// 1053 nm.
+#[must_use]
+pub fn default_reference_wavelength() -> Length {
+    crate::nanometer!(1053.0)
+}
+
 /// Represents a complete material embedded in an OPOSSUM scenery or stored in the registry.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Material {

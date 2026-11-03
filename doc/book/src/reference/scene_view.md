@@ -1,0 +1,384 @@
+# 3D View
+
+The **3D View** shows the optical components of the current model as solid geometry, in the place the
+model puts them. It is a picture of the setup, not an analysis: nothing is computed from what it
+shows, and it is meant for judging at a glance whether a setup looks the way it was intended —
+whether a lens sits where it should, whether two components collide, whether a fold goes the way
+round you had in mind.
+
+## Opening and closing it
+
+Open it from the top navigation bar: **3D View** → **Show 3D view**. It appears as a further tab
+beside the tab of the graph you are working on and comes to the front straight away.
+
+The entry reads **Hide 3D view** for as long as the view is open; choosing it again closes the view,
+and the tab carries the usual close button too. Closing it frees the graphics resources it holds, so
+leave it closed when you are not looking at it.
+
+The entry needs a connected backend: the view asks the backend for the model as soon as it opens. The
+rest of the menu belongs to a view that is open and stays greyed out until it is.
+
+## Side by side with the graph
+
+The editor can be split into two panes next to each other, each with its own tab bar. With the graph
+in one and the 3D view in the other, you can change a distance and watch the component move, without
+switching tabs.
+
+There are three ways to move a tab into the other pane:
+
+- **Drag the tab.** While the editor is not split, drop it on the right half of the view: it opens in
+  a new pane on the right. Dropped on the left half, it stays on the left on its own and the other
+  tabs move to the right. Once the editor is split, drop the tab anywhere over the other pane. The
+  area it would land in lights up; letting go anywhere else leaves everything as it was.
+- **Right-click the tab** and choose **Split right**, or, once split, **Move to right pane** /
+  **Move to left pane**.
+- **Click ⇄** at the right end of a tab bar. It moves the tab that is in front of that pane.
+
+Drag the line between the two panes to share out the width, the same way as the sidebar next to them.
+Neither pane can be made narrower than 200 pixels, and when the window is resized both keep their
+share. A pane closes as soon as its last tab has left it — moved over, or closed — and the editor is
+then one pane again.
+
+Graph tabs can be split the same way, for instance with the whole setup on the left and one group on
+the right. The properties sidebar always shows the graph you last clicked into. While the editor is
+split, a thin blue line on that graph's tab shows which of the two it is.
+
+While the 3D view has a pane to itself, **clicking a component** in it brings the graph that contains
+the component to the front of the other pane, and the sidebar shows the component's properties; the
+3D view stays where it is. Moving the 3D view to the other pane keeps the camera where it was. Opening
+it always puts it next to the graph you are working on, even if it was in the other pane when it was
+last closed.
+
+## What is drawn
+
+Every component that **encloses a volume** — lenses, wedges, cylindric lenses — and every component
+that is **one optical surface** — mirrors (flat and parabolic), gratings, beam splitters, filters,
+paraxial surfaces, and the detectors (energy meter, fluence detector, spot diagram, wavefront
+monitor, spectrometer). Components with no shape of their own are still left out: a source port is
+where light begins rather than a thing, and a reference node is the same component passed through a
+second time rather than a second component. The count in the view's status line tells you how many are
+drawn.
+
+Each component is drawn as large as its `optic shape` (see
+[Optic shape](nodes.md#optic-shape)), the same extent that decides which rays hit it. A
+detector or a paraxial surface whose optic shape is `Open` has no edge to draw. It is shown at a
+nominal size instead, a circle of 12.5 mm radius, which says nothing about what it records or
+focuses.
+
+The bore of a [bored mirror](nodes/bored_mirror.md) is drawn with it: the plate shows the hole and
+its wall, which runs along the axis of the bore, slanted through the plate if the bore is tilted.
+OPOSSUM only accepts shapes that enclose an area and a bore that lies within the edge on both faces,
+so every optic shape it accepts can be drawn. A component that cannot be drawn all the same is left
+out, and the status line and the log say so.
+
+A component only knows where it is once the optical axis has been traced from a source, so the
+model needs a **source port** and an **analyzer** that defines its light — see
+[Which analyzer the view follows](#which-analyzer-the-view-follows). Without either there is
+nothing to place: the view stays empty, and its status line says what is missing.
+
+Components the axis does not reach — a block pasted next to the setup, say, or any other strand no
+source feeds — are left out rather than stopping the rest of the setup from being drawn. The status
+line counts them: click the count for a list, and pick one to go to it in the graph.
+
+If the optical axis ends *at* a component that still has others after it, those cannot be placed,
+and the view cannot be drawn at all. The status line says why and names the component the axis
+ended at. There are two usual causes:
+
+- **The axis passes the component outside its optic shape** — a lens decentered by more than its
+  radius, say, or a double pass whose return path walks off. Enlarge the optic shape or correct the
+  position (see [Geometry](../concepts/geometry.md)). The bore of a bored mirror is no such case:
+  the axis passes it, and behind the mirror it is drawn from the center of the bore on.
+- **A grating is not tilted**: its diffraction order then does not propagate at the wavelength the
+  setup is placed at, and the message names the Littrow angle to tilt the grating by.
+
+A component with nothing after it is drawn either way.
+
+## Which analyzer the view follows
+
+Where a component ends up depends on the light that reaches it: an off-axis source, another
+alignment wavelength or another ambient medium all move it. The view therefore places the setup
+after one analyzer, and draws the optical axis and the rays of that same one.
+
+- **Unless you choose one**, it follows the first analyzer whose light is rays — a ray trace or a
+  ghost focus analysis — and the first analyzer of all only when none has rays.
+- **An energy analysis** knows its light only as spectra. When the view follows one, each source is
+  placed at the center wavelength of its own spectrum, which is what decides where a grating or a
+  wedge sends the axis. It has no rays of its own, so **Rays** shows nothing while the view follows
+  it.
+- **To follow another**, click the analyzer's name at the left of the status line and pick one from
+  the list; the one followed is marked. The choice lasts while OPOSSUM runs but is not saved with the
+  model, and when the chosen analyzer is deleted, the view goes back to the default.
+
+## Light: the optical axis and the rays
+
+Two kinds of light can be drawn over the components, each switched on and off in the **3D View** menu.
+
+**The optical axis** (**Optical axis** in the menu, on by default) is the path the positioning run follows: one ray
+per source, the one every component is placed on. It is drawn as a purple line from each source
+through the components to wherever the axis leaves the setup, and shows how the setup is built up —
+why a component sits where it does, which way a fold turns. Where a beam splitter brings two arms
+back together, as in a Mach-Zehnder interferometer, the axis of both arms runs on through it. A
+component at the end of the setup that the axis cannot pass — a grating whose diffraction order does
+not propagate at that angle, say — ends the axis where it sits. An automatic source, or a chain of
+components in front of it, placed in front of a component only after that component was placed ends its
+axis there (see
+[Geometry → Sources in Front of a Component](../concepts/geometry.md#sources-in-front-of-a-component)).
+
+**The rays** (**Rays**, off by default) are the light of the sources as the analyzer the view
+follows defines it, traced through the setup like a ray trace does. They show what the axis alone
+cannot: how a bundle widens and focuses, where an optic shape clips it, where a beam splitter divides
+it, how a grating fans a spectrum out.
+
+How the rays are colored depends on how many wavelengths the sources hold:
+
+- **One wavelength** is drawn in its own color; infrared light, which has no color of its own, is
+  drawn red, and ultraviolet light violet.
+- **Several wavelengths** — a spectrum or several laser lines — are drawn in false colors, from blue
+  at the shortest wavelength of the sources to red at the longest, whether the light is visible or
+  not. The status line then shows the scale (see [The status line](#the-status-line)).
+
+Where rays cross on the screen, how their colors meet is set in the **3D View** menu:
+
+- **By default** the rays are drawn in a fixed order, and a crossing shows the one drawn later, in
+  its own color, from whichever side you look.
+- **With Enable additive ray overlay** the colors add up, as light does. Where every wavelength of a
+  spectrum runs together the bundle turns white, and where many rays crowd — at a focus — it shines
+  brighter. The rays also add onto whatever lies behind them, though, so a single ray looks lighter
+  than its own color.
+
+A ray that is stopped for passing a component outside its optic shape is drawn up to the last
+component it reached before, not up to the one it missed. A ray a grating cannot send into its
+diffraction order is drawn up to the grating.
+
+A few things to know about the rays:
+
+- **They are a picture, not the analysis.** A source may hold far more rays than can be drawn, so
+  the sources are drawn coarser. They share **max. rays** (500 by default, at most 5000) evenly, and
+  each source's position distribution gets fewer points over the same area — fewer rings, a coarser
+  grid — until it fits its share. How its spectrum is laid on those points is set in the menu:
+  - **By default the spectrum is spread over the ray positions.** Each point shines one wavelength;
+    the wavelengths are dealt out evenly and shuffled, so each is drawn about equally often and the
+    colors follow no pattern of the layout. A spectrum of many samples then costs no more rays than
+    a single line.
+  - **With Full spectrum at each ray position** each point shines every wavelength, as in the
+    analysis, so the colors run together until a grating or a wedge separates them. That leaves room
+    for fewer points: the share divided by the number of samples. A spectrum of more samples than
+    the share is thinned evenly.
+
+  An image source is thinned to its share instead, spread evenly over its cross section with its
+  outermost rays kept. A source with fewer rays is drawn in full.
+- **Energies only decide which rays are drawn.** As in the analysis, a ray below the analyzer's
+  minimum energy per ray is dropped at its source. A coarser source shares its energy among fewer
+  rays, so the faint edges of a spectrum can be drawn where the analysis drops them.
+- **Only the primary path is drawn.** A ghost focus analyzer contributes its sources, but not its
+  reflections.
+- **They need an analyzer whose light is rays.** An energy analysis has none of its own, and the
+  **Rays** entry shows nothing while the view follows one.
+- **They cost a trace.** While Rays is on, every change to the model traces the sources again, and
+  so does a new **max. rays** or a switch of how the spectrum is laid on the rays; the additive
+  overlay and the opacity only change the picture. Turn Rays off when you do not need it; while it
+  is off nothing is traced. The rays are only drawn anew when the trace came out different; see
+  [When the view updates itself](#when-the-view-updates-itself).
+- Light that ends in a component without an output is drawn up to the component before it, not into
+  it.
+
+**ray opacity** sets how opaque the rays are drawn, from solid down to invisible. It only changes the
+picture; nothing is traced again. Dense bundles read better when they are partly transparent, which is
+why the slider starts well below solid — and at the bottom of its range the rays disappear entirely,
+leaving the components and the axis on their own without turning **Rays** off and paying for a trace
+again later.
+
+The optical axis is never faded: it is drawn solid whatever the slider says. It is one line per
+source, not a bundle, and it is the line every component is placed on — the one thing in the picture
+that should still be legible once a wide bundle has been faded back. With the additive ray overlay
+on, it adds onto what lies behind it like the rays. Where the axis runs exactly along a ray, which of
+the two shows can still change as you turn the view.
+
+Lines keep their width on screen however far you zoom in or out.
+
+## Navigating
+
+| Action | Effect |
+| :--- | :--- |
+| Drag with the left mouse button | Orbit around the point the camera looks at |
+| Mouse wheel | Zoom in and out |
+| Drag with the right mouse button | Pan |
+| Click a component | Select it; a box is drawn snugly around it |
+| Click empty space | Clear the selection |
+| Click a gizmo axis | Snap the camera to look straight along that axis |
+
+Dragging never selects, so orbiting past a component does not pick it up by accident. The optical
+table is not selectable: clicking it clears the selection, the same as clicking empty space. Neither
+are the axis and the rays: a click on a line selects the component behind it.
+
+The selection box is tilted along with the component it marks, rather than kept square to the room.
+On a tilted mirror or grating that is the difference between a box the size of the component and one
+reaching well past it, so the box shows which component is meant even in a crowded setup.
+
+The graph and the 3D view share their selection both ways. Clicking a component here selects it in
+the graph — and selecting one or more nodes in the graph canvas draws the box around the same
+components here. Like the properties sidebar, the 3D view follows the graph you last clicked into, so
+it boxes whatever that graph has selected.
+
+### Keyboard shortcuts
+
+Click anywhere in the view once to give it focus, and these keys stand in for the matching **3D View**
+menu entries, so you can frame, reset and toggle without leaving the viewport:
+
+| Key | Effect |
+| :--- | :--- |
+| `F` | Fit view — frame all components |
+| `R` | Reset camera |
+| `T` | Show or hide the optical table |
+| `A` | Show or hide the orientation gizmo |
+| `B` | Show or hide the optical axis |
+| `L` | Show or hide the traced rays |
+
+They act only while the viewport is focused, so the same letters typed in the graph or the properties
+sidebar are never caught by them. Only bare keys count: holding Ctrl, Cmd, Alt or Shift leaves them to
+whatever else the combination belongs to. `L` rather than `R` toggles the rays, because `R` is kept
+for resetting the camera. Each key is also shown beside its entry in the menu.
+
+## The status line
+
+Above the picture the view keeps a single line about itself:
+
+| Part | Effect |
+| :--- | :--- |
+| **Analyzer name ▾** | The analyzer the view follows; click it to follow another |
+| **λ ▬▬ λ** | The false colors the rays are drawn in, from the shortest to the longest wavelength of the sources; shown while **Rays** is on and the sources hold several wavelengths |
+| Red message | Why nothing could be drawn: no source port, no analyzer, or where the optical axis ends |
+| **N component(s) could not be drawn** | Click it for a list of them; pick one to go to it in the graph |
+| **N components** | How many components are drawn |
+
+A long message is cut off at the end of the line; hover over it to read all of it. Every component
+that could not be drawn is noted in the log as well, with the reason.
+
+## The 3D View menu
+
+Everything else the view can be told sits in the **3D View** menu in the top navigation bar.
+
+| Entry | Effect |
+| :--- | :--- |
+| **Show / Hide 3D view** | Open the view, or close it again |
+| **Refresh** | Ask the backend for the model again, at once |
+| **Fit view** | Frame all components (the optical table is not included) |
+| **Reset camera** | Return the camera to its starting pose |
+| **Show / Hide Table** | Show or hide the optical table |
+| **Show / Hide HDR environment** | Put the shipped 360° panorama behind the setup and into mirrors and glass, or return to the background color and the calm horizon |
+| **Show / Hide World axes** | Show or hide the corner orientation gizmo |
+| **Show / Hide Optical axis** | Show or hide the optical axis |
+| **Show / Hide Rays** | Show or hide the traced rays of the analyzer's sources |
+| **Full spectrum at each ray position / Spread spectrum over ray positions** | Give every ray position the whole spectrum of its source, or spread the spectrum over the positions, one wavelength each (the default) |
+| **Enable / Disable additive ray overlay** | Let crossing rays add their colors up like light, or draw them in a fixed order (the default) |
+| **max. rays** | The most rays drawn, of all sources together; takes effect on Enter or when leaving the field |
+| **ray opacity** | How opaque the rays are drawn; the axis is always solid |
+
+See [Light: the optical axis and the rays](#light-the-optical-axis-and-the-rays) for what the last
+six do. Fit view, Reset camera, Table, World axes, Optical axis and Rays also carry a keyboard
+shortcut, shown beside the entry — see [Keyboard shortcuts](#keyboard-shortcuts).
+
+Three things are worth knowing about the menu itself:
+
+- **It stays open while you change things.** A setup is usually judged by trying a few of these in a
+  row — show the rays, fade them, then frame them — so the menu only closes on a click outside it.
+  Each toggle's entry reads **Hide …** while what it switches is on and **Show …** while it is off, so
+  it always names what a click would do. The two entries that switch how the rays are drawn name the
+  way a click switches to instead.
+- **Everything below the first entry needs an open view** and is greyed out until there is one.
+- **What the view shows is remembered.** Close the view and open it again and the toggles, the ray
+  count, the opacity and the analyzer it follows are as you left them. The camera is not — see below.
+
+Refresh, Fit view, and Reset camera move the camera, and so does clicking a gizmo axis in the
+viewport. Table, World axes, Optical axis and Rays are visibility toggles and, like the two ways of
+drawing the rays, do not move the camera.
+Nothing that happens to the *model* moves it either — see below.
+
+## When the view updates itself
+
+The view follows the model on its own. Adding or deleting a component, changing a distance, changing
+a lens radius or thickness, grouping, pasting, undo and redo all reach it within a moment; a burst of
+edits is collected so that holding a spinner costs one update rather than dozens. The optical axis
+and, while shown, the rays follow along with the components.
+
+Three things are worth knowing about how it updates:
+
+- **Only what changed is drawn again.** A component is fetched again only when its shape or its look
+  changed, the optical axis and the rays only when they came out different. An edit that leaves the
+  picture as it was — an analyzer the view does not follow, marking a component as an amplifier, a
+  pump scenario — redraws nothing. While **Rays** is on, every edit still costs a trace to find that
+  out, and a source whose rays start at random points comes out different on every trace, so its
+  rays are drawn anew each time.
+- **The camera never moves by itself.** Whatever changes in the model, the view you set up stays.
+  Only **Refresh**, **Fit view** and **Reset camera** in the menu, and clicking a gizmo axis, move the
+  camera.
+- **Moving nodes around the graph canvas changes nothing here**, and neither does Auto Layout. Where a
+  node sits on the diagram has nothing to do with where its component sits in space.
+
+Switching to a graph tab and back leaves the camera exactly where you left it, and so does moving the
+view to the other pane. Closing the view and opening it again does not: that builds it up afresh. What
+it *shows* is kept either way — that lives with the menu, not with the picture.
+
+## Appearance
+
+Glass is drawn as glass — refracting its surroundings rather than painted on — using the refractive
+index the component's material reports.
+
+That index is always taken at **1053 nm**, the design wavelength of the laser systems OPOSSUM is
+built around. A drawing has to pick some colour of light to render glass at, and this one does not
+follow the analyzer or the default wavelength in the settings. A material that cannot state an index
+at 1053 nm is drawn as plain glass, and the substitution is noted in the log. The coatings that decide
+how mirrored a surface looks (see below) are evaluated at the same wavelength.
+
+How mirrored a surface looks follows its **coating**: the share of light the coating reflects at
+normal incidence is the share of the surface drawn as a mirror. A mirror with its default 100 %
+coating is drawn as a solid mirror, a beam splitter that reflects half of the light as a half-mirrored
+pane, and a mirror whose coating reflects nothing as a pale, see-through pane, so that it stays
+visible and can still be clicked. Each face of a lens or a wedge follows its own coating: give one
+face a highly reflective coating and only that face is drawn mirrored, while the other face and the
+rim stay glass. An uncoated face reflects a few percent and looks almost like plain glass. A coating
+that cannot be evaluated leaves its face drawn uncoated, and this is noted in the log.
+
+A grating is drawn with an iridescent, diffraction-colored sheen that marks it at a glance as the
+component that spreads light by wavelength. A filter or a paraxial surface is drawn as a faint,
+translucent plane. A detector is drawn as a plain, matte surface, deliberately distinct from glass
+and from a mirror, so a setup reads at a glance which components measure the light rather than shape
+or redirect it. None of these acts on the light through its coating — a grating diffracts regardless
+of it — so their coating does not change how they look either.
+
+Unlike a lens or a wedge, these components have no second surface of their own to keep facing the
+camera, so each is drawn from both sides at once and stays visible however far you orbit around it.
+
+Glass is drawn slightly see-through, so a lens sitting behind another lens stays visible rather
+than being hidden by it. This is deliberate: glass shows only solid surroundings through it, and
+another lens is not solid, so the lens in front would otherwise blot it out. The more a glass face is
+mirrored by its coating, the more solid it is drawn. Solid components — a mirror, a grating, a
+detector — are drawn fully opaque and are seen through a lens in front of them as they are.
+
+Mirrors, gratings and glass reflect a calm, neutral **horizon**, a lighter gray-blue above eye level
+and a darker gray below, not the setup around them. A mirror therefore shows no image of the lenses
+or the table in front of it. Both tones are deliberately set apart from the background and the table,
+so a mirror stands out against what lies behind it instead of vanishing into it.
+
+With **HDR environment** in the 3D View menu, a 360° panorama shipped with OPOSSUM takes the place of
+both: it stands behind the setup, and it is what mirrors, gratings and glass reflect, bright spots in
+it included. The table still fades into the plain background color at its edge, so against the
+panorama its rim shows.
+
+## The optical table and orientation
+
+Beneath the setup sits an **optical table**: a dark breadboard surface with a regular raster of holes
+spaced 2.5 cm apart, like a real optical bench. It lies **7.5 cm below the beam** — the optical axis
+runs through the components' centres — so it gives the scene a floor and an immediate sense of scale
+without cutting through the optics. It replaces the old generic reference grid, which would swamp a
+centimetre-to-metre setup rather than frame it.
+
+The table has no edge: it reaches to the horizon wherever you move the camera and fades into the
+background in the distance. It is scenery, not part of the model — **Fit view** frames only the
+components, and clicking the table clears the selection. Seen through a lens, the table does not
+show. Show or hide it with the **Table** entry in the **3D View** menu.
+
+In the bottom-right corner of the view a small **orientation gizmo** shows which way x, y, and z
+point. It keeps you from losing your bearings while orbiting. Click one of its axes to snap the camera
+to look straight along that direction; show or hide it with the **World axes** entry in the **3D
+View** menu.

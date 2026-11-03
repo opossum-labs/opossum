@@ -158,6 +158,9 @@ impl SurfaceEffect for FilterType {
         ray.filter_energy(self)?;
         Ok(split)
     }
+    fn acts_in_bores(&self) -> bool {
+        false
+    }
 }
 impl TryFrom<f64> for FilterTypeBuilder {
     type Error = OpossumError;
@@ -181,7 +184,7 @@ mod test {
     /// would be (see [`Ray::filter_energy`]). A ray that misses it keeps its energy.
     #[test]
     fn a_filter_attenuates_the_rays_that_hit_it() -> OpmResult<()> {
-        let outline = Outline::new(CircleShape::new(millimeter!(5.0))?, Vec::new())?;
+        let outline = Outline::new(CircleShape::new(millimeter!(5.0))?, None)?;
         let mut plane = Geometry::plane(Some(outline));
         let ray_at =
             |y| Ray::new_collimated(millimeter!(0.0, y, -10.0), nanometer!(1054.0), joule!(1.0));

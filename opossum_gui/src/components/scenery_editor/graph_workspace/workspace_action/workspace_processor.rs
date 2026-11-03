@@ -59,6 +59,8 @@ pub fn use_workspace_processor(
                 // true, can_redo false). Capture that classification before `action` is consumed and
                 // reflect it after processing, so the Edit menu's Undo/Redo enabled-state stays correct.
                 let was_document_edit = is_document_edit_action(&action);
+                // Captured here for the same reason as above: `action` is about to be consumed.
+                let changed_the_scene = changes_the_scene(&action);
                 match action {
                     GraphsWorkspaceAction::LoadFromFile(path) => {
                         // A freshly loaded document's scenario ids have nothing to do with whatever
@@ -89,6 +91,8 @@ pub fn use_workspace_processor(
                         *crate::UNDO_REDO_STATUS.write() = (false, false);
                         *crate::AMP_LIST_REFRESH.write() += 1;
                         *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
+                        // A different document altogether - whatever the 3D view shows is gone.
+                        *crate::SCENE_REVISION.write() += 1;
                     }
                     GraphsWorkspaceAction::SaveToFile(path) => {
                         process_save_root_scenery_to_file(
@@ -116,6 +120,8 @@ pub fn use_workspace_processor(
                         *crate::UNDO_REDO_STATUS.write() = (false, false);
                         *crate::AMP_LIST_REFRESH.write() += 1;
                         *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
+                        // A different document altogether - whatever the 3D view shows is gone.
+                        *crate::SCENE_REVISION.write() += 1;
                     }
                     GraphsWorkspaceAction::ResetAndInitializeRootScenery { name } => {
                         process_reset_and_initialize_root_scenery(
@@ -385,6 +391,10 @@ pub fn use_workspace_processor(
                     GraphsWorkspaceAction::ClearSelectedNodes { graph_id } => {
                         workspace_handlers.workspace.clear_selected_nodes(graph_id);
                     }
+                    GraphsWorkspaceAction::ClearSelectedNodesInActiveTab => {
+                        let graph_id = *workspace.active_tab().read();
+                        workspace_handlers.workspace.clear_selected_nodes(graph_id);
+                    }
                     GraphsWorkspaceAction::SetEdgeInCreation {
                         graph_id,
                         edge_in_creation,
@@ -512,15 +522,35 @@ pub fn use_workspace_processor(
                         )
                         .await;
                     }
-                    GraphsWorkspaceAction::RevealNode { node_id, graph_id } => {
+                    GraphsWorkspaceAction::RevealNode {
+                        node_id,
+                        graph_id,
+                        bring_to_front,
+                    } => {
+                        // `ensure_tab_active` is about to change `active_tab` exactly when this
+                        // check is true (it is the same condition it uses internally) - arm the
+                        // flag only then, so `GraphEditor`'s effect always finds a matching
+                        // `active_tab` change to consume it against and it can never leak into an
+                        // unrelated later tab switch.
+                        if !bring_to_front && *workspace.active_tab().read() != graph_id {
+                            *crate::KEEP_SCENE_IN_FRONT.write() = true;
+                        }
                         ensure_tab_active(graph_id, workspace_handlers, root_graph_id, workspace)
                             .await;
                         workspace_handlers
                             .nodes
                             .set_node_active(graph_id, node_id, true, 0);
+                        if !bring_to_front {
+                            // A 3D-view pick has to actually show the properties it reveals -
+                            // selecting the node alone leaves the sidebar on whatever it already
+                            // showed. `ensure_tab_active`'s tab switch does the equivalent for the
+                            // canvas already; this is that step for the sidebar.
+                            *crate::SIDEBAR_VIEW.write() = SidebarView::NodeProperties;
+                            *crate::SIDEBAR_COLLAPSED.write() = false;
+                        }
                     }
-                    GraphsWorkspaceAction::GetEditorArea => {
-                        process_get_editor_area(workspace, workspace_handlers).await;
+                    GraphsWorkspaceAction::GetEditorArea(graph_id) => {
+                        process_get_editor_area(workspace_handlers, graph_id).await;
                     }
                     GraphsWorkspaceAction::Undo => {
                         eval_action_run(
@@ -560,6 +590,9 @@ pub fn use_workspace_processor(
                     // Same reasoning for the pump scenario editor: deleting a node the active
                     // scenario named, for instance, changes what an already-expanded card shows.
                     *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
+                }
+                if changed_the_scene {
+                    *crate::SCENE_REVISION.write() += 1;
                 }
             }
         }
@@ -605,6 +638,24 @@ fn push_viewport_change(before: Viewport, after: Viewport, merge_into_previous: 
 /// backend). Used to keep [`crate::UNDO_REDO_STATUS`] correct after edits. Viewport gestures mark it at
 /// their own push point ([`push_viewport_change`]); `InvertNode`/`SetNodeName` are GUI mirrors whose
 /// real edit is marked in the node editor - so both are excluded here.
+/// Whether processing this action can change what a 3D view of the model shows.
+///
+/// Every document edit except the two that only rearrange the *diagram*. Where a node sits on the
+/// canvas has nothing to do with where its component sits in space, so re-deriving the scene for a
+/// node drag or an auto-layout would make the two most frequent edits the most expensive ones -
+/// each one costs the backend a full re-meshing of the model.
+///
+/// Stated as the exceptions rather than as a second list, so a new document-mutating action is
+/// counted here by default: being refreshed needlessly is a waste, being missed is a stale picture.
+const fn changes_the_scene(action: &GraphsWorkspaceAction) -> bool {
+    is_document_edit_action(action)
+        && !matches!(
+            action,
+            GraphsWorkspaceAction::SyncNodePositions { .. }
+                | GraphsWorkspaceAction::OptimizeLayout { .. }
+        )
+}
+
 const fn is_document_edit_action(action: &GraphsWorkspaceAction) -> bool {
     matches!(
         action,
@@ -867,6 +918,9 @@ fn handle_undo_redo_response(
 ) {
     *crate::UNDO_REDO_STATUS.write() = (r.can_undo, r.can_redo);
     ws_handler.workspace.set_needs_saving(true);
+    // Undoing or redoing can put a component back, take it away or move it, and none of that goes
+    // through the action classification above - the edit being reversed already happened.
+    *crate::SCENE_REVISION.write() += 1;
     spawn(apply_document_changes(
         r.changes,
         r.jump,
@@ -1130,7 +1184,12 @@ async fn ensure_tab_active(
     if *workspace.active_tab().read() == graph_id {
         return;
     }
-    if workspace.tabs().contains_key(&graph_id) {
+    // Judge "already open" by tab-bar visibility, not data existence: a group can be silently
+    // seeded into `tabs()` by `ensure_group_tab` (e.g. when two nodes are grouped) without ever
+    // being added to `tab_order`, and `set_active_tab` alone would then point `active_tab` at a tab
+    // the tab bar never renders - so the group would never visibly open. Route that case through
+    // `process_open_group_tab`, which adds it to `tab_order` and fills it. Mirrors `OpenGroupTab`.
+    if workspace.tab_order().read().contains(&graph_id) {
         ws_handler.workspace.set_active_tab(graph_id);
     } else if let Ok(group_info) = api::get_node_info(graph_id).await {
         process_open_group_tab(
@@ -1144,11 +1203,18 @@ async fn ensure_tab_active(
     }
 }
 
-async fn process_get_editor_area(
-    workspace: ReadStore<GraphsWorkspaceState>,
-    ws_handler: WorkSpaceSignalHandlers,
-) {
-    let element_id = format!("editor_{}", workspace.active_tab().read().as_simple());
+/// Measures where the canvas of `graph_id` sits in the window and stores it for that graph.
+///
+/// # Arguments
+///
+/// * `ws_handler` - the handlers the measurement is stored through.
+/// * `graph_id` - the graph whose canvas (the element `editor_<id>`) is measured.
+///
+/// A graph whose tab is hidden measures as an empty rectangle; that result is dropped rather than
+/// stored, so the graph keeps the rectangle it had while it was last on screen. Its view measures
+/// itself again as soon as it is shown, because showing it resizes it.
+async fn process_get_editor_area(ws_handler: WorkSpaceSignalHandlers, graph_id: Uuid) {
+    let element_id = format!("editor_{}", graph_id.as_simple());
     let js = format!(
         r"
         let el = document.getElementById('{element_id}');
@@ -1175,7 +1241,11 @@ async fn process_get_editor_area(
         )
     {
         let editor_area = Rect::new(Point2D::new(x, y), Size2D::new(width, height));
-        ws_handler.workspace.set_editor_area(editor_area);
+        if !editor_area.is_empty() {
+            ws_handler
+                .workspace
+                .set_graph_editor_area(graph_id, editor_area);
+        }
     }
 }
 
@@ -1647,7 +1717,7 @@ async fn process_add_analyzer(
 
         let zoom = *editor_state.zoom().peek();
         let shift = *editor_state.shift().peek();
-        let center = workspace.get_view_port_center();
+        let center = workspace.get_view_port_center(graph_id);
 
         let proposed_pos = ((center.x - shift.x) / zoom, (center.y - shift.y) / zoom);
 
@@ -1711,7 +1781,7 @@ async fn process_add_optic_node(
         let zoom = *editor_state.zoom().peek();
 
         let shift = *editor_state.shift().peek();
-        let center = workspace.get_view_port_center();
+        let center = workspace.get_view_port_center(graph_id);
         let proposed_pos = (
             (center.x - shift.x - NODE_WIDTH / 2.) / zoom,
             (center.y - shift.y - DEFAULT_NODE_HEIGHT / 2.0) / zoom,
@@ -2367,7 +2437,7 @@ async fn process_refresh(
                         hierarchy,
                     });
                 }
-                process_get_editor_area(workspace, ws_handler).await;
+                process_get_editor_area(ws_handler, id).await;
             }
 
             // 3. Refill the graph from backend; never recenter if the tab already existed

@@ -15,15 +15,14 @@ use crate::{
     },
     light::Ray,
     material::Material,
-    properties::proptype::AssetRef,
     utils::geom_transformation::Isometry,
 };
 
-/// One solid of an [`Assembly`], placed where it sits in the assembly, with its material.
+/// One solid of an [`Assembly`], placed where it sits in the assembly. The solid carries its own
+/// material.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Part {
     geometry: Geometry,
-    material: AssetRef<Material>,
 }
 
 impl Part {
@@ -33,17 +32,12 @@ impl Part {
     ///
     /// * `placement` - where the solid sits relative to the node.
     /// * `geometry` - the solid itself.
-    /// * `material` - the material the solid is made of.
     ///
     /// # Errors
     ///
     /// This function returns an error if the geometry encloses no volume or is an assembly itself;
     /// the parts of an inner assembly are added directly instead.
-    pub fn new(
-        placement: &Isometry,
-        mut geometry: Geometry,
-        material: AssetRef<Material>,
-    ) -> OpmResult<Self> {
+    pub fn new(placement: &Isometry, mut geometry: Geometry) -> OpmResult<Self> {
         if geometry.kind().as_body().is_none() {
             return Err(OpossumError::Other(
                 "a part of an assembly has to enclose a volume".into(),
@@ -56,7 +50,7 @@ impl Part {
             ));
         }
         geometry.move_by(placement);
-        Ok(Self { geometry, material })
+        Ok(Self { geometry })
     }
 }
 
@@ -183,25 +177,31 @@ impl Assembly {
             inversion: None,
         })
     }
-    /// Return the number of the part a face of the assembly belongs to, and the number the face has
-    /// in the solid of that part.
+    /// Return the solids of this assembly, each placed where it sits in the assembly, with the
+    /// number its first face has in the assembly.
     ///
     /// The faces of an assembly are those of its parts, part after part.
+    pub fn parts(&self) -> impl Iterator<Item = (usize, &Geometry)> {
+        self.parts.iter().scan(0, |first_face, part| {
+            let first = *first_face;
+            *first_face += part.geometry.kind().face_count();
+            Some((first, &part.geometry))
+        })
+    }
+    /// Return the number of the part a face of the assembly belongs to, and the number the face has
+    /// in the solid of that part (see [`Assembly::parts`]).
     ///
     /// # Arguments
     ///
     /// * `face` - the number of the face in the assembly.
     fn locate(&self, face: FaceIndex) -> Option<(usize, FaceIndex)> {
         let face = usize::from(face);
-        let mut first_face = 0;
-        for (index, part) in self.parts.iter().enumerate() {
-            let count = part.geometry.kind().face_count();
-            if face < first_face + count {
-                return Some((index, FaceIndex::new(face - first_face)));
-            }
-            first_face += count;
-        }
-        None
+        self.parts()
+            .enumerate()
+            .find_map(|(index, (first_face, geometry))| {
+                let own = face.checked_sub(first_face)?;
+                (own < geometry.kind().face_count()).then_some((index, FaceIndex::new(own)))
+            })
     }
 }
 
@@ -237,6 +237,10 @@ impl GeometryKind for Assembly {
                 .get(part)
                 .is_some_and(|part| part.geometry.kind().includes(own_face, point))
         })
+    }
+    /// Every part is a body (see [`Part::new`]), and the faces of a body end at its bore.
+    fn bored_rim(&self, _face: FaceIndex) -> Option<&Rim> {
+        None
     }
     fn window(&self) -> Option<&Rim> {
         None
@@ -296,6 +300,10 @@ impl Body for Assembly {
             .as_body()?
             .side(own_face)
     }
+    /// An assembly is filled with the materials of its parts, not with one.
+    fn material(&self) -> Option<&Material> {
+        None
+    }
     /// The inversion of the assembly as one medium, as a gain model sees its body.
     fn inversion(&self) -> Option<&Inversion> {
         self.inversion.as_ref()
@@ -326,16 +334,15 @@ mod test {
     };
 
     fn circle() -> OpmResult<Outline> {
-        Outline::new(CircleShape::new(millimeter!(12.5))?, Vec::new())
+        Outline::new(CircleShape::new(millimeter!(12.5))?, None)
     }
-    /// The given geometry as a part made of glass with a refractive index of 1.5, at the given
-    /// placement.
+    /// Glass with a refractive index of 1.5, the material of every part below.
+    fn glass() -> OpmResult<Material> {
+        Ok(Material::from(&RefrIndexConst::new(1.5)?))
+    }
+    /// The given geometry as a part, at the given placement.
     fn part_of(geometry: Geometry, placement: Isometry) -> OpmResult<Part> {
-        Part::new(
-            &placement,
-            geometry,
-            AssetRef::Inline(Material::from(&RefrIndexConst::new(1.5)?)),
-        )
+        Part::new(&placement, geometry)
     }
     /// The diagonal of a beam splitter cube: tilted by 45° about x, 10 mm along z.
     fn diagonal() -> OpmResult<Face> {
@@ -347,27 +354,33 @@ mod test {
     /// The front prism of a beam splitter cube: behind its entrance face, in front of the
     /// diagonal (face 1).
     fn prism_part() -> OpmResult<Part> {
-        let solid = Geometry::Parametric(ParametricSolid::new(vec![
-            (
-                Face::new(SurfaceShape::Plane, Isometry::identity()),
-                Side::Behind,
-            ),
-            (diagonal()?, Side::InFront),
-        ])?);
+        let solid = Geometry::Parametric(Box::new(ParametricSolid::new(
+            vec![
+                (
+                    Face::new(SurfaceShape::Plane, Isometry::identity()),
+                    Side::Behind,
+                ),
+                (diagonal()?, Side::InFront),
+            ],
+            glass()?,
+        )?));
         part_of(solid, Isometry::identity())
     }
     /// The rear prism of the same cube: behind the diagonal (face 0), in front of its exit face.
     fn opposite_prism_part() -> OpmResult<Part> {
-        let solid = Geometry::Parametric(ParametricSolid::new(vec![
-            (diagonal()?, Side::Behind),
-            (
-                Face::new(
-                    SurfaceShape::Plane,
-                    Isometry::new_along_z(millimeter!(20.0))?,
+        let solid = Geometry::Parametric(Box::new(ParametricSolid::new(
+            vec![
+                (diagonal()?, Side::Behind),
+                (
+                    Face::new(
+                        SurfaceShape::Plane,
+                        Isometry::new_along_z(millimeter!(20.0))?,
+                    ),
+                    Side::InFront,
                 ),
-                Side::InFront,
-            ),
-        ])?);
+            ],
+            glass()?,
+        )?));
         part_of(solid, Isometry::identity())
     }
     /// A beam splitter cube: both prisms cemented along the diagonal.
@@ -380,6 +393,24 @@ mod test {
             )],
         )
     }
+    /// An assembly is filled with the materials of its parts, so it names none for itself.
+    #[test]
+    fn an_assembly_names_no_single_material() -> OpmResult<()> {
+        assert_eq!(cube()?.material(), None);
+        Ok(())
+    }
+    /// Light is not propagated through an assembly as through one medium: it refuses, rather than
+    /// passing the rays through untouched.
+    #[test]
+    fn an_assembly_is_not_propagated_through_as_one_medium() -> OpmResult<()> {
+        let mut cube = cube()?;
+        let body: &mut dyn Body = &mut cube;
+        let error = body
+            .propagate_inside(None, &mut [])
+            .expect_err("an assembly was propagated through as one medium");
+        assert!(error.to_string().contains("no single material"), "{error}");
+        Ok(())
+    }
     /// The crown lens of a doublet at the origin, its rear face (R = -40 mm) 5 mm behind it.
     fn crown_part() -> OpmResult<Part> {
         part_of(
@@ -388,6 +419,7 @@ mod test {
                 millimeter!(-40.0),
                 millimeter!(5.0),
                 circle()?,
+                glass()?,
             )?,
             Isometry::identity(),
         )
@@ -400,6 +432,7 @@ mod test {
                 millimeter!(f64::INFINITY),
                 millimeter!(5.0),
                 circle()?,
+                glass()?,
             )?,
             placement,
         )
@@ -533,6 +566,7 @@ mod test {
                     millimeter!(-40.0),
                     millimeter!(5.0),
                     circle()?,
+                    glass()?,
                 )?,
                 Isometry::identity(),
             )
@@ -544,6 +578,7 @@ mod test {
                     millimeter!(f64::INFINITY),
                     millimeter!(5.0),
                     circle()?,
+                    glass()?,
                 )?,
                 Isometry::new(
                     millimeter!(0.0, 0.0, 5.0),
@@ -586,6 +621,18 @@ mod test {
             vec![crown_part()?, flint_part(millimeter!(-40.0), aside)?],
             vec![],
         )
+    }
+    /// The parts are handed out in their order, each as placed and with the number its first face
+    /// has in the assembly: the second lens starts after the two faces of the first.
+    #[test]
+    fn the_parts_are_numbered_part_after_part() -> OpmResult<()> {
+        let assembly = side_by_side()?;
+        let first_faces: Vec<usize> = assembly.parts().map(|(first_face, _)| first_face).collect();
+        assert_eq!(first_faces, [0, 2]);
+        for ((_, geometry), part) in assembly.parts().zip(&assembly.parts) {
+            assert_eq!(geometry, &part.geometry);
+        }
+        Ok(())
     }
     /// A node frame away from the origin and turned about all three axes.
     fn node_frame() -> OpmResult<Isometry> {
@@ -802,7 +849,8 @@ mod test {
     #[test]
     fn a_part_is_a_solid_but_not_an_assembly() -> OpmResult<()> {
         let inner = Assembly::new(vec![prism_part()?], vec![])?;
-        let nested = part_of(Geometry::Assembly(inner), Isometry::identity()).unwrap_err();
+        let nested =
+            part_of(Geometry::Assembly(Box::new(inner)), Isometry::identity()).unwrap_err();
         assert!(nested.to_string().contains("assembly itself"), "{nested}");
         let surface = part_of(Geometry::plane(None), Isometry::identity()).unwrap_err();
         assert!(

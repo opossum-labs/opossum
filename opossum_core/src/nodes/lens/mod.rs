@@ -3,7 +3,7 @@
 
 use crate::{
     analyzers::energy::AnalysisEnergy,
-    core_optics::{NodeAttr, OpticNode, OpticNodeExt, SurfacePorts, Volumetric},
+    core_optics::{NodeAttr, OpticNode, OpticNodeExt, SurfacePorts},
     error::{OpmResult, OpossumError},
     geometry::{
         Geometry,
@@ -105,7 +105,10 @@ impl Default for Lens {
             .create_property_with_validator(
                 OPTIC_SHAPE,
                 "transversal extent of the component",
-                Validator::OpticShapeIsBounded,
+                Validator::OpticShape {
+                    may_be_open: false,
+                    bored: false,
+                },
                 default_optic_shape().into(),
             )
             .unwrap();
@@ -198,8 +201,6 @@ impl Lens {
     }
 }
 
-impl Volumetric for Lens {}
-
 impl EdgeThickness for Lens {
     fn min_edge_thickness(&self) -> OpmResult<Length> {
         let (
@@ -262,10 +263,8 @@ impl OpticNode for Lens {
             *rear_curvature,
             *center_thickness,
             cross_section,
+            self.material()?,
         )?))
-    }
-    fn as_volume(&self) -> Option<&dyn Volumetric> {
-        Some(self)
     }
     fn surface_ports(&self) -> SurfacePorts {
         SurfacePorts::THROUGH_SOLID
@@ -274,6 +273,7 @@ impl OpticNode for Lens {
         Some(self)
     }
 }
+
 impl AnalysisEnergy for Lens {}
 
 #[cfg(test)]
@@ -285,7 +285,7 @@ mod test {
             energy::{AnalysisEnergy, EnergyConfig},
             raytrace::AnalysisRayTrace,
         },
-        apertures::OpticShape,
+        apertures::{CircleShape, OpticShape},
         core_optics::{NodeAttrExt, node_attr::NodePositioning},
         distributions::position::Hexapolar,
         joule,
@@ -499,7 +499,6 @@ mod test {
     /// its rear face a full hemisphere.
     #[test]
     fn a_small_lens_is_built_with_its_own_optic_shape() -> OpmResult<()> {
-        use crate::apertures::CircleShape;
         let optic_shape: OpticShape = CircleShape::new(millimeter!(9.0))?.into();
         let mut lens = Lens::default();
         lens.set_property(OPTIC_SHAPE, optic_shape.clone().into())?;

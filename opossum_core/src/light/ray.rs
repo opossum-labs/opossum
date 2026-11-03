@@ -412,6 +412,17 @@ impl Ray {
         self.path_length += length * self.refractive_index * self.dir.norm();
         Ok(())
     }
+    /// Let this ray start anew at a point, such as on a line parallel to its own: it forgets the
+    /// positions it passed, so its drawn path begins there. Its direction, its up direction and
+    /// its optical path length stay.
+    ///
+    /// # Arguments
+    ///
+    /// * `point` - where the ray starts anew.
+    pub(crate) fn restart_at(&mut self, point: Point3<Length>) {
+        self.pos_hist.clear();
+        self.pos = point;
+    }
     /// Create an [`Isometry`] from this [`Ray`].
     ///
     /// This function creates an [`Isometry`] with its position based on the ray position and the
@@ -1199,13 +1210,15 @@ mod test {
         use crate::{
             apertures::{CircleShape, Outline},
             geometry::{Extruded, Geometry},
+            material::Material,
         };
         let node_frame = Isometry::new(millimeter!(1.0, -2.0, 30.0), degree!(10.0, 5.0, 0.0))?;
         let mut lens = Geometry::singlet(
             millimeter!(50.0),
             millimeter!(f64::INFINITY),
             millimeter!(5.0),
-            Outline::new(CircleShape::new(millimeter!(10.0))?, Vec::new())?,
+            Outline::new(CircleShape::new(millimeter!(10.0))?, None)?,
+            Material::default(),
         )?;
         let mut ray = Ray::new(
             node_frame.transform_point(&millimeter!(3.0, -4.0, -20.0)),

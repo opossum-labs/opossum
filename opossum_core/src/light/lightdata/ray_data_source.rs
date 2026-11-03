@@ -5,7 +5,7 @@ use crate::generic_validators::StaticInRange;
 use crate::{
     degree,
     distributions::{energy::EnergyDistType, position::PosDistType, spectral::SpecDistType},
-    error::OpmResult,
+    error::{OpmResult, OpossumError},
     generic_validators::{AllFinite, AllNormal, AllPositive, PathValid, StaticBounds},
     joule,
     light::Rays,
@@ -13,6 +13,7 @@ use crate::{
     utils::default_from_name::DefaultFromName,
     validated, validated_type,
 };
+use num_traits::Zero;
 use opm_macros_lib::EnsureValidated;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, path::PathBuf};
@@ -603,6 +604,67 @@ impl RayDataSource {
         }
     }
 
+    /// Returns the wavelengths this source emits, without building its rays.
+    ///
+    /// # Returns
+    ///
+    /// The wavelengths its spectrum is sampled at, the one wavelength of an image, or the distinct
+    /// wavelengths of the valid raw rays.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the spectrum cannot be sampled.
+    pub fn wavelengths(&self) -> OpmResult<Vec<Length>> {
+        let spectrum = match self {
+            Self::Collimated(collimated_src) => collimated_src.spect_dist(),
+            Self::PointSrc(point_src) => point_src.spect_dist(),
+            Self::Image(image_src) => return Ok(vec![image_src.wavelength()]),
+            Self::Raw(rays) => return rays.get_unique_wavelengths(true),
+        };
+        Ok(spectrum
+            .generate()
+            .generate()?
+            .into_iter()
+            .map(|(wavelength, _)| wavelength)
+            .collect())
+    }
+
+    /// Returns the energy-weighted mean wavelength of the rays this source builds, without
+    /// building them.
+    ///
+    /// It is the wavelength a source without an alignment wavelength places its optical axis at
+    /// (see [`Rays::central_wavelength`]).
+    ///
+    /// # Returns
+    ///
+    /// The mean of the spectrum's samples weighted by their shares, the one wavelength of an
+    /// image, or the central wavelength of raw rays.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the spectrum cannot be sampled, or if raw rays hold no
+    /// ray.
+    pub fn central_wavelength(&self) -> OpmResult<Length> {
+        let spectrum = match self {
+            Self::Collimated(collimated_src) => collimated_src.spect_dist(),
+            Self::PointSrc(point_src) => point_src.spect_dist(),
+            Self::Image(image_src) => return Ok(image_src.wavelength()),
+            Self::Raw(rays) => {
+                return rays.central_wavelength().ok_or_else(|| {
+                    OpossumError::Other("raw rays without a ray have no central wavelength".into())
+                });
+            }
+        };
+        let samples = spectrum.generate().generate()?;
+        let (weighted, total) = samples.iter().fold(
+            (Length::zero(), 0.0),
+            |(weighted, total), (wavelength, share)| {
+                (weighted + *wavelength * *share, total + share)
+            },
+        );
+        Ok(weighted / total)
+    }
+
     /// Set the position distribution type for the ray source.
     ///
     /// This function sets the [`PosDistType`] on either a collimated or point source variant
@@ -771,9 +833,16 @@ impl Display for RayDataSource {
 mod tests {
     use super::*;
     use crate::{
-        error::OpossumError,
+        distributions::{
+            energy::General2DGaussian,
+            position::Hexapolar,
+            spectral::{Gaussian, LaserLines},
+        },
         generic_validators::{AllNormal, AllPositive, Validate},
+        millimeter,
     };
+    use approx::assert_relative_eq;
+    use uom::si::length::nanometer;
 
     fn get_length(src: &PointSrc) -> Length {
         *src.reference_length()
@@ -867,5 +936,103 @@ mod tests {
             v.is_ok(),
             "Validator combination for reference_length should remain AllPositive && AllNormal"
         );
+    }
+
+    /// An image shines its one wavelength; raw rays count only the wavelengths of valid rays.
+    #[test]
+    fn the_wavelengths_of_an_image_and_of_raw_rays() -> OpmResult<()> {
+        let image = RayDataSource::Image(ImageSrc::default());
+        assert_eq!(image.wavelengths()?, vec![ImageSrc::default().wavelength()]);
+
+        let mut rays = Rays::default();
+        for nm in [1000.0, 500.0, 1000.0, 700.0] {
+            rays.add_ray(crate::light::Ray::new_collimated(
+                meter!(0.0, 0.0, 0.0),
+                nanometer!(nm),
+                joule!(1.0),
+            )?);
+        }
+        let mut stopped = crate::light::Ray::new_collimated(
+            meter!(0.0, 0.0, 0.0),
+            nanometer!(300.0),
+            joule!(1.0),
+        )?;
+        stopped.set_invalid();
+        rays.add_ray(stopped);
+        assert_eq!(
+            RayDataSource::Raw(rays).wavelengths()?,
+            vec![nanometer!(500.0), nanometer!(700.0), nanometer!(1000.0)]
+        );
+        Ok(())
+    }
+
+    /// Read from the spectrum, the central wavelength of a collimated or point source is the one
+    /// its built rays have, also where the energy is spread unevenly over the cross section.
+    #[test]
+    fn the_central_wavelength_is_that_of_the_built_rays() -> OpmResult<()> {
+        let gaussian = Gaussian::new(
+            (nanometer!(1000.0), nanometer!(1100.0)),
+            50,
+            nanometer!(1030.0),
+            nanometer!(20.0),
+            1.0,
+        )?;
+        let lines = LaserLines::new(vec![(nanometer!(500.0), 1.0), (nanometer!(800.0), 3.0)])?;
+        let energy = EnergyDistType::General2DGaussian(General2DGaussian::default());
+        for spectrum in [SpecDistType::from(gaussian), lines.into()] {
+            let pos_dist = PosDistType::from(Hexapolar::new(millimeter!(1.0), 3)?);
+            let collimated = RayDataSource::Collimated(CollimatedSrc::new(
+                pos_dist,
+                energy.clone(),
+                spectrum.clone(),
+            ));
+            let point = RayDataSource::PointSrc(PointSrc::new(
+                pos_dist,
+                energy.clone(),
+                spectrum,
+                meter!(1.0),
+            )?);
+            for source in [collimated, point] {
+                let built = source.clone().build()?.central_wavelength();
+                assert_relative_eq!(
+                    source.central_wavelength()?.get::<nanometer>(),
+                    built.map_or(f64::NAN, |wavelength| wavelength.get::<nanometer>()),
+                    epsilon = 1e-9
+                );
+            }
+        }
+        Ok(())
+    }
+
+    /// An image has its one wavelength; raw rays have theirs, and none without a ray.
+    #[test]
+    fn the_central_wavelength_of_an_image_and_of_raw_rays() -> OpmResult<()> {
+        let image = RayDataSource::Image(ImageSrc::default());
+        assert_eq!(
+            image.central_wavelength()?,
+            ImageSrc::default().wavelength()
+        );
+
+        let mut rays = Rays::default();
+        for (nm, energy) in [(1000.0, 1.0), (500.0, 3.0)] {
+            rays.add_ray(crate::light::Ray::new_collimated(
+                meter!(0.0, 0.0, 0.0),
+                nanometer!(nm),
+                joule!(energy),
+            )?);
+        }
+        assert_relative_eq!(
+            RayDataSource::Raw(rays)
+                .central_wavelength()?
+                .get::<nanometer>(),
+            625.0,
+            epsilon = 1e-9
+        );
+        assert!(
+            RayDataSource::Raw(Rays::default())
+                .central_wavelength()
+                .is_err()
+        );
+        Ok(())
     }
 }

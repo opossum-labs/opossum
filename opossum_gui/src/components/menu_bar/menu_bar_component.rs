@@ -13,6 +13,7 @@ use crate::{
             file_path_display::FilePathDisplay,
             help::about::About,
             node_menu::{analyzers_menu::AnalyzersMenu, nodes_menu::NodesMenu},
+            scene_view_menu::SceneViewMenu,
         },
         short_cuts::{SHORTCUTS, ShortCutAction},
     },
@@ -44,6 +45,7 @@ pub enum AppCommand {
     Quit,
     Simulate,
     Settings,
+    ToggleSceneView,
     OpenMaterialCatalog,
     OpenCatalogSynchronizer,
 }
@@ -255,6 +257,8 @@ pub fn MenuBar(
                             }
                         }
                     }
+                    // --- 3D View Menu ---
+                    SceneViewMenu { on_menu_action, is_connected }
                     // --- Catalogs Menu ---
                     li { class: "nav-item dropdown",
                         a {
@@ -347,11 +351,8 @@ pub fn MenuBar(
                 let simulate_shortcut = SHORTCUTS
                     .get(&ShortCutAction::Simulate)
                     .map_or(String::new(), |s| format!(" ({s})"));
-                let title_str = if is_connected {
-                    format!("Simulate{simulate_shortcut}")
-                } else {
-                    "Simulation disabled bla (no backend connection)".to_string()
-                };
+                let title_str = if is_connected { format!("Simulate{simulate_shortcut}") } else { "Simulation disabled (no backend connection)".to_string() };
+
                 #[cfg(feature = "desktop")]
                 rsx! {
                     div { class: "d-flex align-items-center",

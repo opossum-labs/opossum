@@ -9,6 +9,7 @@
 use std::fmt::{self, Display, Formatter};
 
 use nalgebra::{Point2, Point3, Vector3};
+use num_traits::Zero;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
@@ -204,6 +205,171 @@ impl Face {
     }
 }
 
+/// How far a face may be out of square with a frame before that counts as a tilt, given as the
+/// sine of the angle between the two axes.
+///
+/// Composing a frame with its own inverse does not come out exactly, so a face placed square in
+/// its node still reports a tilt of a few floating point epsilons — which would otherwise turn
+/// every curved face in a node that is merely rotated into an unsupported one. The threshold sits
+/// far above that noise and far below any angle a component is built with: a wedge is turned by
+/// degrees, not by billionths of one. The same slack decides when a face is so nearly parallel to
+/// the frame's axis that it no longer bounds anything along it.
+const ALIGNMENT_TOLERANCE: f64 = 1e-9;
+
+/// How a [`Face`] stands in a frame that is not its own.
+///
+/// Everything built *from* faces — the extent of a body, a mesh laid over one — is expressed in
+/// the frame of the component instead, which need not agree with the frame of the face: a wedge
+/// tilts its exit face against the body it bounds. This does that translation once, together with
+/// the checks that decide whether the face can bound that frame at all.
+pub struct SurfacePlacement<'a> {
+    surface: &'a dyn GeoSurface,
+    relative: Isometry,
+    axis: Vector3<f64>,
+    tilt: f64,
+    vertex: Length,
+}
+
+impl<'a> SurfacePlacement<'a> {
+    /// Work out how `face` stands in `frame`.
+    ///
+    /// # Arguments
+    ///
+    /// - `face`: the face to place
+    /// - `frame`: the frame to measure it against, given in the frame the face is stated in
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the face runs parallel to the frame's axis, so that it
+    /// never crosses it and cannot bound anything along it, or if the face has no vertex.
+    pub fn new(face: &'a Face, frame: &Isometry) -> OpmResult<Self> {
+        let surface = face.surface();
+        let relative =
+            Isometry::new_from_transform(frame.get_inv_transform() * face.frame.get_transform());
+        // The frame's own z axis, written in the face's frame: dotted with a point of the face it
+        // yields that point's longitudinal position in the frame. Its transversal part states how
+        // far the face is tilted against the frame, its z part how much of the face's own sag
+        // survives into the frame's z.
+        let axis = relative.inverse_transform_vector_f64(&Vector3::z());
+        if axis.z.abs() <= ALIGNMENT_TOLERANCE {
+            return Err(OpossumError::Other(format!(
+                "the '{}' surface runs parallel to the frame's axis and does not bound it",
+                surface.name()
+            )));
+        }
+        let vertex = surface.local_z_at(&Point2::origin()).ok_or_else(|| {
+            OpossumError::Other(format!(
+                "the '{}' surface has no vertex to measure its sag from",
+                surface.name()
+            ))
+        })?;
+        Ok(Self {
+            surface,
+            relative,
+            tilt: axis.x.hypot(axis.y),
+            axis,
+            vertex,
+        })
+    }
+    /// Maps a point of the face's own frame into the frame it was measured against.
+    pub(crate) const fn relative(&self) -> &Isometry {
+        &self.relative
+    }
+    /// How far the face is tilted against the frame's axis, as the sine of that angle.
+    pub(crate) const fn tilt(&self) -> f64 {
+        self.tilt
+    }
+    /// Whether the face is turned against the frame's axis at all, rather than square to it.
+    ///
+    /// See [`ALIGNMENT_TOLERANCE`] for why this is not simply `tilt() > 0.0`.
+    pub(crate) fn is_tilted(&self) -> bool {
+        self.tilt > ALIGNMENT_TOLERANCE
+    }
+    /// How much of the face's own sag survives into the frame's z, as the cosine of the tilt.
+    ///
+    /// Negative if the face sits the other way round in this frame.
+    pub(crate) fn alignment(&self) -> f64 {
+        self.axis.z
+    }
+    /// The longitudinal position of the vertex in the face's own frame.
+    pub(crate) const fn vertex(&self) -> Length {
+        self.vertex
+    }
+    /// The surface of the face, to be asked in its vertex frame.
+    pub(crate) fn surface(&self) -> &dyn GeoSurface {
+        self.surface
+    }
+    /// The point of the face above a transversal position of the frame, and the way it faces
+    /// there — both in the frame's coordinates.
+    ///
+    /// "Above" is along the frame's axis: the point where a line through the given transversal
+    /// position, parallel to that axis, meets the face. Finding it means walking along that line
+    /// until the face's own transversal plane is reached, which is exact in the two cases that
+    /// occur: for a face parallel to the frame the walk does not move transversally at all, so any
+    /// sag above the position found is the answer; for a flat one there is no sag to miss. A face
+    /// both tilted *and* curved would be met somewhere the walk does not reach, and is turned away
+    /// — the same limit the extent of a body is subject to, and no node builds such a face.
+    ///
+    /// The normal is turned towards the frame's +z, so it is the outward normal of a body this face
+    /// bounds from below and the inward one of a body it bounds from above.
+    ///
+    /// # Arguments
+    ///
+    /// - `transversal_position`: the position in the frame's xy plane to look above
+    ///
+    /// # Returns
+    ///
+    /// The point of the face and its unit normal, both in the frame's coordinates.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the face does not reach that far out, or if it is both
+    /// curved and tilted against the frame.
+    pub fn above(
+        &self,
+        transversal_position: &Point2<Length>,
+    ) -> OpmResult<(Point3<Length>, Vector3<f64>)> {
+        let start = self.relative.inverse_transform_point(&Point3::new(
+            transversal_position.x,
+            transversal_position.y,
+            Length::zero(),
+        ));
+        let along = -start.z / self.alignment();
+        let local = Point2::new(start.x + along * self.axis.x, start.y + along * self.axis.y);
+        let out_of_reach = || {
+            OpossumError::Other(format!(
+                "the '{}' surface does not reach as far out as {transversal_position:?}",
+                self.surface.name()
+            ))
+        };
+        let surface_z = self.surface.local_z_at(&local).ok_or_else(out_of_reach)?;
+        if self.is_tilted() && surface_z != self.vertex {
+            return Err(OpossumError::Other(format!(
+                "the curved '{}' surface tilted against the frame it is measured in is not \
+                 supported",
+                self.surface.name()
+            )));
+        }
+        let normal = self.relative.transform_vector_f64(
+            &self
+                .surface
+                .local_normal_at(&local)
+                .ok_or_else(out_of_reach)?,
+        );
+        Ok((
+            self.relative
+                .transform_point(&Point3::new(local.x, local.y, surface_z)),
+            // The face may sit the other way round in this frame, in which case its own +z is the
+            // frame's -z and the normal has to be turned around to keep the promise above.
+            if self.alignment().is_sign_negative() {
+                -normal
+            } else {
+                normal
+            },
+        ))
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -211,6 +377,7 @@ mod test {
         degree,
         geometry::{Cylinder, Parabola, Sphere},
         millimeter,
+        utils::test_helper::helper::somewhere_else,
     };
     use approx::assert_abs_diff_eq;
 
@@ -282,6 +449,154 @@ mod test {
         };
         assert!(parabola(100.0)?.coincides_with(&parabola(100.0)?));
         assert!(!parabola(100.0)?.coincides_with(&parabola(101.0)?));
+        Ok(())
+    }
+
+    /// A face of the given shape the given distance along the axis of a node.
+    fn along(shape: SurfaceShape, node: &Isometry, z: f64) -> OpmResult<Face> {
+        Ok(Face::new(
+            shape,
+            node.append(&Isometry::new_along_z(millimeter!(z))?),
+        ))
+    }
+    /// A face turned against its node, the way a wedge turns its exit face.
+    fn tilted(shape: SurfaceShape, node: &Isometry) -> OpmResult<Face> {
+        Ok(Face::new(
+            shape,
+            node.append(&Isometry::new(
+                millimeter!(0.0, 0.0, 3.0),
+                degree!(0.0, 8.0, 0.0),
+            )?),
+        ))
+    }
+    /// One of every face a volume node builds, each at its own offset within the node.
+    fn faces_of_a_node(node: &Isometry) -> OpmResult<Vec<(&'static str, Face)>> {
+        Ok(vec![
+            ("plane", along(SurfaceShape::Plane, node, 0.0)?),
+            (
+                "convex sphere",
+                along(SurfaceShape::spherical(millimeter!(50.0))?, node, 0.0)?,
+            ),
+            (
+                "concave sphere",
+                along(SurfaceShape::spherical(millimeter!(-50.0))?, node, 4.0)?,
+            ),
+            (
+                "cylinder",
+                along(SurfaceShape::cylindrical(millimeter!(40.0))?, node, 2.0)?,
+            ),
+            (
+                "parabola",
+                along(
+                    SurfaceShape::Parabola(Parabola::new(millimeter!(60.0))?),
+                    node,
+                    0.0,
+                )?,
+            ),
+            ("tilted plane", tilted(SurfaceShape::Plane, node)?),
+        ])
+    }
+
+    /// Transversal positions of a frame to place points above, all within the reach of every face
+    /// of [`faces_of_a_node`].
+    fn positions() -> [Point2<Length>; 5] {
+        [
+            millimeter!(0.0, 0.0),
+            millimeter!(6.0, 0.0),
+            millimeter!(0.0, -7.0),
+            millimeter!(3.0, 4.0),
+            millimeter!(-6.0, -6.0),
+        ]
+    }
+    /// A face placed in a frame answers with the point right above the asked position, lying on the
+    /// face, and with a unit normal facing the +z of the frame.
+    #[test]
+    fn a_placed_face_follows_the_contract() -> OpmResult<()> {
+        for node in [Isometry::identity(), somewhere_else()?] {
+            for (name, face) in faces_of_a_node(&node)? {
+                let placement = SurfacePlacement::new(&face, &node)?;
+                for position in positions() {
+                    let (point, normal) = placement.above(&position)?;
+                    assert_abs_diff_eq!(point.x.value, position.x.value, epsilon = 1e-12);
+                    assert_abs_diff_eq!(point.y.value, position.y.value, epsilon = 1e-12);
+                    // Where the face itself says it lies there, asked through its own frame.
+                    let local = face
+                        .frame()
+                        .inverse_transform_point(&node.transform_point(&point));
+                    let sag = face
+                        .surface()
+                        .local_z_at(&Point2::new(local.x, local.y))
+                        .expect("the face reaches a point it was placed at");
+                    assert_abs_diff_eq!(local.z.value, sag.value, epsilon = 1e-12);
+                    assert_abs_diff_eq!(normal.norm(), 1.0, epsilon = 1e-12);
+                    assert!(
+                        normal.z > 0.0,
+                        "a normal of the {name} does not face the +z of its frame: {normal:?}"
+                    );
+                }
+            }
+        }
+        Ok(())
+    }
+    /// A face is placed in its node's own frame, so moving the node changes no answer.
+    #[test]
+    fn a_placement_does_not_move_with_the_node() -> OpmResult<()> {
+        let (here, there) = (Isometry::identity(), somewhere_else()?);
+        for ((_, face), (_, moved)) in faces_of_a_node(&here)?
+            .into_iter()
+            .zip(faces_of_a_node(&there)?)
+        {
+            let at_origin = SurfacePlacement::new(&face, &here)?;
+            let elsewhere = SurfacePlacement::new(&moved, &there)?;
+            for position in positions() {
+                let (before, before_normal) = at_origin.above(&position)?;
+                let (after, after_normal) = elsewhere.above(&position)?;
+                assert_abs_diff_eq!(
+                    (before - after).map(|c| c.value).norm(),
+                    0.0,
+                    epsilon = 1e-12
+                );
+                assert_abs_diff_eq!((before_normal - after_normal).norm(), 0.0, epsilon = 1e-12);
+            }
+        }
+        Ok(())
+    }
+    /// A sphere ends where its radius of curvature does, so it places no point beyond that.
+    #[test]
+    fn a_face_places_no_point_beyond_its_reach() -> OpmResult<()> {
+        let face = Face::new(
+            SurfaceShape::Sphere(Sphere::new(millimeter!(5.0))?),
+            Isometry::identity(),
+        );
+        let placement = SurfacePlacement::new(&face, &Isometry::identity())?;
+        assert!(placement.above(&millimeter!(10.0, 0.0)).is_err());
+        assert!(placement.above(&millimeter!(2.0, 0.0)).is_ok());
+        Ok(())
+    }
+    /// A face standing on edge never crosses the frame's axis, so it cannot be placed in that frame.
+    #[test]
+    fn a_face_parallel_to_the_frame_axis_cannot_be_placed() -> OpmResult<()> {
+        let on_edge = Face::new(
+            SurfaceShape::Plane,
+            Isometry::new(millimeter!(0.0, 0.0, 0.0), degree!(0.0, 90.0, 0.0))?,
+        );
+        assert!(SurfacePlacement::new(&on_edge, &Isometry::identity()).is_err());
+        Ok(())
+    }
+    /// Where a curved face tilted against its frame is met cannot be found by walking along the
+    /// frame's axis, so no point off its vertex is placed.
+    #[test]
+    fn a_curved_face_tilted_against_the_frame_places_no_point() -> OpmResult<()> {
+        let node = Isometry::identity();
+        for shape in [
+            SurfaceShape::Sphere(Sphere::new(millimeter!(50.0))?),
+            SurfaceShape::Cylinder(Cylinder::new(millimeter!(40.0))?),
+            SurfaceShape::Parabola(Parabola::new(millimeter!(60.0))?),
+        ] {
+            let face = tilted(shape, &node)?;
+            let placement = SurfacePlacement::new(&face, &node)?;
+            assert!(placement.above(&millimeter!(5.0, 3.0)).is_err());
+        }
         Ok(())
     }
 }

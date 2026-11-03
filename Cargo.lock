@@ -2217,6 +2217,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus_glb_viewer"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "dioxus",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "directories"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5782,6 +5792,7 @@ dependencies = [
  "opossum_core",
  "opossum_gui",
  "opossum_reporter",
+ "opossum_scene",
 ]
 
 [[package]]
@@ -5796,6 +5807,7 @@ dependencies = [
  "nalgebra",
  "opossum_core",
  "opossum_reporter",
+ "opossum_scene",
  "parking_lot 0.13.0",
  "ron",
  "semver",
@@ -5873,6 +5885,7 @@ dependencies = [
  "dioxus",
  "dioxus-free-icons",
  "dioxus-primitives",
+ "dioxus_glb_viewer",
  "directories",
  "futures-util",
  "gloo-timers 0.4.0",
@@ -5956,10 +5969,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "opossum_scene"
+version = "0.8.1"
+dependencies = [
+ "approx",
+ "fastrand",
+ "log",
+ "nalgebra",
+ "opossum_core",
+ "optoscene",
+ "serde_json",
+ "spade",
+ "strum",
+ "uom",
+ "uuid",
+]
+
+[[package]]
 name = "option-ext"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
+
+[[package]]
+name = "optoscene"
+version = "0.1.0"
+dependencies = [
+ "nalgebra",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "os_pipe"

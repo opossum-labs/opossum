@@ -23,6 +23,7 @@
 //! }
 //! ```
 mod beam_splitter;
+mod bored_mirror;
 mod cylindric_lens;
 mod dummy;
 mod energy_meter;
@@ -38,12 +39,14 @@ pub mod reflective_grating;
 mod source_helper;
 mod source_port;
 mod spectrometer;
+mod splitter;
 mod spot_diagram;
 pub(crate) mod test_helper;
 mod thin_mirror;
 mod wavefront;
 mod wedge;
 pub use beam_splitter::BeamSplitter;
+pub use bored_mirror::BoredMirror;
 pub use cylindric_lens::CylindricLens;
 pub use dummy::Dummy;
 pub use energy_meter::{EnergyMeter, Metertype};
@@ -72,7 +75,7 @@ pub use wedge::Wedge;
 
 use crate::{
     analyzers::Analyzable,
-    core_optics::OpticRef,
+    core_optics::{OpticNodeExt, OpticRef},
     error::{OpmResult, OpossumError},
 };
 use std::{collections::HashSet, sync::LazyLock};
@@ -136,14 +139,15 @@ pub fn node_types() -> Vec<(&'static str, &'static str)> {
 }
 /// The node types that enclose a volume of material, derived from the node registry.
 ///
-/// Every registered type is instantiated once and asked whether it is
-/// [`Volumetric`](crate::core_optics::Volumetric). Doing that once is worth a `LazyLock`: it builds
-/// one node of every type in the program, while the answer cannot change at runtime.
+/// Every registered type is instantiated once and asked whether its geometry encloses a volume (see
+/// [`OpticNodeExt::encloses_volume`]). Doing that once is worth a `LazyLock`: it builds one node of
+/// every type in the program, while the answer cannot change at runtime.
 static VOLUME_NODE_TYPES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     node_types()
         .into_iter()
         .filter(|(node_type, _)| {
-            create_node_ref(node_type).is_ok_and(|optic_ref| optic_ref.as_volume().is_some())
+            create_node_ref(node_type)
+                .is_ok_and(|optic_ref| optic_ref.encloses_volume().unwrap_or(false))
         })
         .map(|(node_type, _)| node_type)
         .collect()
@@ -151,10 +155,9 @@ static VOLUME_NODE_TYPES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
 
 /// Return whether nodes of the given type enclose a volume of material.
 ///
-/// This is the question [`OpticNode::as_volume`](crate::core_optics::OpticNode::as_volume) answers,
-/// for a caller that has only a type name and no node: a user interface deciding whether to offer
-/// amplification for a component, for instance. It is derived from the very same capability, so the
-/// two cannot drift apart.
+/// This is the question [`OpticNodeExt::encloses_volume`] answers, for a caller that has only a type
+/// name and no node: a user interface deciding whether to offer amplification for a component, for
+/// instance. It is derived from the very same geometry, so the two cannot drift apart.
 ///
 /// # Arguments
 ///
@@ -184,10 +187,13 @@ pub trait EdgeThickness: Send + Sync {
 mod test {
     use super::*;
     use crate::{
+        apertures::{Bore, CircleShape, OpticShape, Outline},
         coatings::{CoatingType, SplittingConfigBuilder},
-        core_optics::{OpticNode, OpticNodeExt, SurfacePorts, node_attr::NodePositioning},
+        core_optics::{
+            NodeAttrExt, OpticNode, OpticNodeExt, SurfacePorts, node_attr::NodePositioning,
+        },
         degree,
-        geometry::{Extruded, FaceIndex, Sphere, SurfaceGeometry, SurfaceShape},
+        geometry::{Extruded, FaceIndex, Sphere, SurfaceGeometry, SurfaceShape, body::OPTIC_SHAPE},
         millimeter,
         nodes::test_helper::helper::{
             assert_snapshots, body_of, body_snapshot, geometry_snapshot, hit_snapshot,
@@ -293,7 +299,7 @@ mod test {
     fn every_volume_body_is_recorded() -> OpmResult<()> {
         let mut actual = Vec::new();
         for (label, node) in placed_configurations()? {
-            if node.as_volume().is_some() {
+            if node.encloses_volume()? {
                 let frame = node.effective_node_iso().unwrap_or_else(Isometry::identity);
                 actual.push((
                     label,
@@ -323,6 +329,26 @@ mod test {
                         "chord from (12.6, 0) at 0 deg: none",
                         "chord from (12.6, 0) at 10 deg: none",
                         "inside: ...............#####.........#####..######.#####..######.#####......................",
+                    ],
+                ),
+                (
+                    "bored mirror",
+                    &[
+                        "frame t=(10.406345, -17.828447, 30.345311) x=(0.964207, 0.204382, 0.168918) z=(-0.136689, -0.162745, 0.977154)",
+                        "box x=[-12.500000, 12.500000] y=[-12.500000, 12.500000] z=[0.000000, 6.000000]",
+                        "chord from (0, 0) at 0 deg: none",
+                        "chord from (0, 0) at 10 deg: 6.092560",
+                        "chord from (5, 0) at 0 deg: 6.000000",
+                        "chord from (5, 0) at 10 deg: 6.092560",
+                        "chord from (0, 5) at 0 deg: 6.000000",
+                        "chord from (0, 5) at 10 deg: none",
+                        "chord from (-8, 3) at 0 deg: 6.000000",
+                        "chord from (-8, 3) at 10 deg: none",
+                        "chord from (12.4, 0) at 0 deg: 6.000000",
+                        "chord from (12.4, 0) at 10 deg: none",
+                        "chord from (12.6, 0) at 0 deg: none",
+                        "chord from (12.6, 0) at 10 deg: none",
+                        "inside: ...............####.................####...####...####...####.......................",
                     ],
                 ),
                 (
@@ -501,6 +527,35 @@ mod test {
                         "out out1_trans1_refl2 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
                         "out out1_trans1_refl2 from (12.6, 0) at 0 deg: miss",
                         "out out2_trans2_refl1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out out2_trans2_refl1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out out2_trans2_refl1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out out2_trans2_refl1 from (0, 5) at 10 deg: miss",
+                        "out out2_trans2_refl1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out out2_trans2_refl1 from (12.6, 0) at 0 deg: miss",
+                    ],
+                ),
+                (
+                    "bored mirror",
+                    &[
+                        "in input_1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) not recorded",
+                        "in input_1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (0, 5) at 10 deg: miss",
+                        "in input_1 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_1 from (12.6, 0) at 0 deg: miss",
+                        "in input_2 from (0, 0) at 0 deg: (0.000000, 0.000000, 6.000000) n=(0.000000, 0.000000, -1.000000) not recorded",
+                        "in input_2 from (5, 0) at 10 deg: (5.000000, 9.874311, 6.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_2 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 6.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_2 from (0, 5) at 10 deg: miss",
+                        "in input_2 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 6.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "in input_2 from (12.6, 0) at 0 deg: miss",
+                        "out out1_trans1_refl2 from (0, 0) at 0 deg: (0.000000, 0.000000, 6.000000) n=(0.000000, 0.000000, -1.000000) not recorded",
+                        "out out1_trans1_refl2 from (5, 0) at 10 deg: (5.000000, 9.874311, 6.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out out1_trans1_refl2 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 6.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out out1_trans1_refl2 from (0, 5) at 10 deg: miss",
+                        "out out1_trans1_refl2 from (12.4, 0) at 0 deg: (12.400000, 0.000000, 6.000000) n=(0.000000, 0.000000, -1.000000) recorded",
+                        "out out1_trans1_refl2 from (12.6, 0) at 0 deg: miss",
+                        "out out2_trans2_refl1 from (0, 0) at 0 deg: (0.000000, 0.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) not recorded",
                         "out out2_trans2_refl1 from (5, 0) at 10 deg: (5.000000, 8.816349, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
                         "out out2_trans2_refl1 from (-8, 3) at 0 deg: (-8.000000, 3.000000, 0.000000) n=(0.000000, 0.000000, -1.000000) recorded",
                         "out out2_trans2_refl1 from (0, 5) at 10 deg: miss",
@@ -905,6 +960,40 @@ mod test {
         assert!(error.contains("face count: 1"), "{error}");
     }
 
+    /// Only the bored mirror takes a bore through its optic shape, and it takes none without one:
+    /// every other node type with an optic shape refuses a bore and keeps an optic shape without.
+    #[test]
+    fn only_the_bored_mirror_takes_a_bore() -> OpmResult<()> {
+        let edge = || CircleShape::new(millimeter!(12.5));
+        let bore = Bore::new(
+            CircleShape::new(millimeter!(2.0))?,
+            millimeter!(0.0, 0.0),
+            degree!(0.0),
+        );
+        let bored = OpticShape::from(Outline::new(edge()?, Some(bore))?);
+        let plain = OpticShape::from(edge()?);
+        let mut checked = 0;
+        for (node_type, _) in node_types() {
+            let mut node = create_node_ref(node_type)?;
+            if node.node_attr().get_property(OPTIC_SHAPE).is_err() {
+                continue;
+            }
+            let takes_a_bore = node_type == "bored mirror";
+            assert_eq!(
+                node.set_property(OPTIC_SHAPE, bored.clone().into()).is_ok(),
+                takes_a_bore,
+                "{node_type} with a bore"
+            );
+            assert_eq!(
+                node.set_property(OPTIC_SHAPE, plain.clone().into()).is_ok(),
+                !takes_a_bore,
+                "{node_type} without a bore"
+            );
+            checked += 1;
+        }
+        assert!(checked > 1, "only {checked} node types have an optic shape");
+        Ok(())
+    }
     /// Every surface of every node type takes a separator coating exactly when it splits the
     /// light, and any other coating exactly when it does not. The beam splitter's surface splits.
     #[test]
@@ -964,6 +1053,15 @@ mod test {
                         "in input_1: plane t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=0",
                         "in input_2: plane t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=0",
                         "out out1_trans1_refl2: plane t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=0",
+                        "out out2_trans2_refl1: plane t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=0",
+                    ],
+                ),
+                (
+                    "bored mirror",
+                    &[
+                        "in input_1: plane t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=0",
+                        "in input_2: plane t=(0.000000, 0.000000, 6.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=1",
+                        "out out1_trans1_refl2: plane t=(0.000000, 0.000000, 6.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=1",
                         "out out2_trans2_refl1: plane t=(0.000000, 0.000000, 0.000000) x=(1.000000, 0.000000, 0.000000) z=(0.000000, 0.000000, 1.000000) sag=(0.000000, 0.000000, 0.000000) shared=0",
                     ],
                 ),

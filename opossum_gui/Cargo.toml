@@ -34,6 +34,9 @@ uuid.workspace = true
 dioxus = { version = "0.7" }
 dioxus-free-icons = { version = "0.10", features = ["font-awesome-solid"] }
 dioxus-primitives = { git = "https://github.com/DioxusLabs/components", version = "0.0.1", default-features = false }
+# The 3D viewer component. Deliberately without its `desktop`/`web` features: those exist only so
+# the crate's own example can call `dioxus::launch`, and a dependency must not pick the renderer.
+dioxus_glb_viewer = { path = "../dioxus_glb_viewer" }
 
 # Utility libraries shared across platforms
 futures-util = "0.3"

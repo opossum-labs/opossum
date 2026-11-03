@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- The bored mirror icon of opossum_gui/assets/icons/NodeIcons.svg (symbol "bored_mirror"), standalone. -->
+<svg
+   width="50mm"
+   height="50mm"
+   viewBox="230 65 50 50"
+   version="1.1"
+   color="#808080"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker
+       style="overflow:visible"
+       id="ArrowWideRounded"
+       refX="0"
+       refY="0"
+       orient="auto-start-reverse"
+       markerWidth="1"
+       markerHeight="1"
+       viewBox="0 0 1 1"
+       preserveAspectRatio="xMidYMid">
+      <path
+         style="fill:none;stroke:context-stroke;stroke-width:1;stroke-linecap:round"
+         d="M 3,-3 0,0 3,3"
+         transform="rotate(180,0.125,0)" />
+    </marker>
+    <linearGradient id="linearGradient17">
+      <stop style="stop-color:#0023ff;stop-opacity:0.12639999;" offset="0" />
+      <stop style="stop-color:#00b9ff;stop-opacity:0.1344;" offset="1" />
+    </linearGradient>
+    <linearGradient id="linearGradient2">
+      <stop style="stop-color:#0023ff;stop-opacity:0.17254902;" offset="0" />
+      <stop style="stop-color:#00b9ff;stop-opacity:0.84313726;" offset="1" />
+    </linearGradient>
+    <linearGradient
+       xlink:href="#linearGradient17"
+       id="linearGradient3"
+       x1="240.23062"
+       y1="124.08875"
+       x2="274.61569"
+       y2="120.05257"
+       gradientUnits="userSpaceOnUse"
+       gradientTransform="translate(-172.47768,151.50315)" />
+    <linearGradient
+       xlink:href="#linearGradient2"
+       id="linearGradient10"
+       gradientUnits="userSpaceOnUse"
+       gradientTransform="translate(-172.47768,151.50315)"
+       x1="240.23062"
+       y1="124.08875"
+       x2="274.61569"
+       y2="120.05257" />
+    <linearGradient
+       xlink:href="#linearGradient2"
+       id="linearGradient11"
+       gradientUnits="userSpaceOnUse"
+       gradientTransform="translate(-172.47768,151.50315)"
+       x1="240.23062"
+       y1="124.08875"
+       x2="274.61569"
+       y2="120.05257" />
+    <clipPath clipPathUnits="userSpaceOnUse" id="clipPath11">
+      <rect
+         style="fill:#000000;stroke:none"
+         width="34.166645"
+         height="14.53824"
+         x="240.10938"
+         y="116.22438"
+         transform="rotate(45)" />
+    </clipPath>
+    <clipPath clipPathUnits="userSpaceOnUse" id="clipPath13">
+      <rect
+         style="fill:#000000;stroke:none"
+         width="34.166645"
+         height="14.53824"
+         x="236.14061"
+         y="135.64359"
+         transform="rotate(45)" />
+    </clipPath>
+    <clipPath clipPathUnits="userSpaceOnUse" id="clipPath15">
+      <rect
+         style="fill:#000000;stroke:none"
+         width="34.166645"
+         height="4.8809495"
+         x="238.89656"
+         y="130.76262"
+         transform="rotate(45)" />
+    </clipPath>
+  </defs>
+  <g transform="translate(0,-55.000004)">
+    <g transform="translate(1.4179125,11.371133)">
+      <rect
+         style="fill:url(#linearGradient3);stroke:#808080;stroke-width:0.5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:0.5, 1.5;stroke-dashoffset:0;stroke-opacity:1"
+         width="34.166645"
+         height="4.8809495"
+         x="67.909088"
+         y="271.18027"
+         transform="rotate(-45)"
+         clip-path="url(#clipPath15)" />
+      <rect
+         style="fill:url(#linearGradient10);stroke:#808080;stroke-width:0.5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1"
+         width="34.166645"
+         height="4.8809495"
+         x="67.909088"
+         y="271.18027"
+         transform="rotate(-45)"
+         clip-path="url(#clipPath13)" />
+      <rect
+         style="fill:url(#linearGradient11);stroke:#808080;stroke-width:0.5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1"
+         width="34.166645"
+         height="4.8809495"
+         x="67.909088"
+         y="271.18027"
+         transform="rotate(-45,0.00416533,-0.01005551)"
+         clip-path="url(#clipPath11)" />
+    </g>
+    <rect
+       style="fill:none;stroke:currentColor;stroke-width:0.52025;stroke-linecap:round;stroke-linejoin:round"
+       width="47.976749"
+       height="47.976749"
+       x="231.01149"
+       y="120.76313"
+       ry="4.9336262" />
+    <path
+       style="fill:none;stroke:currentColor;stroke-width:0.465;marker-end:url(#ArrowWideRounded)"
+       d="m 236.25672,144.31653 h 37.7335" />
+    <path
+       style="fill:none;stroke:currentColor;stroke-width:0.465;marker-end:url(#ArrowWideRounded)"
+       d="m 236.25672,149.71374 h 10.13736 V 125.0274" />
+    <path
+       style="fill:none;stroke:currentColor;stroke-width:0.465;marker-end:url(#ArrowWideRounded)"
+       d="m 236.25672,138.91933 h 20.65017 V 124.7458" />
+  </g>
+</svg>

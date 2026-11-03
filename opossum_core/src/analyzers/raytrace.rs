@@ -5,9 +5,7 @@ use std::collections::HashMap;
 use super::{Analyzer, AnalyzerType};
 use crate::{
     analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
-    core_optics::{
-        NodeAttrExt, OpticNode, OpticNodeExt, node_attr::HasNodeAttr, optic_surface::OpticSurface,
-    },
+    core_optics::{OpticNode, OpticNodeExt, node_attr::HasNodeAttr, optic_surface::OpticSurface},
     error::{OpmResult, OpossumError},
     gain::{ActiveScenario, PumpConfig, PumpScenario},
     light::{LightResult, Rays, lightdata::ray_data_builder::RayDataBuilder},
@@ -17,7 +15,7 @@ use crate::{
     reporting::analysis_report::AnalysisReport,
     utils::geom_transformation::Isometry,
 };
-use log::{info, warn};
+use log::info;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -54,6 +52,11 @@ pub struct RayTraceConfig {
     /// not been prepared yet and gain models must skip amplification. Not saved to file.
     #[serde(skip)]
     positioning_run: bool,
+    /// When set, [`NodeGroup`] instances keep the ray bundles that exit through unconnected,
+    /// unmapped output ports (see [`NodeGroup::ray_ends`]). Used only by visualization on
+    /// throwaway copies; not saved to disk.
+    #[serde(skip)]
+    collect_ray_ends: bool,
 }
 impl Default for RayTraceConfig {
     /// Create a default config for a ray tracing analysis with the following parameters:
@@ -72,6 +75,7 @@ impl Default for RayTraceConfig {
             ambient_material: Material::vacuum(),
             active_pump_scenario: ActiveScenario::default(),
             positioning_run: false,
+            collect_ray_ends: false,
         }
     }
 }
@@ -132,6 +136,11 @@ impl RayTraceConfig {
     pub fn map_source(&mut self, uuid: Uuid, builder: RayDataBuilder) -> bool {
         self.source_map.insert(uuid, builder).is_some()
     }
+    /// Returns the ray data builders of all sources, keyed by the UUID of their source port.
+    #[must_use]
+    pub const fn source_map(&self) -> &HashMap<Uuid, RayDataBuilder> {
+        &self.source_map
+    }
     /// Returns a reference to the ray data builder mapped to the given source UUID, if any.
     #[must_use]
     pub fn get_source(&self, uuid: &Uuid) -> Option<&RayDataBuilder> {
@@ -186,11 +195,31 @@ impl RayTraceConfig {
     pub const fn set_positioning_run(&mut self, positioning_run: bool) {
         self.positioning_run = positioning_run;
     }
+    /// Sets whether [`NodeGroup`] instances should collect ray bundles that exit through
+    /// unconnected, unmapped output ports.
+    ///
+    /// When set to `true`, every walk run with this config appends those bundles to
+    /// [`NodeGroup::ray_ends`]; nothing clears them. Set it only on a fresh copy of a model (e.g.
+    /// one created from its file string), which starts with no ray ends. When `false` (the
+    /// default) the bundles are discarded and no extra memory is allocated — normal simulations
+    /// are completely unaffected.
+    pub const fn set_collect_ray_ends(&mut self, collect: bool) {
+        self.collect_ray_ends = collect;
+    }
+    /// Returns whether ray bundles at unconnected, unmapped output ports are collected.
+    ///
+    /// See [`set_collect_ray_ends`](Self::set_collect_ray_ends) for details.
+    #[must_use]
+    pub const fn collect_ray_ends(&self) -> bool {
+        self.collect_ray_ends
+    }
     /// Return a config suitable for the geometry-positioning run.
     ///
     /// Copies the source map and scalar settings from `self` but drops the `active_pump_scenario`
     /// (to avoid cloning a potentially large [`PumpScenario`]) and sets `positioning_run = true`
-    /// so that gain models know no medium has been prepared yet.
+    /// so that gain models know no medium has been prepared yet.  `collect_ray_ends` is
+    /// explicitly set to `false`: a positioning run must not also collect the ray ends of the
+    /// analysis walk it precedes.
     ///
     /// A missed surface always stops the ray, whatever `self` says: the optical axis has to pass
     /// every component it is connected through, and positioning stops where it does not.
@@ -205,6 +234,7 @@ impl RayTraceConfig {
             active_pump_scenario: ActiveScenario::default(),
             ambient_material: self.ambient_material().clone(),
             positioning_run: true,
+            collect_ray_ends: false,
         }
     }
 }
@@ -293,7 +323,8 @@ pub trait AnalysisRayTrace: OpticNode {
     ///
     /// This function calculates the position of this [`OpticNode`] element in 3D space. This is based on the analysis of a single,
     /// central [`Ray`](crate::light::ray::Ray) representing the optical axis. The default implementation is to use the normal `analyze`
-    /// function. For a [`NodeGroup`] however, this must be separately implemented in order to allow nesting.
+    /// function. For a [`NodeGroup`] however, this must be separately implemented in order to allow nesting. Within a graph,
+    /// a node no axis reaches is passed over before this is called.
     ///
     /// # Errors
     /// This function will return an error if internal element-specific errors occur and the analysis cannot be performed.
@@ -302,15 +333,7 @@ pub trait AnalysisRayTrace: OpticNode {
         incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
-        if incoming_data.is_empty() {
-            warn!(
-                "{} got no valid optical axis data from previous node and can thus not being placed. Skipping.",
-                self.node_info()
-            );
-            Ok(LightResult::default())
-        } else {
-            self.analyze(incoming_data, config)
-        }
+        self.analyze(incoming_data, config)
     }
     /// Return the local frame from which the optical axis enters the given input port.
     ///
@@ -436,7 +459,7 @@ mod test {
     fn config_debug() {
         assert_eq!(
             format!("{:?}", RayTraceConfig::default()),
-            "RayTraceConfig { min_energy_per_ray: 1e-12 m^2 kg^1 s^-2, max_number_of_bounces: 1000, max_number_of_refractions: 1000, missed_surface_strategy: Stop, source_map: {}, ambient_material: Material { header: AssetHeader { schema_version: 1, id: 00000000-0000-0000-0000-000000000000, version: 0, name: \"vacuum\", manufacturer: None, description: None }, optical: OpticalProperties { refractive_index: Const(RefrIndexConst { refractive_index: Validated { value: 1.0, validator: AndValidator { v1: AllFinite, v2: StaticInRange { _marker: PhantomData<(f64, opossum_core::refractive_index::refr_index_const::RefIndBounds)> }, _marker: PhantomData<f64> } } }), absorption: None }, thermal: None, mechanical: None }, active_pump_scenario: ActiveScenario(None), positioning_run: false }"
+            "RayTraceConfig { min_energy_per_ray: 1e-12 m^2 kg^1 s^-2, max_number_of_bounces: 1000, max_number_of_refractions: 1000, missed_surface_strategy: Stop, source_map: {}, ambient_material: Material { header: AssetHeader { schema_version: 1, id: 00000000-0000-0000-0000-000000000000, version: 0, name: \"vacuum\", manufacturer: None, description: None }, optical: OpticalProperties { refractive_index: Const(RefrIndexConst { refractive_index: Validated { value: 1.0, validator: AndValidator { v1: AllFinite, v2: StaticInRange { _marker: PhantomData<(f64, opossum_core::refractive_index::refr_index_const::RefIndBounds)> }, _marker: PhantomData<f64> } } }), absorption: None }, thermal: None, mechanical: None }, active_pump_scenario: ActiveScenario(None), positioning_run: false, collect_ray_ends: false }"
         );
     }
     #[test]
@@ -600,6 +623,8 @@ mod test {
         assert!(config.get_source(&uuid2).is_none());
         Ok(())
     }
+    /// Neither dummy is placed: no axis reaches either, and nothing either feeds is placed. Both
+    /// are put back and, placed back to front, still have nothing to stand in front of.
     #[test]
     fn test_no_optical_axis_warning() -> OpmResult<()> {
         let mut scenery = NodeGroup::new("OpticScenery demo");
@@ -612,8 +637,8 @@ mod test {
         check_logs(
             log::Level::Warn,
             vec![
-                "'dummy1' (dummy) has no incoming connections and can thus not being placed. Skipping.",
-                "'dummy2' (dummy) got no valid optical axis data from previous node and can thus not being placed. Skipping.",
+                "'dummy1' (dummy) cannot be placed: no optical axis reaches it, and it stands in front of nothing it feeds. Skipping.",
+                "'dummy2' (dummy) cannot be placed: no optical axis reaches it, and it stands in front of nothing it feeds. Skipping.",
             ],
         );
         Ok(())

@@ -1,0 +1,13 @@
+[book]
+authors = ["Yannik Zobus <y.zobus@gsi.de>"]
+description = "User guide and reference for the optoscene glTF/GLB export crate"
+language = "en"
+src = "src"
+title = "optoscene Handbook"
+
+[rust]
+edition = "2021"
+
+[output.html]
+default-theme = "navy"
+git-repository-url = "https://github.com/opossum-labs/opossum"

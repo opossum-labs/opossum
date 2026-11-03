@@ -1,9 +1,7 @@
 use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
-    helper_functions::{
-        apply_and_push_undo, parent_group_id_or_self, resolve_reference_chain, ron_or_json_response,
-    },
+    helper_functions::{apply_and_push_undo, resolve_reference_chain, ron_or_json_response},
     undo::{Command, PatchProperty},
 };
 use actix_web::{HttpRequest, HttpResponse, get, patch, web};
@@ -97,7 +95,7 @@ pub async fn patch_property(
     let old_value = document.scenery().with_node_attr(uuid, |node_attr| {
         node_attr.properties().get(&prop_name).cloned()
     })??;
-    let parent_group_id = parent_group_id_or_self(document.scenery(), uuid)?;
+    let parent_group_id = document.scenery().parent_group_id_or_self(uuid)?;
 
     let command = Command::PatchProperty(PatchProperty {
         uuid,
@@ -357,7 +355,7 @@ mod test {
     }
 
     /// The GUI offers only the optic shapes a node can take, and learns them from the property's
-    /// validator: a lens must be bounded, a paraxial surface has no validator and may also be open.
+    /// validator: a lens must be bounded, a paraxial surface may also be open, neither takes a bore.
     #[actix_web::test]
     async fn test_get_properties_carries_the_validators() {
         let app_state = create_test_state();
@@ -372,10 +370,11 @@ mod test {
             )
         };
         let app = test::init_service(App::new().app_data(app_state).service(get_properties)).await;
-        for (node_id, expected) in [
-            (lens_id, Some(Validator::OpticShapeIsBounded)),
-            (paraxial_id, None),
-        ] {
+        for (node_id, may_be_open) in [(lens_id, false), (paraxial_id, true)] {
+            let expected = Some(Validator::OpticShape {
+                may_be_open,
+                bored: false,
+            });
             let req = test::TestRequest::get()
                 .uri(&format!("/{node_id}/properties"))
                 .insert_header(("Accept", "application/ron"))

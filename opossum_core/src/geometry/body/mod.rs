@@ -20,15 +20,17 @@
 //! [`Plane`](crate::geometry::Plane)s with a circular cross section, a slab two planes with a
 //! rectangular one, a lens two [`Sphere`](crate::geometry::Sphere)s.
 //!
-//! The cross section is the [`Outline`](crate::apertures::Outline) of the optic shape: an edge
-//! with bores through it, which always delimits a region.
+//! The cross section is the [`Outline`](crate::apertures::Outline) of the optic shape: an edge,
+//! possibly with a bore through it, which always delimits a region.
 
 use crate::{
+    absorption::absorption_model::AbsorptionModel,
     apertures::{CircleShape, OpticShape, RectangleShape},
     error::{OpmResult, OpossumError},
-    gain::Inversion,
+    gain::{Extraction, Inversion},
     geometry::{FaceIndex, Side},
-    light::Ray,
+    light::{Ray, Rays},
+    material::Material,
     millimeter, nanometer,
     utils::{geom_transformation::Isometry, math_utils::distance_3d_point},
 };
@@ -211,6 +213,14 @@ pub trait Body: Debug + Send + Sync {
     ///
     /// The side of the face the body lies on, or `None` if there is no such face.
     fn side(&self, face: FaceIndex) -> Option<Side>;
+    /// Return the [`Material`] this [`Body`] is filled with.
+    ///
+    /// # Returns
+    ///
+    /// The material, or `None` if the body holds only a reference to it that is not resolved yet
+    /// (while a document is loaded), or if it is filled with several (an
+    /// [`Assembly`](crate::geometry::Assembly), whose parts each have their own).
+    fn material(&self) -> Option<&Material>;
     /// Return the inversion a gain model built in this [`Body`], or `None` if there is none.
     fn inversion(&self) -> Option<&Inversion>;
     /// Return the inversion of this [`Body`], to be built, depleted or cleared.
@@ -285,6 +295,83 @@ pub trait Body: Debug + Send + Sync {
         let center_point = first_point + (last_point - first_point).map(|c| c * 0.5);
         self.contains(&center_point)
             .then(|| distance_3d_point(&first_point, &last_point))
+    }
+}
+
+/// What a medium does to the light travelling through it, the same for every kind of solid. It is
+/// a method of the trait object rather than a provided method, so no kind can answer it differently.
+impl dyn Body + '_ {
+    /// Apply what this medium does to the rays travelling through it, in a single traversal.
+    ///
+    /// Two effects act on the same chord, and when both are present they are applied in one step,
+    /// never in two passes:
+    ///
+    /// * **Dopant gain** — a property of the operating point, given as `extraction`. Its exponent
+    ///   (see [`Extraction::path_exponent`], an exact Amanatides–Woo voxel walk for grid-based
+    ///   models) amplifies along the chord.
+    /// * **Host-material absorption** — a property of the material this body is filled with (see
+    ///   [`Body::material`]), whenever its [`AbsorptionModel`] is not [`AbsorptionModel::None`]. Its
+    ///   transmittance over the geometric chord attenuates.
+    ///
+    /// For each valid ray with a positive chord through the body both combine into one energy factor
+    /// `exp(∫ g₀·β ds) · T(λ, L)`. They multiply on the ray energy and commute, so the body is walked
+    /// once, not once per effect. A medium that neither amplifies nor absorbs leaves the rays
+    /// untouched. The rays are not moved: the surfaces carry them from one face to the other.
+    ///
+    /// # Arguments
+    ///
+    /// * `extraction` - the gain model the operating point runs this medium with, or `None` for a
+    ///   passive one. A saturating model reads and depletes the inversion of this body.
+    /// * `rays_bundle` - the ray bundles inside the medium, modified in place.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the body holds no single material, if the transmittance
+    /// cannot be evaluated, if the combined factor is not finite, or if a ray rejects it.
+    pub fn propagate_inside(
+        &mut self,
+        extraction: Option<&dyn Extraction>,
+        rays_bundle: &mut [Rays],
+    ) -> OpmResult<()> {
+        // Cloned, so that the body can be walked mutably below.
+        let absorption = self
+            .material()
+            .ok_or_else(|| {
+                OpossumError::Analysis("the medium holds no single material to absorb in".into())
+            })?
+            .optical
+            .absorption
+            .clone();
+        let absorption = (absorption != AbsorptionModel::None).then_some(&absorption);
+        if extraction.is_none() && absorption.is_none() {
+            return Ok(());
+        }
+        for rays in rays_bundle.iter_mut() {
+            for ray in rays.iter_mut().filter(|ray| ray.valid()) {
+                let Some(chord) = self.path_length_inside(ray) else {
+                    continue;
+                };
+                if chord.value <= 0.0 {
+                    continue;
+                }
+                let mut factor = 1.0_f64;
+                if let Some(extraction) = extraction {
+                    factor *= extraction.gain_factor(self, ray);
+                }
+                if let Some(absorption) = absorption {
+                    factor *= absorption.transmittance(ray.wavelength(), chord)?;
+                }
+                if !factor.is_finite() {
+                    return Err(OpossumError::Analysis(format!(
+                        "the net medium factor over a path of {} mm through the medium is \
+                         {factor}, which is not finite",
+                        chord.get::<uom::si::length::millimeter>()
+                    )));
+                }
+                ray.scale_energy(factor)?;
+            }
+        }
+        Ok(())
     }
 }
 

@@ -19,7 +19,7 @@ fn criterion_kde(c: &mut Criterion) {
         hit_map.add_hit_point(hit_point).unwrap();
     }
     c.bench_function("kde", |b| {
-        b.iter(|| hit_map.calc_fluence_map((30, 30), &FluenceEstimator::KDE, None, None))
+        b.iter(|| hit_map.calc_fluence_map((30, 30), &FluenceEstimator::KDE, None, None));
     });
 }
 
@@ -33,7 +33,7 @@ fn criterion_binning(c: &mut Criterion) {
         hit_map.add_hit_point(hit_point).unwrap();
     }
     c.bench_function("binning", |b| {
-        b.iter(|| hit_map.calc_fluence_map((30, 30), &FluenceEstimator::Binning, None, None))
+        b.iter(|| hit_map.calc_fluence_map((30, 30), &FluenceEstimator::Binning, None, None));
     });
 }
 

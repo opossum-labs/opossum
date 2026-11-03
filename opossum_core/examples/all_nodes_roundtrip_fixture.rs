@@ -50,6 +50,7 @@ fn main() -> OpmResult<()> {
         ReflectiveGrating::default().with_rot_from_littrow(nanometer!(1000.0), degree!(0.0))?,
     )?;
     let thin_mirror = scenery.add_node(ThinMirror::default())?;
+    let bored_mirror = scenery.add_node(BoredMirror::default())?;
 
     scenery.connect_nodes(src, "output_1", beam_splitter, "input_1", millimeter!(5.0))?;
     scenery.connect_nodes(
@@ -143,6 +144,13 @@ fn main() -> OpmResult<()> {
         reflective_grating,
         "output_1",
         thin_mirror,
+        "input_1",
+        millimeter!(50.0),
+    )?;
+    scenery.connect_nodes(
+        thin_mirror,
+        "output_1",
+        bored_mirror,
         "input_1",
         millimeter!(50.0),
     )?;

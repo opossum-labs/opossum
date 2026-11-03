@@ -74,7 +74,10 @@ impl Default for ThinMirror {
             .create_property_with_validator(
                 OPTIC_SHAPE,
                 "transversal extent of the component",
-                Validator::OpticShapeIsBounded,
+                Validator::OpticShape {
+                    may_be_open: false,
+                    bored: false,
+                },
                 default_optic_shape().into(),
             )
             .unwrap();
@@ -225,7 +228,7 @@ mod test {
     use super::*;
     use crate::{
         analyzers::{RayTraceConfig, energy::EnergyConfig},
-        apertures::{Bore, CircleShape, OpticShape, Outline},
+        apertures::{CircleShape, OpticShape},
         core_optics::{Alignable, NodeAttrExt, PortType, node_attr::NodePositioning},
         degree,
         geometry::body::OPTIC_SHAPE,
@@ -235,10 +238,8 @@ mod test {
         nodes::test_helper::helper::*,
         utils::geom_transformation::Isometry,
     };
-    use approx::assert_abs_diff_eq;
-    use nalgebra::{Point2, vector};
+    use nalgebra::vector;
     use num_traits::Zero;
-    use uom::si::f64::Angle;
     #[test]
     fn default() {
         let node = ThinMirror::default();
@@ -360,44 +361,6 @@ mod test {
         }
         Ok(())
     }
-    /// A mirror with a central hole of 2 mm in a 12.5 mm disk: its optic shape is a ring. A ray
-    /// through the hole misses the mirror, one on the ring is reflected.
-    #[test]
-    fn a_ray_through_the_central_hole_of_a_mirror_misses_it() -> OpmResult<()> {
-        let hole = Bore::new(
-            CircleShape::new(millimeter!(2.0))?,
-            Point2::origin(),
-            Angle::zero(),
-        );
-        let ring = Outline::new(CircleShape::new(millimeter!(12.5))?, vec![hole])?;
-        let mut mirror = ThinMirror::default();
-        mirror.set_property(OPTIC_SHAPE, OpticShape::from(ring).into())?;
-        mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
-        let rays = rays_along_z_from(
-            &[millimeter!(0.0, 1.0, -10.0), millimeter!(0.0, 8.0, -10.0)],
-            nanometer!(1000.0),
-        )?;
-        let output = AnalysisRayTrace::analyze(
-            &mut mirror,
-            LightResult::from([("input_1".into(), LightData::Geometric(rays))]),
-            &RayTraceConfig::default(),
-        )?;
-        let Some(LightData::Geometric(reflected)) = output.get("output_1") else {
-            panic!("expected ray data at the output port");
-        };
-        let heights: Vec<f64> = reflected
-            .iter()
-            .filter(|ray| ray.valid())
-            .map(|ray| ray.position().y.get::<uom::si::length::millimeter>())
-            .collect();
-        assert_eq!(
-            heights.len(),
-            1,
-            "only the ray on the ring is reflected: {heights:?}"
-        );
-        assert_abs_diff_eq!(heights[0], 8.0, epsilon = 1e-9);
-        Ok(())
-    }
     /// An energy analysis traces no rays, so the optic shape does not cut its light, however
     /// small the mirror is.
     #[test]
@@ -475,6 +438,46 @@ mod test {
         } else {
             panic!("could not get LightData");
         }
+        Ok(())
+    }
+    /// A ray that misses the mirror is stopped and goes on in the reflected bundle, invalid, where
+    /// it last was: the reflected beam is what goes on, so that is where its path is drawn from.
+    #[test]
+    fn a_ray_that_misses_the_mirror_goes_on_stopped() -> OpmResult<()> {
+        let mut node = ThinMirror::default();
+        node.set_positioning(NodePositioning::Absolute(Isometry::new(
+            millimeter!(0.0, 0.0, 10.0),
+            degree!(0.0, 0.0, 0.0),
+        )?))?;
+        let mut rays = Rays::from(Ray::origin_along_z(nanometer!(1000.0), joule!(1.0))?);
+        // Beside the 12.5 mm radius of the default mirror.
+        rays.add_ray(Ray::new_collimated(
+            millimeter!(20.0, 0.0, 0.0),
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?);
+        let input = LightResult::from([("input_1".into(), LightData::Geometric(rays))]);
+
+        let output = AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default())?;
+
+        let Some(LightData::Geometric(reflected)) = output.get("output_1") else {
+            panic!("could not get LightData");
+        };
+        assert_eq!(
+            reflected.nr_of_rays(true),
+            1,
+            "the ray on the mirror is reflected"
+        );
+        assert_eq!(
+            reflected.nr_of_rays(false),
+            2,
+            "the one beside it goes on stopped"
+        );
+        let stopped = reflected
+            .iter()
+            .find(|ray| !ray.valid())
+            .ok_or_else(|| OpossumError::Other("no stopped ray".to_string()))?;
+        assert_eq!(stopped.position(), millimeter!(20.0, 0.0, 0.0));
         Ok(())
     }
 }

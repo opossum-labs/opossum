@@ -1,7 +1,7 @@
 use crate::{
     analyzers::ghostfocus::AnalysisGhostFocus,
     core_optics::{NodeAttrExt, OpticNodeExt, node_attr::HasNodeAttr},
-    error::{OpmResult, OpossumError},
+    error::OpmResult,
     light::{LightRays, Rays},
     nodes::SourcePort,
     prelude::GhostFocusConfig,
@@ -21,19 +21,16 @@ impl AnalysisGhostFocus for SourcePort {
             incoming_data.get("output_1").cloned().unwrap_or_default()
         } else if bounce_lvl == 0 {
             // First pass: generate initial rays from RayDataBuilder in GhostFocusConfig
-            let mut rays = config
-                .get_source(&self.node_attr().uuid())
-                .ok_or_else(|| {
-                    OpossumError::Analysis(format!("No source data found in analyzer for {self}"))
-                })?
-                .clone()
-                .build()?;
-
-            // Set ambient refractive index for initial ghost focus rays
-            rays.set_refractive_index(config.ambient_material().refractive_index_type())?;
-
-            let iso = self.effective_surface_iso("output_1")?;
-            vec![rays.transformed_by_iso(&iso)]
+            match self.light_or_warn(config.get_source(&self.node_attr().uuid())) {
+                Some(ray_data_builder) => {
+                    let mut rays = ray_data_builder.clone().build()?;
+                    // Set ambient refractive index for initial ghost focus rays
+                    rays.set_refractive_index(config.ambient_material().refractive_index_type())?;
+                    let iso = self.effective_surface_iso("output_1")?;
+                    vec![rays.transformed_by_iso(&iso)]
+                }
+                None => Vec::new(),
+            }
         } else {
             // Forward bounce > 0: source port does not generate new initial rays
             Vec::<Rays>::new()
@@ -50,22 +47,21 @@ mod test {
     use super::*;
     use crate::{core_optics::OpticNode, joule, light::Ray, millimeter, nanometer};
 
+    /// A source the analysis defines no light for sends out none, and says so.
     #[test]
-    fn analyze_ghostfocus_no_source_definition() {
+    fn analyze_ghostfocus_no_source_definition() -> OpmResult<()> {
         let mut node = SourcePort::default();
-        let output_error = AnalysisGhostFocus::analyze(
+        testing_logger::setup();
+        let output = AnalysisGhostFocus::analyze(
             &mut node,
             LightRays::default(),
             &GhostFocusConfig::default(),
             &mut Vec::new(),
             0,
-        )
-        .unwrap_err();
-        assert!(
-            output_error
-                .to_string()
-                .contains("No source data found in analyzer for")
-        );
+        )?;
+        assert!(output.values().all(Vec::is_empty), "{output:?}");
+        crate::utils::test_helper::helper::assert_warned("has no light in this analysis");
+        Ok(())
     }
 
     #[test]

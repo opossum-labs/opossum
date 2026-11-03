@@ -2,7 +2,7 @@
 use crate::{
     app_state::AppState,
     error::BackEndErrorResponse,
-    helper_functions::{analyzer_mut_or_404, parent_group_id_or_self},
+    helper_functions::analyzer_mut_or_404,
     sse_logger::SENDER,
     undo::{Command, PatchNode, RepositionAnalyzer, SetViewport, capture_old_node_request},
 };
@@ -14,18 +14,149 @@ use futures_util::StreamExt;
 use log::{error, info, warn};
 use opossum_core::{
     core_optics::node_attr::HasNodeAttr,
+    error::{OpmResult, OpossumError},
     opm_document::OpmDocument,
     types::api_types::{
         DocumentChange, ErrorResponse, JumpTarget, LoadDocumentResponse, PositionUpdate,
-        UndoRedoResponse, UpdateNodeRequest, ViewportChangeRequest,
+        SceneAnalyzer, SceneManifest, UndoRedoResponse, UpdateNodeRequest, ViewportChangeRequest,
     },
 };
+use opossum_scene::{
+    LineColors, SpectrumDrawing, axis_glb, digest, glb_of_node, light_glb, manifest_of, scene_glb,
+    source_wavelength_range,
+};
+use serde::Deserialize;
 use std::{path::PathBuf, str::FromStr};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
+use utoipa::IntoParams;
 use utoipa_actix_web::service_config::ServiceConfig;
+use uuid::Uuid;
 
 const RON_MEDIA_TYPE: &str = "application/ron";
+const GLB_MEDIA_TYPE: &str = "model/gltf-binary";
+
+/// Which analyzer a 3D view of the model should follow.
+#[derive(Debug, Deserialize, IntoParams)]
+struct SceneQuery {
+    /// Uuid of the analyzer to take the placement from, or none to follow the first analyzer whose
+    /// light is rays, else the first. One the document no longer has is ignored.
+    analyzer: Option<Uuid>,
+}
+
+/// How many rays of all sources together `/scene/rays.glb` draws unless asked for another number.
+const DEFAULT_DISPLAY_RAYS: usize = 500;
+/// The most rays of all sources together `/scene/rays.glb` draws, whatever is asked for: a
+/// mistyped number must not keep the server tracing for minutes, nor the view drawing them.
+const MAX_DISPLAY_RAYS: usize = 5000;
+
+/// Which analyzer's light a 3D view of the model should draw, and how much of it.
+#[derive(Debug, Deserialize, IntoParams)]
+struct RaysQuery {
+    /// Uuid of the analyzer to take the sources from, or none to follow the first analyzer whose
+    /// light is rays, else the first. One the document no longer has is ignored.
+    analyzer: Option<Uuid>,
+    /// The most rays drawn, of all sources together (default 500, at most 5000).
+    max_rays: Option<usize>,
+    /// Whether each start point shines every wavelength of its source's spectrum, as in the
+    /// analysis, rather than one (default false).
+    full_spectrum: Option<bool>,
+}
+
+/// Which analyzer a 3D view of the model should follow, and which of its rays the view draws.
+#[derive(Debug, Deserialize, IntoParams)]
+struct ManifestQuery {
+    /// Uuid of the analyzer to take the placement from, or none to follow the first analyzer whose
+    /// light is rays, else the first. One the document no longer has is ignored.
+    analyzer: Option<Uuid>,
+    /// The most rays drawn, as asked of `/scene/rays.glb`. Without it the manifest digests no
+    /// rays, and nothing is traced for them.
+    max_rays: Option<usize>,
+    /// Whether each start point shines every wavelength, as asked of `/scene/rays.glb`.
+    full_spectrum: Option<bool>,
+}
+
+/// Draw the light of a model's sources, off the request thread.
+///
+/// The trace is the long part, so it must hold neither the document nor the request thread: the
+/// model comes as its file, the only copy that shares nothing with the live document.
+///
+/// # Arguments
+///
+/// - `model`: the model as its OPM file
+/// - `analyzer`: the analyzer to take the sources from, or `None` for the default
+/// - `max_rays`: the most rays drawn, 500 if not given, at most 5000
+/// - `full_spectrum`: whether each start point shines every wavelength rather than one
+///
+/// # Returns
+///
+/// The GLB bytes `/scene/rays.glb` serves for these parameters.
+///
+/// # Errors
+///
+/// This function returns an error if the model cannot be read back or its light not drawn.
+async fn traced_light(
+    model: String,
+    analyzer: Option<Uuid>,
+    max_rays: Option<usize>,
+    full_spectrum: Option<bool>,
+) -> OpmResult<Vec<u8>> {
+    let max_rays = max_rays
+        .unwrap_or(DEFAULT_DISPLAY_RAYS)
+        .min(MAX_DISPLAY_RAYS);
+    let drawing = if full_spectrum.unwrap_or(false) {
+        SpectrumDrawing::Full
+    } else {
+        SpectrumDrawing::Dealt
+    };
+    web::block(move || {
+        light_glb(
+            &OpmDocument::from_string(&model)?,
+            analyzer,
+            max_rays,
+            drawing,
+        )
+    })
+    .await
+    .map_err(|e| OpossumError::Other(format!("the rays could not be traced: {e}")))?
+}
+
+/// Digest what an endpoint of drawn light answers: its file, or why it has none.
+///
+/// A failure is digested by its reason, so a viewer still asks for the file and is told why it
+/// failed - once, until the reason changes.
+///
+/// # Arguments
+///
+/// - `answer`: the file, or why it could not be drawn
+///
+/// # Returns
+///
+/// The digest, see [`digest`].
+fn digest_of(answer: &OpmResult<Vec<u8>>) -> String {
+    match answer {
+        Ok(glb) => digest(glb),
+        Err(e) => digest(e.to_string().as_bytes()),
+    }
+}
+
+/// The analyzer a 3D view asked to follow, if the document still has it.
+///
+/// A viewer holds on to its choice while the document changes underneath it: the analyzer may have
+/// been deleted, undone, or belong to a document since loaded over it. A choice that is gone is
+/// dropped, so the view follows the analyzer the model is drawn after by default rather than fail.
+///
+/// # Arguments
+///
+/// - `document`: the live document
+/// - `asked`: the analyzer the viewer asked for, if any
+///
+/// # Returns
+///
+/// `asked`, or `None` if the document has no such analyzer.
+fn analyzer_still_there(document: &OpmDocument, asked: Option<Uuid>) -> Option<Uuid> {
+    asked.filter(|id| document.drawing_analyzer(Some(*id)).is_ok())
+}
 
 /// Delete the current document and create new (empty) one
 #[utoipa::path(responses((status = NO_CONTENT, description = "document deleted and new one sucessfully created")), tag="document")]
@@ -64,8 +195,231 @@ async fn get_document(data: web::Data<AppState>) -> Result<impl Responder, BackE
         .body(document.to_opm_file_string()?))
 }
 
+/// Get the model as a 3D scene
+///
+/// This function returns every component of the current document that encloses a volume as a
+/// binary glTF (GLB) file, ready to be opened in any glTF viewer.
+///
+/// The components of a model only have a place in space once its optical axis has been traced, so
+/// that run happens here — on a copy, leaving the document itself untouched. Which analyzer the
+/// axis is traced after can be named with the `analyzer` parameter; without it, the first analyzer
+/// whose light is rays is used, or else the first of all.
+#[utoipa::path(tag = "document",
+    params(SceneQuery),
+    responses(
+        (status = 200, description = "glTF binary of the model", body = Vec<u8>,
+            content_type = GLB_MEDIA_TYPE),
+        (status = 400, description = "the model could not be drawn", body = ErrorResponse)
+    )
+)]
+#[get("/scene.glb")]
+async fn get_scene(
+    data: web::Data<AppState>,
+    query: web::Query<SceneQuery>,
+) -> Result<impl Responder, BackEndErrorResponse> {
+    // Only the copy needs the live model. Meshing it is by far the longer half of the work, and
+    // holding the document across that would block every other edit for as long as it takes.
+    let placed = {
+        let document = data.document.lock();
+        document.placed_scenery(analyzer_still_there(&document, query.analyzer))?
+    };
+    let glb = scene_glb(&placed)?;
+    Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
+}
+
+/// List the components of the model with their placement, without their geometry
+///
+/// This function returns one entry per component that encloses a volume, holding where the
+/// component sits and a hash of what it looks like — but not the geometry itself, which is fetched
+/// per component from `/scene/node/{uid}.glb`.
+///
+/// Splitting the two apart is what makes a live 3D view cheap. A viewer that already shows the
+/// model compares this list against what it has: a component whose hash is unchanged only needs its
+/// new placement applied, however far it moved, and only one that really changed shape is fetched
+/// again.
+///
+/// As with `/scene.glb`, the components only have a place in space once the optical axis has been
+/// traced, so that run happens here on a copy, and the `analyzer` parameter picks which analyzer to
+/// follow when the model has more than one. The list names the analyzer it followed, and the false
+/// colors `/scene/rays.glb` draws that analyzer's light in if it holds several wavelengths.
+///
+/// The drawn light takes the same way: the list holds a digest of what `/scene/axis.glb` serves
+/// for the same analyzer, and, if `max_rays` is given, of what `/scene/rays.glb` serves for the
+/// same parameters. A viewer that names the digest in the address fetches the light again only when
+/// it changed, so an edit that draws nothing new - another analyzer, an amplifier - redraws
+/// nothing. The rays are traced for their digest only when asked for.
+///
+/// A model that cannot be placed is answered with an empty list whose `notice` says why: that is
+/// a state of the model a viewer has to show, not a failed request.
+#[utoipa::path(tag = "document",
+    params(ManifestQuery),
+    responses(
+        (status = 200, description = "the drawable components of the model, or why there are none", body = SceneManifest),
+        (status = 400, description = "the components could not be listed", body = ErrorResponse)
+    )
+)]
+#[get("/scene/manifest")]
+async fn get_scene_manifest(
+    data: web::Data<AppState>,
+    query: web::Query<ManifestQuery>,
+) -> Result<impl Responder, BackEndErrorResponse> {
+    // Same split as `get_scene`: only the copy needs the live model, and the meshing that follows
+    // must not block every other edit for as long as it takes.
+    let (placed, asked, analyzer, colors, axis, model) = {
+        let document = data.document.lock();
+        let asked = analyzer_still_there(&document, query.analyzer);
+        let analyzer = document
+            .drawing_analyzer(asked)?
+            .map(|(uid, info)| SceneAnalyzer {
+                uid,
+                name: info.display_name(),
+            });
+        let colors = LineColors::Wavelength(source_wavelength_range(&document, asked)?);
+        let placed = document.placed_scenery(asked);
+        // Light is only drawn over a placed model, and the rays only while a view asks for them.
+        let axis = placed
+            .is_ok()
+            .then(|| digest_of(&axis_glb(&document, asked)));
+        let model = if placed.is_ok() && query.max_rays.is_some() {
+            Some(document.to_opm_file_string()?)
+        } else {
+            None
+        };
+        (placed, asked, analyzer, colors, axis, model)
+    };
+    let rays = match model {
+        Some(model) => Some(digest_of(
+            &traced_light(model, asked, query.max_rays, query.full_spectrum).await,
+        )),
+        None => None,
+    };
+    let mut manifest = match placed {
+        Ok(placed) => SceneManifest {
+            spectrum: colors.legend(),
+            ..manifest_of(&placed)?
+        },
+        Err(e) => SceneManifest {
+            notice: Some(e.to_string()),
+            ..SceneManifest::default()
+        },
+    };
+    manifest.analyzer = analyzer;
+    manifest.axis = axis;
+    manifest.rays = rays;
+    Ok(Json(manifest))
+}
+
+/// Get one component of the model as a 3D scene
+///
+/// This function returns a single component as a binary glTF (GLB) file, held at the coordinate
+/// origin rather than where the setup puts it. Where it belongs is stated by `/scene/manifest`
+/// instead, which is what lets a viewer move a component without fetching its geometry again.
+///
+/// No positioning run happens here: what a component looks like does not depend on where it ended
+/// up. Its surfaces do have to be rebuilt first, though — see below.
+#[utoipa::path(tag = "document",
+    params(("uid" = Uuid, Path, description = "Uuid of the component to draw")),
+    responses(
+        (status = 200, description = "glTF binary of the component", body = Vec<u8>,
+            content_type = GLB_MEDIA_TYPE),
+        (status = 404, description = "no component of that uuid is drawn", body = ErrorResponse),
+        (status = 400, description = "the component could not be drawn", body = ErrorResponse)
+    )
+)]
+#[get("/scene/node/{uid}.glb")]
+async fn get_scene_node(
+    data: web::Data<AppState>,
+    uid: web::Path<Uuid>,
+) -> Result<impl Responder, BackEndErrorResponse> {
+    // The lookup hands out a deep clone of the node, so the lock is gone again before the meshing
+    // starts.
+    let node = {
+        let document = data.document.lock();
+        document
+            .scenery()
+            .node_recursive(uid.into_inner())
+            .map_err(|_| BackEndErrorResponse::not_found())?
+            .0
+    };
+    let glb = glb_of_node(&*node)?.ok_or_else(BackEndErrorResponse::not_found)?;
+    Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
+}
+
+/// Get the optical axis of the model as a 3D scene
+///
+/// This function returns the path the optical axis takes through the model as lines in a binary
+/// glTF (GLB) file, in the same world coordinates `/scene/manifest` places the components in. It is
+/// the path the positioning run follows, one ray per source, so it shows how the setup is built up
+/// and why each component sits where it does.
+///
+/// The axis is traced on a copy, leaving the document itself untouched, and the `analyzer`
+/// parameter picks which analyzer's sources to follow exactly as for `/scene.glb`. The axis is
+/// drawn up to every open output port it reaches; light that ends in a component without any
+/// output port is not drawn into it.
+#[utoipa::path(tag = "document",
+    params(SceneQuery),
+    responses(
+        (status = 200, description = "glTF binary of the optical axis", body = Vec<u8>,
+            content_type = GLB_MEDIA_TYPE),
+        (status = 400, description = "the axis could not be traced", body = ErrorResponse)
+    )
+)]
+#[get("/scene/axis.glb")]
+async fn get_scene_axis(
+    data: web::Data<AppState>,
+    query: web::Query<SceneQuery>,
+) -> Result<impl Responder, BackEndErrorResponse> {
+    let glb = {
+        let document = data.document.lock();
+        axis_glb(&document, analyzer_still_there(&document, query.analyzer))?
+    };
+    Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
+}
+
+/// Get the light of the model's sources as a 3D scene
+///
+/// This function traces the sources an analyzer defines through the model and returns the rays'
+/// paths as lines in a binary glTF (GLB) file, in the same world coordinates `/scene/manifest`
+/// places the components in. Light of a single wavelength is drawn in the color of that
+/// wavelength; light of several in false colors from blue for the shortest to red for the longest,
+/// which `/scene/manifest` names as its `spectrum`. Rays an aperture stops are drawn up to where
+/// they stop.
+///
+/// The sources share `max_rays` rays, and each is coarsened to its share before the trace: its rays
+/// are spread evenly over its cross section, and each shines one wavelength of its spectrum - or,
+/// with `full_spectrum`, every wavelength, as in the analysis, from as many fewer start points. So a
+/// source of millions of rays and many spectral samples costs no more than one of a few hundred,
+/// while every wavelength of its spectrum is still drawn. Only the
+/// primary path is traced; a ghost focus analyzer contributes its sources, not its reflections.
+/// Without an analyzer whose light is rays - none at all, or an energy analysis - the file is
+/// empty. The trace runs on a copy, off the request thread, and the `analyzer` parameter picks
+/// which analyzer's sources to follow exactly as for `/scene.glb`.
+#[utoipa::path(tag = "document",
+    params(RaysQuery),
+    responses(
+        (status = 200, description = "glTF binary of the traced rays", body = Vec<u8>,
+            content_type = GLB_MEDIA_TYPE),
+        (status = 400, description = "the rays could not be traced", body = ErrorResponse)
+    )
+)]
+#[get("/scene/rays.glb")]
+async fn get_scene_rays(
+    data: web::Data<AppState>,
+    query: web::Query<RaysQuery>,
+) -> Result<impl Responder, BackEndErrorResponse> {
+    let (model, analyzer) = {
+        let document = data.document.lock();
+        (
+            document.to_opm_file_string()?,
+            analyzer_still_there(&document, query.analyzer),
+        )
+    };
+    let glb = traced_light(model, analyzer, query.max_rays, query.full_spectrum).await?;
+    Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
+}
+
 #[utoipa::path(
-    tag = "document", 
+    tag = "document",
     request_body(
         content = String,
         description = "OPM file as string",
@@ -298,7 +652,7 @@ fn apply_one_position_update(
             .with_node_attr(update.uuid, |node_attr| {
                 capture_old_node_request(node_attr, &new)
             })?;
-        let parent_group_id = parent_group_id_or_self(document.scenery(), update.uuid)?;
+        let parent_group_id = document.scenery().parent_group_id_or_self(update.uuid)?;
         Command::PatchNode(Box::new(PatchNode {
             uuid: update.uuid,
             parent_group_id,
@@ -395,6 +749,11 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(delete_document);
 
     cfg.service(get_root_uuid);
+    cfg.service(get_scene);
+    cfg.service(get_scene_manifest);
+    cfg.service(get_scene_node);
+    cfg.service(get_scene_axis);
+    cfg.service(get_scene_rays);
 
     cfg.service(undo_document);
     cfg.service(delete_undo_history);
@@ -1282,6 +1641,662 @@ mod test {
 
         let root_uuid: uuid::Uuid = test::read_body_json(resp).await;
         assert_eq!(root_uuid, expected_uuid);
+    }
+
+    /// A backend state holding a model with a single lens behind a source port, which a ray-trace
+    /// analyzer defines — enough to draw. The lens is the model's first node.
+    fn state_with_a_lens() -> Data<AppState> {
+        use opossum_core::{
+            analyzers::{AnalyzerType, RayTraceConfig},
+            light::lightdata::ray_data_builder::RayDataBuilder,
+            millimeter,
+            nodes::{Lens, NodeGroup, SourcePort},
+        };
+
+        let mut scenery = NodeGroup::default();
+        let lens = scenery.add_node(Lens::default()).unwrap();
+        let source = scenery.add_node(SourcePort::default()).unwrap();
+        scenery
+            .connect_nodes(source, "output_1", lens, "input_1", millimeter!(50.0))
+            .unwrap();
+        let mut document = OpmDocument::new(scenery);
+        let mut config = RayTraceConfig::default();
+        config.map_source(source, RayDataBuilder::default());
+        document.add_analyzer(AnalyzerType::RayTrace(config));
+        let app_state = Data::new(AppState::default());
+        *app_state.document.lock() = document;
+        app_state
+    }
+
+    /// Analyze the model of `app_state` two more ways, each of them defining its source port.
+    ///
+    /// # Returns
+    ///
+    /// The analyzer added last, a ray trace.
+    fn analyze_two_more_ways(app_state: &Data<AppState>) -> Uuid {
+        use opossum_core::{
+            analyzers::{AnalyzerType, GhostFocusConfig, RayTraceConfig},
+            light::lightdata::ray_data_builder::RayDataBuilder,
+        };
+
+        let mut document = app_state.document.lock();
+        let source = document.scenery().find_source_ports().unwrap()[0];
+        let mut ghost_focus = GhostFocusConfig::default();
+        ghost_focus.map_source(source, RayDataBuilder::default());
+        document.add_analyzer(AnalyzerType::GhostFocus(ghost_focus));
+        let mut ray_trace = RayTraceConfig::default();
+        ray_trace.map_source(source, RayDataBuilder::default());
+        document.add_analyzer(AnalyzerType::RayTrace(ray_trace))
+    }
+
+    /// Ask a state for its 3D view.
+    async fn request_scene(
+        app_state: &Data<AppState>,
+        query: &str,
+    ) -> actix_web::dev::ServiceResponse {
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(web::scope("/document").service(get_scene)),
+        )
+        .await;
+        let req = test::TestRequest::get()
+            .uri(&format!("/document/scene.glb{query}"))
+            .to_request();
+        app.call(req).await.unwrap()
+    }
+
+    /// The 3D view of a model is a plain glTF binary, so that any viewer can open it.
+    #[actix_web::test]
+    async fn the_scene_of_a_model_is_a_gltf_binary() {
+        let resp = request_scene(&state_with_a_lens(), "").await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers()
+                .get(actix_web::http::header::CONTENT_TYPE)
+                .unwrap(),
+            GLB_MEDIA_TYPE
+        );
+        let body = test::read_body(resp).await;
+        assert!(body.starts_with(b"glTF"));
+    }
+
+    /// A model with nothing in it has neither a source port nor an analyzer to place it with, so
+    /// it cannot be exported, and the answer says why.
+    #[actix_web::test]
+    async fn the_scene_of_an_empty_model_is_refused_with_the_reason() {
+        let resp = request_scene(&Data::new(AppState::default()), "").await;
+
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        let error: ErrorResponse = test::read_body_json(resp).await;
+        assert!(error.message.contains("neither"), "{}", error.message);
+    }
+
+    /// A model analyzed several ways is drawn after the analyzer named, or else after its first
+    /// analysis with rays.
+    #[actix_web::test]
+    async fn a_model_analyzed_several_ways_is_drawn_without_the_analyzer_named() {
+        let app_state = state_with_a_lens();
+        let named = analyze_two_more_ways(&app_state);
+
+        let resp = request_scene(&app_state, "").await;
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let resp = request_scene(&app_state, &format!("?analyzer={named}")).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    /// Ask a state for the optical axis of its model.
+    async fn request_axis(
+        app_state: &Data<AppState>,
+        query: &str,
+    ) -> actix_web::dev::ServiceResponse {
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(web::scope("/document").service(get_scene_axis)),
+        )
+        .await;
+        let req = test::TestRequest::get()
+            .uri(&format!("/document/scene/axis.glb{query}"))
+            .to_request();
+        app.call(req).await.unwrap()
+    }
+
+    /// The axis runs from the source through the lens to its open output, drawn as lines.
+    #[actix_web::test]
+    async fn the_axis_of_a_model_is_drawn_as_lines() {
+        let resp = request_axis(&state_with_a_lens(), "").await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = test::read_body(resp).await;
+        assert!(body.starts_with(b"glTF"));
+        assert!(
+            body.windows(br#""mode":1"#.len())
+                .any(|window| window == br#""mode":1"#),
+            "the axis is drawn as LINES"
+        );
+    }
+
+    /// Ask a state for the traced rays of its model.
+    async fn request_rays(
+        app_state: &Data<AppState>,
+        query: &str,
+    ) -> actix_web::dev::ServiceResponse {
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(web::scope("/document").service(get_scene_rays)),
+        )
+        .await;
+        let req = test::TestRequest::get()
+            .uri(&format!("/document/scene/rays.glb{query}"))
+            .to_request();
+        app.call(req).await.unwrap()
+    }
+
+    /// A source of 721 rays at 1000 nm in front of a lens, traced by a ray-trace analyzer.
+    fn state_with_a_traced_source() -> Data<AppState> {
+        use opossum_core::{joule, millimeter, nodes::round_collimated_ray_builder};
+
+        state_tracing(round_collimated_ray_builder(millimeter!(5.0), joule!(1.0), 15).unwrap())
+    }
+
+    /// The given source in front of a lens, traced by a ray-trace analyzer.
+    fn state_tracing(
+        builder: opossum_core::light::lightdata::ray_data_builder::RayDataBuilder,
+    ) -> Data<AppState> {
+        use opossum_core::{
+            analyzers::{AnalyzerType, RayTraceConfig},
+            millimeter,
+            nodes::{Lens, NodeGroup, SourcePort},
+        };
+
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default()).unwrap();
+        let lens = scenery.add_node(Lens::default()).unwrap();
+        scenery
+            .connect_nodes(source, "output_1", lens, "input_1", millimeter!(100.0))
+            .unwrap();
+        let mut document = OpmDocument::new(scenery);
+        let mut config = RayTraceConfig::default();
+        config.map_source(source, builder);
+        document.add_analyzer(AnalyzerType::RayTrace(config));
+        let app_state = Data::new(AppState::default());
+        *app_state.document.lock() = document;
+        app_state
+    }
+
+    /// Light of several wavelengths is drawn in false colors, which the manifest names for a
+    /// legend; light of one wavelength keeps the color of its own and has none.
+    #[actix_web::test]
+    async fn the_manifest_names_the_false_colors_of_several_wavelengths() {
+        use opossum_core::{
+            distributions::spectral::LaserLines, joule, millimeter, nanometer,
+            nodes::round_collimated_ray_builder,
+        };
+
+        let manifest: SceneManifest =
+            test::read_body_json(request_manifest(&state_with_a_traced_source(), "").await).await;
+        assert_eq!(manifest.spectrum, None, "a single laser line");
+
+        let mut builder = round_collimated_ray_builder(millimeter!(5.0), joule!(1.0), 3).unwrap();
+        let mut source = builder.source().clone();
+        let lines = vec![(nanometer!(1000.0), 1.0), (nanometer!(1100.0), 1.0)];
+        source.set_spectral_dist(LaserLines::new(lines).unwrap().into());
+        builder.set_source(source);
+        let app_state = state_tracing(builder);
+
+        let manifest: SceneManifest =
+            test::read_body_json(request_manifest(&app_state, "").await).await;
+        let spectrum = manifest.spectrum.expect("two laser lines");
+        assert!((spectrum.shortest_nm - 1000.0).abs() < 1e-9);
+        assert!((spectrum.longest_nm - 1100.0).abs() < 1e-9);
+        assert!(spectrum.colors.len() >= 2);
+        let resp = request_rays(&app_state, "").await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert!(holds_lines(&test::read_body(resp).await));
+    }
+
+    /// Whether a GLB holds a line primitive.
+    fn holds_lines(glb: &[u8]) -> bool {
+        glb.windows(br#""mode":1"#.len())
+            .any(|window| window == br#""mode":1"#)
+    }
+
+    /// An analyzer's source is traced through the model and drawn as lines, coarsened to the number
+    /// asked for, with its spectrum dealt out or in full.
+    #[actix_web::test]
+    async fn the_rays_of_a_source_are_drawn_as_lines() {
+        let app_state = state_with_a_traced_source();
+        for query in [
+            "",
+            "?max_rays=50",
+            "?max_rays=100000",
+            "?full_spectrum=true",
+            "?max_rays=50&full_spectrum=false",
+        ] {
+            let resp = request_rays(&app_state, query).await;
+
+            assert_eq!(resp.status(), StatusCode::OK, "{query}");
+            let body = test::read_body(resp).await;
+            assert!(body.starts_with(b"glTF"), "{query}");
+            assert!(holds_lines(&body), "{query}");
+        }
+    }
+
+    /// Asked for the full spectrum, a source of two lines is drawn with both at every start point,
+    /// which are other rays than one line dealt to each.
+    #[actix_web::test]
+    async fn the_full_spectrum_is_drawn_when_asked_for() {
+        use opossum_core::{
+            distributions::spectral::LaserLines, joule, millimeter, nanometer,
+            nodes::round_collimated_ray_builder,
+        };
+
+        let mut builder = round_collimated_ray_builder(millimeter!(5.0), joule!(1.0), 3).unwrap();
+        let mut source = builder.source().clone();
+        let lines = vec![(nanometer!(1000.0), 1.0), (nanometer!(1100.0), 1.0)];
+        source.set_spectral_dist(LaserLines::new(lines).unwrap().into());
+        builder.set_source(source);
+        let app_state = state_tracing(builder);
+
+        let dealt = request_rays(&app_state, "?full_spectrum=false").await;
+        assert_eq!(dealt.status(), StatusCode::OK);
+        let full = request_rays(&app_state, "?full_spectrum=true").await;
+        assert_eq!(full.status(), StatusCode::OK);
+        assert_ne!(test::read_body(dealt).await, test::read_body(full).await);
+    }
+
+    /// Without an analyzer there is no light of the setup's own to draw: an empty file, not an
+    /// error, so the view simply shows none.
+    #[actix_web::test]
+    async fn a_model_nobody_analyzes_has_no_rays_to_draw() {
+        let app_state = state_with_a_lens();
+        app_state.document.lock().analyzers_mut().clear();
+
+        let resp = request_rays(&app_state, "").await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = test::read_body(resp).await;
+        assert!(body.starts_with(b"glTF"));
+        assert!(!holds_lines(&body));
+    }
+
+    /// The rays of a model analyzed several ways are those of its first analysis with rays: the ray
+    /// trace here, not the ghost focus analysis added after it.
+    #[actix_web::test]
+    async fn the_rays_of_a_model_analyzed_several_ways_are_those_of_its_first_analysis_with_rays() {
+        use opossum_core::analyzers::{AnalyzerType, GhostFocusConfig};
+
+        let app_state = state_with_a_traced_source();
+        app_state
+            .document
+            .lock()
+            .add_analyzer(AnalyzerType::GhostFocus(GhostFocusConfig::default()));
+
+        let resp = request_rays(&app_state, "").await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert!(holds_lines(&test::read_body(resp).await));
+    }
+
+    /// The axis follows the same analyzer as the scene: the one named, or else the first with
+    /// rays.
+    #[actix_web::test]
+    async fn the_axis_of_a_model_analyzed_several_ways_is_drawn_without_the_analyzer_named() {
+        let app_state = state_with_a_lens();
+        let named = analyze_two_more_ways(&app_state);
+
+        let resp = request_axis(&app_state, "").await;
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let resp = request_axis(&app_state, &format!("?analyzer={named}")).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    /// Ask a state for the list of its drawable components.
+    async fn request_manifest(
+        app_state: &Data<AppState>,
+        query: &str,
+    ) -> actix_web::dev::ServiceResponse {
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(web::scope("/document").service(get_scene_manifest)),
+        )
+        .await;
+        let req = test::TestRequest::get()
+            .uri(&format!("/document/scene/manifest{query}"))
+            .to_request();
+        app.call(req).await.unwrap()
+    }
+
+    /// The first analyzer of the model `app_state` holds: the one a view follows by default here.
+    fn first_analyzer(app_state: &Data<AppState>) -> Uuid {
+        *app_state.document.lock().analyzers().keys().next().unwrap()
+    }
+
+    /// The manifest names the analyzer it was drawn after, so a viewer can say which one it shows.
+    #[actix_web::test]
+    async fn the_manifest_names_the_analyzer_it_is_drawn_after() {
+        let app_state = state_with_a_lens();
+        let ray_trace = first_analyzer(&app_state);
+
+        let manifest: SceneManifest =
+            test::read_body_json(request_manifest(&app_state, "").await).await;
+
+        let analyzer = manifest.analyzer.expect("the model is analyzed");
+        assert_eq!(analyzer.uid, ray_trace);
+        assert_eq!(analyzer.name, "RayTracing");
+    }
+
+    /// Named, an analyzer is the one the manifest is drawn after.
+    #[actix_web::test]
+    async fn the_manifest_is_drawn_after_the_analyzer_named() {
+        let app_state = state_with_a_lens();
+        let named = analyze_two_more_ways(&app_state);
+
+        let manifest: SceneManifest =
+            test::read_body_json(request_manifest(&app_state, &format!("?analyzer={named}")).await)
+                .await;
+
+        assert_eq!(manifest.analyzer.map(|analyzer| analyzer.uid), Some(named));
+    }
+
+    /// A view may still ask for an analyzer that has gone since - deleted, undone, or part of a
+    /// document loaded over it. The model is drawn after the one it follows by default instead.
+    #[actix_web::test]
+    async fn an_analyzer_that_is_gone_falls_back_to_the_default() {
+        let app_state = state_with_a_lens();
+        let ray_trace = first_analyzer(&app_state);
+
+        let resp = request_manifest(&app_state, &format!("?analyzer={}", Uuid::new_v4())).await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        let manifest: SceneManifest = test::read_body_json(resp).await;
+        assert!(manifest.notice.is_none(), "{:?}", manifest.notice);
+        assert_eq!(
+            manifest.analyzer.map(|analyzer| analyzer.uid),
+            Some(ray_trace)
+        );
+    }
+
+    /// The rays fall back the same way for an analyzer that has gone.
+    #[actix_web::test]
+    async fn the_rays_of_an_analyzer_that_is_gone_are_those_of_the_default() {
+        let query = format!("?analyzer={}", Uuid::new_v4());
+        let resp = request_rays(&state_with_a_traced_source(), &query).await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert!(holds_lines(&test::read_body(resp).await));
+    }
+
+    /// Ask a state for one component's geometry.
+    async fn request_scene_node(
+        app_state: &Data<AppState>,
+        uid: Uuid,
+    ) -> actix_web::dev::ServiceResponse {
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(web::scope("/document").service(get_scene_node)),
+        )
+        .await;
+        let req = test::TestRequest::get()
+            .uri(&format!("/document/scene/node/{uid}.glb"))
+            .to_request();
+        app.call(req).await.unwrap()
+    }
+
+    /// The manifest names every component that can be drawn, and names it by its node uuid - that
+    /// is what lets a click in the 3D view point back at a node in the graph.
+    #[actix_web::test]
+    async fn the_manifest_lists_each_drawable_component_by_its_uuid() {
+        let app_state = state_with_a_lens();
+        let lens = app_state
+            .document
+            .lock()
+            .scenery()
+            .collect_all_nodes_recursive()[0]
+            .node_attr()
+            .uuid();
+
+        let resp = request_manifest(&app_state, "").await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        let manifest: SceneManifest = test::read_body_json(resp).await;
+        assert_eq!(manifest.nodes.len(), 1);
+        assert_eq!(manifest.nodes[0].uid, lens);
+        assert!(!manifest.nodes[0].geometry.is_empty());
+    }
+
+    /// A model with nothing to draw still answers with a list, an empty one that says why.
+    #[actix_web::test]
+    async fn the_manifest_of_an_empty_model_is_empty_and_says_why() {
+        let resp = request_manifest(&Data::new(AppState::default()), "").await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        let manifest: SceneManifest = test::read_body_json(resp).await;
+        assert!(manifest.nodes.is_empty());
+        let notice = manifest
+            .notice
+            .expect("the manifest says why nothing is drawn");
+        assert!(notice.contains("neither"), "{notice}");
+    }
+
+    /// A model that cannot be placed is answered with an empty list that says why, not with a
+    /// failed request: the untilted grating swallows the optical axis at 1000 nm, so the mirror
+    /// behind it has no place. Nor is there any light to draw, even with rays asked for.
+    #[actix_web::test]
+    async fn the_manifest_of_a_model_that_cannot_be_placed_says_why() {
+        use opossum_core::{
+            analyzers::{AnalyzerType, RayTraceConfig},
+            joule, millimeter,
+            nodes::{
+                NodeGroup, ReflectiveGrating, SourcePort, ThinMirror, round_collimated_ray_builder,
+            },
+        };
+
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default()).unwrap();
+        let grating = scenery.add_node(ReflectiveGrating::default()).unwrap();
+        let mirror = scenery.add_node(ThinMirror::default()).unwrap();
+        scenery
+            .connect_nodes(source, "output_1", grating, "input_1", millimeter!(50.0))
+            .unwrap();
+        scenery
+            .connect_nodes(grating, "output_1", mirror, "input_1", millimeter!(50.0))
+            .unwrap();
+        let mut document = OpmDocument::new(scenery);
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(5.0), joule!(1.0), 0).unwrap(),
+        );
+        document.add_analyzer(AnalyzerType::RayTrace(config));
+        let app_state = Data::new(AppState::default());
+        *app_state.document.lock() = document;
+
+        let resp = request_manifest(&app_state, "?max_rays=50").await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        let manifest: SceneManifest = test::read_body_json(resp).await;
+        assert!(manifest.nodes.is_empty());
+        assert!(
+            manifest.analyzer.is_some(),
+            "the analyzer that cannot place the model is still named, so another can be chosen"
+        );
+        assert_eq!((manifest.axis, manifest.rays), (None, None));
+        let notice = manifest
+            .notice
+            .expect("the manifest says why nothing is drawn");
+        assert!(notice.contains("evanescent"), "{notice}");
+    }
+
+    /// Light that cannot be drawn is digested by the reason, so another reason is another digest
+    /// and none is mistaken for a file.
+    #[actix_web::test]
+    async fn a_failure_is_digested_by_its_reason() {
+        let failed = |reason: &str| digest_of(&Err(OpossumError::Other(reason.to_owned())));
+
+        assert_eq!(failed("no light"), failed("no light"));
+        assert_ne!(failed("no light"), failed("no rays"));
+        assert_ne!(failed(""), digest_of(&Ok(Vec::new())));
+    }
+
+    /// The manifest of `app_state` for a view that draws 50 rays.
+    async fn manifest_drawing_rays(app_state: &Data<AppState>) -> SceneManifest {
+        test::read_body_json(request_manifest(app_state, "?max_rays=50").await).await
+    }
+
+    /// The manifest digests exactly the files the axis and the rays are served as for the same
+    /// parameters, which is what lets a viewer fetch them by their digest.
+    #[actix_web::test]
+    async fn the_manifest_digests_the_files_the_light_is_served_as() {
+        let app_state = state_with_a_traced_source();
+        let axis = test::read_body(request_axis(&app_state, "").await).await;
+        for query in ["?max_rays=50", "?max_rays=50&full_spectrum=true"] {
+            let manifest: SceneManifest =
+                test::read_body_json(request_manifest(&app_state, query).await).await;
+            let rays = test::read_body(request_rays(&app_state, query).await).await;
+
+            assert_eq!(manifest.axis, Some(digest(&axis)), "{query}");
+            assert_eq!(manifest.rays, Some(digest(&rays)), "{query}");
+        }
+    }
+
+    /// Without a number of rays the manifest digests none: a view that shows no rays must not pay
+    /// for a trace.
+    #[actix_web::test]
+    async fn the_manifest_digests_no_rays_unless_asked_for() {
+        let manifest: SceneManifest =
+            test::read_body_json(request_manifest(&state_with_a_traced_source(), "").await).await;
+
+        assert!(manifest.axis.is_some());
+        assert_eq!(manifest.rays, None);
+    }
+
+    /// Edits that draw nothing new leave the manifest as it was, digests included, so a 3D view
+    /// redraws nothing: analyzers the view does not follow, an amplifier candidate, a pump
+    /// scenario's gain. The axis and the rays used to be fetched again after every one of them.
+    #[actix_web::test]
+    async fn edits_that_draw_nothing_new_leave_the_manifest_as_it_was() {
+        use opossum_core::gain::{ConstGain, GainModel};
+
+        let app_state = state_with_a_traced_source();
+        let before = manifest_drawing_rays(&app_state).await;
+        assert!(before.axis.is_some() && before.rays.is_some());
+        let lens = before.nodes[0].uid;
+
+        analyze_two_more_ways(&app_state);
+        {
+            let mut document = app_state.document.lock();
+            document.set_is_amplifier_node(lens, true);
+            let scenario = document.add_pump_scenario("pumped");
+            document
+                .pump_scenario_mut(scenario)
+                .unwrap()
+                .set_gain_model(lens, GainModel::Const(ConstGain::new(2.0).unwrap()));
+        }
+
+        assert_eq!(manifest_drawing_rays(&app_state).await, before);
+    }
+
+    /// An edit that does change the light changes its digests: a new distance moves the axis and
+    /// the rays, a narrower source changes the rays but not the axis.
+    #[actix_web::test]
+    async fn edits_that_change_the_light_change_its_digests() {
+        use opossum_core::{
+            analyzers::{AnalyzerType, RayTraceConfig},
+            joule, millimeter,
+            nodes::round_collimated_ray_builder,
+        };
+
+        let app_state = state_with_a_traced_source();
+        let ray_trace = first_analyzer(&app_state);
+        let first = manifest_drawing_rays(&app_state).await;
+
+        let source = app_state
+            .document
+            .lock()
+            .scenery()
+            .find_source_ports()
+            .unwrap()[0];
+        app_state
+            .document
+            .lock()
+            .scenery_mut()
+            .update_connection_distance(source, "output_1", millimeter!(150.0))
+            .unwrap();
+        let moved = manifest_drawing_rays(&app_state).await;
+        assert_ne!(moved.axis, first.axis, "the axis runs on to the moved lens");
+        assert_ne!(moved.rays, first.rays, "and so do the rays");
+
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(2.0), joule!(1.0), 15).unwrap(),
+        );
+        app_state
+            .document
+            .lock()
+            .analyzers_mut()
+            .get_mut(&ray_trace)
+            .unwrap()
+            .set_analyzer_type(&AnalyzerType::RayTrace(config));
+        let narrower = manifest_drawing_rays(&app_state).await;
+        assert_ne!(
+            narrower.rays, moved.rays,
+            "a narrower source draws other rays"
+        );
+        assert_eq!(narrower.axis, moved.axis, "on the same axis");
+    }
+
+    /// Every component the manifest names has to be fetchable, or a viewer would be left asking for
+    /// something that does not exist.
+    #[actix_web::test]
+    async fn a_component_named_by_the_manifest_is_served_as_a_gltf_binary() {
+        let app_state = state_with_a_lens();
+        let manifest: SceneManifest =
+            test::read_body_json(request_manifest(&app_state, "").await).await;
+
+        let resp = request_scene_node(&app_state, manifest.nodes[0].uid).await;
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers()
+                .get(actix_web::http::header::CONTENT_TYPE)
+                .unwrap(),
+            GLB_MEDIA_TYPE
+        );
+        let body = test::read_body(resp).await;
+        assert!(body.starts_with(b"glTF"));
+    }
+
+    /// A uuid that is not in the model at all.
+    #[actix_web::test]
+    async fn an_unknown_component_is_not_found() {
+        let resp = request_scene_node(&state_with_a_lens(), Uuid::new_v4()).await;
+
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    /// A node that exists but is neither a volume nor a surface has no geometry to hand out - a
+    /// source port is where light begins, not a shape. A detector, by contrast, *is* one surface and
+    /// is served just like a mirror or a lens (see `scene_export`'s own tests for that path).
+    #[actix_web::test]
+    async fn a_component_with_no_shape_is_not_found() {
+        let mut scenery = opossum_core::nodes::NodeGroup::default();
+        let source = scenery
+            .add_node(opossum_core::nodes::SourcePort::default())
+            .unwrap();
+        let app_state = Data::new(AppState::default());
+        *app_state.document.lock() = OpmDocument::new(scenery);
+
+        let resp = request_scene_node(&app_state, source).await;
+
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
     }
 
     #[actix_web::test]

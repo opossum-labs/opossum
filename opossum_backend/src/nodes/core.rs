@@ -18,12 +18,12 @@ use opossum_core::{
 use uuid::Uuid;
 
 use crate::{
-    analyzers::{create_default_energy_builder, create_default_ray_builder},
+    analyzers::light_new_source,
     app_state::AppState,
     error::BackEndErrorResponse,
     helper_functions::{
         apply_and_push_undo, check_reference_target_not_nested, is_reference_target,
-        parent_group_id_or_self, resolve_reference_chain, ron_or_json_response,
+        resolve_reference_chain, ron_or_json_response,
     },
     undo::{
         Command, PatchAmplifierNodes, PatchAnalyzer, PatchNode, PatchPumpScenario,
@@ -104,40 +104,16 @@ pub async fn post_children(
     let (_, delta) = scenery
         .with_group_node_mut(uuid, |g| g.add_node_ref_with_delta(new_node_ref.clone()))??;
 
-    // --- AUTOMATICALLY INJECT MAPPINGS INTO ALL ANALYZERS IF NEW NODE IS A SOURCE PORT ---
-    let node_type_str = new_node_ref.node_attr().node_type().to_string();
     let new_node_uuid = new_node_ref.node_attr().uuid();
-
-    let mut analyzer_inverses: Vec<Command> = Vec::new();
-    if node_type_str == "source port" {
-        let analyzer_keys: Vec<Uuid> = document.analyzers().keys().copied().collect();
-        for az_uuid in analyzer_keys {
-            if let Some(analyzer_info) = document.analyzer_mut(az_uuid) {
-                let default_wvl = analyzer_info.default_wavelength();
-                let old_type = analyzer_info.analyzer_type().clone();
-                let mut a_type = old_type.clone();
-                match &mut a_type {
-                    AnalyzerType::Energy(cfg) => {
-                        cfg.map_source(new_node_uuid, create_default_energy_builder(default_wvl));
-                    }
-                    AnalyzerType::RayTrace(cfg) => {
-                        cfg.map_source(new_node_uuid, create_default_ray_builder(default_wvl));
-                    }
-                    AnalyzerType::GhostFocus(cfg) => {
-                        cfg.map_source(new_node_uuid, create_default_ray_builder(default_wvl));
-                    }
-                }
-                if a_type != old_type {
-                    analyzer_info.set_analyzer_type(&a_type);
-                    analyzer_inverses.push(Command::PatchAnalyzer(Box::new(PatchAnalyzer {
-                        id: az_uuid,
-                        old: a_type,
-                        new: old_type,
-                    })));
-                }
-            }
-        }
-    }
+    let analyzer_inverses = if document
+        .scenery()
+        .find_source_ports()?
+        .contains(&new_node_uuid)
+    {
+        light_new_source(&mut document, new_node_uuid, None)
+    } else {
+        Vec::new()
+    };
     drop(document);
 
     let remove_node = Command::UndoGraph(Box::new(delta));
@@ -220,7 +196,7 @@ fn propagate_rename_to_references(
         let ref_old = document.scenery().with_node_attr(*ref_id, |node_attr| {
             capture_old_node_request(node_attr, &ref_new)
         })?;
-        let ref_parent = parent_group_id_or_self(document.scenery(), *ref_id)?;
+        let ref_parent = document.scenery().parent_group_id_or_self(*ref_id)?;
         commands.push(Command::PatchNode(Box::new(PatchNode {
             uuid: *ref_id,
             parent_group_id: ref_parent,
@@ -258,7 +234,7 @@ pub async fn patch_node(
     let old = document
         .scenery()
         .with_node_attr(uuid, |node_attr| capture_old_node_request(node_attr, &new))?;
-    let parent_group_id = parent_group_id_or_self(document.scenery(), uuid)?;
+    let parent_group_id = document.scenery().parent_group_id_or_self(uuid)?;
     // `parent_group_id_or_self` reports the scenery root as its own parent, so this equality holds
     // exactly for the root. A root patch is never a user edit - the GUI renames the root to mirror
     // the project's file name on new project/load/save, and there is no UI path for a user to
@@ -902,8 +878,8 @@ mod test {
     /// `NodeGroup::node_recursive`, which only ever searches a group's *children* for a matching uuid -
     /// so it could never succeed for the root's own uuid, since the root is never a child of itself.
     /// This fired on every GUI startup, since the GUI renames the root scenery tab to match the
-    /// project's file name right after mounting. Fixed via `parent_group_id_or_self`
-    /// (`helper_functions.rs`), which reports the root's own uuid as its "parent" - the same
+    /// project's file name right after mounting. Fixed via `NodeGroup::parent_group_id_or_self`,
+    /// which reports the root's own uuid as its "parent" - the same
     /// self-as-parent sentinel `remove_port_map_cascade` already uses for the same reason. Patches the
     /// scenery root's own name and asserts success (204), not the previous 400.
     #[actix_web::test]

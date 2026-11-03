@@ -38,6 +38,18 @@ pub async fn get_connections(group_id: Uuid) -> Result<Vec<ConnectInfo>, String>
         .get::<Vec<ConnectInfo>>(&format!("/api/nodes/{group_id}/connections"))
         .await
 }
+/// Get the connections of the given node group whose distance places a node when the model is
+/// placed. Empty if the model cannot be placed.
+///
+/// # Errors
+///
+/// This function will return an error if
+/// - the given `group_id` does not correspond to a group node.
+pub async fn get_placing_connections(group_id: Uuid) -> Result<Vec<ConnectInfo>, String> {
+    HTTP_API_CLIENT()
+        .get::<Vec<ConnectInfo>>(&format!("/api/nodes/{group_id}/placing_connections"))
+        .await
+}
 
 pub async fn get_port_maps_of_group(group_id: Uuid) -> Result<PortMappingsResponse, String> {
     HTTP_API_CLIENT()

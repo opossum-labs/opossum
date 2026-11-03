@@ -11,7 +11,11 @@ mod utils;
 use api::http_client::HTTPClient;
 use app_config::AppConfig;
 use components::{
-    app::App, context_menu::cx_menu::CxMenu, logger::Logs, scenery_editor::SidebarView,
+    app::App,
+    context_menu::cx_menu::CxMenu,
+    logger::Logs,
+    scene_view::{SceneViewControls, SceneViewRequest},
+    scenery_editor::SidebarView,
 };
 use dioxus::{
     prelude::*,
@@ -94,6 +98,56 @@ static AMPLIFIER_CANDIDATES: GlobalSignal<HashSet<Uuid>> = Signal::global(HashSe
 static SIDEBAR_VIEW: GlobalSignal<SidebarView> = Signal::global(|| SidebarView::NodeProperties);
 static SIDEBAR_COLLAPSED: GlobalSignal<bool> = Signal::global(|| false);
 static SIDEBAR_WIDTH: GlobalSignal<f64> = Signal::global(|| 280.0);
+/// Bumped whenever the document changed in a way that can alter what the 3D view shows - a
+/// component added, removed, moved, reshaped, or given a different material.
+///
+/// Model edits reach the GUI through two separate paths and this has to cover both: the structural
+/// ones go through the workspace processor, while changing a property of a node - a lens radius, or
+/// the distance to the next component - is sent straight from the node editor and never becomes a
+/// workspace action at all. The second path is the one that matters most here, because adjusting
+/// distances is exactly what a 3D view is opened for.
+///
+/// Deliberately *not* raised for edits that only move nodes around the diagram: where a node sits on
+/// the canvas says nothing about where its component sits in space, and re-meshing the model for a
+/// drag would make the most frequent edit the most expensive one.
+static SCENE_REVISION: GlobalSignal<usize> = Signal::global(|| 0);
+/// Whether the 3D view of the model is open as a tab beside the graphs.
+///
+/// Global for the same reason as [`SIDEBAR_VIEW`]: the menu bar opens it and the tab's own close
+/// button shuts it, and those two sit on opposite sides of the component tree. It is deliberately
+/// *not* part of the graph workspace state — that state is a map of graphs, and the 3D view is not
+/// a graph. Which pane it sits in and which tab is in front stay local to the graph editor (its
+/// `TabLayout`).
+static SCENE_VIEW_OPEN: GlobalSignal<bool> = Signal::global(|| false);
+/// What the 3D view shows: the optical table, the orientation gizmo, the optical axis, the rays, and
+/// how the light among those is drawn.
+///
+/// Global for the same reason as [`SCENE_VIEW_OPEN`], and set from the same place: the 3D View menu
+/// in the menu bar writes it, the view reads it and applies whatever changed to its viewer options
+/// and its object list. Keeping it out of the view component is also what lets the settings outlive a
+/// closed view - the view itself is unmounted with its tab, so anything it held locally would be back
+/// at its default the next time it is opened.
+static SCENE_VIEW_CONTROLS: GlobalSignal<SceneViewControls> =
+    Signal::global(SceneViewControls::default);
+/// The analyzer the user chose for the 3D view to follow, or `None` for the one the model is drawn
+/// after by default.
+///
+/// Global so that the choice outlives a closed view, like [`SCENE_VIEW_CONTROLS`], but a signal of
+/// its own: the view fetches the model again when it changes, and toggling the table must not.
+static SCENE_VIEW_ANALYZER: GlobalSignal<Option<Uuid>> = Signal::global(|| None);
+/// A one-off request to the 3D view - refresh the model, frame the components, put the camera back -
+/// set by the 3D View menu and consumed (cleared) by the view's effect that carries it out.
+///
+/// Unlike [`SCENE_VIEW_CONTROLS`] these are not states that can be mirrored: each one needs something
+/// only the view itself holds, its model resource or its viewer handle, so a caller outside can do no
+/// more than ask. `None` whenever nothing has been asked for, which is nearly always.
+static SCENE_VIEW_REQUEST: GlobalSignal<Option<SceneViewRequest>> = Signal::global(|| None);
+/// Set right before a `RevealNode` action whose `bring_to_front` is `false` changes `active_tab`
+/// (a 3D view pick), so `GraphEditor`'s effect that otherwise brings a graph's tab to the front
+/// whenever `active_tab` changes can skip that step this one time - where the graph would cover the
+/// 3D view, that is; in the other pane of a split editor it is still brought forward. Consumed
+/// (cleared) by that effect.
+static KEEP_SCENE_IN_FRONT: GlobalSignal<bool> = Signal::global(|| false);
 /// Set from the backend's authoritative `JumpTarget` when an undo/redo focuses a node: the node it
 /// selected and the panel to open once that node's editor has loaded. Consumed (cleared) by whichever
 /// `OpticalNodeEditor` instance matches the uuid. `apply_document_changes` sets it
