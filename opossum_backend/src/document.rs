@@ -2058,8 +2058,7 @@ mod test {
             .document
             .lock()
             .scenery()
-            .collect_all_nodes_recursive()
-            .unwrap()[0]
+            .collect_all_nodes_recursive()[0]
             .node_attr()
             .uuid();
 

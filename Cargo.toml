@@ -25,7 +25,7 @@ members = [
     "dioxus_glb_viewer",
     "opossum_core/opm_macros_lib",
     "xtask",
-    "opossum_registry", "schott_converter",
+    "opossum_registry", "schott_converter", "opossum_optimization",
 ]
 # `optoscene` is a workspace of its own living next to this one. Without this, cargo takes its
 # crates for members of this workspace and resolves their inherited dependencies against the wrong

@@ -1,6 +1,7 @@
 pub mod hit_map;
 pub mod node_attr;
 pub mod node_attr_ext;
+pub mod observable;
 pub mod optic_node;
 pub mod optic_node_ext;
 pub mod optic_ports;

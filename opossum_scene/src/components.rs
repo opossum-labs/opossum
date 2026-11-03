@@ -216,7 +216,7 @@ where
     F: FnMut(Drawn<'_>, Isometry3<f64>) -> OpmResult<()>,
 {
     let mut skipped = Vec::new();
-    for node_ref in placed.collect_all_nodes_recursive()? {
+    for node_ref in placed.collect_all_nodes_recursive() {
         let Some(appearance) = Appearance::of_node_type(node_ref.node_type()).transpose() else {
             continue;
         };
@@ -397,7 +397,7 @@ mod test {
         let mut document = two_lenses(millimeter!(100.0))?;
         let lens = document
             .scenery()
-            .collect_all_nodes_recursive()?
+            .collect_all_nodes_recursive()
             .into_iter()
             .find(|node| node.node_type() == "lens")
             .expect("a model with lenses has something to draw")
@@ -423,7 +423,7 @@ mod test {
         let mut document = a_bit_of_everything()?;
         let mirror = document
             .scenery()
-            .collect_all_nodes_recursive()?
+            .collect_all_nodes_recursive()
             .into_iter()
             .find(|node| node.properties().get("curvature").is_ok())
             .expect("the model has a mirror")
@@ -454,7 +454,7 @@ mod test {
         let document = two_lenses(millimeter!(100.0))?;
         let lens = document
             .scenery()
-            .collect_all_nodes_recursive()?
+            .collect_all_nodes_recursive()
             .into_iter()
             .find(|node| node.node_type() == "lens")
             .expect("a model with lenses has something to draw")
@@ -484,7 +484,7 @@ mod test {
         let document = two_lenses(millimeter!(100.0))?;
         let placed = document.placed_scenery(None)?;
         let far = placed
-            .collect_all_nodes_recursive()?
+            .collect_all_nodes_recursive()
             .into_iter()
             .filter_map(|node| glb_of_node(&*node).transpose())
             .next_back()
