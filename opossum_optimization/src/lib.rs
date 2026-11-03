@@ -7,6 +7,7 @@ pub mod discovery;
 pub mod merit;
 pub mod operand;
 pub mod optimizer;
+pub mod progress;
 pub mod reader;
 pub mod resolver;
 pub mod schema_extractor;
@@ -27,6 +28,7 @@ pub use operand::{
     TargetValueOperand, ThresholdDirection, ThresholdOperand, TransmissionPenaltyOperand,
 };
 pub use optimizer::OpticOptimizer;
+pub use progress::OptimizationProgressEvent;
 pub use reader::MetricReader;
 pub use resolver::ParameterResolver;
 pub use schema_extractor::SchemaExtractor;

@@ -7,13 +7,20 @@ use argmin::{
         simulatedannealing::{SATempFunc, SimulatedAnnealing},
     },
 };
-use std::sync::Arc;
+use std::sync::{Arc, atomic::AtomicBool};
 
 use crate::{
-    OptimizationConfig, algorithm::OptimizationAlgorithm, applier::ParameterApplier,
-    coupling::ParameterCoupling, merit::MeritFunction, operand::Operand, reader::MetricReader,
-    resolver::ParameterResolver, summary::OptimizationSummary, variable::FiniteDifferenceMethod,
-    variable::FreeVariable,
+    OptimizationConfig, OptimizationProgressEvent,
+    algorithm::OptimizationAlgorithm,
+    applier::ParameterApplier,
+    coupling::ParameterCoupling,
+    merit::MeritFunction,
+    operand::Operand,
+    progress::ProgressObserver,
+    reader::MetricReader,
+    resolver::ParameterResolver,
+    summary::OptimizationSummary,
+    variable::{FiniteDifferenceMethod, FreeVariable},
 };
 use opossum_core::{
     error::{OpmResult, OpossumError},
@@ -124,7 +131,12 @@ impl<'a> OpticOptimizer<'a> {
     /// Executes the optimization, updates the model in-place, and refreshes detector states.
     ///
     /// # Errors
-    /// Returns an error if validation fails or the optimization solver encounters a fatal error.
+    ///
+    /// This function returns an error if
+    /// - no free variables were specified for the optimization
+    /// - no operands were specified for the merit function
+    /// - the free variable or operands definitions are invalid
+    /// - the optimization solver encounters a fatal error.
     pub fn optimize(self) -> OpmResult<OptimizationSummary> {
         if self.free_variables.is_empty() {
             return Err(OpossumError::Other(
@@ -172,6 +184,217 @@ impl<'a> OpticOptimizer<'a> {
         })
     }
 
+    /// Executes the optimization, updates the model in-place, and refreshes detector states.
+    ///
+    /// This function is similar to [`OpticOptimizer::optimize`] but allows for adding an observer function and an
+    /// abort functionality.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if
+    /// - no free variables were specified for the optimization
+    /// - no operands were specified for the merit function
+    /// - the free variable or operands definitions are invalid
+    /// - the optimization solver encounters a fatal error.
+    pub fn optimize_with_observer<F>(
+        self,
+        cancel_flag: Arc<AtomicBool>,
+        mut progress_callback: F,
+    ) -> OpmResult<OptimizationSummary>
+    where
+        F: FnMut(OptimizationProgressEvent) -> bool + Send + 'static,
+    {
+        if self.free_variables.is_empty() {
+            return Err(OpossumError::Other(
+                "No free variables specified for optimization".to_string(),
+            ));
+        }
+        if self.operands.is_empty() {
+            return Err(OpossumError::Other(
+                "No operands specified for merit function".to_string(),
+            ));
+        }
+        ParameterResolver::validate_configuration(&self.free_variables, &self.couplings)?;
+
+        let merit = MeritFunction::new(
+            self.doc.clone(),
+            self.free_variables.clone(),
+            self.couplings.clone(),
+            self.operands.clone(),
+        )?;
+
+        let initial_vector = self.collect_initial_vector()?;
+        let initial_cost = merit.evaluate(&initial_vector);
+
+        let max_iters = match self.algorithm {
+            OptimizationAlgorithm::NelderMead { max_iterations, .. }
+            | OptimizationAlgorithm::LBFGS { max_iterations, .. }
+            | OptimizationAlgorithm::SimulatedAnnealing { max_iterations, .. } => max_iterations,
+        };
+
+        progress_callback(OptimizationProgressEvent::Started {
+            initial_cost,
+            total_max_iterations: max_iters,
+        });
+
+        let observer = ProgressObserver::new(
+            progress_callback,
+            cancel_flag,
+            self.free_variables.clone(),
+            self.couplings.clone(),
+        );
+
+        let outcome = self.execute_solver_with_observer(merit, initial_vector, observer)?;
+
+        let resolved_map = ParameterResolver::resolve(
+            &self.free_variables,
+            &self.couplings,
+            &outcome.best_params,
+        )?;
+
+        for (address, value) in &resolved_map {
+            ParameterApplier::set_value(self.doc, address, *value)?;
+        }
+        ParameterApplier::finalize_update(self.doc)?;
+        self.doc.analyze_headless()?;
+
+        Ok(OptimizationSummary {
+            initial_cost,
+            final_cost: outcome.final_cost,
+            iterations: outcome.iterations,
+            converged: outcome.converged,
+            optimized_parameters: resolved_map,
+        })
+    }
+
+    fn execute_solver_with_observer(
+        &self,
+        merit: MeritFunction,
+        initial_vector: Vec<f64>,
+        observer: ProgressObserver,
+    ) -> OpmResult<SolverOutcome> {
+        match self.algorithm {
+            OptimizationAlgorithm::NelderMead {
+                max_iterations,
+                sd_tolerance,
+            } => {
+                let initial_simplex =
+                    OptimizationAlgorithm::build_initial_simplex(&self.free_variables)?;
+                let solver = NelderMead::new(initial_simplex)
+                    .with_sd_tolerance(sd_tolerance)
+                    .map_err(|e| OpossumError::Other(format!("Failed to set tolerance: {e}")))?;
+
+                let res = Executor::new(merit, solver)
+                    .configure(|state| {
+                        state
+                            .max_iters(max_iterations)
+                            .target_cost(self.target_cost)
+                    })
+                    .add_observer(observer, argmin::core::observers::ObserverMode::Always)
+                    .run()
+                    .map_err(|e| {
+                        if e.to_string().contains("cancelled by user") {
+                            OpossumError::Other("Optimization cancelled by user".to_string())
+                        } else {
+                            OpossumError::Other(format!("Nelder-Mead failed: {e}"))
+                        }
+                    })?;
+
+                self.handle_solver_state(res.state())
+            }
+            OptimizationAlgorithm::LBFGS {
+                max_iterations,
+                gradient_tolerance,
+                history_size,
+                gradient_method,
+            } => {
+                let merit = merit.with_gradient_method(gradient_method);
+                let linesearch = MoreThuenteLineSearch::new()
+                    .with_c(1e-4, 0.9)
+                    .map_err(|e| OpossumError::Other(format!("Failed to set line search: {e}")))?;
+                let solver = LBFGS::new(linesearch, history_size)
+                    .with_tolerance_grad(gradient_tolerance)
+                    .map_err(|e| OpossumError::Other(format!("Failed to set tolerance: {e}")))?;
+
+                let res = Executor::new(merit, solver)
+                    .configure(|state| {
+                        state
+                            .param(initial_vector)
+                            .max_iters(max_iterations)
+                            .target_cost(self.target_cost)
+                    })
+                    .add_observer(observer, argmin::core::observers::ObserverMode::Always)
+                    .run()
+                    .map_err(|e| {
+                        if e.to_string().contains("cancelled by user") {
+                            OpossumError::Other("Optimization cancelled by user".to_string())
+                        } else {
+                            OpossumError::Other(format!("L-BFGS failed: {e}"))
+                        }
+                    })?;
+
+                self.handle_solver_state(res.state())
+            }
+            OptimizationAlgorithm::SimulatedAnnealing {
+                max_iterations,
+                initial_temperature,
+                stall_best,
+                stall_accepted,
+                reannealing_fixed,
+            } => {
+                let mut solver = SimulatedAnnealing::new(initial_temperature)
+                    .map_err(|e| OpossumError::Other(format!("Failed to init SA: {e}")))?
+                    .with_temp_func(SATempFunc::Exponential(0.95))
+                    .with_stall_best(stall_best)
+                    .with_stall_accepted(stall_accepted);
+
+                if let Some(reanneal_steps) = reannealing_fixed {
+                    solver = solver.with_reannealing_fixed(reanneal_steps);
+                }
+
+                let res = Executor::new(merit, solver)
+                    .configure(|state| {
+                        state
+                            .param(initial_vector)
+                            .max_iters(max_iterations)
+                            .target_cost(self.target_cost)
+                    })
+                    .add_observer(observer, argmin::core::observers::ObserverMode::Always)
+                    .run()
+                    .map_err(|e| {
+                        if e.to_string().contains("cancelled by user") {
+                            OpossumError::Other("Optimization cancelled by user".to_string())
+                        } else {
+                            OpossumError::Other(format!("Simulated Annealing failed: {e}"))
+                        }
+                    })?;
+
+                self.handle_solver_state(res.state())
+            }
+        }
+    }
+    fn handle_solver_state<I>(&self, state: &I) -> OpmResult<SolverOutcome>
+    where
+        I: State<Param = Vec<f64>, Float = f64>,
+    {
+        let best_params = state
+            .get_best_param()
+            .cloned()
+            .or_else(|| state.get_param().cloned())
+            .ok_or_else(|| OpossumError::Other("Solver produced no solution".to_string()))?;
+
+        let converged = match state.get_termination_reason() {
+            Some(TerminationReason::TargetCostReached | TerminationReason::SolverConverged) => true,
+            _ => state.get_best_cost() <= self.target_cost,
+        };
+
+        Ok(SolverOutcome {
+            best_params,
+            final_cost: state.get_best_cost(),
+            iterations: state.get_iter(),
+            converged,
+        })
+    }
     /// Safely collects the initial parameter vector from all free variables.
     fn collect_initial_vector(&self) -> OpmResult<Vec<f64>> {
         self.free_variables

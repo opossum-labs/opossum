@@ -11,6 +11,7 @@ opossum_cli = { workspace = true }
 opossum_gui = { workspace = true }
 opossum_reporter = { workspace = true }
 opossum_scene = { workspace = true }
+opossum_optimization = { workspace = true }
 
 [workspace]
 members = [
@@ -25,7 +26,9 @@ members = [
     "dioxus_glb_viewer",
     "opossum_core/opm_macros_lib",
     "xtask",
-    "opossum_registry", "schott_converter", "opossum_optimization",
+    "opossum_registry",
+    "schott_converter",
+    "opossum_optimization",
 ]
 # `optoscene` is a workspace of its own living next to this one. Without this, cargo takes its
 # crates for members of this workspace and resolves their inherited dependencies against the wrong
@@ -57,6 +60,7 @@ opossum_backend = { version = "0.8.1", path = "opossum_backend" }
 opossum_cli = { version = "0.8.1", path = "opossum_cli" }
 opossum_gui = { version = "0.8.1", path = "opossum_gui" }
 opossum_registry = { version = "0.8.1", path = "opossum_registry" }
+opossum_optimization = { version = "0.8.1", path = "opossum_optimization" }
 
 approx = "0.5"
 chrono = { version = "0.4.45", features = ["serde"] }

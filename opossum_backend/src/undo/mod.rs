@@ -6,13 +6,16 @@
 
 use opossum_core::{
     analyzers::AnalyzerType,
+    core_optics::node_attr::HasNodeAttr,
+    error::OpmResult,
     nodes::GraphDelta,
     opm_document::OpmDocument,
     types::api_types::{
         AnalyzerItemDto, DocumentChange, JumpTarget, NodeEditorPanel, PumpScenarioItemDto,
     },
 };
-use std::collections::HashSet;
+use opossum_optimization::{ParameterAddress, ParameterApplier};
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 use crate::error::BackEndErrorResponse;
@@ -31,6 +34,28 @@ pub use group_commands::{GroupConversion, MoveNodes, ReroutedMapping};
 pub use node_commands::{PatchNode, PatchProperty, capture_old_node_request};
 pub use pump_scenario_commands::{PatchAnalyzerPumpScenarios, PatchPumpScenario};
 pub use viewport_commands::SetViewport;
+
+#[derive(Clone, Debug)]
+pub struct OptimizationUndo {
+    /// Mapping: Adresse -> (Alter Wert vor Optimierung, Neuer optimierter Wert)
+    pub parameter_diff: HashMap<ParameterAddress, (f64, f64)>,
+}
+
+impl OptimizationUndo {
+    // pub fn apply_old(&self, doc: &mut OpmDocument) -> OpmResult<()> {
+    //     for (addr, (old_val, _)) in &self.parameter_diff {
+    //         ParameterApplier::set_value(doc, addr, *old_val)?;
+    //     }
+    //     ParameterApplier::finalize_update(doc)
+    // }
+
+    pub fn apply_new(&self, doc: &mut OpmDocument) -> OpmResult<()> {
+        for (addr, (_, new_val)) in &self.parameter_diff {
+            ParameterApplier::set_value(doc, addr, *new_val)?;
+        }
+        ParameterApplier::finalize_update(doc)
+    }
+}
 
 /// A reversible document mutation.
 #[derive(Clone)]
@@ -74,6 +99,7 @@ pub enum Command {
     SetViewport(SetViewport),
     /// Applies each sub-command in order; its inverse is the sub-commands' inverses in reverse order.
     Batch(Vec<Self>),
+    ApplyOptimization(OptimizationUndo),
 }
 
 impl Command {
@@ -130,6 +156,22 @@ impl Command {
                 inverses.reverse();
                 Ok(Self::Batch(inverses))
             }
+            Self::ApplyOptimization(undo) => {
+                // 1. Werte ins Dokument schreiben
+                undo.apply_new(document).map_err(|e| {
+                    BackEndErrorResponse::new(500, "Optimization Error", &e.to_string())
+                })?;
+
+                // 2. Inverses Command erzeugen (old und new vertauscht für Redo/Undo-Spiegelung)
+                let inverse = OptimizationUndo {
+                    parameter_diff: undo
+                        .parameter_diff
+                        .iter()
+                        .map(|(addr, (old_val, new_val))| (addr.clone(), (*new_val, *old_val)))
+                        .collect(),
+                };
+                Ok(Self::ApplyOptimization(inverse))
+            }
         }
     }
 
@@ -148,7 +190,8 @@ impl Command {
             | Self::PatchPumpScenario(_)
             | Self::PatchAnalyzerPumpScenarios(_)
             | Self::PatchAmplifierNodes(_)
-            | Self::SetViewport(_) => false,
+            | Self::SetViewport(_)
+            | Self::ApplyOptimization(_) => false,
             Self::UndoGraph(_)
             | Self::RedoGraph(_)
             | Self::MoveNodes(_)
@@ -208,6 +251,7 @@ impl Command {
             | Self::RemovePumpScenario(_)
             | Self::PatchPumpScenario(_)
             | Self::PatchAnalyzerPumpScenarios(_)
+            | Self::ApplyOptimization(_)
             | Self::PatchAmplifierNodes(_) => None,
             Self::SetViewport(cmd) => Some(JumpTarget::new_from_graph_id(cmd.to.graph_id)),
             Self::Batch(commands) => batch_jump_target(commands, root_id),
@@ -291,6 +335,28 @@ impl Command {
                     changes.extend(command.describe(document)?);
                 }
                 dedup_against_full_refreshes(changes)
+            }
+            Self::ApplyOptimization(undo) => {
+                let mut graph_ids = HashSet::new();
+                for addr in undo.parameter_diff.keys() {
+                    match addr {
+                        ParameterAddress::NodeProperty { node_id, .. } => {
+                            if let Ok((_, parent_id)) = document.scenery().node_recursive(*node_id)
+                            {
+                                graph_ids.insert(parent_id);
+                            }
+                        }
+                        ParameterAddress::ConnectionDistance { src_id, .. } => {
+                            if let Ok((_, parent_id)) = document.scenery().node_recursive(*src_id) {
+                                graph_ids.insert(parent_id);
+                            }
+                        }
+                    }
+                }
+                if graph_ids.is_empty() {
+                    graph_ids.insert(document.scenery().node_attr().uuid());
+                }
+                refresh_changes(graph_ids)
             }
         })
     }
