@@ -3,7 +3,7 @@
 use super::{InvertGraphGuard, OpticGraph};
 use crate::{
     analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
-    core_optics::{NodeAttrExt, OpticNodeExt, PortType, node_attr::NodePositioning},
+    core_optics::{NodeAttrExt, OpticNodeExt, OpticRef, PortType, node_attr::NodePositioning},
     error::{OpmResult, OpossumError},
     light::{LightData, LightResult, Rays},
     radian,
@@ -18,7 +18,7 @@ use petgraph::{
     graph::{EdgeIndex, NodeIndex},
     visit::EdgeRef,
 };
-use std::collections::{BTreeSet, VecDeque};
+use std::collections::BTreeSet;
 use uom::si::f64::Length;
 
 fn filter_ray_limits(light_result: &mut LightResult, r_config: &RayTraceConfig) {
@@ -101,8 +101,11 @@ impl OpticGraph {
 
     /// Positions nodes in the graph based on optical ray propagation.
     ///
-    /// The nodes are visited in the order `PlacingOrder` describes, which may offer a node that no
-    /// axis reaches once more at the end.
+    /// The nodes are visited in the order `PlacingOrder` describes. A node no axis reaches is
+    /// placed in front of what it feeds; if nothing it feeds is placed yet, it is put back. Once
+    /// every other node was visited, the nodes put back are placed back to front, each in front of
+    /// what it feeds, and then their axes are traced front to back: an axis meeting a node visited
+    /// before ends there, checked against where that node sits.
     ///
     /// # Arguments
     ///
@@ -127,22 +130,24 @@ impl OpticGraph {
             flow.set_placed_by_distance(false);
         }
 
-        while let Some((idx, last_offer)) = order.next() {
-            if self.is_unreached_and_unplaced(idx)? {
+        while let Some(idx) = order.next() {
+            let node_id = self.g[idx].uuid();
+            if self.placement_of(idx)?.is_none()
+                && self.get_incoming(node_id, incoming_data)?.is_empty()
+            {
+                // What feeds it was put back, so it is traced after that.
+                if self.has_input_connections(node_id)? {
+                    order.put_back(self, idx);
+                    continue;
+                }
                 match self.place_in_front_of_successor(idx)? {
                     InFront::Placed => {}
-                    InFront::NothingPlaced if !last_offer => {
+                    InFront::NothingPlaced => {
                         order.put_back(self, idx);
                         continue;
                     }
-                    InFront::NothingPlaced | InFront::Refused => {
-                        let node_info = format!("{}", self.g[idx]);
-                        warn!(
-                            "{node_info} has no incoming connections and can thus not being placed. Skipping."
-                        );
-                        if !last_offer {
-                            order.release(self, idx);
-                        }
+                    InFront::Refused => {
+                        order.release(self, idx);
                         continue;
                     }
                 }
@@ -155,23 +160,47 @@ impl OpticGraph {
                 &mut light_result,
                 ray_ends.as_deref_mut(),
             )?;
-            if last_offer {
-                self.end_axes_where_they_arrive(idx, ray_ends.as_deref_mut())?;
-            } else {
-                order.release(self, idx);
+            order.release(self, idx);
+        }
+
+        let put_back = order.into_put_back();
+        for &idx in put_back.iter().rev() {
+            if self.placement_of(idx)?.is_none() {
+                self.place_in_front_of_successor(idx)?;
             }
+        }
+        for &idx in &put_back {
+            if self.placement_of(idx)?.is_none() {
+                warn!(
+                    "{} cannot be placed: no optical axis reaches it, and it stands in front of nothing it feeds. Skipping.",
+                    self.g[idx]
+                );
+                continue;
+            }
+            calculate_single_node_position(
+                self,
+                idx,
+                incoming_data,
+                config,
+                &mut light_result,
+                ray_ends.as_deref_mut(),
+            )?;
+            self.end_axes_where_they_arrive(idx, &put_back, ray_ends.as_deref_mut())?;
         }
 
         Ok(light_result)
     }
 
-    /// Ends the axes the node at `idx` sent out after the nodes it feeds were visited: each one
-    /// becomes a ray end where it arrives at them.
+    /// Ends the axes the node at `idx`, traced after the nodes it feeds were visited, sent to those
+    /// nodes: each one is checked against where the node it meets sits (see
+    /// [`set_node_isometry`](OpticGraph::set_node_isometry)) and becomes a ray end there.
     ///
     /// # Arguments
     ///
-    /// * `idx` - the node that was visited after the nodes it feeds.
-    /// * `ray_ends` - if given, collects the ends; otherwise nothing is done.
+    /// * `idx` - the node traced after the nodes it feeds.
+    /// * `still_traced` - the nodes traced the same way, whose axes are passed on rather than
+    ///   ended.
+    /// * `ray_ends` - if given, collects the ends.
     ///
     /// # Errors
     ///
@@ -179,21 +208,16 @@ impl OpticGraph {
     fn end_axes_where_they_arrive(
         &mut self,
         idx: NodeIndex,
-        ray_ends: Option<&mut Vec<Rays>>,
+        still_traced: &[NodeIndex],
+        mut ray_ends: Option<&mut Vec<Rays>>,
     ) -> OpmResult<()> {
-        let Some(ray_ends) = ray_ends else {
-            return Ok(());
-        };
-        let edges: Vec<EdgeIndex> = self
+        let edges: Vec<(EdgeIndex, NodeIndex)> = self
             .g
             .edges_directed(idx, Direction::Outgoing)
-            .map(|edge| edge.id())
+            .filter(|edge| !still_traced.contains(&edge.target()))
+            .map(|edge| (edge.id(), edge.target()))
             .collect();
-        for edge in edges {
-            let Some((_, target)) = self.g.edge_endpoints(edge) else {
-                continue;
-            };
-            let target = self.g[target].uuid();
+        for (edge, target) in edges {
             let Some(flow) = self.g.edge_weight_mut(edge) else {
                 continue;
             };
@@ -201,13 +225,22 @@ impl OpticGraph {
                 continue;
             };
             let port = flow.target_port().to_owned();
-            ray_ends.push(self.axis_arriving_at(target, &port, &light)?);
+            let target_id = self.g[target].uuid();
+            if self.placement_of(target)?.is_some() {
+                self.set_node_isometry(
+                    &LightResult::from([(port.clone(), light.clone())]),
+                    target_id,
+                )?;
+            }
+            if let Some(ray_ends) = ray_ends.as_deref_mut() {
+                ray_ends.push(self.axis_arriving_at(target_id, &port, &light)?);
+            }
         }
         Ok(())
     }
 
-    /// Returns whether no axis reaches the node at `idx` - it has no input connection - and it is
-    /// not placed yet, neither absolutely nor by an earlier run.
+    /// Returns whether no axis can reach the node at `idx`, as it has no input connection, while
+    /// it is not placed yet, neither absolutely nor by an earlier run.
     ///
     /// # Errors
     ///
@@ -217,9 +250,37 @@ impl OpticGraph {
             && self.g[idx].positioning().effective_position().is_none())
     }
 
+    /// Returns the node a pass through the node at `idx` goes through: the node itself, or for a
+    /// reference the node it refers to.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the node a reference refers to cannot be found.
+    fn passed_node_mut(&mut self, idx: NodeIndex) -> OpmResult<&mut OpticRef> {
+        match self.g[idx].referenced_node_id() {
+            Some(target) => self.reference_target_mut(target),
+            None => Ok(&mut self.g[idx]),
+        }
+    }
+
+    /// Returns where the node a pass through the node at `idx` goes through is placed (see
+    /// [`passed_node_mut`](OpticGraph::passed_node_mut)), if it is.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the node a reference refers to cannot be found.
+    fn placement_of(&mut self, idx: NodeIndex) -> OpmResult<Option<Isometry>> {
+        Ok(self
+            .passed_node_mut(idx)?
+            .positioning()
+            .effective_position()
+            .copied())
+    }
+
     /// Places the node at `idx`, which no axis reaches, in front of the first of its successors
     /// that is placed: the face of its output port at the connection's distance before where the
-    /// axis enters that successor, facing it. Its alignment then moves it from there.
+    /// axis enters that successor, facing it. Its alignment then moves it from there. A reference
+    /// hands the placement to the node it refers to.
     ///
     /// A placed successor is passed over, with a warning, if the light would pass it against the
     /// way it is placed - a reference turned other than its target - or if it has no surface at
@@ -236,7 +297,7 @@ impl OpticGraph {
     fn place_in_front_of_successor(&mut self, idx: NodeIndex) -> OpmResult<InFront> {
         let mut refused = false;
         let node_info = format!("{}", self.g[idx]);
-        let geometry = self.g[idx].create_geometry()?;
+        let geometry = self.passed_node_mut(idx)?.create_geometry()?;
         for port in self.g[idx].ports().names(&PortType::Output) {
             let Some((successor, entrance, distance)) = self
                 .g
@@ -254,10 +315,7 @@ impl OpticGraph {
                 continue;
             };
             let inverted = self.g[successor].inverted();
-            let passed = match self.g[successor].referenced_node_id() {
-                Some(target) => self.reference_target_mut(target)?,
-                None => &mut self.g[successor],
-            };
+            let passed = self.passed_node_mut(successor)?;
             let Some(placed) = passed.positioning().effective_position().copied() else {
                 continue;
             };
@@ -275,7 +333,8 @@ impl OpticGraph {
                 refused = true;
                 continue;
             }
-            let Some(exit) = self.g[idx]
+            let Some(exit) = self
+                .passed_node_mut(idx)?
                 .face_of_port(&port)
                 .ok()
                 .and_then(|face| geometry.as_ref()?.face(face))
@@ -288,7 +347,8 @@ impl OpticGraph {
                 .append(&self.axis_entrance_frame_of(successor_id, &entrance))
                 .append(&Isometry::new_along_z(-distance)?)
                 .append(&Isometry::new_from_transform(exit.get_inv_transform()));
-            self.g[idx].set_positioning(NodePositioning::Automatic(Some(in_front)))?;
+            self.passed_node_mut(idx)?
+                .set_positioning(NodePositioning::Automatic(Some(in_front)))?;
             self.mark_placed_by_distance(successor, &entrance);
             return Ok(InFront::Placed);
         }
@@ -345,9 +405,9 @@ enum InFront {
 /// reached directly and through a reference is thus placed by its own input, whatever order the
 /// nodes were added in; a reference only places it when the light reaches the reference first on
 /// the same path. A node no axis reaches comes last, so what it feeds is placed if anything
-/// places it, and it can stand in front of it. If nothing it feeds is placed yet - a combiner
-/// waiting for its light, say - it is put back: the nodes after it go on without it, and it is
-/// offered once more when no other node is left. Ties go by node index.
+/// places it, and it can stand in front of it. A node put back - nothing it feeds is placed yet,
+/// a combiner waiting for its light, say - lets the nodes after it go on without it. Ties go by
+/// node index.
 struct PlacingOrder {
     /// The rank of every node, by its index.
     ranks: Vec<Rank>,
@@ -355,8 +415,8 @@ struct PlacingOrder {
     waiting: Vec<usize>,
     /// The nodes ready to be visited, by rank and index.
     ready: BTreeSet<(Rank, NodeIndex)>,
-    /// The nodes put back, to be offered once more at the end.
-    put_back: VecDeque<NodeIndex>,
+    /// The nodes put back, in the order they were.
+    put_back: Vec<NodeIndex>,
 }
 
 impl PlacingOrder {
@@ -398,16 +458,16 @@ impl PlacingOrder {
             ranks,
             waiting,
             ready,
-            put_back: VecDeque::new(),
+            put_back: Vec::new(),
         })
     }
-    /// Returns the next node to visit, and whether it was put back before: then this is its last
-    /// offer. `None` once every node was offered.
-    fn next(&mut self) -> Option<(NodeIndex, bool)> {
-        if let Some((_, idx)) = self.ready.pop_first() {
-            return Some((idx, false));
-        }
-        self.put_back.pop_front().map(|idx| (idx, true))
+    /// Returns the next node to visit, or `None` once no node is ready any more.
+    fn next(&mut self) -> Option<NodeIndex> {
+        self.ready.pop_first().map(|(_, idx)| idx)
+    }
+    /// Returns the nodes put back, in the order they were: a topological order of them.
+    fn into_put_back(self) -> Vec<NodeIndex> {
+        self.put_back
     }
     /// Lets the nodes after the node at `idx` of `graph` stop waiting for it.
     fn release(&mut self, graph: &OpticGraph, idx: NodeIndex) {
@@ -422,11 +482,10 @@ impl PlacingOrder {
             }
         }
     }
-    /// Puts the node at `idx` of `graph` back: the nodes after it go on without it, and it is
-    /// offered once more when no other node is left.
+    /// Puts the node at `idx` of `graph` back: the nodes after it go on without it.
     fn put_back(&mut self, graph: &OpticGraph, idx: NodeIndex) {
         self.release(graph, idx);
-        self.put_back.push_back(idx);
+        self.put_back.push(idx);
     }
 }
 
@@ -1344,6 +1403,95 @@ mod test {
                 placed?;
                 assert_warned("twice in a row");
             }
+        }
+        Ok(())
+    }
+    /// How far apart two points are, in meters.
+    fn distance_between(a: Point3<Length>, b: Point3<Length>) -> f64 {
+        Vector3::new((a.x - b.x).value, (a.y - b.y).value, (a.z - b.z).value).norm()
+    }
+    /// A source with an automatic position feeds a lens that feeds a placed beam splitter. No axis
+    /// reaches either, so both are put back and placed back to front - the lens 50 mm in front of
+    /// the splitter, the source 100 mm in front of the lens - and the source's axis then runs
+    /// through the lens to the splitter's center, consistent with where the splitter sits. It does
+    /// not matter whether the splitter is placed absolutely or by another source, nor whether the
+    /// light passes the lens itself or a reference to it, which then hands the lens its placement.
+    #[test]
+    fn a_chain_no_axis_reaches_is_placed_in_front_of_what_it_feeds() -> OpmResult<()> {
+        for (splitter_placed_by_a_source, through_reference) in
+            [(false, false), (true, false), (false, true), (true, true)]
+        {
+            let mut scenery = NodeGroup::default();
+            let mut splitter = BeamSplitter::default().with_tilt(degree!(45.0, 0.0, 0.0))?;
+            if !splitter_placed_by_a_source {
+                splitter.set_positioning(NodePositioning::Absolute(Isometry::new_along_z(
+                    millimeter!(200.0),
+                )?))?;
+            }
+            let splitter = scenery.add_node(splitter)?;
+            let source = scenery.add_node(automatic_source("chain")?)?;
+            let lens = scenery.add_node(Lens::default())?;
+            let passed = if through_reference {
+                scenery.add_node(NodeReference::from_node(&scenery.node(lens)?)?)?
+            } else {
+                lens
+            };
+            scenery.connect_nodes(source, "output_1", passed, "input_1", millimeter!(100.0))?;
+            scenery.connect_nodes(passed, "output_1", splitter, "input_1", millimeter!(50.0))?;
+            let mut sources = vec![source];
+            if splitter_placed_by_a_source {
+                let other = scenery.add_node(SourcePort::default())?;
+                scenery.connect_nodes(
+                    other,
+                    "output_1",
+                    splitter,
+                    "input_2",
+                    millimeter!(200.0),
+                )?;
+                sources.push(other);
+            }
+            let mut config = RayTraceConfig::default();
+            for source in sources {
+                config.map_source(
+                    source,
+                    round_collimated_ray_builder(millimeter!(1.0), joule!(1.0), 1)?,
+                );
+            }
+            let mut config = config.for_positioning();
+            config.set_collect_ray_ends(true);
+            testing_logger::setup();
+            AnalysisRayTrace::calc_node_positions(&mut scenery, LightResult::default(), &config)?;
+
+            let case = format!(
+                "splitter placed by a source: {splitter_placed_by_a_source}, through a reference: \
+                 {through_reference}"
+            );
+            let center = placement(&scenery, splitter)?.translation();
+            let lens_node = scenery.node(lens)?;
+            let rear = lens_node.effective_surface_iso("output_1")?.translation();
+            assert_relative_eq!(distance_between(rear, center), 0.05, epsilon = 1e-9);
+            let front = lens_node.effective_surface_iso("input_1")?.translation();
+            let start = placement(&scenery, source)?.translation();
+            assert_relative_eq!(distance_between(start, front), 0.1, epsilon = 1e-9);
+            let ends_at_center = scenery.ray_ends().iter().any(|end| {
+                end.iter().next().is_some_and(|ray| {
+                    let path = ray.position_history_with_current();
+                    let first = Point3::new(path[(0, 0)], path[(0, 1)], path[(0, 2)]);
+                    distance_between(first, start) < 1e-9
+                        && distance_between(ray.position(), center) < 1e-9
+                })
+            });
+            assert!(
+                ends_at_center,
+                "{case}: the source's axis ends at the splitter"
+            );
+            testing_logger::validate(|logs| {
+                assert!(
+                    !logs.iter().any(|log| log.body.contains("not consistent")
+                        || log.body.contains("cannot be placed")),
+                    "{case}"
+                );
+            });
         }
         Ok(())
     }
