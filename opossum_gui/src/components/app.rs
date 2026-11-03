@@ -1,23 +1,13 @@
 // --- Common imports ---
 use crate::{
-    APP_CONFIG,
-    api::get_api_welcome,
-    backend_status::BackendStatus,
-    components::{
-        catalog_editor::{CatalogSynchronizer, MaterialCatalog},
-        context_menu::cx_menu::{ContextMenu, CxtCommand},
-        logger::logger_component::Logger,
-        menu_bar::{
+    APP_CONFIG, api::get_api_welcome, backend_status::BackendStatus, components::{
+        catalog_editor::{CatalogSynchronizer, MaterialCatalog}, context_menu::cx_menu::{ContextMenu, CxtCommand}, logger::logger_component::Logger, menu_bar::{
             menu_bar_component::{AppCommand, MenuBar},
             project_helper::{select_open_path, select_save_path},
-        },
-        primitives::alert_dialog::{
+        }, optimization::OptimizationModal, primitives::alert_dialog::{
             AlertDialog, AlertDialogAction, AlertDialogActions, AlertDialogCancel,
             AlertDialogDescription, AlertDialogTitle,
-        },
-        scenery_editor::{GraphEditor, NodeEditorCommand},
-        settings_dialog::SettingsDialog,
-        short_cuts::{PendingAction, SHORTCUTS, Shortcut},
+        }, scenery_editor::{GraphEditor, NodeEditorCommand}, settings_dialog::SettingsDialog, short_cuts::{PendingAction, SHORTCUTS, Shortcut},
     },
 };
 use dioxus::prelude::*;
@@ -210,6 +200,7 @@ pub fn App() -> Element {
     let mut show_settings = use_signal(|| false);
     let mut show_material_catalog = use_signal(|| false);
     let mut show_catalog_synchronizer = use_signal(|| false);
+    let show_optimization = use_signal(|| true);
 
     let mut execute_immediate = move |cmd: AppCommand| match cmd {
         AppCommand::NewProject => {
@@ -569,6 +560,7 @@ pub fn App() -> Element {
         SettingsDialog { open: show_settings }
         MaterialCatalog { open: show_material_catalog }
         CatalogSynchronizer { open: show_catalog_synchronizer }
+        OptimizationModal { open: show_optimization }
         // Invisible master sprite containing all icon definitions
         div {
             style: "position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none;",
