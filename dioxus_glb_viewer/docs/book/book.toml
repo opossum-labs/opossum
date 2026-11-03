@@ -1,0 +1,13 @@
+[book]
+authors = ["Yannik Zobus <y.zobus@gsi.de>"]
+description = "User guide, internals and maintenance notes for the dioxus_glb_viewer component crate"
+language = "en"
+src = "src"
+title = "dioxus_glb_viewer Handbook"
+
+[rust]
+edition = "2021"
+
+[output.html]
+default-theme = "navy"
+git-repository-url = "https://github.com/opossum-labs/opossum"

@@ -18,11 +18,10 @@ use uuid::Uuid;
 
 use super::upper_left_corner_of_nodes;
 use crate::{
+    analyzers::light_new_source,
     app_state::{AppState, NodeCacheItem},
     error::BackEndErrorResponse,
-    helper_functions::{
-        build_connect_info, map_port, parent_group_id_or_self, validate_relocated_references,
-    },
+    helper_functions::{build_connect_info, map_port, validate_relocated_references},
     undo::{Command, PatchAmplifierNodes, PatchPumpScenario},
 };
 
@@ -226,6 +225,13 @@ pub(super) async fn post_paste_nodes(
     )?;
 
     let mut amplifier_state_inverses = propagate_amplifier_state(&mut document, &node_id_link);
+    let sources = document.scenery().find_source_ports()?;
+    let mut source_light_inverses = Vec::new();
+    for (original, copy) in &node_id_link {
+        if sources.contains(copy) {
+            source_light_inverses.extend(light_new_source(&mut document, *copy, Some(*original)));
+        }
+    }
 
     // Build GraphDelta::Composite for top-level pasted optical nodes and their connections
     let mut graph_deltas = Vec::new();
@@ -267,6 +273,7 @@ pub(super) async fn post_paste_nodes(
         undo_commands.push(Command::RemoveAnalyzer(analyzer.clone()));
     }
     undo_commands.append(&mut amplifier_state_inverses);
+    undo_commands.append(&mut source_light_inverses);
 
     if !undo_commands.is_empty() {
         data.push_undo(Command::from_vec(undo_commands).expect("undo_commands is not empty"));
@@ -540,7 +547,7 @@ fn collect_optical_node_to_copy(
 
     node_id_link.insert(old_node_id, new_node_ref.uuid());
 
-    let parent_group_id = parent_group_id_or_self(scenery, old_node_id)?;
+    let parent_group_id = scenery.parent_group_id_or_self(old_node_id)?;
 
     let connect = scenery.with_group_node(parent_group_id, |group| {
         group
@@ -609,7 +616,13 @@ mod test {
     use std::collections::HashSet;
 
     use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
-    use opossum_core::meter;
+    use opossum_core::{
+        analyzers::{AnalyzerType, EnergyConfig, RayTraceConfig},
+        light::lightdata::{
+            energy_data_builder::EnergyDataBuilder, ray_data_builder::RayDataBuilder,
+        },
+        meter,
+    };
 
     use super::*;
     use crate::{
@@ -1378,5 +1391,109 @@ mod test {
             PumpConfig::new(gain, pump),
             "undo must not disturb the original's configuration"
         );
+    }
+
+    /// The light the analyzer `analyzer` of `document` gives the source port `source`, if any: the
+    /// ray builder of a ray trace, the energy builder of an energy analysis.
+    fn light_of(
+        document: &OpmDocument,
+        analyzer: Uuid,
+        source: Uuid,
+    ) -> (Option<RayDataBuilder>, Option<EnergyDataBuilder>) {
+        match document.analyzer(analyzer).unwrap().analyzer_type() {
+            AnalyzerType::RayTrace(config) => (config.get_source(&source).cloned(), None),
+            AnalyzerType::Energy(config) => (None, config.get_source(&source).cloned()),
+            AnalyzerType::GhostFocus(config) => (config.get_source(&source).cloned(), None),
+        }
+    }
+
+    /// A pasted source port shines like the one it was copied from in every analyzer, and undoing
+    /// the paste takes its light away again.
+    #[actix_web::test]
+    async fn test_paste_gives_a_source_the_light_of_its_original() {
+        use opossum_core::{
+            joule, millimeter,
+            nodes::{SourcePort, round_collimated_ray_builder},
+        };
+
+        let app_state = Data::new(AppState::default());
+        let (root_id, source_id, analyzers) = {
+            let mut document = app_state.document.lock();
+            let root_id = document.scenery().node_attr().uuid();
+            let source_id = document
+                .scenery_mut()
+                .add_node(SourcePort::default())
+                .unwrap();
+            let mut ray_trace = RayTraceConfig::default();
+            ray_trace.map_source(
+                source_id,
+                round_collimated_ray_builder(millimeter!(3.0), joule!(2.0), 2).unwrap(),
+            );
+            let mut energy = EnergyConfig::default();
+            energy.map_source(source_id, EnergyDataBuilder::default());
+            let analyzers = [
+                document.add_analyzer(AnalyzerType::RayTrace(ray_trace)),
+                document.add_analyzer(AnalyzerType::Energy(energy)),
+            ];
+            let ids = (root_id, source_id, analyzers);
+            drop(document);
+            ids
+        };
+
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(post_copy_nodes)
+                .service(post_paste_nodes)
+                .service(undo_document),
+        )
+        .await;
+        let req = test::TestRequest::post()
+            .uri("/copy_nodes")
+            .set_json(HashSet::from([source_id]))
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+        let req = test::TestRequest::post()
+            .uri("/paste_nodes")
+            .set_json((root_id, (500.0, 500.0)))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let pasted: PasteNodesResponse = test::read_body_json(resp).await;
+        let pasted_id = pasted
+            .pasted_nodes
+            .values()
+            .flatten()
+            .find(|info| info.uuid() != source_id)
+            .expect("a pasted duplicate must exist")
+            .uuid();
+
+        {
+            let document = app_state.document.lock();
+            for analyzer in analyzers {
+                let original = light_of(&document, analyzer, source_id);
+                assert!(original.0.is_some() || original.1.is_some());
+                assert_eq!(
+                    light_of(&document, analyzer, pasted_id),
+                    original,
+                    "the copy shines like the original"
+                );
+            }
+        }
+
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        assert_eq!(app.call(req).await.unwrap().status(), StatusCode::OK);
+
+        let document = app_state.document.lock();
+        for analyzer in analyzers {
+            assert_eq!(
+                light_of(&document, analyzer, pasted_id),
+                (None, None),
+                "undo takes the copy's light away"
+            );
+        }
     }
 }

@@ -2,7 +2,7 @@
 use crate::refractive_index::RefractiveIndex;
 use crate::{
     analyzers::energy::AnalysisEnergy,
-    core_optics::{NodeAttr, OpticNode, OpticNodeExt, SurfacePorts, Volumetric},
+    core_optics::{NodeAttr, OpticNode, OpticNodeExt, SurfacePorts},
     degree,
     error::{OpmResult, OpossumError},
     geometry::{
@@ -97,7 +97,10 @@ impl Default for Wedge {
             .create_property_with_validator(
                 OPTIC_SHAPE,
                 "transversal extent of the component",
-                Validator::OpticShapeIsBounded,
+                Validator::OpticShape {
+                    may_be_open: false,
+                    bored: false,
+                },
                 default_optic_shape().into(),
             )
             .unwrap();
@@ -136,7 +139,6 @@ impl Wedge {
     }
 }
 
-impl Volumetric for Wedge {}
 impl OpticNode for Wedge {
     fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         let (Ok(Proptype::Length(center_thickness)), Ok(Proptype::Angle(wedge_angle))) = (
@@ -157,10 +159,8 @@ impl OpticNode for Wedge {
             *center_thickness,
             *wedge_angle,
             cross_section,
+            self.material()?,
         )?))
-    }
-    fn as_volume(&self) -> Option<&dyn Volumetric> {
-        Some(self)
     }
     fn surface_ports(&self) -> SurfacePorts {
         SurfacePorts::THROUGH_SOLID

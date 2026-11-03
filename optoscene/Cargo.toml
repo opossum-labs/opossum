@@ -1,0 +1,36 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/optoscene",
+    "crates/optoscene-protocol",
+    "examples/actix-viewer",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0"
+repository = "https://github.com/opossum-labs/opossum"
+
+[workspace.dependencies]
+# nalgebra must be the exact same version as the Opossum workspace, otherwise the
+# geometry types are incompatible across the crate boundary.
+nalgebra = { version = "0.35.0", default-features = false, features = ["std"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+optoscene-protocol = { version = "0.1.0", path = "crates/optoscene-protocol" }
+
+# Dev-dependency only: read exported GLBs back in for roundtrip tests. We parse
+# via `Gltf::from_slice` (the `blob` field carries the GLB binary chunk), so the
+# heavyweight `import`/`image` features are not needed.
+gltf = { version = "1.4.1", default-features = false, features = [
+    "utils",
+    "extras",
+    "names",
+    "extensions",
+    "KHR_materials_transmission",
+    "KHR_materials_ior",
+    "KHR_materials_volume",
+    "KHR_materials_unlit",
+] }

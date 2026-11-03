@@ -17,6 +17,9 @@ pub enum GraphsWorkspaceAction {
         /// The ID of the graph.
         graph_id: Uuid,
     },
+    /// Clears the selection in whichever tab is currently active. Used by the 3D view, which -
+    /// unlike the graph canvas - does not know which tab that is; the processor resolves it.
+    ClearSelectedNodesInActiveTab,
     /// Atomically resets backend leftovers and initializes the new root scenery tab.
     /// This prevents intermediate store clears and reduces startup re-renders.
     ResetAndInitializeRootScenery {
@@ -127,8 +130,8 @@ pub enum GraphsWorkspaceAction {
         edge_in_creation: Option<EdgeCreation>,
     },
 
-    /// Requests the editor area dimensions or layout.
-    GetEditorArea,
+    /// Measures where the canvas of the graph with this id sits in the window.
+    GetEditorArea(Uuid),
 
     /// Loads a graph workspace from a file.
     LoadFromFile(PathBuf),
@@ -400,13 +403,21 @@ pub enum GraphsWorkspaceAction {
     },
 
     /// Brings a node into view: makes its graph the active tab (opening it first if needed) and
-    /// selects it. Used by the amplifier overview to take the user to a listed node, which may sit
-    /// in a group whose tab isn't even open.
+    /// selects it. Used by the amplifier overview to take the user to a listed node, and by a 3D
+    /// view pick, which may both sit in a group whose tab isn't even open.
     RevealNode {
         /// The ID of the node to reveal.
         node_id: Uuid,
         /// The ID of the graph containing the node.
         graph_id: Uuid,
+        /// Whether to also bring the node's graph tab to the front.
+        ///
+        /// `true` for the amplifier overview's "reveal": the sidebar stays on the pump scenario
+        /// list, so jumping the canvas to the node is the whole point. `false` for a 3D view pick:
+        /// the 3D tab already shows where the component is, so bringing the graph forward would
+        /// undo the very thing the click was for - the node is selected and the properties sidebar
+        /// switches to it instead (see `workspace_processor`'s handling of this action).
+        bring_to_front: bool,
     },
 
     /// Undoes the last checkpointed document edit.

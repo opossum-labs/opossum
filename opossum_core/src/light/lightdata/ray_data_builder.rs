@@ -110,6 +110,22 @@ impl RayDataBuilder {
     pub fn alignment_wavelength(&self) -> Option<Length> {
         self.alignment_wavelength
     }
+
+    /// Returns the wavelength the optical axis of this source is placed at.
+    ///
+    /// # Returns
+    ///
+    /// The alignment wavelength, or the central wavelength of the source if none is set (see
+    /// [`RayDataSource::central_wavelength`]).
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if no alignment wavelength is set and the central
+    /// wavelength of the source cannot be determined.
+    pub fn axis_wavelength(&self) -> OpmResult<Length> {
+        self.alignment_wavelength
+            .map_or_else(|| self.source.central_wavelength(), Ok)
+    }
 }
 
 impl From<RayDataSource> for RayDataBuilder {
@@ -121,5 +137,38 @@ impl From<RayDataSource> for RayDataBuilder {
         let mut rdb = Self::default();
         rdb.set_source(value);
         rdb
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        distributions::spectral::LaserLines, light::lightdata::ray_data_source::CollimatedSrc,
+        nanometer,
+    };
+    use approx::assert_relative_eq;
+    use uom::si::length::nanometer;
+
+    /// The axis follows the alignment wavelength where one is set, else the source's own center.
+    #[test]
+    fn the_axis_wavelength_is_the_alignment_wavelength_or_the_central_one() -> OpmResult<()> {
+        let mut source = CollimatedSrc::default();
+        source.set_spect_dist(
+            LaserLines::new(vec![(nanometer!(500.0), 1.0), (nanometer!(800.0), 3.0)])?.into(),
+        );
+        let mut builder = RayDataBuilder::from(RayDataSource::Collimated(source));
+        assert_relative_eq!(
+            builder.axis_wavelength()?.get::<nanometer>(),
+            725.0,
+            epsilon = 1e-9
+        );
+
+        builder.set_alignment_wavelength(Some(nanometer!(1053.0)));
+        assert_eq!(builder.axis_wavelength()?, nanometer!(1053.0));
+
+        let empty = RayDataBuilder::from(RayDataSource::Raw(Rays::default()));
+        assert!(empty.axis_wavelength().is_err());
+        Ok(())
     }
 }

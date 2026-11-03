@@ -4,7 +4,7 @@
 //! This file holds the solid ([`Extruded`]) and what it knows about its volume: whether a point lies
 //! inside it, how far a ray travels through it and which box encloses it (see [`Body`]).
 
-use nalgebra::{Point2, Point3, Vector3};
+use nalgebra::{Point2, Point3};
 use num_traits::Zero;
 use std::ops::Range;
 use uom::si::f64::Length;
@@ -18,8 +18,11 @@ use crate::{
     geometry::{
         Face, FaceIndex, GeometryKind, Rim,
         body::{Body, BoundingBox},
+        face::SurfacePlacement,
     },
     light::Ray,
+    material::Material,
+    properties::proptype::AssetRef,
     utils::geom_transformation::Isometry,
 };
 
@@ -27,12 +30,14 @@ use crate::{
 ///
 /// The profile is the outline of the [`Rim`], stated in the plane perpendicular to the rim's axis;
 /// it is the component's optic shape. The center thickness is not stored separately: it is where
-/// the rear face's vertex sits, together with any tilt of that face.
+/// the rear face's vertex sits, together with any tilt of that face. The solid is filled with its
+/// material.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Extruded {
     rim: Rim,
     front: OpticSurface,
     rear: OpticSurface,
+    material: AssetRef<Material>,
     inversion: Option<Inversion>,
 }
 
@@ -46,26 +51,37 @@ impl Extruded {
     /// * `front` - the face capping the profile towards -z, stated in the `axis` frame.
     /// * `rear` - the face capping the profile towards +z, stated in the `axis` frame.
     /// * `outline` - the profile, in the xy plane of the `axis` frame.
+    /// * `material` - the material the solid is filled with, embedded or still referenced.
     ///
     /// # Errors
     ///
     /// This function returns an error if a face is curved too tightly to reach the edge of the
-    /// profile.
+    /// profile, or if a tilted bore meets a face on or beyond the edge.
     pub fn new(
         axis: Isometry,
         mut front: Face,
         mut rear: Face,
         outline: Outline,
+        material: impl Into<AssetRef<Material>>,
     ) -> OpmResult<Self> {
         let reach = outline.transversal_reach();
         front.check_reach(reach, "front face")?;
         rear.check_reach(reach, "rear face")?;
+        for (face, name) in [(&front, "front face"), (&rear, "rear face")] {
+            outline
+                .check_bore_on(|position| {
+                    let at = SurfacePlacement::new(face, &Isometry::identity())?;
+                    Ok(at.above(&position)?.0.z)
+                })
+                .map_err(|error| OpossumError::Properties(format!("{error}, at its {name}")))?;
+        }
         front.move_by(&axis);
         rear.move_by(&axis);
         Ok(Self {
             rim: Rim::new(outline, axis),
             front: front.into(),
             rear: rear.into(),
+            material: material.into(),
             inversion: None,
         })
     }
@@ -111,9 +127,15 @@ impl GeometryKind for Extruded {
             _ => None,
         }
     }
+    /// A face reaches into the bore, where the body only holds no material.
     fn includes(&self, face: FaceIndex, point: &Point3<Length>) -> bool {
         GeometryKind::surface(self, face)
-            .is_some_and(|surface| self.rim.bounds(surface.face(), point))
+            .is_some_and(|surface| self.rim.reaches(surface.face(), point))
+    }
+    fn bored_rim(&self, face: FaceIndex) -> Option<&Rim> {
+        GeometryKind::surface(self, face)
+            .map(|_| &self.rim)
+            .filter(|rim| rim.outline().bore().is_some())
     }
     fn window(&self) -> Option<&Rim> {
         None
@@ -163,25 +185,14 @@ impl Extruded {
     /// not reach as far out as the cross section, or if it is both curved and tilted against the
     /// body.
     fn surface_z_range(&self, face: &Face, transversal_reach: Length) -> OpmResult<Range<Length>> {
-        // Placing a surface and its body leaves rounding noise in their relative orientation.
-        const ORIENTATION_NOISE: f64 = 1.0e-12;
-        let surface = face.surface();
-        let relative = Isometry::new_from_transform(
-            self.isometry().get_inv_transform() * face.frame().get_transform(),
+        // How the face stands in the body's frame is the same question the 3D view asks when it
+        // lays a mesh over it, so both read it off the same placement.
+        let placement = SurfacePlacement::new(face, &self.isometry())?;
+        let (surface, alignment, vertex) = (
+            placement.surface(),
+            placement.alignment(),
+            placement.vertex(),
         );
-        // The body's own z axis, written in the surface's frame: dotted with a point of the
-        // surface it yields that point's longitudinal position in the body. Its transversal part
-        // states how far the surface is tilted against the body, its z part how much of the
-        // surface's own sag survives into the body's z.
-        let body_axis = relative.inverse_transform_vector_f64(&Vector3::z());
-        let tilt = body_axis.x.hypot(body_axis.y);
-        let alignment = body_axis.z;
-        if alignment.abs() < ORIENTATION_NOISE {
-            return Err(OpossumError::Other(format!(
-                "the '{}' surface runs parallel to the body's axis and does not bound it",
-                surface.name()
-            )));
-        }
         // A tilted surface has to be looked at further out to still span the cross section.
         let reach = transversal_reach / alignment.abs();
         let out_of_reach = || {
@@ -190,9 +201,6 @@ impl Extruded {
                 surface.name()
             ))
         };
-        let vertex = surface
-            .local_z_at(&Point2::origin())
-            .ok_or_else(out_of_reach)?;
         // The sag grows monotonically with the distance from the axis for every surface modelled
         // here, so its extremes over the cross section are attained at the rim. Both axes are
         // sampled because a Cylinder is curved along one of them only.
@@ -208,8 +216,7 @@ impl Extruded {
             lowest_sag = Length::min(lowest_sag, sag);
             highest_sag = Length::max(highest_sag, sag);
         }
-        if tilt > ORIENTATION_NOISE
-            && (lowest_sag != Length::zero() || highest_sag != Length::zero())
+        if placement.is_tilted() && (lowest_sag != Length::zero() || highest_sag != Length::zero())
         {
             return Err(OpossumError::Other(format!(
                 "the extent of a body bounded by the curved '{}' surface tilted against it is not \
@@ -217,10 +224,11 @@ impl Extruded {
                 surface.name()
             )));
         }
-        let anchor = relative
+        let anchor = placement
+            .relative()
             .transform_point(&Point3::new(Length::zero(), Length::zero(), vertex))
             .z;
-        let from_tilt = reach * tilt;
+        let from_tilt = reach * placement.tilt();
         let (one_sag, other_sag) = (lowest_sag * alignment, highest_sag * alignment);
         Ok(anchor - from_tilt + Length::min(one_sag, other_sag)
             ..anchor + from_tilt + Length::max(one_sag, other_sag))
@@ -243,11 +251,14 @@ impl Body for Extruded {
     }
     fn path_length_inside(&self, ray: &Ray) -> Option<Length> {
         // A ray leaving the body through its lateral boundary meets no hit there: that boundary is
-        // not part of the model.
+        // not part of the model. Neither is a hit in the bore, which holds no material.
         let hits = face_hits(
             [self.front.face(), self.rear.face()].into_iter(),
             ray,
-            |face, point| self.includes(face, point),
+            |face, point| {
+                GeometryKind::surface(self, face)
+                    .is_some_and(|surface| self.rim.bounds(surface.face(), point))
+            },
         );
         self.chord_through(ray.position(), ray.direction(), hits)
     }
@@ -285,6 +296,9 @@ impl Body for Extruded {
     }
     fn side(&self, face: FaceIndex) -> Option<Side> {
         self.surface_and_side(face).map(|(_, side)| side)
+    }
+    fn material(&self) -> Option<&Material> {
+        self.material.as_inline()
     }
     fn inversion(&self) -> Option<&Inversion> {
         self.inversion.as_ref()
@@ -326,7 +340,7 @@ mod test {
 
     /// Create a circular outline of the given radius.
     fn circular_cross_section(radius: Length) -> OpmResult<Outline> {
-        Outline::new(CircleShape::new(radius)?, Vec::new())
+        Outline::new(CircleShape::new(radius)?, None)
     }
     /// Create the two flat faces of a plate of the given thickness.
     fn plate_faces(thickness: Length) -> OpmResult<(Face, Face)> {
@@ -351,7 +365,13 @@ mod test {
         outline: Outline,
         node_frame: Isometry,
     ) -> OpmResult<Extruded> {
-        let mut body = Extruded::new(Isometry::identity(), front, rear, outline)?;
+        let mut body = Extruded::new(
+            Isometry::identity(),
+            front,
+            rear,
+            outline,
+            Material::default(),
+        )?;
         body.move_by(&node_frame);
         Ok(body)
     }
@@ -369,10 +389,76 @@ mod test {
     fn test_ray(position: Point3<Length>, direction: Vector3<f64>) -> OpmResult<Ray> {
         Ray::new(position, direction, nanometer!(1053.0), joule!(1.0))
     }
+    /// A body holds no material in its bore, so a ray through the bore runs nowhere inside it,
+    /// while one beside the bore runs through the whole plate.
+    #[test]
+    fn a_ray_through_the_bore_runs_nowhere_inside_the_body() -> OpmResult<()> {
+        let (front, rear) = plate_faces(millimeter!(10.0))?;
+        let ring = Outline::new(
+            CircleShape::new(millimeter!(12.5))?,
+            Some(Bore::new(
+                CircleShape::new(millimeter!(2.0))?,
+                millimeter!(0.0, 0.0),
+                Angle::zero(),
+            )),
+        )?;
+        let body = body_between(front, rear, ring, Isometry::identity())?;
+        let along_z = |y: f64| test_ray(millimeter!(0.0, y, -5.0), Vector3::z());
+        assert_eq!(body.path_length_inside(&along_z(0.0)?), None);
+        assert_abs_diff_eq!(
+            path_length(&body, &along_z(5.0)?)?.value,
+            0.01,
+            epsilon = 1e-12
+        );
+        Ok(())
+    }
+    /// A tilted bore has to lie within the edge where it meets either face, not only where it
+    /// crosses the plane of the outline: one 9 mm off the axis of a plate of 12.5 mm, tilted by 30°
+    /// about y, lies within the edge on the front face but reaches 6 mm · tan 30° = 3.464 mm further
+    /// out on the rear face, 6 mm deep, beyond the edge.
+    #[test]
+    fn a_tilted_bore_that_leaves_the_edge_on_the_rear_face_is_refused() -> OpmResult<()> {
+        let (front, rear) = plate_faces(millimeter!(6.0))?;
+        let outline = Outline::new(
+            CircleShape::new(millimeter!(12.5))?,
+            Some(
+                Bore::new(
+                    CircleShape::new(millimeter!(2.0))?,
+                    millimeter!(-9.0, 0.0),
+                    Angle::zero(),
+                )
+                .with_tilt(Angle::zero(), degree!(30.0)),
+            ),
+        )?;
+        let error = body_between(front, rear, outline, Isometry::identity())
+            .expect_err("a bore leaving the edge was accepted")
+            .to_string();
+        assert!(error.contains("rear face"), "{error}");
+        Ok(())
+    }
     /// Trace the given ray through the given body and require it to pass through.
     fn path_length(body: &Extruded, ray: &Ray) -> OpmResult<Length> {
         body.path_length_inside(ray)
             .ok_or_else(|| crate::error::OpossumError::Other("ray missed the body".into()))
+    }
+    /// A solid answers with the material it is filled with, but not with one it only refers to
+    /// while a document is still being loaded.
+    #[test]
+    fn a_solid_answers_only_with_an_embedded_material() -> OpmResult<()> {
+        let solid = |material: AssetRef<Material>| -> OpmResult<Extruded> {
+            let (front, rear) = plate_faces(millimeter!(5.0))?;
+            Extruded::new(
+                Isometry::identity(),
+                front,
+                rear,
+                circular_cross_section(millimeter!(12.5))?,
+                material,
+            )
+        };
+        let glass = Material::default();
+        assert_eq!(solid(glass.clone().into())?.material(), Some(&glass));
+        assert_eq!(solid(AssetRef::Id(glass.id()))?.material(), None);
+        Ok(())
     }
     /// Both faces end at the rim of the profile; a closed surface also only on the sheet through its
     /// vertex, not on the far side of its equator.
@@ -434,7 +520,7 @@ mod test {
             rear,
             Outline::new(
                 RectangleShape::new(millimeter!(20.0), millimeter!(4.0))?,
-                Vec::new(),
+                None,
             )?,
             Isometry::identity(),
         )?;
@@ -633,7 +719,7 @@ mod test {
             rear,
             Outline::new(
                 RectangleShape::new(millimeter!(20.0), millimeter!(4.0))?,
-                Vec::new(),
+                None,
             )?,
             Isometry::identity(),
         )?;
@@ -648,7 +734,7 @@ mod test {
     fn bounding_box_of_a_ring_is_that_of_its_outer_circle() -> OpmResult<()> {
         let bounds_of_disk_with = |bore: Bore| -> OpmResult<BoundingBox> {
             let (front, rear) = plate_faces(millimeter!(10.0))?;
-            let outline = Outline::new(CircleShape::new(millimeter!(8.0))?, vec![bore])?;
+            let outline = Outline::new(CircleShape::new(millimeter!(8.0))?, Some(bore))?;
             body_between(front, rear, outline, Isometry::identity())?.bounding_box()
         };
         let bore = |x: f64, y: f64| -> OpmResult<Bore> {
@@ -843,6 +929,7 @@ mod test {
                 Isometry::new_along_z(millimeter!(20.0))?,
             ),
             circular_cross_section(millimeter!(12.5))?,
+            Material::default(),
         )?;
         let frame = |index: FaceIndex| {
             extruded
@@ -868,6 +955,7 @@ mod test {
                 Isometry::new_along_z(millimeter!(20.0))?,
             ),
             circular_cross_section(millimeter!(12.5))?,
+            Material::default(),
         )?;
         let node_frame = Isometry::new(millimeter!(0.0, 5.0, 0.0), degree!(0.0, 0.0, 0.0))?;
         body.move_by(&node_frame);
@@ -892,6 +980,7 @@ mod test {
                 Isometry::new_along_z(millimeter!(20.0))?,
             ),
             circular_cross_section(millimeter!(12.5))?,
+            Material::default(),
         )?;
         let node_frame = Isometry::new(millimeter!(0.0, 5.0, 0.0), degree!(0.0, 0.0, 0.0))?;
         body.move_by(&node_frame);

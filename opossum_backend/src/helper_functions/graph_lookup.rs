@@ -145,21 +145,6 @@ pub fn map_port(
     Ok(())
 }
 
-/// Returns `uuid`'s parent group id, or `uuid` itself if it names the scenery root - which has no
-/// real parent to report, matching the same self-as-parent sentinel `remove_port_map_cascade` uses
-/// for the same reason.
-///
-/// # Errors
-///
-/// Returns an error if `uuid` doesn't resolve to a node in `scenery`.
-pub fn parent_group_id_or_self(scenery: &NodeGroup, uuid: Uuid) -> OpmResult<Uuid> {
-    if uuid == scenery.node_attr().uuid() {
-        Ok(uuid)
-    } else {
-        Ok(scenery.node_recursive(uuid)?.1)
-    }
-}
-
 /// The chain of group ids from `uuid` up to (and including) the scenery root: `[uuid, parent, ..., root]`.
 ///
 /// # Errors
@@ -170,7 +155,7 @@ fn ancestor_chain(scenery: &NodeGroup, uuid: Uuid) -> OpmResult<Vec<Uuid>> {
     let mut chain = vec![uuid];
     let mut current = uuid;
     while current != root {
-        let parent = parent_group_id_or_self(scenery, current)?;
+        let parent = scenery.parent_group_id_or_self(current)?;
         if parent == current {
             break; // root's self-sentinel (or a node with no distinct parent) - stop.
         }

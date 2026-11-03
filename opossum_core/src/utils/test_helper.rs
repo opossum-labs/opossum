@@ -6,9 +6,12 @@
 #[cfg(test)]
 pub mod helper {
     use crate::{
+        degree,
         error::{OpmResult, OpossumError},
+        millimeter,
         properties::Proptype,
         reporting::analysis_report::AnalysisReport,
+        utils::geom_transformation::Isometry,
     };
 
     /// Read the energy an [`EnergyMeter`](crate::nodes::EnergyMeter) recorded from an analysis
@@ -58,5 +61,33 @@ pub mod helper {
                 assert_eq!(log.0.body, log.1);
             }
         });
+    }
+
+    /// Assert that a warning containing `part` was logged since `testing_logger::setup()`.
+    pub fn assert_warned(part: &str) {
+        testing_logger::validate(|logs| {
+            assert!(
+                logs.iter()
+                    .any(|log| log.level == log::Level::Warn && log.body.contains(part)),
+                "no warning containing '{part}' in {:?}",
+                logs.iter().map(|log| log.body.as_str()).collect::<Vec<_>>()
+            );
+        });
+    }
+
+    /// A frame well away from the origin and turned about all three axes.
+    ///
+    /// Geometry expressed in a component's own frame must not depend on where that component sits,
+    /// so anything making that claim is asked here for somewhere awkward to sit.
+    ///
+    /// # Returns
+    ///
+    /// A placement that is neither at the origin nor axis-aligned.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the hard-coded placement is rejected, which cannot happen.
+    pub fn somewhere_else() -> OpmResult<Isometry> {
+        Isometry::new(millimeter!(12.0, -4.0, 80.0), degree!(3.0, -7.0, 20.0))
     }
 }

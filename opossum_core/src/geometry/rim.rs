@@ -12,7 +12,12 @@ use nalgebra::{Point2, Point3};
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
-use crate::{apertures::Outline, geometry::Face, utils::geom_transformation::Isometry};
+use crate::{
+    apertures::Outline,
+    error::OpmResult,
+    geometry::{Face, face::SurfacePlacement},
+    utils::geom_transformation::Isometry,
+};
 
 /// The lateral boundary of a component: its outline, extruded along an axis.
 ///
@@ -63,12 +68,12 @@ impl Rim {
     ///
     /// # Returns
     ///
-    /// `true` if the point's projection along the axis lies within the outline.
+    /// `true` if the point's projection along the axis lies within the edge of the outline and
+    /// the point lies outside the bore, which runs along its own axis.
     #[must_use]
     pub fn contains(&self, point: &Point3<Length>) -> bool {
-        let local_point = self.frame.inverse_transform_point(point);
         self.outline
-            .contains(Point2::new(local_point.x, local_point.y))
+            .contains_at(self.frame.inverse_transform_point(point))
     }
     /// Return whether a point on an unbounded surface is part of the component this [`Rim`] bounds.
     ///
@@ -83,6 +88,61 @@ impl Rim {
     pub fn bounds(&self, face: &Face, point: &Point3<Length>) -> bool {
         self.contains(point) && face.is_on_vertex_sheet(point)
     }
+    /// Return whether a single surface this [`Rim`] bounds reaches a point on its unbounded
+    /// surface: the point lies within the edge, on the material or in the bore, and on the sheet of
+    /// the vertex (see [`Face::is_on_vertex_sheet`]).
+    ///
+    /// # Arguments
+    ///
+    /// * `face` - the face with the unbounded surface.
+    /// * `point` - a point on the surface, in the frame this rim is stated in.
+    #[must_use]
+    pub fn reaches(&self, face: &Face, point: &Point3<Length>) -> bool {
+        self.outline.within_edge(self.projected(point)) && face.is_on_vertex_sheet(point)
+    }
+    /// Return whether a point lies in the bore of the outline, which runs along its own axis
+    /// through the component (see [`Bore`](crate::apertures::Bore)).
+    ///
+    /// # Arguments
+    ///
+    /// * `point` - the point to be tested, in the frame this rim is stated in.
+    #[must_use]
+    pub fn in_bore(&self, point: &Point3<Length>) -> bool {
+        self.outline
+            .in_bore_at(self.frame.inverse_transform_point(point))
+    }
+    /// Return the center of the bore of the outline on a face: where the axis of the bore, which
+    /// may be tilted against the axis of the rim (see [`Bore`](crate::apertures::Bore)), meets the
+    /// face.
+    ///
+    /// # Arguments
+    ///
+    /// * `face` - the face, in the frame this rim is stated in.
+    ///
+    /// # Returns
+    ///
+    /// The center on the face, in the frame this rim is stated in; `None` if the outline has no
+    /// bore.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the face cannot be measured along the axis of this rim,
+    /// or if the axis of the bore does not settle on it.
+    pub fn bore_center_on(&self, face: &Face) -> OpmResult<Option<Point3<Length>>> {
+        let Some(bore) = self.outline.bore() else {
+            return Ok(None);
+        };
+        let at = SurfacePlacement::new(face, &self.frame)?;
+        let below = bore.meeting(bore.center(), &|position: Point2<Length>| {
+            Ok(at.above(&position)?.0.z)
+        })?;
+        Ok(Some(self.frame.transform_point(&at.above(&below)?.0)))
+    }
+    /// The projection of a point along the axis onto the plane of the outline.
+    fn projected(&self, point: &Point3<Length>) -> Point2<Length> {
+        let local_point = self.frame.inverse_transform_point(point);
+        Point2::new(local_point.x, local_point.y)
+    }
 }
 
 #[cfg(test)]
@@ -95,7 +155,7 @@ mod test {
         // A circle of 5 mm around (3, 4) mm of a plane, extruded along the reference's x axis.
         let plane = Isometry::new(millimeter!(0.0, 0.0, 2.0), degree!(0.0, 90.0, 0.0))?;
         let rim = Rim::new(
-            Outline::new(CircleShape::new(millimeter!(5.0))?, Vec::new())?,
+            Outline::new(CircleShape::new(millimeter!(5.0))?, None)?,
             plane.append(&Isometry::new_translation(millimeter!(3.0, 4.0, 0.0))?),
         );
         let reference = Isometry::new(millimeter!(10.0, 0.0, 0.0), degree!(0.0, 0.0, 30.0))?;

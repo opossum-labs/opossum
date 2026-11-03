@@ -7,6 +7,7 @@ use crate::{
     nodes::NodeRegistration,
     prelude::{Isometry, OpticNode},
 };
+use log::warn;
 use opm_macros_lib::OpmNode;
 
 mod analysis_energy;
@@ -50,6 +51,19 @@ impl SourcePort {
         let mut node = Self::default();
         node.node_attr.set_name(name);
         node
+    }
+
+    /// Returns the light an analysis defines for this source, warning if it defines none: the
+    /// source then sends out no light in that analysis.
+    ///
+    /// # Arguments
+    ///
+    /// * `light` - what the analysis's source map holds for this source.
+    fn light_or_warn<'a, L>(&self, light: Option<&'a L>) -> Option<&'a L> {
+        if light.is_none() {
+            warn!("{self} has no light in this analysis, so it sends out none");
+        }
+        light
     }
 }
 

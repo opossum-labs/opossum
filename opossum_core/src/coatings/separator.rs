@@ -193,6 +193,10 @@ impl SurfaceEffect for SplittingConfig {
     ) -> OpmResult<(Option<Ray>, Option<HitPoint>)> {
         ray.refract_at(hit, self, None)
     }
+    /// The neutral split that places the optical axis sees the edge of a component alone.
+    fn acts_in_bores(&self) -> bool {
+        true
+    }
 }
 
 impl Display for SplittingConfig {

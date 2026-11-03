@@ -15,10 +15,10 @@ pub use super::{
     },
     meter, micrometer, millimeter, nanometer,
     nodes::{
-        BeamSplitter, ConnectionInfo, CylindricLens, Dummy, EnergyMeter, FluenceDetector,
-        IdealFilter, Lens, Metertype, NodeGroup, NodeReference, ParabolicMirror, ParaxialSurface,
-        RayPropagationVisualizer, ReflectiveGrating, SourcePort, Spectrometer, SpectrometerType,
-        SpotDiagram, ThinMirror, WaveFront, Wedge, collimated_line_ray_builder,
+        BeamSplitter, BoredMirror, ConnectionInfo, CylindricLens, Dummy, EnergyMeter,
+        FluenceDetector, IdealFilter, Lens, Metertype, NodeGroup, NodeReference, ParabolicMirror,
+        ParaxialSurface, RayPropagationVisualizer, ReflectiveGrating, SourcePort, Spectrometer,
+        SpectrometerType, SpotDiagram, ThinMirror, WaveFront, Wedge, collimated_line_ray_builder,
         ideal_filter::{
             BandFilter, BandFilterType, EdgeFilter, EdgeFilterType, FilterTypeBuilder,
             SpectralFilterBuilder,

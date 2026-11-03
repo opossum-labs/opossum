@@ -136,7 +136,7 @@ pub enum Proptype {
     Metertype(Metertype),
     /// An [`Uuid`] for identifying an optical node.
     Uuid(Uuid),
-    /// The optic shape of a component: an outline on its axis with bores through it.
+    /// The optic shape of a component: an outline on its axis, possibly with a bore through it.
     OpticShape(OpticShape),
     /// A property for storing a [`Spectrum`].
     Spectrum(Spectrum),

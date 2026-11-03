@@ -1,7 +1,6 @@
 use crate::{
     analyzers::energy::{AnalysisEnergy, EnergyConfig},
     core_optics::{NodeAttrExt, node_attr::HasNodeAttr},
-    error::OpossumError,
     light::{LightData, LightResult},
     nodes::SourcePort,
 };
@@ -16,9 +15,11 @@ impl AnalysisEnergy for SourcePort {
         if self.inverted() {
             return Ok(LightResult::default());
         }
-        let energy_data_builder = config.get_source(&self.node_attr().uuid()).ok_or_else(|| {
-            OpossumError::Analysis(format!("No source data found in analyzer for {self}"))
-        })?;
+        let Some(energy_data_builder) =
+            self.light_or_warn(config.get_source(&self.node_attr().uuid()))
+        else {
+            return Ok(LightResult::default());
+        };
         Ok(LightResult::from([(
             "output_1".into(),
             LightData::Energy(energy_data_builder.build()?),
@@ -33,17 +34,16 @@ mod test {
     };
 
     use super::*;
+    /// A source the analysis defines no light for sends out none, and says so.
     #[test]
-    fn analyze_energy_no_source_definition() {
+    fn analyze_energy_no_source_definition() -> OpmResult<()> {
         let mut node = SourcePort::default();
-        let output_error =
-            AnalysisEnergy::analyze(&mut node, LightResult::default(), &EnergyConfig::default())
-                .unwrap_err();
-        assert!(
-            output_error
-                .to_string()
-                .contains("No source data found in analyzer for")
-        );
+        testing_logger::setup();
+        let output =
+            AnalysisEnergy::analyze(&mut node, LightResult::default(), &EnergyConfig::default())?;
+        assert!(output.is_empty());
+        crate::utils::test_helper::helper::assert_warned("has no light in this analysis");
+        Ok(())
     }
     #[test]
     fn analyze_energy_ok() -> OpmResult<()> {

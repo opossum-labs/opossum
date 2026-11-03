@@ -422,27 +422,29 @@ mod test {
     fn bounding_box_expands_for_mapped_ports() {
         let node = NodeElement::from(&sample_node_info());
         let default_box = node.get_bounding_box();
-        assert_eq!(default_box.width(), NODE_WIDTH);
+        assert!((default_box.width() - NODE_WIDTH).abs() < f64::EPSILON);
 
         let input_mapped_box = node.get_bounding_box_with_mapped_ports(true, false);
-        assert_eq!(
-            input_mapped_box.origin.x,
-            default_box.origin.x - PORT_MAP_OVERHANG
+        assert!(
+            (input_mapped_box.origin.x - (default_box.origin.x - PORT_MAP_OVERHANG)).abs()
+                < f64::EPSILON
         );
-        assert_eq!(input_mapped_box.width(), NODE_WIDTH + PORT_MAP_OVERHANG);
+        assert!((input_mapped_box.width() - (NODE_WIDTH + PORT_MAP_OVERHANG)).abs() < f64::EPSILON);
 
         let output_mapped_box = node.get_bounding_box_with_mapped_ports(false, true);
-        assert_eq!(output_mapped_box.origin.x, default_box.origin.x);
-        assert_eq!(output_mapped_box.width(), NODE_WIDTH + PORT_MAP_OVERHANG);
+        assert!((output_mapped_box.origin.x - default_box.origin.x).abs() < f64::EPSILON);
+        assert!(
+            (output_mapped_box.width() - (NODE_WIDTH + PORT_MAP_OVERHANG)).abs() < f64::EPSILON
+        );
 
         let both_mapped_box = node.get_bounding_box_with_mapped_ports(true, true);
-        assert_eq!(
-            both_mapped_box.origin.x,
-            default_box.origin.x - PORT_MAP_OVERHANG
+        assert!(
+            (both_mapped_box.origin.x - (default_box.origin.x - PORT_MAP_OVERHANG)).abs()
+                < f64::EPSILON
         );
-        assert_eq!(
-            both_mapped_box.width(),
-            NODE_WIDTH + 2.0 * PORT_MAP_OVERHANG
+        assert!(
+            (both_mapped_box.width() - (2.0f64.mul_add(PORT_MAP_OVERHANG, NODE_WIDTH))).abs()
+                < f64::EPSILON
         );
     }
 }

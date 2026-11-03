@@ -1,0 +1,15 @@
+[package]
+name = "actix-viewer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Example actix-web server streaming optoscene frames to a three.js viewer"
+publish = false
+
+[dependencies]
+optoscene = { path = "../../crates/optoscene", features = ["protocol", "fixtures"] }
+nalgebra.workspace = true
+actix-web = "4"
+actix-ws = "0.3"
+tokio = { version = "1", features = ["sync", "time", "macros"] }

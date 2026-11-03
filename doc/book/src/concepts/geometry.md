@@ -76,6 +76,18 @@ When a component is set to `absolute`, OPOSSUM places it at the defined coordina
 
 > **Important Caveat:** When using absolute placement, the distance value specified in the connection *before* the component is **completely ignored**.
 
+### Sources in Front of a Component
+
+A `Sourceport` is placed absolutely at the origin by default. Set its `Position` property to `automatic` instead, and OPOSSUM places it in front of the component it feeds: the source's beam leaves it at the distance of the connection before that component and runs along the component's axis, the way the component sits. This needs the component to be placed by something else — another source, an absolute position or, for a reference node, the component it refers to. The source's `Alignment` then shifts and tilts it from there, so a second beam can, for example, enter a lens slightly off its axis.
+
+The source does not have to feed that component directly. Between them may be a whole chain of components no optical axis reaches — lenses, mirrors, gratings. OPOSSUM places such a chain back to front: the last component in front of the placed one, the one before it in front of that, and the source last. Each component is placed by what it does to the optical axis: a lens passes it straight on, a tilted mirror is turned so that its reflection meets what follows it, and a grating diffracts it there at the wavelength of the source feeding the chain. The `Alignment` of such a component is part of what it does to the axis — a mirror's tilt is its alignment — and so decides where the components before it, and the source, end up. Only the source's own alignment is a deviation, as above. Once placed, the chain is traced front to back: the source's optical axis runs through it to the placed component, where the 3D view ends it.
+
+A source, or a chain, that cannot be placed this way is not placed at all: OPOSSUM warns, and the source sends out no light. That happens if nothing the chain feeds is placed, if the light would pass the component against the way it is placed (a reference node turned other than the component it refers to), if the component has no surface of its own where the light enters it, as a group, or if no optical axis leaves a component of the chain at the port that leads on.
+
+A component that is placed automatically waits for the light of every source feeding it — a beam combiner, say. An automatic source, or a chain, in front of it is then held back: the combiner is placed by its other input first, and the chain is placed in front of it afterwards.
+
+A source that an analysis defines no light for sends out none in that analysis: OPOSSUM warns, and everything else is placed, traced and drawn as usual.
+
 ## Pitfalls of Relative Positioning
 
 While relative positioning is convenient, it can lead to geometric inconsistencies in complex setups. Below are common edge cases to watch for.
@@ -98,13 +110,15 @@ OPOSSUM must decide where to place the Beam Combiner in 3D space. The logic is a
 1. **Placement:** The Beam Combiner is placed from the beam reaching its **first input** (`input_1`) — deterministically, independently of the order in which the two arms happen to be traced. Here that puts it at the end of the 100 mm Arm 1.
 2. **Consistency check:** The axis reaching the **second input** (`input_2`) is then checked against that placement. Since Arm 2 is 200 mm long, its beam does not meet the Combiner where Arm 1 placed it.
 
-**Result:** OPOSSUM keeps the placement from `input_1` and issues a **warning**. The warning does more than flag the problem: it reports how far the second beam is off (in direction, in distance along the axis, and as a sideways miss), the connection length that would remove the along-axis error, and the exact position and direction the second arm would need at its predecessor to be consistent. Use it to correct the offending connection distance or alignment; you must verify warnings in split-path setups.
+**Result:** OPOSSUM keeps the placement from `input_1` and issues a **warning**. The warning does more than flag the problem: it reports how far the second beam is off (in direction, in distance along the axis, and as a sideways miss), the connection length that would remove the along-axis error, and the exact position and direction the second arm would need at its predecessor to be consistent. Use it to correct the offending connection distance or alignment; you must verify warnings in split-path setups. The axes of both arms run on through the combiner all the same, so in the 3D view an inconsistent second arm shows as a second axis leaving the combiner beside the first.
 
 ### Two Sources on One Combiner
 
 A beam combiner can also be fed by two independent sources rather than by two arms of one split beam. Every source is placed at the global origin by default, so two sources both start at `(0, 0, 0)` — which is almost never what a real two-arm setup looks like, and the combiner's consistency check (above) will warn.
 
 To resolve this, give the **second** source an absolute position: in the `Node Editor`, set its `Position` property to `absolute` (see [Absolute Placement](#absolute-placement)). You do not have to work out the pose by hand — the combiner's warning prints the exact start point and direction the `input_2` beam needs; enter those as the second source's absolute position and orientation. The first source stays at the origin as the anchor of the system.
+
+Alternatively, set the second source's `Position` to `automatic`: it is then placed in front of the combiner's `input_2`, at the distance of its connection, and its beam meets the first one by construction (see [Sources in Front of a Component](#sources-in-front-of-a-component)).
 
 ### Misaligned Absolute Components
 
@@ -131,6 +145,7 @@ The same happens if the axis reaches a component but passes it outside its `opti
 
 **Behavior:**
 
-1. **Original Node:** During the positioning run, the "real" node is placed normally.
-2. **Reference Node:** When the reference node is encountered, OPOSSUM attempts to route the beam back to the location of the "real" node.
-3. **Conflict Check:** Similar to the Beam Combiner scenario, if the calculated optical path does not align perfectly with the "real" node's existing position, the placement fails, and a warning is issued.
+1. **Original Node:** During the positioning run, the "real" node is placed by its own input, like any other node — whatever order the nodes were added to the model in. A reference elsewhere does not move it.
+2. **Reference Node:** A reference node takes the placement of the "real" node. The light reaching it passes the "real" node where that node sits; the distance of the connection into the reference is ignored, just as for an absolutely placed component, and the editor does not offer it.
+3. **Forward Reference:** If the light reaches a reference node before the "real" node — the first pass of a double pass whose "real" node only comes later on the path — the reference places the "real" node, by the distance of the connection into the reference. The editor offers that distance, as it does for the connection from an automatic source in front of a reference (see [Sources in Front of a Component](#sources-in-front-of-a-component)).
+4. **Twice in a Row:** A node connected directly to a reference to it, or two references to the same node connected to each other, says that the light passes the component twice in a row. That is a shorthand only an energy analysis can follow — it counts how often the light passes, as for a multi-pass amplifier. A ray needs something between the passes to turn it back, so placing such a model (ray tracing, the 3D view) says so: as an error while components after the second pass are still to be placed, as a warning when the second pass ends the setup.

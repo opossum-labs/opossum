@@ -5,6 +5,7 @@ pub mod inputs;
 pub mod logger;
 pub mod menu_bar;
 pub mod node_editor;
+pub mod scene_view;
 pub mod scenery_editor;
 pub mod settings_dialog;
 pub mod short_cuts;

@@ -1,7 +1,7 @@
 use super::Lens;
 use crate::{
     analyzers::{GhostFocusConfig, ghostfocus::AnalysisGhostFocus},
-    core_optics::Volumetric,
+    core_optics::OpticNodeExt,
     error::OpmResult,
     light::{LightRays, Rays},
 };

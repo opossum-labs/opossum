@@ -9,7 +9,7 @@
 //! 1. Grid-sampled point ray source
 //! 2. 75 mm lens as primary optical element
 //! 3. Thin mirror with a 0.5° tilt angle
-//! 4. NodeReference linked to the first lens, with inverted propagation enabled
+//! 4. `NodeReference` linked to the first lens, with inverted propagation enabled
 //! 5. Ray propagation visualizer
 //! 6. Point-source ray-tracing configuration
 //! 7. Ray-tracing analyzer

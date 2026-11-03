@@ -51,7 +51,7 @@ fn main() -> OpmResult<()> {
         spect_dist.into(),
     ));
     let rays = ray_data_source.clone().build()?;
-    println!("# of rays {}", rays.nr_of_rays(true),);
+    println!("# of rays {}", rays.nr_of_rays(true));
     let focal_length = millimeter!(100.0);
     let p = millimeter!(0.0);
     let beam_size = millimeter!(10.0) * (p - focal_length) / focal_length;

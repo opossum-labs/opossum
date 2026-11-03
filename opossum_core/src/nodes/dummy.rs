@@ -16,6 +16,7 @@ use crate::{
     geometry::{Geometry, body::OPTIC_SHAPE},
     light::LightResult,
     nodes::NodeRegistration,
+    properties::validator::Validator,
 };
 
 inventory::submit! {
@@ -54,9 +55,13 @@ impl Default for Dummy {
     fn default() -> Self {
         let mut node_attr = NodeAttr::new("dummy");
         node_attr
-            .create_property(
+            .create_property_with_validator(
                 OPTIC_SHAPE,
                 "transversal extent of the surface, open for an unbounded one",
+                Validator::OpticShape {
+                    may_be_open: true,
+                    bored: false,
+                },
                 OpticShape::Open.into(),
             )
             .expect("Failed to declare dummy properties");

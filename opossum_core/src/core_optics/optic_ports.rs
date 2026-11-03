@@ -72,9 +72,10 @@ pub struct SurfacePorts {
     /// The output ports light leaves through: their (physical) names and the face each one sits
     /// on.
     pub outputs: &'static [(&'static str, FaceIndex)],
-    /// The faces at which the node follows both parts of the light, the transmitted and the
-    /// reflected one; at every other face it follows only one of them. Such a splitting face takes
-    /// only a separator coating, every other face any coating but a separator.
+    /// The faces whose coating is the split of the light into the transmitted and the reflected
+    /// part, both of which the node follows. Such a splitting face takes only a separator coating,
+    /// every other face any coating but a separator. A node may follow both parts at another face
+    /// too, such as a bored mirror, whose bore splits the light and whose face is a mirror.
     pub splitting: &'static [FaceIndex],
 }
 

@@ -12,8 +12,14 @@ use crate::components::{
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_core::{prelude::*, types::api_types::ConnectInfo};
 
+/// Draw one connection with the field for its distance.
+///
+/// The distance of a connection into a reference usually places nothing - the reference takes the
+/// placement of the node it refers to - so its field is offered only where `distance_places` says
+/// it does: into a reference the light reaches before that node, or with a source standing in
+/// front of it.
 #[component]
-pub fn EdgeComponent(edge: ReadStore<EdgeElement>) -> Element {
+pub fn EdgeComponent(edge: ReadStore<EdgeElement>, distance_places: bool) -> Element {
     let edge = edge();
     let graph_state = use_context::<ReadStore<GraphState>>();
     let graph_store = graph_state.graph_store();
@@ -53,7 +59,7 @@ pub fn EdgeComponent(edge: ReadStore<EdgeElement>) -> Element {
         f64::midpoint(start_position().x, end_position().x) - EDGE_DISTANCE_FIELD_WIDTH / 2.0,
         f64::midpoint(start_position().y, end_position().y) - EDGE_DISTANCE_FIELD_HEIGHT / 2.0,
     );
-    let targets_reference = edge.targets_reference();
+    let distance_offered = !edge.targets_reference() || distance_places;
 
     // Construct persistent, deterministic test IDs for path and input field separately
     let edge_test_id = format!("edge-{}", edge.edge_index());
@@ -91,7 +97,7 @@ pub fn EdgeComponent(edge: ReadStore<EdgeElement>) -> Element {
             div {
                 // Test ID for targeting the distance input field box specifically
                 "data-testid": "{edge_input_test_id}",
-                hidden: targets_reference,
+                hidden: !distance_offered,
                 pointer_events: "auto",
                 class: "input-with-unit",
                 style: "display: flex; align-items: center; background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 0 8px; box-sizing: border-box;",
@@ -110,7 +116,7 @@ pub fn EdgeComponent(edge: ReadStore<EdgeElement>) -> Element {
                     ),
                     label: "distance".to_string(),
                     value: edge.distance(),
-                    readonly: edge.targets_reference(),
+                    readonly: !distance_offered,
                     unit_config: UnitHandling::new("m", true),
                     onchange: {
                         let connect_info: ConnectInfo = edge.info().clone();

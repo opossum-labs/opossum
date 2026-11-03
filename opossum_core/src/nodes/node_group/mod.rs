@@ -58,6 +58,8 @@ pub struct NodeGroup {
     input_port_distances: BTreeMap<String, Length>,
     #[serde(skip)]
     accumulated_rays: Vec<HashMap<Uuid, Rays>>,
+    #[serde(skip)]
+    ray_ends: Vec<Rays>,
 }
 
 impl Analyzable for NodeGroup {
@@ -81,6 +83,7 @@ impl Default for NodeGroup {
             input_port_distances: BTreeMap::default(),
             node_attr,
             accumulated_rays: Vec::<HashMap<Uuid, Rays>>::new(),
+            ray_ends: Vec::<Rays>::new(),
         }
     }
 }
@@ -309,6 +312,19 @@ impl NodeGroup {
     /// Returns [`OpossumError::OpticScenery`] if the node does not exist.
     pub fn node_recursive(&self, node_id: Uuid) -> OpmResult<(OpticRef, Uuid)> {
         self.graph.node_recursive(node_id, self.node_attr().uuid())
+    }
+
+    /// Return the UUID of the group holding the node `node_id`, or `node_id` itself if it names this
+    /// group: the root has no parent to report, so it stands in for its own.
+    ///
+    /// # Errors
+    /// Returns [`OpossumError::OpticScenery`] if the node does not exist.
+    pub fn parent_group_id_or_self(&self, node_id: Uuid) -> OpmResult<Uuid> {
+        if node_id == self.node_attr().uuid() {
+            Ok(node_id)
+        } else {
+            Ok(self.node_recursive(node_id)?.1)
+        }
     }
 
     /// Execute a read-only operation on the `NodeGroup` identified by `node_id`.
@@ -685,6 +701,35 @@ impl NodeGroup {
             }
         }
         Ok(analysis_report)
+    }
+
+    /// Returns the ray bundles that exited this group through unconnected, unmapped output ports.
+    ///
+    /// Bundles are only collected by walks
+    /// ([`analyze`](crate::analyzers::raytrace::AnalysisRayTrace::analyze) or
+    /// [`calc_node_positions`](crate::analyzers::raytrace::AnalysisRayTrace::calc_node_positions))
+    /// run with [`RayTraceConfig::collect_ray_ends`](crate::analyzers::RayTraceConfig::collect_ray_ends)
+    /// set; otherwise this list stays empty. Every such walk *appends*: a group that light passes
+    /// twice in one run (e.g. via two references) keeps the ends of both passes. Set the flag only
+    /// on a fresh copy of a model, e.g. one created from its file string — the list is never
+    /// saved, so such a copy starts empty.
+    ///
+    /// The returned list contains this group's own ray ends first, followed by the ray ends of
+    /// nested [`NodeGroup`] nodes in node-index order.  An inner group contributes its ends
+    /// only when its output ports are **not** mapped to the parent's external output ports; a
+    /// mapped port's data flows out through the parent chain and is **not** duplicated here.
+    ///
+    /// **Limitation**: light that enters a node with no output port at all is not recorded —
+    /// the last propagation leg to that absorbing node is missing from this list.
+    #[must_use]
+    pub fn ray_ends(&self) -> Vec<&Rays> {
+        let mut result: Vec<&Rays> = self.ray_ends.iter().collect();
+        for node_ref in self.nodes() {
+            if let Some(group) = node_ref.as_any().downcast_ref::<Self>() {
+                result.extend(group.ray_ends());
+            }
+        }
+        result
     }
 
     /// Returns a reference to the accumulated rays after ghost focus analysis.
@@ -1081,6 +1126,25 @@ mod test {
         assert_eq!(top_group.connections().len(), 1);
         assert!(top_group.exists(n_inside));
 
+        Ok(())
+    }
+
+    /// The root reports itself, every other node the group holding it however deep it sits, and an
+    /// unknown uuid is an error.
+    #[test]
+    fn parent_group_id_or_self() -> OpmResult<()> {
+        let mut top_group = NodeGroup::new("top_group");
+        let top_id = top_group.node_attr().uuid();
+        let mut inner_group = NodeGroup::new("inner_group");
+        let n_inside = inner_group.add_node(Dummy::new("inside_node"))?;
+        let inner_id = top_group.add_node(inner_group)?;
+        let n_top = top_group.add_node(Dummy::new("top_node"))?;
+
+        assert_eq!(top_group.parent_group_id_or_self(top_id)?, top_id);
+        assert_eq!(top_group.parent_group_id_or_self(n_top)?, top_id);
+        assert_eq!(top_group.parent_group_id_or_self(inner_id)?, top_id);
+        assert_eq!(top_group.parent_group_id_or_self(n_inside)?, inner_id);
+        assert!(top_group.parent_group_id_or_self(Uuid::new_v4()).is_err());
         Ok(())
     }
 }

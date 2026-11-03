@@ -24,4 +24,56 @@ but it can also be connected to large industrial machines.
 Because the CLI works with the `Rust` programming language, it talks directly to the core library
 without needing a server in the middle.
 
-![Toplevel architecture](./images/overall_architecture.svg)
+![Toplevel architecture](../../images/overall_architecture.svg)
+
+## How a model becomes a picture
+
+The 3D view is a good example of the above in miniature, and of one rule worth stating explicitly.
+
+The geometry comes from `opossum_core`, which knows the shape of every component. The file format
+comes from `optoscene`, a small export crate that knows glTF and nothing about optics. Between the two
+sits `opossum_scene`: it decides what of a model is drawn and in which material, and hands the result
+to `optoscene`. The backend only calls it and serves the bytes. The drawing is done by
+`dioxus_glb_viewer`, a viewer component that knows three.js and nothing about optics either.
+
+![How a model reaches the 3D view](../../images/scene_view_dataflow.svg)
+
+**The two export crates know nothing about each other, and that is deliberate.** `optoscene` never
+mentions a viewer, `dioxus_glb_viewer` never mentions a scene, and neither depends on the other in
+either direction. Everything that translates one into the other sits in one function in the GUI. Each
+crate is therefore replaceable on its own, and each is useful outside OPOSSUM.
+
+Two endpoints rather than one is what keeps a live view cheap. The manifest is small and is refetched
+whenever the model changes; it says which components exist, what each one looks like as a hash, and
+where it sits. A component's geometry is fetched separately, and only when that hash says its shape
+really changed. Moving a lens therefore costs a new position and no geometry at all.
+
+Drawn light takes the same way with two endpoints of its own, one for the optical axis and one for
+the rays of the analyzer's sources. Both are traced on a copy of the model, and the core hands back
+the ray bundles that leave the setup, each ray carrying the whole path it took. Keeping those
+bundles is an opt-in of the ray-trace configuration that only these copies switch on, so a real
+analysis never pays for it. How much of the sources' light is drawn is decided in `opossum_scene`:
+it shares the rays to draw among the sources, coarsens each of them so that every ray shines one
+wavelength of its spectrum, and has the core trace them through the placed model. It then turns
+the paths into glTF lines in world coordinates, which the viewer draws over the components as they
+are, without moving them.
+
+The manifest names that light by a digest as well, one for each of the two files as its endpoint
+would serve it, and the view puts the digest into the file's address. So the axis or the rays are
+fetched again only when they came out different, and an edit that leaves the light as it was — an
+analyzer the view does not follow, an amplifier — redraws nothing. The digest of the rays costs a
+trace of its own, which is why the manifest only computes it while the view draws rays.
+
+The rule behind the split is that the core describes and `opossum_scene` draws. The core holds what
+a simulation needs: faces, outlines, coatings, materials. Everything that serves only the picture
+belongs in `opossum_scene`. How each node type looks is decided there, in a table keyed by the
+node type, so the core holds no look at all. Turning a geometry into triangles is done there too:
+the core describes each shape (its kind, faces, frames, outlines and bores) and answers where a
+face lies above a point; every kind of geometry is meshed by an implementation of its own in
+`opossum_scene`, and a new kind in the core does not compile until it is.
+
+`optoscene` does bring a streaming protocol of its own, which computes the minimal set of update
+messages between two scenes. OPOSSUM does not use it. The viewer already performs the same kind of
+comparison on the object list it is handed, at the same granularity, so decoding those messages would
+only rebuild a list the viewer then diffs a second time. The feature stays switched off on purpose —
+it is not an oversight.
