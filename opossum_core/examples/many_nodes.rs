@@ -20,7 +20,7 @@ fn main() -> OpmResult<()> {
     for row in 0..rows {
         for col in 0..cols {
             // Unique identifier for each node
-            let node_name = format!("dummy_{}_{}", row, col);
+            let node_name = format!("dummy_{row}_{col}");
             let mut dummy_node = Dummy::new(&node_name);
 
             // Compute the GUI canvas position for the current grid coordinate
