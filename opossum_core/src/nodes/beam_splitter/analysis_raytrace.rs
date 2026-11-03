@@ -592,8 +592,8 @@ mod test {
         let mut bs = BeamSplitter::new("bs", &SplittingConfigBuilder::FixedRatio(0.5))?;
         bs.set_alignment(millimeter!(0., 0., 0.), degree!(0., 45., 0.))?;
         let bs = scenery.add_node(bs)?;
-        // The reference is added after the (still unplaced) beam splitter and sits before it in the
-        // beam path, so it is a forward reference: it is positioned first and then places the target.
+        // The reference is reached while the beam splitter it refers to is still unplaced, so it is
+        // a forward reference: it is positioned first and then places the target.
         let bs_ref = NodeReference::from_node(&scenery.node(bs)?)?;
         let bs_ref = scenery.add_node(bs_ref)?;
         let dummy = scenery.add_node(Dummy::new("out"))?;
@@ -601,11 +601,10 @@ mod test {
         scenery.connect_nodes(
             bs_ref,
             "out2_trans2_refl1",
-            bs,
+            dummy,
             "input_1",
             millimeter!(50.0),
         )?;
-        scenery.connect_nodes(bs, "out1_trans1_refl2", dummy, "input_1", millimeter!(50.0))?;
 
         let mut config = RayTraceConfig::default();
         config.map_source(

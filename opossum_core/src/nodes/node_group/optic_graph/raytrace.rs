@@ -299,6 +299,19 @@ impl OpticGraph {
         })
     }
 
+    /// Returns whether the node at `idx` is the same component as a node feeding it directly: a
+    /// node and a reference to it, or two references to the same node.
+    fn passes_its_predecessor_again(&self, idx: NodeIndex) -> bool {
+        let passed = |idx: NodeIndex| {
+            self.g[idx]
+                .referenced_node_id()
+                .unwrap_or_else(|| self.g[idx].uuid())
+        };
+        self.g
+            .neighbors_directed(idx, Direction::Incoming)
+            .any(|predecessor| passed(predecessor) == passed(idx))
+    }
+
     /// Marks the connection into port `port` of the node at `idx` as one whose distance placed a
     /// node in this positioning run (see
     /// [`LightFlow::placed_by_distance`](crate::light::LightFlow::placed_by_distance)).
@@ -526,6 +539,13 @@ fn execute_node_calculation(
     incoming_edges: LightResult,
     config: &RayTraceConfig,
 ) -> OpmResult<LightResult> {
+    if graph.passes_its_predecessor_again(node_idx) {
+        return Err(OpossumError::Analysis(format!(
+            "{} is passed twice in a row, which only an energy analysis can follow: a ray needs \
+             something between the passes to turn it back",
+            graph.g[node_idx]
+        )));
+    }
     if graph.g[node_idx].referenced_node_id().is_some() {
         graph.evaluate_node_or_reference(node_idx, |node| {
             AnalysisRayTrace::analyze(&mut **node, incoming_edges, config)
@@ -648,7 +668,7 @@ mod test {
             round_collimated_ray_builder,
         },
         percent,
-        utils::geom_transformation::Isometry,
+        utils::{geom_transformation::Isometry, test_helper::helper::assert_warned},
     };
     use approx::assert_relative_eq;
     use nalgebra::{MatrixXx3, Point3, Vector3};
@@ -1287,6 +1307,44 @@ mod test {
             &config.for_positioning(),
         )?;
         assert_eq!(placed_by_distance(&scenery), Vec::<(Uuid, Uuid)>::new());
+        Ok(())
+    }
+    /// A component chained to a reference to it says the light passes it twice - a shorthand only
+    /// an energy analysis can follow, as no ray meets a component again without something turning
+    /// it back in between. Placing such a model says so: as an error while components after the
+    /// second pass are still to be placed, as a warning when it ends the setup.
+    #[test]
+    fn a_component_passed_twice_in_a_row_cannot_be_placed() -> OpmResult<()> {
+        for with_successor in [true, false] {
+            let mut scenery = NodeGroup::default();
+            let source = scenery.add_node(SourcePort::default())?;
+            let lens = scenery.add_node(Dummy::new("lens"))?;
+            let again = scenery.add_node(NodeReference::from_node(&scenery.node(lens)?)?)?;
+            scenery.connect_nodes(source, "output_1", lens, "input_1", millimeter!(100.0))?;
+            scenery.connect_nodes(lens, "output_1", again, "input_1", millimeter!(10.0))?;
+            if with_successor {
+                let screen = scenery.add_node(Dummy::new("screen"))?;
+                scenery.connect_nodes(again, "output_1", screen, "input_1", millimeter!(10.0))?;
+            }
+            let mut config = RayTraceConfig::default();
+            config.map_source(
+                source,
+                round_collimated_ray_builder(millimeter!(1.0), joule!(1.0), 1)?,
+            );
+            testing_logger::setup();
+            let placed = AnalysisRayTrace::calc_node_positions(
+                &mut scenery,
+                LightResult::default(),
+                &config.for_positioning(),
+            );
+            if with_successor {
+                let error = placed.expect_err("the components after the second pass are lost");
+                assert!(error.to_string().contains("twice in a row"), "{error}");
+            } else {
+                placed?;
+                assert_warned("twice in a row");
+            }
+        }
         Ok(())
     }
 }
