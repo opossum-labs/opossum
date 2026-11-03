@@ -236,13 +236,21 @@ impl OpticGraph {
     fn place_in_front_of_successor(&mut self, idx: NodeIndex) -> OpmResult<InFront> {
         let mut refused = false;
         let node_info = format!("{}", self.g[idx]);
-        let connections = self.get_outgoing_connection_info_of_node(self.g[idx].uuid());
         let geometry = self.g[idx].create_geometry()?;
         for port in self.g[idx].ports().names(&PortType::Output) {
-            let Some(connection) = connections.iter().find(|c| c.src_port == port) else {
-                continue;
-            };
-            let Some(successor) = self.node_idx_by_uuid(connection.target_id) else {
+            let Some((successor, entrance, distance)) = self
+                .g
+                .edges_directed(idx, Direction::Outgoing)
+                .find(|edge| edge.weight().src_port() == port)
+                .map(|edge| {
+                    let flow = edge.weight();
+                    (
+                        edge.target(),
+                        flow.target_port().to_owned(),
+                        *flow.distance(),
+                    )
+                })
+            else {
                 continue;
             };
             let inverted = self.g[successor].inverted();
@@ -260,10 +268,9 @@ impl OpticGraph {
                 refused = true;
                 continue;
             }
-            if passed.face_of_port(&connection.target_port).is_err() {
+            if passed.face_of_port(&entrance).is_err() {
                 warn!(
-                    "{node_info} cannot be placed in front of {passed}: it has no surface at port '{}' to tell where the light enters it",
-                    connection.target_port
+                    "{node_info} cannot be placed in front of {passed}: it has no surface at port '{entrance}' to tell where the light enters it"
                 );
                 refused = true;
                 continue;
@@ -276,12 +283,13 @@ impl OpticGraph {
             else {
                 continue;
             };
+            let successor_id = self.g[successor].uuid();
             let in_front = placed
-                .append(&self.axis_entrance_frame_of(connection.target_id, &connection.target_port))
-                .append(&Isometry::new_along_z(-connection.distance)?)
+                .append(&self.axis_entrance_frame_of(successor_id, &entrance))
+                .append(&Isometry::new_along_z(-distance)?)
                 .append(&Isometry::new_from_transform(exit.get_inv_transform()));
             self.g[idx].set_positioning(NodePositioning::Automatic(Some(in_front)))?;
-            self.mark_placed_by_distance(successor, &connection.target_port);
+            self.mark_placed_by_distance(successor, &entrance);
             return Ok(InFront::Placed);
         }
         Ok(if refused {
@@ -328,13 +336,12 @@ enum InFront {
 /// waiting for its light, say - it is put back: the nodes after it go on without it, and it is
 /// offered once more when no other node is left. Ties go by node index.
 struct PlacingOrder {
-    /// The rank of every node, by its index: 0 for an ordinary node, 1 for a reference, 2 for a
-    /// node no axis reaches that is not placed.
-    ranks: Vec<u8>,
+    /// The rank of every node, by its index.
+    ranks: Vec<Rank>,
     /// How many of its predecessors every node, by its index, still waits for.
     waiting: Vec<usize>,
     /// The nodes ready to be visited, by rank and index.
-    ready: BTreeSet<(u8, NodeIndex)>,
+    ready: BTreeSet<(Rank, NodeIndex)>,
     /// The nodes put back, to be offered once more at the end.
     put_back: VecDeque<NodeIndex>,
 }
@@ -355,12 +362,14 @@ impl PlacingOrder {
             .node_indices()
             .map(|idx| {
                 Ok(if graph.is_unreached_and_unplaced(idx)? {
-                    2
+                    Rank::Unreached
+                } else if graph.g[idx].referenced_node_id().is_some() {
+                    Rank::Reference
                 } else {
-                    u8::from(graph.g[idx].referenced_node_id().is_some())
+                    Rank::Ordinary
                 })
             })
-            .collect::<OpmResult<Vec<u8>>>()?;
+            .collect::<OpmResult<Vec<Rank>>>()?;
         let waiting: Vec<usize> = graph
             .g
             .node_indices()
@@ -406,6 +415,18 @@ impl PlacingOrder {
         self.release(graph, idx);
         self.put_back.push_back(idx);
     }
+}
+
+/// How early a positioning run visits a node that is ready (see `PlacingOrder`).
+#[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord)]
+enum Rank {
+    /// An ordinary node, visited first.
+    #[default]
+    Ordinary,
+    /// A reference, visited after the ordinary nodes.
+    Reference,
+    /// A node no axis reaches that is not placed yet, visited last.
+    Unreached,
 }
 
 fn position_node(
