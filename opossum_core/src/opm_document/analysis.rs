@@ -126,7 +126,8 @@ impl OpmDocument {
     /// This function returns an error if the model has no source port or no analyzer, if the
     /// named analyzer does not exist, or if the positioning run itself fails.
     pub fn placed_scenery(&self, analyzer_id: Option<Uuid>) -> OpmResult<NodeGroup> {
-        let mut scenery = self.placed_copy(&self.placing_config(analyzer_id)?)?;
+        let (mut scenery, run) = self.placing_run(&self.placing_config(analyzer_id)?)?;
+        run?;
         scenery.reset_data();
         Ok(scenery)
     }
@@ -157,12 +158,9 @@ impl OpmDocument {
         let mut config = self.placing_config(analyzer_id)?;
         // Only copies collect ray ends, so the scenery the copy came from holds none.
         config.set_collect_ray_ends(true);
-        Ok(self
-            .placed_copy(&config)?
-            .ray_ends()
-            .into_iter()
-            .cloned()
-            .collect())
+        let (scenery, run) = self.placing_run(&config)?;
+        run?;
+        Ok(scenery.ray_ends().into_iter().cloned().collect())
     }
 
     /// Returns the connections of a group of this model whose distance places a node when the
@@ -171,7 +169,9 @@ impl OpmDocument {
     /// A distance places a node when the node it leads to is placed along it, or when the node it
     /// comes from stands in front of where it leads. A distance into a node placed absolutely, or
     /// into a reference taking the placement of the node it refers to, places nothing. The model
-    /// is placed on a copy, as for [`placed_scenery`](OpmDocument::placed_scenery).
+    /// is placed on a copy, as for [`placed_scenery`](OpmDocument::placed_scenery). A placement
+    /// that stops part way still lists the distances that placed a node before it stopped; why it
+    /// stopped is what [`placed_scenery`](OpmDocument::placed_scenery) answers.
     ///
     /// # Arguments
     ///
@@ -186,18 +186,19 @@ impl OpmDocument {
     ///
     /// # Errors
     ///
-    /// This function returns an error in the same cases as
-    /// [`placed_scenery`](OpmDocument::placed_scenery), or if the model has no group `group_id`.
+    /// This function returns an error if the model has no source port or no analyzer, if the
+    /// named analyzer does not exist, if a node cannot rebuild its surfaces, or if the model has
+    /// no group `group_id`.
     pub fn placing_connections(
         &self,
         analyzer_id: Option<Uuid>,
         group_id: Uuid,
     ) -> OpmResult<Vec<ConnectionInfo>> {
-        self.placed_copy(&self.placing_config(analyzer_id)?)?
-            .with_group_node(group_id, |group| group.graph().placing_connections())
+        let (scenery, _) = self.placing_run(&self.placing_config(analyzer_id)?)?;
+        scenery.with_group_node(group_id, |group| group.graph().placing_connections())
     }
 
-    /// Returns a copy of this model's scenery, placed by a positioning run.
+    /// Runs a positioning run on a copy of this model's scenery.
     ///
     /// An edit writes a position or a property into a node without the node rebuilding its
     /// surfaces, so the copy rebuilds them first, as a ray trace does: a source then sends its axis
@@ -209,17 +210,21 @@ impl OpmDocument {
     ///
     /// # Returns
     ///
-    /// The placed copy, with the data the run left on it.
+    /// The copy, placed as far as the run got and with the data the run left on it, and what the
+    /// run gave: an error if it stopped part way.
     ///
     /// # Errors
     ///
-    /// This function returns an error if a node cannot rebuild its surfaces or if the positioning
-    /// run fails.
-    fn placed_copy(&self, config: &RayTraceConfig) -> OpmResult<NodeGroup> {
+    /// This function returns an error if a node cannot rebuild its surfaces.
+    fn placing_run(
+        &self,
+        config: &RayTraceConfig,
+    ) -> OpmResult<(NodeGroup, OpmResult<LightResult>)> {
         let mut scenery = self.scenery.clone();
         scenery.rebuild_surfaces()?;
-        AnalysisRayTrace::calc_node_positions(&mut scenery, LightResult::default(), config)?;
-        Ok(scenery)
+        let run =
+            AnalysisRayTrace::calc_node_positions(&mut scenery, LightResult::default(), config);
+        Ok((scenery, run))
     }
 
     /// Returns the configuration a positioning run of this model starts from.
@@ -362,7 +367,7 @@ mod tests {
             },
         },
         millimeter, nanometer,
-        nodes::{EnergyMeter, Lens, NodeGroup, NodeReference, SourcePort},
+        nodes::{Dummy, EnergyMeter, Lens, NodeGroup, NodeReference, SourcePort},
         utils::{geom_transformation::Isometry, test_helper::helper::metered_energy},
     };
     use approx::assert_relative_eq;
@@ -641,6 +646,41 @@ mod tests {
         expected.sort();
         assert_eq!(placing, expected);
         assert!(document.placing_connections(None, Uuid::new_v4()).is_err());
+        Ok(())
+    }
+
+    /// A placement that stops part way still tells which distances placed a node before it
+    /// stopped: here the one into a forward reference, ahead of a component passed twice in a
+    /// row, which no ray can follow.
+    #[test]
+    fn the_distances_placing_a_node_before_a_failure_are_still_listed() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let lens = scenery.add_node(Dummy::new("lens"))?;
+        let ahead = scenery.add_node(NodeReference::from_node(&scenery.node(lens)?)?)?;
+        let window = scenery.add_node(Dummy::new("window"))?;
+        let again = scenery.add_node(NodeReference::from_node(&scenery.node(window)?)?)?;
+        let screen = scenery.add_node(Dummy::new("screen"))?;
+        scenery.connect_nodes(source, "output_1", ahead, "input_1", millimeter!(100.0))?;
+        scenery.connect_nodes(ahead, "output_1", window, "input_1", millimeter!(50.0))?;
+        scenery.connect_nodes(window, "output_1", again, "input_1", millimeter!(10.0))?;
+        scenery.connect_nodes(again, "output_1", screen, "input_1", millimeter!(10.0))?;
+        let root = scenery.node_attr().uuid();
+        let mut document = OpmDocument::new(scenery);
+        let mut config = RayTraceConfig::default();
+        config.map_source(source, RayDataBuilder::default());
+        document.add_analyzer(AnalyzerType::RayTrace(config));
+        assert!(
+            document.placed_scenery(None).is_err(),
+            "the placement fails"
+        );
+
+        let placing: Vec<(Uuid, Uuid)> = document
+            .placing_connections(None, root)?
+            .into_iter()
+            .map(|connection| (connection.src_id, connection.target_id))
+            .collect();
+        assert!(placing.contains(&(source, ahead)), "{placing:?}");
         Ok(())
     }
 }

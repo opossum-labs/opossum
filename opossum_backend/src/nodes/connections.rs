@@ -54,8 +54,8 @@ pub async fn get_connections(
 /// placement of the node it refers to, places nothing, so there is no point in editing it.
 ///
 /// The model is placed on a copy, as for the 3D view, after the analyzer that view follows by
-/// default. A model that cannot be placed - without a source port or an analyzer, or with an
-/// optical axis that gets lost - places nothing by any distance: the list is empty.
+/// default. A placement that stops part way lists the distances that placed a node before it
+/// stopped. A model without a source port or an analyzer places nothing: the list is empty.
 #[utoipa::path(tag = "node",
     params(
         ("uuid" = Uuid, Path, description = "UUID of the group node"),
