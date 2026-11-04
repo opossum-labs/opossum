@@ -200,7 +200,7 @@ pub fn App() -> Element {
     let mut show_settings = use_signal(|| false);
     let mut show_material_catalog = use_signal(|| false);
     let mut show_catalog_synchronizer = use_signal(|| false);
-    let show_optimization = use_signal(|| true);
+    let mut show_optimization = use_signal(|| false);
 
     let mut execute_immediate = move |cmd: AppCommand| match cmd {
         AppCommand::NewProject => {
@@ -312,6 +312,9 @@ pub fn App() -> Element {
         AppCommand::OpenCatalogSynchronizer => {
             show_catalog_synchronizer.set(true);
         }
+        AppCommand::OpenOptimization => {
+            show_optimization.set(true);
+        }
     };
 
     let mut execute_immediate_for_alert = execute_immediate.clone();
@@ -330,6 +333,7 @@ pub fn App() -> Element {
             | AppCommand::SaveAs
             | AppCommand::AddNode(_)
             | AppCommand::AddAnalyzer(_)
+            | AppCommand::OpenOptimization
                 if !is_connected =>
             {
                 log::warn!("Command {cmd:?} ignored: Backend is not connected.");
@@ -593,6 +597,7 @@ pub fn App() -> Element {
         }
         SettingsDialog { open: show_settings }
         CatalogSynchronizer { open: show_catalog_synchronizer }
+        OptimizationModal { open: show_optimization }
     }
 }
 

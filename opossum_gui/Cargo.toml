@@ -16,6 +16,7 @@ readme = "README.md"
 opossum_core = { workspace = true }
 opm_macros_lib = { workspace = true }
 opossum_registry = { workspace = true }
+opossum_optimization = { workspace = true }
 
 # Common workspace dependencies
 approx.workspace = true
@@ -42,15 +43,17 @@ dioxus_glb_viewer = { path = "../dioxus_glb_viewer" }
 futures-util = "0.3"
 heck = "0.5"
 regex = "1"
-reqwest = { version = "0.13", default-features = false, features = ["json"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "stream"] }
 rust-sugiyama = "0.4"
 webbrowser = "1.2.3"
-web-time = "1.1" # Cross-platform Instant and SystemTime replacement
+web-time = "1.1"                                                              # Cross-platform Instant and SystemTime replacement
 rfd = { version = "0.17" }
 
 # Desktop-specific dependencies (optional, enabled via "desktop" feature)
 directories = { version = "6", optional = true }
-image = { version = "0.25", default-features = false, features = ["png"], optional = true }
+image = { version = "0.25", default-features = false, features = [
+    "png",
+], optional = true }
 tempfile = { workspace = true, optional = true }
 
 # Web-specific dependencies (optional, enabled via "web" feature)
@@ -72,19 +75,10 @@ tokio = { version = "1", default-features = false }
 default = ["desktop"]
 
 # Activates Dioxus desktop renderer and native system features
-desktop = [
-    "dioxus/desktop",
-    "dep:directories",
-    "dep:image",
-    "dep:tempfile",
-]
+desktop = ["dioxus/desktop", "dep:directories", "dep:image", "dep:tempfile"]
 
 # Activates Dioxus web renderer and browser/wasm bindings
-web = [
-    "dioxus/web",
-    "dep:gloo-timers",
-    "dep:web-sys",
-]
+web = ["dioxus/web", "dep:gloo-timers", "dep:web-sys"]
 
 # Mobile platform support
 mobile = ["dioxus/mobile"]
