@@ -5,18 +5,24 @@ use dioxus_free_icons::{
     icons::fa_solid_icons::{FaChartLine, FaGears},
 };
 
+use super::state::OptimizationModel;
+
 #[derive(Props, Clone, PartialEq)]
 pub struct LiveMonitorProps {
+    pub model: Signal<OptimizationModel>,
     pub is_running: bool,
     pub iteration: u64,
-    pub max_iterations: u64,
     pub current_cost: f64,
     pub initial_cost: f64,
 }
 
 #[component]
-pub fn LiveMonitorPanel(props: LiveMonitorProps) -> Element {
-    // Smooth sample points for logarithmic convergence curve
+pub fn LiveMonitorPanel(mut props: LiveMonitorProps) -> Element {
+    let current_algo_kind = props.model.read().algorithm_kind();
+    let configured_max_iters = props.model.read().max_iterations();
+    let configured_target_cost = props.model.read().target_cost;
+
+    // Smooth sample points for logarithmic convergence curve placeholder
     let points = "5,15 25,32 50,68 85,92 130,105 180,114 235,119 270,121";
 
     rsx! {
@@ -26,7 +32,7 @@ pub fn LiveMonitorPanel(props: LiveMonitorProps) -> Element {
           "Solver & Progress"
         }
 
-        // Algorithm Settings
+        // Algorithm Selector
         div { class: "mb-2",
           label {
             class: "form-label text-muted mb-0",
@@ -36,12 +42,18 @@ pub fn LiveMonitorPanel(props: LiveMonitorProps) -> Element {
           select {
             class: "form-select form-select-sm bg-black text-light border-secondary",
             style: "font-size: 11px;",
-            option { selected: true, "L-BFGS (Quasi-Newton)" }
-            option { "Nelder-Mead (Simplex)" }
-            option { "Simulated Annealing" }
+            disabled: props.is_running,
+            value: "{current_algo_kind}",
+            onchange: move |e| {
+                props.model.write().set_algorithm_kind(&e.value());
+            },
+            option { value: "LBFGS", "L-BFGS (Quasi-Newton)" }
+            option { value: "NelderMead", "Nelder-Mead (Simplex)" }
+            option { value: "SimulatedAnnealing", "Simulated Annealing" }
           }
         }
 
+        // Max Iterations & Target Cost Inputs
         div { class: "row g-2 mb-2",
           div { class: "col-6",
             label {
@@ -53,7 +65,13 @@ pub fn LiveMonitorPanel(props: LiveMonitorProps) -> Element {
               r#type: "number",
               class: "form-control form-control-sm bg-black text-light border-secondary font-monospace text-end",
               style: "font-size: 11px;",
-              value: "{props.max_iterations}",
+              disabled: props.is_running,
+              value: "{configured_max_iters}",
+              oninput: move |e| {
+                  if let Ok(val) = e.value().parse::<u64>() {
+                      props.model.write().set_max_iterations(val);
+                  }
+              },
             }
           }
           div { class: "col-6",
@@ -63,30 +81,38 @@ pub fn LiveMonitorPanel(props: LiveMonitorProps) -> Element {
               "Target Cost"
             }
             input {
+              r#type: "number",
+              step: "any",
               class: "form-control form-control-sm bg-black text-light border-secondary font-monospace text-end",
               style: "font-size: 11px;",
-              value: "1e-8",
+              disabled: props.is_running,
+              value: "{configured_target_cost}",
+              oninput: move |e| {
+                  if let Ok(val) = e.value().parse::<f64>() {
+                      props.model.write().set_target_cost(val);
+                  }
+              },
             }
           }
         }
 
-        // Real-Time Iteration Box
+        // Real-Time Iteration & Cost Display
         div { class: "p-2 rounded bg-black border border-secondary mb-2 font-monospace",
           div { class: "d-flex justify-content-between align-items-center small",
             span { class: "text-muted", "Step:" }
-            span { class: "text-info fw-bold", "{props.iteration} / {props.max_iterations}" }
+            span { class: "text-info fw-bold", "{props.iteration} / {configured_max_iters}" }
           }
           div { class: "d-flex justify-content-between align-items-center small mt-1",
             span { class: "text-muted", "Merit Φ:" }
             span { class: "text-warning fw-bold", "{props.current_cost:.6}" }
           }
           div { class: "d-flex justify-content-between align-items-center small mt-1",
-            span { class: "text-muted", "Δ Improvement:" }
-            span { class: "text-success", "-88.4%" }
+            span { class: "text-muted", "Target Φ:" }
+            span { class: "text-success", "{configured_target_cost:.1e}" }
           }
         }
 
-        // Logarithmic Convergence Plot (SVG)
+        // Logarithmic Convergence Plot (SVG Placeholder)
         div { class: "fw-bold small d-flex align-items-center gap-1 mb-1",
           Icon { icon: FaChartLine }
           "Log Φ Convergence"
@@ -120,7 +146,6 @@ pub fn LiveMonitorPanel(props: LiveMonitorProps) -> Element {
               stroke: "#2a2a2a",
               stroke_dasharray: "2",
             }
-
             // Path
             polyline {
               fill: "none",
@@ -144,7 +169,7 @@ pub fn LiveMonitorPanel(props: LiveMonitorProps) -> Element {
               class: "alert alert-primary py-1 px-2 mb-0 small d-flex align-items-center gap-2 font-monospace",
               style: "font-size: 11px;",
               span { class: "spinner-border spinner-border-sm" }
-              "Rayon Finite Differences..."
+              "Optimizing ({current_algo_kind})..."
             }
           } else {
             div {

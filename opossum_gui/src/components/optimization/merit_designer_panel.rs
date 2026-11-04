@@ -1,7 +1,7 @@
 use crate::components::primitives::{
     alert_dialog::{
-        AlertDialog, AlertDialogActions, AlertDialogCancel, AlertDialogDescription,
-        AlertDialogTitle,
+        AlertDialog, AlertDialogActions, AlertDialogCancel,
+        AlertDialogDescription, AlertDialogTitle,
     },
     button::{Button, ButtonSize, ButtonVariant},
     scroll_area::ScrollArea,
@@ -12,8 +12,9 @@ use dioxus_free_icons::{
     icons::fa_solid_icons::{FaCrosshairs, FaPlus, FaTrash},
 };
 use dioxus_primitives::alert_dialog::AlertDialogContent;
+use opossum_core::core_optics::observable::MetricDimension;
 use opossum_optimization::{
-    MetricSource, MinEdgeThicknessOperand, Operand, StandardOperand, TargetValueOperand,
+   MetricSource, MinEdgeThicknessOperand, Operand, StandardOperand, TargetValueOperand, ThresholdDirection, ThresholdOperand, operand::default_scale_for_metric,
 };
 
 use super::state::OptimizationModel;
@@ -23,11 +24,10 @@ pub struct MeritDesignerProps {
     pub model: Signal<OptimizationModel>,
 }
 
-/// Helper struct providing formatted display strings for an operand row.
 struct OperandDisplayInfo {
     category: &'static str,
     target_node: String,
-    target_value: String,
+    target_numeric: f64,
 }
 
 fn resolve_operand_display(op: &StandardOperand) -> OperandDisplayInfo {
@@ -52,7 +52,7 @@ fn resolve_operand_display(op: &StandardOperand) -> OperandDisplayInfo {
                     MetricSource::Observable(obs) => obs.metric_name.clone(),
                     MetricSource::Parameter(p) => format!("{p:?}"),
                 },
-                target_value: format!("{:.3}", t.target),
+                target_numeric: t.target,
             }
         }
         StandardOperand::Threshold(t) => OperandDisplayInfo {
@@ -61,22 +61,22 @@ fn resolve_operand_display(op: &StandardOperand) -> OperandDisplayInfo {
                 MetricSource::Observable(obs) => obs.metric_name.clone(),
                 MetricSource::Parameter(p) => format!("{p:?}"),
             },
-            target_value: format!("lim {:.3}", t.limit),
+            target_numeric: t.limit,
         },
         StandardOperand::MaxTotalLength(t) => OperandDisplayInfo {
             category: "Envelope",
             target_node: format!("{} segments", t.segments.len()),
-            target_value: format!("<= {:.1} mm", t.max_length * 1e3),
+            target_numeric: t.max_length,
         },
         StandardOperand::MinEdgeThickness(t) => OperandDisplayInfo {
             category: "Geometry",
-            target_node: format!("Node {}", &t.node_id.to_string()[..8]),
-            target_value: format!(">= {:.2} mm", t.min_thickness * 1e3),
+            target_node: format!("Lens {}", &t.node_id.to_string()[..8]),
+            target_numeric: t.min_thickness,
         },
         StandardOperand::TransmissionPenalty(t) => OperandDisplayInfo {
             category: "Loss",
             target_node: t.address.metric_name.clone(),
-            target_value: format!("{:.0} rays", t.expected_rays),
+            target_numeric: t.expected_rays,
         },
     }
 }
@@ -88,8 +88,6 @@ pub fn MeritDesignerPanel(mut props: MeritDesignerProps) -> Element {
 
     let operands = props.model.read().operands.clone();
     let cat_filter = *selected_category.read();
-
-    // Calculate total weight to render relative weight impact percentages
     let total_weight: f64 = operands.iter().map(|op| op.weight()).sum();
 
     let operand_rows: Vec<(usize, StandardOperand, OperandDisplayInfo, f64)> = operands
@@ -109,7 +107,6 @@ pub fn MeritDesignerPanel(mut props: MeritDesignerProps) -> Element {
 
     rsx! {
       div { class: "border rounded p-2 bg-dark text-light h-100 d-flex flex-column",
-        // Header Bar
         div { class: "d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom border-secondary gap-2",
           div { class: "fw-bold small d-flex align-items-center gap-1",
             Icon { icon: FaCrosshairs }
@@ -149,7 +146,6 @@ pub fn MeritDesignerPanel(mut props: MeritDesignerProps) -> Element {
           }
         }
 
-        // Dense Table
         ScrollArea { height: "31rem",
           div { class: "table-responsive",
             table {
@@ -159,7 +155,6 @@ pub fn MeritDesignerPanel(mut props: MeritDesignerProps) -> Element {
                 tr {
                   th { style: "width: 25px;", "" }
                   th { "Criterion / Metric" }
-                  th { style: "width: 60px;", "Current" }
                   th { style: "width: 75px;", "Target" }
                   th { style: "width: 48px;", "Weight" }
                   th {
@@ -173,32 +168,39 @@ pub fn MeritDesignerPanel(mut props: MeritDesignerProps) -> Element {
               tbody {
                 for (idx , op , info , share) in operand_rows {
                   tr { key: "{idx}_{op.name()}",
-                    // Row index
                     td { class: "text-center px-1 text-muted",
                       "{idx + 1}"
                     }
 
-                    // Operand Name & Source
                     td {
                       div {
                         class: "fw-bold text-light text-truncate",
-                        style: "max-width: 120px;",
+                        style: "max-width: 140px;",
                         title: "{op.name()}",
                         "{op.name()}"
                       }
                       div {
                         class: "text-muted text-truncate",
-                        style: "max-width: 120px;",
+                        style: "max-width: 140px;",
                         "{info.target_node}"
                       }
                     }
 
-                    // Current Value
-                    td { class: "text-end text-warning px-1", "-" }
-
-                    // Target Goal / Limit
-                    td { class: "text-end text-success px-1",
-                      "{info.target_value}"
+                    // Editable Target Goal Input
+                    td { class: "px-1",
+                      input {
+                        r#type: "number",
+                        class: "form-control form-control-sm bg-black text-success border-secondary p-0 px-1 font-monospace text-end",
+                        style: "height: 22px; font-size: 11px;",
+                        value: "{info.target_numeric}",
+                        oninput: {
+                            move |e| {
+                                if let Ok(val) = e.value().parse::<f64>() {
+                                    props.model.write().update_operand_target(idx, val);
+                                }
+                            }
+                        },
+                      }
                     }
 
                     // Editable Weight Input
@@ -250,9 +252,9 @@ pub fn MeritDesignerPanel(mut props: MeritDesignerProps) -> Element {
                 if props.model.read().operands.is_empty() {
                   tr {
                     td {
-                      colspan: "7",
+                      colspan: "6",
                       class: "text-center text-muted py-4",
-                      "No operands configured. Click '+ Operand' to add goals."
+                      "No operands configured. Click '+ Operand' to add criteria."
                     }
                   }
                 }
@@ -262,14 +264,12 @@ pub fn MeritDesignerPanel(mut props: MeritDesignerProps) -> Element {
         }
       }
 
-      // Add Operand Dialog (Derived from ModelOptimizationSchema)
       if show_add_modal() {
         AddOperandDialog { model: props.model, open: show_add_modal }
       }
     }
 }
 
-/// Dialog allowing the user to select an observable or physical constraint from the schema.
 #[component]
 fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<bool>) -> Element {
     let schema_opt = model.read().schema.clone();
@@ -278,20 +278,20 @@ fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<bool>
       AlertDialog {
         open: open(),
         on_open_change: move |v| open.set(v),
-        max_width: "40rem".to_string(),
+        max_width: "44rem".to_string(),
         AlertDialogContent {
           AlertDialogTitle { "Add Optimization Operand" }
           AlertDialogDescription {
             div { class: "d-flex flex-column gap-3 text-light",
               p { class: "small text-muted mb-0",
-                "Select an observable metric recorded by an analyzer or a geometric constraint."
+                "Choose a detector observable or geometric constraint from the loaded model."
               }
 
               if let Some(schema) = schema_opt {
                 // Section 1: Observable Detector Metrics
                 div {
                   div { class: "fw-bold small mb-2 text-info", "Detector Observables" }
-                  ScrollArea { height: "10rem",
+                  ScrollArea { height: "12rem",
                     div { class: "list-group list-group-flush small",
                       for obs in schema.observable_metrics {
                         button {
@@ -300,12 +300,16 @@ fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<bool>
                           onclick: {
                               let obs_clone = obs.clone();
                               move |_| {
+                                  let scale = default_scale_for_metric(
+                                      obs_clone.descriptor.dimension,
+                                      &obs_clone.descriptor.name,
+                                  );
                                   let operand = TargetValueOperand::new(
-                                      format!("Target {}", obs_clone.descriptor.name),
+                                      format!("{} ({})", obs_clone.descriptor.name, obs_clone.node_name),
                                       obs_clone.address.clone(),
                                       0.0,
                                       1.0,
-                                      1e-6,
+                                      scale,
                                   );
                                   model.write().add_operand(operand.into());
                                   open.set(false);
@@ -314,11 +318,11 @@ fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<bool>
                           div {
                             div { class: "fw-bold", "{obs.node_name}" }
                             div { class: "text-muted font-monospace",
-                              "{obs.descriptor.name}"
+                              "{obs.descriptor.name} ({obs.descriptor.dimension:?})"
                             }
                           }
                           span { class: "badge bg-primary",
-                            "+ Add"
+                            "+ Add Target"
                           }
                         }
                       }
@@ -330,7 +334,7 @@ fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<bool>
                 if !schema.edge_thickness_nodes.is_empty() {
                   div {
                     div { class: "fw-bold small mb-2 text-warning",
-                      "Lens Edge Thickness Constraints"
+                      "Physical Lens Constraints"
                     }
                     div { class: "d-flex flex-column gap-1",
                       for edge_node in schema.edge_thickness_nodes {
@@ -353,7 +357,7 @@ fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<bool>
                           },
                           span { "{edge_node.node_name} ({edge_node.node_type})" }
                           span { class: "badge bg-warning text-dark",
-                            "Min >= 1.5 mm"
+                            "Min Edge >= 1.5 mm"
                           }
                         }
                       }
@@ -361,7 +365,7 @@ fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<bool>
                   }
                 }
               } else {
-                div { class: "text-muted small", "No schema available. Fetching..." }
+                div { class: "text-muted small", "No model schema loaded." }
               }
             }
           }

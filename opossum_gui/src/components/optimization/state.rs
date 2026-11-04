@@ -2,9 +2,7 @@ use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 use opossum_optimization::{
-    BoxBounds, CouplingType, FreeVariable, ModelOptimizationSchema,
-    OptimizationAlgorithm, OptimizationConfig, ParameterAddress, ParameterCoupling,
-    StandardOperand, TargetValueOperand, ThresholdDirection, ThresholdOperand,
+    BoxBounds, CouplingType, DiscoveredVariable, FreeVariable, ModelOptimizationSchema, OptimizationAlgorithm, OptimizationConfig, ParameterAddress, ParameterCoupling, StandardOperand, TargetValueOperand, ThresholdDirection, ThresholdOperand,
 };
 
 /// UI-specific representation of a tunable variable row in the dense table.
@@ -71,51 +69,96 @@ impl Default for OptimizationModel {
 }
 
 impl OptimizationModel {
-    /// Initializes or refreshes the model using an extracted schema.
+   /// Initializes or refreshes the model using an extracted schema.
     pub fn populate_from_schema(&mut self, schema: ModelOptimizationSchema) {
-        let mut rows = Vec::with_capacity(schema.controllable_variables.len());
-
-        for var in &schema.controllable_variables {
-            // Read-only properties cannot be manipulated by the solver
-            if var.is_read_only {
-                continue;
+        // 1. Synchronisiere alle bereits hinzugefügten Variablen mit den aktuellen Werten aus dem Modell
+        for row in &mut self.variable_rows {
+            if let Some(discovered) = schema
+                .controllable_variables
+                .iter()
+                .find(|v| v.address == row.address)
+            {
+                row.current_value = discovered.initial_value;
+                row.node_name = discovered.node_name.clone();
+                row.property_name = discovered.display_name.clone();
             }
-
-            let (group_id, group_name) = match &var.address {
-                ParameterAddress::NodeProperty { .. } => {
-                    (None, "Optical Nodes".to_string())
-                }
-                ParameterAddress::ConnectionDistance { .. } => {
-                    (None, "Beam Distances".to_string())
-                }
-            };
-
-            // Derive default box bounds: current +/- 50%
-            let val = var.initial_value;
-            let (min_b, max_b) = if val.abs() > 1e-6 {
-                let margin = val.abs() * 0.5;
-                (Some(val - margin), Some(val + margin))
-            } else {
-                (Some(-0.01), Some(0.01))
-            };
-
-            rows.push(UiVariableRow {
-                address: var.address.clone(),
-                group_id,
-                group_name,
-                node_name: var.node_name.clone(),
-                property_name: var.display_name.clone(),
-                current_value: val,
-                is_enabled: false, // Default: designer activates parameters explicitly
-                min_bound: min_b,
-                max_bound: max_b,
-                coupling: None,
-            });
         }
 
         self.schema = Some(schema);
-        self.variable_rows = rows;
         self.run_preflight_validation();
+    }
+
+    /// Updates parameter current values directly from optimization results.
+    pub fn update_values(&mut self, values: &[(ParameterAddress, f64)]) {
+        for (addr, val) in values {
+            if let Some(row) = self.variable_rows.iter_mut().find(|r| &r.address == addr) {
+                row.current_value = *val;
+            }
+        }
+        self.run_preflight_validation();
+    }
+
+    /// Adds a parameter from the schema as an active variable.
+    pub fn add_variable_from_schema(&mut self, var: &DiscoveredVariable) {
+        // Prevent duplicate entries
+        if self.variable_rows.iter().any(|r| r.address == var.address) {
+            return;
+        }
+
+        let val = var.initial_value;
+        let (min_b, max_b) = if val.abs() > 1e-6 {
+            let margin = val.abs() * 0.5;
+            (Some(val - margin), Some(val + margin))
+        } else {
+            (Some(-0.01), Some(0.01))
+        };
+
+        self.variable_rows.push(UiVariableRow {
+            address: var.address.clone(),
+            group_id: None,
+            group_name: "Selected Parameters".to_string(),
+            node_name: var.node_name.clone(),
+            property_name: var.display_name.clone(),
+            current_value: val,
+            is_enabled: true, // User intentionally added this variable
+            min_bound: min_b,
+            max_bound: max_b,
+            coupling: None,
+        });
+
+        self.run_preflight_validation();
+    }
+
+    /// Removes a variable by index.
+    pub fn remove_variable(&mut self, index: usize) {
+        if index < self.variable_rows.len() {
+            let removed_addr = self.variable_rows[index].address.clone();
+            self.variable_rows.remove(index);
+
+            // Also clear any couplings that referenced this variable as source
+            for row in &mut self.variable_rows {
+                if let Some(rule) = &row.coupling {
+                    let has_ref = match rule {
+                        CouplingType::Identical { source } | CouplingType::Opposite { source } => source == &removed_addr,
+                        CouplingType::Affine { source, .. } => source == &removed_addr,
+                        CouplingType::TotalLengthLock { other_segments, .. } => other_segments.contains(&removed_addr),
+                    };
+                    if has_ref {
+                        row.coupling = None;
+                    }
+                }
+            }
+        }
+        self.run_preflight_validation();
+    }
+
+    /// Checks if a valid optimization run can be started.
+    pub fn can_start_optimization(&self) -> bool {
+        let has_enabled_vars = self.variable_rows.iter().any(|r| r.is_enabled && r.coupling.is_none());
+        let has_operands = !self.operands.is_empty();
+        let has_no_fatal_errors = !self.validation_issues.iter().any(|i| i.severity == ValidationSeverity::Error);
+
+        has_enabled_vars && has_operands && has_no_fatal_errors
     }
 
     /// Toggles the activation state of a variable.
@@ -261,7 +304,21 @@ impl OptimizationModel {
                 }
             }
         }
-
+        // Prüfen, ob eine ausgewählte Variable im Dokument gar nicht mehr existiert
+        if let Some(schema) = &self.schema {
+            for row in &self.variable_rows {
+                if !schema.controllable_variables.iter().any(|v| v.address == row.address) {
+                    issues.push(ValidationIssue {
+                        severity: ValidationSeverity::Error,
+                        message: format!(
+                            "Variable '{} ({})' no longer exists in the model.",
+                            row.node_name, row.property_name
+                        ),
+                        target_address: Some(row.address.clone()),
+                    });
+                }
+            }
+        }
         self.validation_issues = issues;
     }
     /// Removes an operand by index.
@@ -289,5 +346,67 @@ impl OptimizationModel {
     pub fn add_operand(&mut self, operand: StandardOperand) {
         self.operands.push(operand);
         self.run_preflight_validation();
+    }
+
+    /// Updates the target goal of an operand (if applicable).
+    pub fn update_operand_target(&mut self, index: usize, new_target: f64) {
+        if let Some(op) = self.operands.get_mut(index) {
+            match op {
+                StandardOperand::Target(t) => t.target = new_target,
+                StandardOperand::Threshold(t) => t.limit = new_target,
+                StandardOperand::MinEdgeThickness(t) => t.min_thickness = new_target,
+                _ => {}
+            }
+        }
+        self.run_preflight_validation();
+    }
+
+    /// Toggles all variables within a specific group on or off.
+    pub fn toggle_all_in_group(&mut self, group_name: &str, enable: bool) {
+        for row in &mut self.variable_rows {
+            if row.group_name == group_name && row.coupling.is_none() {
+                row.is_enabled = enable;
+            }
+        }
+        self.run_preflight_validation();
+    }
+    /// Returns the active algorithm identifier as a string key.
+    pub fn algorithm_kind(&self) -> &'static str {
+        match self.algorithm {
+            OptimizationAlgorithm::LBFGS { .. } => "LBFGS",
+            OptimizationAlgorithm::NelderMead { .. } => "NelderMead",
+            OptimizationAlgorithm::SimulatedAnnealing { .. } => "SimulatedAnnealing",
+        }
+    }
+
+    /// Returns the current maximum iteration limit across all solver variants.
+    pub fn max_iterations(&self) -> u64 {
+        match self.algorithm {
+            OptimizationAlgorithm::NelderMead { max_iterations, .. }
+            | OptimizationAlgorithm::LBFGS { max_iterations, .. }
+            | OptimizationAlgorithm::SimulatedAnnealing { max_iterations, .. } => max_iterations,
+        }
+    }
+
+    /// Switches the algorithm type while preserving the currently set maximum iteration limit.
+    pub fn set_algorithm_kind(&mut self, kind: &str) {
+        let iters = self.max_iterations();
+        self.algorithm = match kind {
+            "NelderMead" => OptimizationAlgorithm::nelder_mead().with_max_iterations(iters),
+            "SimulatedAnnealing" => {
+                OptimizationAlgorithm::simulated_annealing().with_max_iterations(iters)
+            }
+            _ => OptimizationAlgorithm::lbfgs().with_max_iterations(iters),
+        };
+    }
+
+    /// Updates the maximum iterations limit on the active algorithm.
+    pub fn set_max_iterations(&mut self, iters: u64) {
+        self.algorithm = self.algorithm.clone().with_max_iterations(iters);
+    }
+
+    /// Updates the target cost threshold for early stopping.
+    pub fn set_target_cost(&mut self, cost: f64) {
+        self.target_cost = cost;
     }
 }

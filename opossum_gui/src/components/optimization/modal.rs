@@ -1,6 +1,6 @@
 use crate::api::{
-    eval_action_run, get_optimization_schema, post_abort_optimization,
-    post_start_optimization, subscribe_optimization_events, undo_document,
+    eval_action_run, get_optimization_schema, post_abort_optimization, post_start_optimization,
+    subscribe_optimization_events, undo_document,
 };
 use crate::components::primitives::{
     alert_dialog::{AlertDialog, AlertDialogActions, AlertDialogCancel, AlertDialogDescription},
@@ -11,12 +11,12 @@ use dioxus::prelude::*;
 use dioxus_free_icons::{
     Icon,
     icons::fa_solid_icons::{
-        FaBullseye, FaCube, FaFileExport, FaPlay, FaRotateLeft, FaStop,
-        FaTriangleExclamation, FaWandMagicSparkles,
+        FaBullseye, FaCube, FaFileExport, FaPlay, FaRotateLeft, FaStop, FaTriangleExclamation,
+        FaWandMagicSparkles,
     },
 };
 use futures_util::StreamExt;
-use opossum_optimization::OptimizationProgressEvent;
+use opossum_optimization::{ModelOptimizationSchema, OptimizationProgressEvent};
 
 use super::{
     live_monitor_panel::LiveMonitorPanel,
@@ -36,76 +36,23 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
     let mut show_issue_drawer = use_signal(|| false);
 
     // Coroutine receives progress events from background thread and updates UI signals safely
-    let sse_receiver = use_coroutine(move |mut rx: UnboundedReceiver<OptimizationProgressEvent>| async move {
-        while let Some(event) = rx.next().await {
-            match event {
-                OptimizationProgressEvent::Started { initial_cost: cost, total_max_iterations } => {
-                    initial_cost.set(cost);
-                    current_cost.set(cost);
-                    max_iterations.set(total_max_iterations);
-                }
-                OptimizationProgressEvent::Iteration { iteration, best_cost, .. } => {
-                    current_iteration.set(iteration);
-                    current_cost.set(best_cost);
-                }
-                OptimizationProgressEvent::Finished { final_cost, .. } => {
-                    current_cost.set(final_cost);
-                    is_running.set(false);
-                    *crate::NODE_DETAILS_REFRESH.write() += 1;
-                }
-                OptimizationProgressEvent::Aborted { last_cost, .. } => {
-                    if !last_cost.is_nan() {
-                        current_cost.set(last_cost);
-                    }
-                    is_running.set(false);
-                    *crate::NODE_DETAILS_REFRESH.write() += 1;
-                }
-                OptimizationProgressEvent::Failed { error } => {
-                    log::error!("Optimization failed: {error}");
-                    is_running.set(false);
-                }
-            }
-        }
-    });
-
-    // Initial schema retrieval when the modal dialog is opened
-    use_effect(move || {
-        if open() && model.read().schema.is_none() {
-            spawn(async move {
-                let res = get_optimization_schema().await;
-                eval_action_run(res, Some(move |schema| {
-                    model.write().populate_from_schema(schema);
-                }));
-            });
-        }
-    });
-
-    // Start optimization job and dispatch SSE stream into the coroutine channel
-    // Start optimization job and dispatch SSE stream via Tokio mpsc channel
-    let mut start_optimization = move || {
-        let config = match model.read().build_optimization_config() {
-            Ok(cfg) => cfg,
-            Err(err) => {
-                log::error!("Cannot start optimization: {err}");
-                return;
-            }
-        };
-
-        is_running.set(true);
-
-        // Standard Tokio Channel: Tx is Send + 'static, Rx stays on the UI thread
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<OptimizationProgressEvent>();
-
-        // 1. UI-Thread Task: Receives events from channel and updates local signals
-        spawn(async move {
-            while let Some(event) = rx.recv().await {
+    let sse_receiver = use_coroutine(
+        move |mut rx: UnboundedReceiver<OptimizationProgressEvent>| async move {
+            while let Some(event) = rx.next().await {
                 match event {
-                    OptimizationProgressEvent::Started { initial_cost: cost, total_max_iterations } => {
+                    OptimizationProgressEvent::Started {
+                        initial_cost: cost,
+                        total_max_iterations,
+                    } => {
                         initial_cost.set(cost);
                         current_cost.set(cost);
                         max_iterations.set(total_max_iterations);
                     }
-                    OptimizationProgressEvent::Iteration { iteration, best_cost, .. } => {
+                    OptimizationProgressEvent::Iteration {
+                        iteration,
+                        best_cost,
+                        ..
+                    } => {
                         current_iteration.set(iteration);
                         current_cost.set(best_cost);
                     }
@@ -127,19 +74,118 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                     }
                 }
             }
+        },
+    );
+
+    // Initial schema retrieval when the modal dialog is opened
+    use_effect(move || {
+        if open() {
+            spawn(async move {
+                let res = get_optimization_schema().await;
+                eval_action_run(
+                    res,
+                    Some(move |schema: ModelOptimizationSchema| {
+                        log::info!(
+                            "Loaded schema: {} vars, {} metrics, {} thickness nodes",
+                            schema.controllable_variables.len(),
+                            schema.observable_metrics.len(),
+                            schema.edge_thickness_nodes.len()
+                        );
+                        model.write().populate_from_schema(schema);
+                    }),
+                );
+            });
+        }
+    });
+
+    // Start optimization job and dispatch SSE stream into the coroutine channel
+    // Start optimization job with clean timing
+    let mut start_optimization = move || {
+        let config = match model.read().build_optimization_config() {
+            Ok(cfg) => cfg,
+            Err(err) => {
+                log::error!("Cannot start optimization: {err}");
+                return;
+            }
+        };
+        // UI-Limits auf den gewählten Algorithmus einstellen
+        max_iterations.set(model.read().max_iterations());
+        is_running.set(true);
+
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<OptimizationProgressEvent>();
+
+        // 1. UI-Thread Task: Updates Dioxus state upon receiving events
+        spawn(async move {
+            while let Some(event) = rx.recv().await {
+                // Im UI-Thread Task für SSE-Events:
+                match event {
+                    OptimizationProgressEvent::Started {
+                        initial_cost: cost,
+                        total_max_iterations,
+                    } => {
+                        initial_cost.set(cost);
+                        current_cost.set(cost);
+                        max_iterations.set(total_max_iterations);
+                    }
+                    OptimizationProgressEvent::Iteration {
+                        iteration,
+                        best_cost,
+                        ..
+                    } => {
+                        current_iteration.set(iteration);
+                        current_cost.set(best_cost);
+                    }
+                    OptimizationProgressEvent::Finished {
+                        final_cost,
+                        optimized_parameters,
+                        ..
+                    } => {
+                        current_cost.set(final_cost);
+                        is_running.set(false);
+                        // Werte in der Tabelle auf die optimierten Endergebnisse aktualisieren:
+                        model.write().update_values(&optimized_parameters);
+                        *crate::NODE_DETAILS_REFRESH.write() += 1;
+                    }
+                    OptimizationProgressEvent::Aborted {
+                        last_cost,
+                        best_parameters,
+                        ..
+                    } => {
+                        if !last_cost.is_nan() {
+                            current_cost.set(last_cost);
+                        }
+                        is_running.set(false);
+                        if !best_parameters.is_empty() {
+                            model.write().update_values(&best_parameters);
+                        }
+                        *crate::NODE_DETAILS_REFRESH.write() += 1;
+                    }
+                    OptimizationProgressEvent::Failed { error } => {
+                        log::error!("Optimization failed: {error}");
+                        is_running.set(false);
+                    }
+                }
+            }
         });
 
-        // 2. Background Task: Streams SSE events and triggers the backend start endpoint
+        // 2. Background Task: Ensures SSE receiver is connected BEFORE sending /start
         spawn(async move {
-            // Task 2a: SSE Stream listener (tx is Send)
             let sse_tx = tx.clone();
+
+            // Connect to events stream
             spawn(async move {
-                let _ = subscribe_optimization_events(move |event| {
+                if let Err(err) = subscribe_optimization_events(move |event| {
                     let _ = sse_tx.send(event);
-                }).await;
+                })
+                .await
+                {
+                    log::error!("SSE stream error: {err}");
+                }
             });
 
-            // Task 2b: Trigger backend optimization worker
+            // Brief delay (50ms) to ensure HTTP SSE handshake is completed
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
             let res = post_start_optimization(config).await;
             if let Err(err) = res {
                 log::error!("Failed to start optimization: {err}");
@@ -148,29 +194,39 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
         });
     };
 
-    // Abort active solver execution
-    let abort_optimization = move || {
+    // Immediate abort reaction
+    let mut abort_optimization = move || {
+        is_running.set(false); // Reset UI immediately so user gets instant feedback
         spawn(async move {
             let res = post_abort_optimization().await;
             eval_action_run(res, Some(|msg| log::info!("{msg}")));
         });
     };
 
+    // Valid start condition: Enabled variables > 0, Operands > 0, No fatal configuration errors
+    let can_start = model.read().can_start_optimization();
+
     // Revert to initial baseline via backend undo stack
     let revert_to_baseline = move || {
         spawn(async move {
             let res = undo_document().await;
-            eval_action_run(res, Some(|_| {
-                *crate::NODE_DETAILS_REFRESH.write() += 1;
-            }));
+            eval_action_run(
+                res,
+                Some(|_| {
+                    *crate::NODE_DETAILS_REFRESH.write() += 1;
+                }),
+            );
+
+            // Nach dem Undo die wiederhergestellten Werte direkt im Dialog aktualisieren
+            let schema_res = get_optimization_schema().await;
+            eval_action_run(
+                schema_res,
+                Some(move |schema| {
+                    model.write().populate_from_schema(schema);
+                }),
+            );
         });
     };
-
-    let has_fatal_errors = model
-        .read()
-        .validation_issues
-        .iter()
-        .any(|i| i.severity == ValidationSeverity::Error);
 
     rsx! {
       AlertDialog {
@@ -232,10 +288,11 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                   }
 
                   // Run / Abort Control
+                  // Run / Abort Control
                   Button {
                     variant: if is_running() { ButtonVariant::Destructive } else { ButtonVariant::Primary },
                     size: ButtonSize::Sm,
-                    disabled: !is_running() && has_fatal_errors,
+                    disabled: !is_running() && !can_start,
                     onclick: move |_| {
                         if is_running() {
                             abort_optimization();
@@ -308,9 +365,9 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                 }
                 div { class: "col-lg-3 col-md-12",
                   LiveMonitorPanel {
+                    model, // <-- Hier model übergeben
                     is_running: is_running(),
                     iteration: current_iteration(),
-                    max_iterations: max_iterations(),
                     current_cost: current_cost(),
                     initial_cost: initial_cost(),
                   }

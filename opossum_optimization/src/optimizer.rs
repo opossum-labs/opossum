@@ -214,6 +214,7 @@ impl<'a> OpticOptimizer<'a> {
                 "No operands specified for merit function".to_string(),
             ));
         }
+
         ParameterResolver::validate_configuration(&self.free_variables, &self.couplings)?;
 
         let merit = MeritFunction::new(
@@ -237,15 +238,28 @@ impl<'a> OpticOptimizer<'a> {
             total_max_iterations: max_iters,
         });
 
+        let best_tracker = Arc::new(std::sync::Mutex::new(Some((
+            initial_vector.clone(),
+            initial_cost,
+            0,
+        ))));
+
         let observer = ProgressObserver::new(
             progress_callback,
             cancel_flag,
             self.free_variables.clone(),
             self.couplings.clone(),
+            best_tracker.clone(),
         );
 
-        let outcome = self.execute_solver_with_observer(merit, initial_vector, observer)?;
+        let outcome = self.execute_solver_with_observer(
+            merit,
+            initial_vector,
+            observer,
+            best_tracker,
+        )?;
 
+        // Parameter auflösen und in das Dokument schreiben
         let resolved_map = ParameterResolver::resolve(
             &self.free_variables,
             &self.couplings,
@@ -272,8 +286,9 @@ impl<'a> OpticOptimizer<'a> {
         merit: MeritFunction,
         initial_vector: Vec<f64>,
         observer: ProgressObserver,
+        best_tracker: Arc<std::sync::Mutex<Option<(Vec<f64>, f64, u64)>>>,
     ) -> OpmResult<SolverOutcome> {
-        match self.algorithm {
+        let run_result = match self.algorithm {
             OptimizationAlgorithm::NelderMead {
                 max_iterations,
                 sd_tolerance,
@@ -283,8 +298,7 @@ impl<'a> OpticOptimizer<'a> {
                 let solver = NelderMead::new(initial_simplex)
                     .with_sd_tolerance(sd_tolerance)
                     .map_err(|e| OpossumError::Other(format!("Failed to set tolerance: {e}")))?;
-
-                let res = Executor::new(merit, solver)
+                Executor::new(merit, solver)
                     .configure(|state| {
                         state
                             .max_iters(max_iterations)
@@ -292,15 +306,7 @@ impl<'a> OpticOptimizer<'a> {
                     })
                     .add_observer(observer, argmin::core::observers::ObserverMode::Always)
                     .run()
-                    .map_err(|e| {
-                        if e.to_string().contains("cancelled by user") {
-                            OpossumError::Other("Optimization cancelled by user".to_string())
-                        } else {
-                            OpossumError::Other(format!("Nelder-Mead failed: {e}"))
-                        }
-                    })?;
-
-                self.handle_solver_state(res.state())
+                    .map(|res| self.handle_solver_state(res.state()))
             }
             OptimizationAlgorithm::LBFGS {
                 max_iterations,
@@ -315,25 +321,16 @@ impl<'a> OpticOptimizer<'a> {
                 let solver = LBFGS::new(linesearch, history_size)
                     .with_tolerance_grad(gradient_tolerance)
                     .map_err(|e| OpossumError::Other(format!("Failed to set tolerance: {e}")))?;
-
-                let res = Executor::new(merit, solver)
+                Executor::new(merit, solver)
                     .configure(|state| {
                         state
-                            .param(initial_vector)
+                            .param(initial_vector.clone())
                             .max_iters(max_iterations)
                             .target_cost(self.target_cost)
                     })
                     .add_observer(observer, argmin::core::observers::ObserverMode::Always)
                     .run()
-                    .map_err(|e| {
-                        if e.to_string().contains("cancelled by user") {
-                            OpossumError::Other("Optimization cancelled by user".to_string())
-                        } else {
-                            OpossumError::Other(format!("L-BFGS failed: {e}"))
-                        }
-                    })?;
-
-                self.handle_solver_state(res.state())
+                    .map(|res| self.handle_solver_state(res.state()))
             }
             OptimizationAlgorithm::SimulatedAnnealing {
                 max_iterations,
@@ -347,29 +344,39 @@ impl<'a> OpticOptimizer<'a> {
                     .with_temp_func(SATempFunc::Exponential(0.95))
                     .with_stall_best(stall_best)
                     .with_stall_accepted(stall_accepted);
-
                 if let Some(reanneal_steps) = reannealing_fixed {
                     solver = solver.with_reannealing_fixed(reanneal_steps);
                 }
-
-                let res = Executor::new(merit, solver)
+                Executor::new(merit, solver)
                     .configure(|state| {
                         state
-                            .param(initial_vector)
+                            .param(initial_vector.clone())
                             .max_iters(max_iterations)
                             .target_cost(self.target_cost)
                     })
                     .add_observer(observer, argmin::core::observers::ObserverMode::Always)
                     .run()
-                    .map_err(|e| {
-                        if e.to_string().contains("cancelled by user") {
-                            OpossumError::Other("Optimization cancelled by user".to_string())
-                        } else {
-                            OpossumError::Other(format!("Simulated Annealing failed: {e}"))
-                        }
-                    })?;
+                    .map(|res| self.handle_solver_state(res.state()))
+            }
+        };
 
-                self.handle_solver_state(res.state())
+        match run_result {
+            Ok(inner_res) => inner_res,
+            Err(e) => {
+                // Bei Nutzerabbruch: Bisher besten Zustand aus dem Tracker retten
+                if e.to_string().contains("cancelled by user") {
+                    if let Ok(guard) = best_tracker.lock() {
+                        if let Some((best_params, final_cost, iterations)) = guard.clone() {
+                            return Ok(SolverOutcome {
+                                best_params,
+                                final_cost,
+                                iterations,
+                                converged: false,
+                            });
+                        }
+                    }
+                }
+                Err(OpossumError::Other(format!("Optimization failed: {e}")))
             }
         }
     }

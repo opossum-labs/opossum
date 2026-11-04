@@ -89,14 +89,20 @@ pub async fn optimization_events(data: web::Data<AppState>) -> impl Responder {
     let stream = futures_util::stream::unfold(rx, |mut rx| async move {
         loop {
             match rx.recv().await {
-                Ok(event) => {
-                    let json = serde_json::to_string(&event).unwrap_or_default();
-                    let bytes = web::Bytes::from(format!("data: {json}\n\n"));
-                    return Some((Ok::<_, actix_web::Error>(bytes), rx));
+            Ok(event) => {
+                match serde_json::to_string(&event) {
+                    Ok(json) => {
+                        let bytes = web::Bytes::from(format!("data: {json}\n\n"));
+                        return Some((Ok::<_, actix_web::Error>(bytes), rx));
+                    }
+                    Err(e) => {
+                        log::error!("Failed to serialize OptimizationProgressEvent: {e}");
+                    }
                 }
-                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
-                Err(tokio::sync::broadcast::error::RecvError::Closed) => return None,
             }
+            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
+            Err(tokio::sync::broadcast::error::RecvError::Closed) => return None,
+        }
         }
     });
 
@@ -193,7 +199,7 @@ fn spawn_optimization_worker(
                     let _ = tx.send(OptimizationProgressEvent::Aborted {
                         last_cost: summary.final_cost,
                         iterations: summary.iterations,
-                        best_parameters: summary.optimized_parameters,
+                        best_parameters: summary.optimized_parameters.into_iter().collect(),
                     });
                 } else {
                     *app_state.optimization.status.write() = OptimizationStatus::Finished;
@@ -201,7 +207,7 @@ fn spawn_optimization_worker(
                         final_cost: summary.final_cost,
                         iterations: summary.iterations,
                         converged: summary.converged,
-                        optimized_parameters: summary.optimized_parameters,
+                        optimized_parameters: summary.optimized_parameters.into_iter().collect(),
                     });
                 }
             }
@@ -212,7 +218,7 @@ fn spawn_optimization_worker(
                     let _ = tx.send(OptimizationProgressEvent::Aborted {
                         last_cost: f64::NAN,
                         iterations: 0,
-                        best_parameters: HashMap::new(),
+                        best_parameters: Vec::new(),
                     });
                 } else {
                     *app_state.optimization.status.write() = OptimizationStatus::Failed;
