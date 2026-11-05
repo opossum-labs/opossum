@@ -262,23 +262,28 @@ impl MeritFunction {
         DVector::from_vec(residuals)
     }
 
-    /// Computes the m x n Jacobian matrix J_ij = d(r_i) / d(x_j) using parallel finite differences.
-    pub fn compute_jacobian(&self, x: &[f64], base_residuals: &DVector<f64>) -> DMatrix<f64> {
+    /// Computes the m x n Jacobian matrix J_ij = d(r_i) / d(x_j) using parallel central finite differences.
+    pub fn compute_jacobian(&self, x: &[f64], _base_residuals: &DVector<f64>) -> DMatrix<f64> {
         let n = self.free_variables.len();
-        let m = base_residuals.len();
+        let m = self.operands.len() + n; // Operands plus box-bounds residuals
 
         let columns: Vec<DVector<f64>> = (0..n)
             .into_par_iter()
             .map(|j| {
                 let val = x[j];
-                // Relative finite difference step size with absolute lower guard
-                let h = (1e-4 * val.abs()).max(1e-6);
+                // Adaptive step size: 1e-4 relative with a floor of 1e-5
+                let h = (1e-4 * val.abs()).max(1e-5);
 
-                let mut x_perturbed = x.to_vec();
-                x_perturbed[j] += h;
+                let mut x_plus = x.to_vec();
+                let mut x_minus = x.to_vec();
+                x_plus[j] += h;
+                x_minus[j] -= h;
 
-                let r_perturbed = self.evaluate_residuals(&x_perturbed);
-                (r_perturbed - base_residuals) / h
+                let r_plus = self.evaluate_residuals(&x_plus);
+                let r_minus = self.evaluate_residuals(&x_minus);
+
+                // Central difference: (r(x+h) - r(x-h)) / (2*h)
+                (r_plus - r_minus) / (2.0 * h)
             })
             .collect();
 
