@@ -5,7 +5,9 @@ use super::{
         ModelOptimizationSchema,
     },
 };
-use opossum_core::{core_optics::NodeAttrExt, nodes::NodeGroup, opm_document::OpmDocument};
+use opossum_core::{
+    core_optics::NodeAttrExt, nodes::NodeGroup, opm_document::OpmDocument, properties::Proptype,
+};
 
 pub struct SchemaExtractor;
 
@@ -56,6 +58,7 @@ impl SchemaExtractor {
                 }
             }
         }
+
         schema
     }
 
@@ -75,24 +78,50 @@ impl SchemaExtractor {
             });
         }
 
-        // Collect scalar node properties
+        // Collect node properties
         for node_ref in group.nodes() {
             let node_id = node_ref.uuid();
             let node_name = node_ref.name().to_string();
             let attr = node_ref.node_attr();
+
             for (prop_name, prop) in attr.properties() {
-                // Only consider properties that can be represented as an f64 scalar
-                if let Some(val) = prop.prop().as_f64() {
-                    schema.controllable_variables.push(DiscoveredVariable {
-                        address: ParameterAddress::NodeProperty {
-                            node_id,
-                            property_name: prop_name.clone(),
-                        },
-                        node_name: node_name.clone(),
-                        display_name: prop_name.clone(),
-                        initial_value: val,
-                        is_read_only: prop.is_read_only(),
-                    });
+                match prop.prop() {
+                    // Spherical curvature: Optimize in curvature space c [1/m]
+                    Proptype::Curvature(radius_len) => {
+                        let radius_m = radius_len.value;
+                        let initial_c = if !radius_m.is_finite() || radius_m.abs() < 1e-12 {
+                            0.0
+                        } else {
+                            1.0 / radius_m
+                        };
+
+                        schema.controllable_variables.push(DiscoveredVariable {
+                            address: ParameterAddress::SurfaceCurvature {
+                                node_id,
+                                property_name: prop_name.clone(),
+                            },
+                            node_name: node_name.clone(),
+                            display_name: format!("{prop_name} (curvature)"),
+                            initial_value: initial_c,
+                            is_read_only: prop.is_read_only(),
+                        });
+                    }
+
+                    // Standard scalar f64 property
+                    _ => {
+                        if let Some(val) = prop.prop().as_f64() {
+                            schema.controllable_variables.push(DiscoveredVariable {
+                                address: ParameterAddress::NodeProperty {
+                                    node_id,
+                                    property_name: prop_name.clone(),
+                                },
+                                node_name: node_name.clone(),
+                                display_name: prop_name.clone(),
+                                initial_value: val,
+                                is_read_only: prop.is_read_only(),
+                            });
+                        }
+                    }
                 }
             }
 

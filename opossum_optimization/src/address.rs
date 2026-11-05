@@ -9,6 +9,15 @@ pub enum ParameterAddress {
         node_id: Uuid,
         property_name: String,
     },
+    /// A spherical optical surface curvature.
+    ///
+    /// Solver representation: Curvature $c$ in SI base units [$1/\text{m}$] ($c = 1/R$).
+    /// Underlying model property: Radius of curvature $R$ in [$m$].
+    /// A curvature of $c = 0.0$ corresponds to a flat surface ($R = \pm\infty$).
+    SurfaceCurvature {
+        node_id: Uuid,
+        property_name: String,
+    },
     /// A distance starting from an output port of a node.
     ConnectionDistance { src_id: Uuid, src_port: String },
 }

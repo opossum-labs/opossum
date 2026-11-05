@@ -95,7 +95,53 @@ pub fn LiveMonitorPanel(mut props: LiveMonitorProps) -> Element {
             }
           }
         }
-
+// Algorithm-Specific Controls for Simulated Annealing
+        if current_algo_kind == "SimulatedAnnealing" {
+          div { class: "row g-2 mb-2 p-2 rounded bg-black bg-opacity-50 border border-secondary",
+            div { class: "col-6",
+              label {
+                class: "form-label text-warning mb-0",
+                style: "font-size: 10px;",
+                "Initial Temp (T₀)"
+              }
+              input {
+                r#type: "number",
+                step: "0.1",
+                class: "form-control form-control-sm bg-black text-light border-secondary font-monospace text-end",
+                style: "font-size: 11px;",
+                disabled: props.is_running,
+                value: "{props.model.read().sa_initial_temperature()}",
+                oninput: move |e| {
+                    if let Ok(val) = e.value().parse::<f64>() {
+                        props.model.write().set_sa_initial_temperature(val);
+                    }
+                },
+              }
+            }
+            div { class: "col-6",
+              label {
+                class: "form-label text-warning mb-0",
+                style: "font-size: 10px;",
+                "Cooling Rate (α)"
+              }
+              input {
+                r#type: "number",
+                step: "0.01",
+                min: "0.50",
+                max: "0.999",
+                class: "form-control form-control-sm bg-black text-light border-secondary font-monospace text-end",
+                style: "font-size: 11px;",
+                disabled: props.is_running,
+                value: "{props.model.read().sa_cooling_rate()}",
+                oninput: move |e| {
+                    if let Ok(val) = e.value().parse::<f64>() {
+                        props.model.write().set_sa_cooling_rate(val);
+                    }
+                },
+              }
+            }
+          }
+        }
         // Real-Time Iteration & Cost Display
         div { class: "p-2 rounded bg-black border border-secondary mb-2 font-monospace",
           div { class: "d-flex justify-content-between align-items-center small",

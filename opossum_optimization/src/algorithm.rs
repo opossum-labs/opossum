@@ -19,15 +19,13 @@ pub enum OptimizationAlgorithm {
     },
     /// Simulated Annealing global stochastic optimization.
     SimulatedAnnealing {
-        /// Maximum number of iterations (search steps).
         max_iterations: u64,
-        /// Initial temperature.
+        /// Initial temperature T0.
         initial_temperature: f64,
-        /// Maximum iterations without global best improvement.
+        /// Geometric cooling rate alpha in T_{k+1} = alpha * T_k (e.g. 0.85 .. 0.99).
+        cooling_rate: f64,
         stall_best: u64,
-        /// Maximum iterations without any accepted move.
         stall_accepted: u64,
-        /// Periodic reannealing interval (steps). If None, no reannealing occurs.
         reannealing_fixed: Option<u64>,
     },
 }
@@ -59,18 +57,26 @@ impl OptimizationAlgorithm {
         }
     }
 
-    /// Creates a default Simulated Annealing configuration with robust defaults.
+    /// Creates a default Simulated Annealing configuration.
     #[must_use]
     pub const fn simulated_annealing() -> Self {
         Self::SimulatedAnnealing {
             max_iterations: 1000,
-            initial_temperature: 15.0,
+            initial_temperature: 1.0, // Reduced default for optical merit functions
+            cooling_rate: 0.92,
             stall_best: 60,
             stall_accepted: 120,
             reannealing_fixed: None,
         }
     }
-
+    /// Sets the cooling rate for Simulated Annealing.
+    #[must_use]
+    pub const fn with_cooling_rate(mut self, rate: f64) -> Self {
+        if let Self::SimulatedAnnealing { cooling_rate, .. } = &mut self {
+            *cooling_rate = rate;
+        }
+        self
+    }
     /// Sets the initial temperature for Simulated Annealing.
     #[must_use]
     pub const fn with_temperature(mut self, temp: f64) -> Self {

@@ -409,4 +409,33 @@ impl OptimizationModel {
     pub fn set_target_cost(&mut self, cost: f64) {
         self.target_cost = cost;
     }
+    /// Returns initial temperature if Simulated Annealing is active.
+    pub fn sa_initial_temperature(&self) -> f64 {
+        match self.algorithm {
+            OptimizationAlgorithm::SimulatedAnnealing { initial_temperature, .. } => initial_temperature,
+            _ => 1.0,
+        }
+    }
+
+    /// Sets the initial temperature for Simulated Annealing.
+    pub fn set_sa_initial_temperature(&mut self, temp: f64) {
+        if let OptimizationAlgorithm::SimulatedAnnealing { initial_temperature, .. } = &mut self.algorithm {
+            *initial_temperature = temp;
+        }
+    }
+
+    /// Returns the cooling rate alpha if Simulated Annealing is active.
+    pub fn sa_cooling_rate(&self) -> f64 {
+        match self.algorithm {
+            OptimizationAlgorithm::SimulatedAnnealing { cooling_rate, .. } => cooling_rate,
+            _ => 0.92,
+        }
+    }
+
+    /// Sets the cooling rate alpha for Simulated Annealing.
+    pub fn set_sa_cooling_rate(&mut self, rate: f64) {
+        if let OptimizationAlgorithm::SimulatedAnnealing { cooling_rate, .. } = &mut self.algorithm {
+            *cooling_rate = rate.clamp(0.5, 0.999);
+        }
+    }
 }

@@ -9,7 +9,7 @@ impl ParameterApplier {
     ///
     /// # Errors
     ///
-    /// This function returns an error if the underlying properties oder node attributes could not be set.
+    /// This function returns an error if the underlying properties or node attributes could not be set.
     pub fn set_value(
         doc: &mut OpmDocument,
         address: &ParameterAddress,
@@ -22,12 +22,26 @@ impl ParameterApplier {
             } => doc.scenery_mut().with_node_attr_mut(*node_id, |attr| {
                 attr.properties_mut().set_internal_f64(property_name, value)
             })?,
+
+            ParameterAddress::SurfaceCurvature {
+                node_id,
+                property_name,
+            } => {
+                // Curvature c [1/m] -> Radius of curvature R [m]
+                let radius_m = if value.abs() < 1e-12 {
+                    f64::INFINITY
+                } else {
+                    1.0 / value
+                };
+                doc.scenery_mut().with_node_attr_mut(*node_id, |attr| {
+                    attr.properties_mut().set_internal_f64(property_name, radius_m)
+                })?
+            }
+
             ParameterAddress::ConnectionDistance { src_id, src_port } => {
                 let distance = Length::new::<meter>(value);
-
                 // Resolve parent group containing the source node
                 let (_, parent_group_id) = doc.scenery().node_recursive(*src_id)?;
-
                 doc.scenery_mut()
                     .with_group_node_mut(parent_group_id, |group| {
                         group
@@ -42,7 +56,7 @@ impl ParameterApplier {
     ///
     /// # Errors
     ///
-    /// This function returns an error if the underlying node surfaces of the model could not created.
+    /// This function returns an error if the underlying node surfaces of the model could not be created.
     pub fn finalize_update(doc: &mut OpmDocument) -> OpmResult<()> {
         doc.scenery_mut().rebuild_surfaces()
     }

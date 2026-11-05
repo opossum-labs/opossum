@@ -335,13 +335,14 @@ impl<'a> OpticOptimizer<'a> {
             OptimizationAlgorithm::SimulatedAnnealing {
                 max_iterations,
                 initial_temperature,
+                cooling_rate,
                 stall_best,
                 stall_accepted,
                 reannealing_fixed,
             } => {
                 let mut solver = SimulatedAnnealing::new(initial_temperature)
                     .map_err(|e| OpossumError::Other(format!("Failed to init SA: {e}")))?
-                    .with_temp_func(SATempFunc::Exponential(0.95))
+                    .with_temp_func(SATempFunc::Exponential(cooling_rate))
                     .with_stall_best(stall_best)
                     .with_stall_accepted(stall_accepted);
                 if let Some(reanneal_steps) = reannealing_fixed {
@@ -444,6 +445,7 @@ impl<'a> OpticOptimizer<'a> {
             OptimizationAlgorithm::SimulatedAnnealing {
                 max_iterations,
                 initial_temperature,
+                cooling_rate,
                 stall_best,
                 stall_accepted,
                 reannealing_fixed,
@@ -452,6 +454,7 @@ impl<'a> OpticOptimizer<'a> {
                 initial_vector,
                 max_iterations,
                 initial_temperature,
+                cooling_rate,
                 stall_best,
                 stall_accepted,
                 reannealing_fixed,
@@ -551,13 +554,14 @@ impl<'a> OpticOptimizer<'a> {
         initial_vector: Vec<f64>,
         max_iterations: u64,
         initial_temperature: f64,
+        cooling_rate: f64,
         stall_best: u64,
         stall_accepted: u64,
         reannealing_fixed: Option<u64>,
     ) -> OpmResult<SolverOutcome> {
         let mut solver = SimulatedAnnealing::new(initial_temperature)
             .map_err(|e| OpossumError::Other(format!("Failed to init Simulated Annealing: {e}")))?
-            .with_temp_func(SATempFunc::Exponential(0.95))
+            .with_temp_func(SATempFunc::Exponential(cooling_rate))
             .with_stall_best(stall_best)
             .with_stall_accepted(stall_accepted);
 

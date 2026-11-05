@@ -32,7 +32,6 @@ impl MetricReader {
                 address.node_id, e
             ))
         })?;
-
         node_ref
             .read_observable(&address.metric_name)
             .ok_or_else(|| {
@@ -59,6 +58,22 @@ impl MetricReader {
                 let (node_ref, _) = doc.scenery().node_recursive(*node_id)?;
                 node_ref.node_attr().properties().get_f64(property_name)
             }
+
+            ParameterAddress::SurfaceCurvature {
+                node_id,
+                property_name,
+            } => {
+                let (node_ref, _) = doc.scenery().node_recursive(*node_id)?;
+                let radius_m = node_ref.node_attr().properties().get_f64(property_name)?;
+                if !radius_m.is_finite() {
+                    Ok(0.0) // Flat surface: R = inf -> c = 0.0
+                } else if radius_m.abs() < 1e-12 {
+                    Ok(1e12) // Guard against division by zero
+                } else {
+                    Ok(1.0 / radius_m)
+                }
+            }
+
             ParameterAddress::ConnectionDistance { src_id, src_port } => {
                 let (_, parent_group_id) = doc.scenery().node_recursive(*src_id)?;
                 doc.scenery().with_group_node(parent_group_id, |group| {
