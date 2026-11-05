@@ -5,6 +5,12 @@ use serde::{Deserialize, Serialize};
 /// Supported numerical optimization algorithms and their solver-specific controls.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum OptimizationAlgorithm {
+    /// Damped Least Squares (Levenberg-Marquardt) optimization.
+    Dls {
+        max_iterations: u64,
+        initial_damping: f64,
+        gradient_tolerance: f64,
+    },
     /// Nelder-Mead simplex direct search method (derivative-free).
     NelderMead {
         max_iterations: u64,
@@ -37,6 +43,15 @@ impl Default for OptimizationAlgorithm {
 }
 
 impl OptimizationAlgorithm {
+    /// Creates a default DLS configuration.
+    #[must_use]
+    pub const fn dls() -> Self {
+        Self::Dls {
+            max_iterations: 50,
+            initial_damping: 1e-3,
+            gradient_tolerance: 1e-7,
+        }
+    }
     /// Creates a default Nelder-Mead configuration (100 iterations, 1e-6 tolerance).
     #[must_use]
     pub const fn nelder_mead() -> Self {
@@ -90,12 +105,12 @@ impl OptimizationAlgorithm {
         self
     }
 
-    /// Sets the maximum iteration count across all supported algorithms.
     #[must_use]
     pub const fn with_max_iterations(mut self, iters: u64) -> Self {
         match &mut self {
-            Self::LBFGS { max_iterations, .. }
+            Self::Dls { max_iterations, .. }
             | Self::NelderMead { max_iterations, .. }
+            | Self::LBFGS { max_iterations, .. }
             | Self::SimulatedAnnealing { max_iterations, .. } => *max_iterations = iters,
         }
         self
@@ -109,7 +124,7 @@ impl OptimizationAlgorithm {
             Self::LBFGS {
                 gradient_tolerance, ..
             } => *gradient_tolerance = tol,
-            Self::SimulatedAnnealing { .. } => {}
+            Self::SimulatedAnnealing { .. } | Self::Dls { ..} => {}
         }
         self
     }

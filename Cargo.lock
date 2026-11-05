@@ -5925,6 +5925,7 @@ dependencies = [
  "argmin",
  "argmin-math",
  "log",
+ "nalgebra",
  "opossum_core",
  "rand 0.10.3",
  "rayon",

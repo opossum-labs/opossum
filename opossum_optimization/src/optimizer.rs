@@ -10,17 +10,7 @@ use argmin::{
 use std::sync::{Arc, atomic::AtomicBool};
 
 use crate::{
-    OptimizationConfig, OptimizationProgressEvent,
-    algorithm::OptimizationAlgorithm,
-    applier::ParameterApplier,
-    coupling::ParameterCoupling,
-    merit::MeritFunction,
-    operand::Operand,
-    progress::ProgressObserver,
-    reader::MetricReader,
-    resolver::ParameterResolver,
-    summary::OptimizationSummary,
-    variable::{FiniteDifferenceMethod, FreeVariable},
+    DampedLeastSquares, OptimizationConfig, OptimizationProgressEvent, algorithm::OptimizationAlgorithm, applier::ParameterApplier, coupling::ParameterCoupling, dls::DlsIterState, merit::MeritFunction, operand::Operand, progress::ProgressObserver, reader::MetricReader, resolver::ParameterResolver, summary::OptimizationSummary, variable::{FiniteDifferenceMethod, FreeVariable},
 };
 use opossum_core::{
     error::{OpmResult, OpossumError},
@@ -231,6 +221,7 @@ impl<'a> OpticOptimizer<'a> {
             OptimizationAlgorithm::NelderMead { max_iterations, .. }
             | OptimizationAlgorithm::LBFGS { max_iterations, .. }
             | OptimizationAlgorithm::SimulatedAnnealing { max_iterations, .. } => max_iterations,
+            OptimizationAlgorithm::Dls { max_iterations, .. } => max_iterations,
         };
 
         progress_callback(OptimizationProgressEvent::Started {
@@ -252,12 +243,8 @@ impl<'a> OpticOptimizer<'a> {
             best_tracker.clone(),
         );
 
-        let outcome = self.execute_solver_with_observer(
-            merit,
-            initial_vector,
-            observer,
-            best_tracker,
-        )?;
+        let outcome =
+            self.execute_solver_with_observer(merit, initial_vector, observer, best_tracker)?;
 
         // Parameter auflösen und in das Dokument schreiben
         let resolved_map = ParameterResolver::resolve(
@@ -350,6 +337,26 @@ impl<'a> OpticOptimizer<'a> {
                 }
                 Executor::new(merit, solver)
                     .configure(|state| {
+                        state
+                            .param(initial_vector.clone())
+                            .max_iters(max_iterations)
+                            .target_cost(self.target_cost)
+                    })
+                    .add_observer(observer, argmin::core::observers::ObserverMode::Always)
+                    .run()
+                    .map(|res| self.handle_solver_state(res.state()))
+            }
+            OptimizationAlgorithm::Dls {
+                max_iterations,
+                initial_damping,
+                gradient_tolerance,
+            } => {
+                let solver = DampedLeastSquares::new(merit.clone())
+                    .with_initial_damping(initial_damping)
+                    .with_gradient_tolerance(gradient_tolerance);
+
+                Executor::new(merit, solver)
+                    .configure(|state: DlsIterState| {
                         state
                             .param(initial_vector.clone())
                             .max_iters(max_iterations)
@@ -459,6 +466,27 @@ impl<'a> OpticOptimizer<'a> {
                 stall_accepted,
                 reannealing_fixed,
             ),
+            OptimizationAlgorithm::Dls {
+                max_iterations,
+                initial_damping,
+                gradient_tolerance,
+            } => {
+                let solver = DampedLeastSquares::new(merit.clone())
+                    .with_initial_damping(initial_damping)
+                    .with_gradient_tolerance(gradient_tolerance);
+
+                let res = Executor::new(merit, solver)
+                    .configure(|state: DlsIterState| {
+                        state
+                            .param(initial_vector.clone())
+                            .max_iters(max_iterations)
+                            .target_cost(self.target_cost)
+                    })
+                    .run()
+                    .map_err(|e| OpossumError::Other(format!("Optimization failed: {e}")))?;
+
+                self.handle_solver_state(res.state())
+            }
         }
     }
 

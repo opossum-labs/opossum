@@ -47,6 +47,7 @@ pub fn LiveMonitorPanel(mut props: LiveMonitorProps) -> Element {
             onchange: move |e| {
                 props.model.write().set_algorithm_kind(&e.value());
             },
+            option { value: "DLS", "Damped Least Squares (Levenberg-Marquardt)" }
             option { value: "LBFGS", "L-BFGS (Quasi-Newton)" }
             option { value: "NelderMead", "Nelder-Mead (Simplex)" }
             option { value: "SimulatedAnnealing", "Simulated Annealing" }

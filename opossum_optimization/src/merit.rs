@@ -2,6 +2,7 @@ use argmin::{
     core::{CostFunction, Error, Gradient},
     solver::simulatedannealing::Anneal,
 };
+use nalgebra::{DMatrix, DVector};
 use rand::RngExt;
 use std::sync::Arc;
 
@@ -25,6 +26,7 @@ pub const DEFAULT_BOUNDS_PENALTY_WEIGHT: f64 = 1.0e8;
 
 /// Central cost function evaluator $\Phi(x)$ managing blueprint cloning, parameter mapping,
 /// simulation execution, and operand evaluation.
+#[derive(Clone)]
 pub struct MeritFunction {
     blueprint: OpmDocument,
     free_variables: Vec<FreeVariable>,
@@ -191,6 +193,100 @@ impl MeritFunction {
                     .collect()
             }
         }
+    }
+    /// Evaluates the signed residual vector R(x) for all operands and box bounds.
+    ///
+    /// The sum of squares ||R(x)||^2 strictly equals the scalar cost Phi(x).
+    pub fn evaluate_residuals(&self, x: &[f64]) -> DVector<f64> {
+        let n_vars = self.free_variables.len();
+        let n_ops = self.operands.len();
+        let mut residuals = Vec::with_capacity(n_ops + n_vars);
+
+        // 1. Box bounds penalty residuals
+        let mut bound_residuals = Vec::with_capacity(n_vars);
+        for (var, &val) in self.free_variables.iter().zip(x.iter()) {
+            let res = if let Some(bounds) = &var.bounds {
+                if val < bounds.min {
+                    (bounds.min - val) * self.bounds_penalty_weight.sqrt()
+                } else if val > bounds.max {
+                    (val - bounds.max) * self.bounds_penalty_weight.sqrt()
+                } else {
+                    0.0
+                }
+            } else {
+                0.0
+            };
+            bound_residuals.push(res);
+        }
+
+        // 2. Clone blueprint and apply candidate parameters
+        let mut working_doc = self.blueprint.clone();
+        let parameter_map = match ParameterResolver::resolve(&self.free_variables, &self.couplings, x) {
+            Ok(map) => map,
+            Err(_) => {
+                let fallback_val = (self.fatal_penalty / (n_ops + n_vars) as f64).sqrt();
+                return DVector::from_element(n_ops + n_vars, fallback_val);
+            }
+        };
+
+        for (address, value) in parameter_map {
+            if ParameterApplier::set_value(&mut working_doc, &address, value).is_err() {
+                let fallback_val = (self.fatal_penalty / (n_ops + n_vars) as f64).sqrt();
+                return DVector::from_element(n_ops + n_vars, fallback_val);
+            }
+        }
+
+        if ParameterApplier::finalize_update(&mut working_doc).is_err()
+            || working_doc.analyze_headless().is_err()
+        {
+            let fallback_val = (self.fatal_penalty / (n_ops + n_vars) as f64).sqrt();
+            return DVector::from_element(n_ops + n_vars, fallback_val);
+        }
+
+        // 3. Evaluate individual operand residuals
+        let context = EvaluationContext::new(&working_doc);
+        for operand in &self.operands {
+            match operand.evaluate(&context) {
+                Ok(cost) => {
+                    residuals.push(cost.max(0.0).sqrt());
+                }
+                Err(_) => {
+                    residuals.push((self.fatal_penalty * 0.1).sqrt());
+                }
+            }
+        }
+
+        // 4. Append bound violation residuals
+        residuals.extend(bound_residuals);
+
+        DVector::from_vec(residuals)
+    }
+
+    /// Computes the m x n Jacobian matrix J_ij = d(r_i) / d(x_j) using parallel finite differences.
+    pub fn compute_jacobian(&self, x: &[f64], base_residuals: &DVector<f64>) -> DMatrix<f64> {
+        let n = self.free_variables.len();
+        let m = base_residuals.len();
+
+        let columns: Vec<DVector<f64>> = (0..n)
+            .into_par_iter()
+            .map(|j| {
+                let val = x[j];
+                // Relative finite difference step size with absolute lower guard
+                let h = (1e-4 * val.abs()).max(1e-6);
+
+                let mut x_perturbed = x.to_vec();
+                x_perturbed[j] += h;
+
+                let r_perturbed = self.evaluate_residuals(&x_perturbed);
+                (r_perturbed - base_residuals) / h
+            })
+            .collect();
+
+        let mut jacobian = DMatrix::zeros(m, n);
+        for (j, col) in columns.into_iter().enumerate() {
+            jacobian.set_column(j, &col);
+        }
+        jacobian
     }
 }
 
