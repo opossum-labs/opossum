@@ -13,11 +13,93 @@ pub struct UiVariableRow {
     pub group_name: String,
     pub node_name: String,
     pub property_name: String,
+    /// Note: Stored in solver units:
+    /// - For SurfaceCurvature: Curvature c in [1/m]
+    /// - For ConnectionDistance / NodeProperty: Value in SI base units (m, rad, etc.)
     pub current_value: f64,
     pub is_enabled: bool,
     pub min_bound: Option<f64>,
     pub max_bound: Option<f64>,
     pub coupling: Option<CouplingType>,
+}
+
+impl UiVariableRow {
+    /// True if this parameter represents a spherical surface curvature.
+    #[must_use]
+    pub fn is_curvature(&self) -> bool {
+        matches!(self.address, ParameterAddress::SurfaceCurvature { .. })
+    }
+
+    /// Computes the current radius of curvature in millimeters ($R = 1000 / c$).
+    /// Returns None for completely flat surfaces ($c \approx 0$).
+    #[must_use]
+    pub fn current_radius_mm(&self) -> Option<f64> {
+        if self.is_curvature() {
+            if self.current_value.abs() < 1e-9 {
+                None
+            } else {
+                Some(1000.0 / self.current_value)
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Formats the current value for display in the table.
+    #[must_use]
+    pub fn display_current(&self) -> (String, Option<String>) {
+        if self.is_curvature() {
+            if let Some(r_mm) = self.current_radius_mm() {
+                (
+                    format!("R = {r_mm:.1} mm"),
+                    Some(format!("c = {:.3} m⁻¹", self.current_value)),
+                )
+            } else {
+                ("Plan (R = ∞)".to_string(), Some("c = 0.0 m⁻¹".to_string()))
+            }
+        } else if matches!(self.address, ParameterAddress::ConnectionDistance { .. }) {
+            (format!("{:.2} mm", self.current_value * 1000.0), None)
+        } else {
+            (format!("{:.3}", self.current_value), None)
+        }
+    }
+
+    /// Converts designer bounds into solver BoxBounds in SI units.
+    pub fn solver_bounds(&self) -> Result<Option<BoxBounds>, String> {
+        let (Some(b_min), Some(b_max)) = (self.min_bound, self.max_bound) else {
+            return Ok(None);
+        };
+
+        if self.is_curvature() {
+            // Fall A: Vorzeichengleich (z. B. beide positiv: R in [40 mm, 750 mm])
+            if b_min > 0.0 && b_max > 0.0 {
+                let c_min = 1000.0 / b_max; // z.B. 1000 / 750 = 1.33 m^-1
+                let c_max = 1000.0 / b_min; // z.B. 1000 / 40  = 25.0 m^-1
+                BoxBounds::new(c_min, c_max).map(Some).map_err(|e| e.to_string())
+            }
+            // Fall B: Beide negativ (z. B. R in [-750 mm, -40 mm])
+            else if b_min < 0.0 && b_max < 0.0 {
+                let c_min = 1000.0 / b_max; // z.B. 1000 / -40  = -25.0 m^-1
+                let c_max = 1000.0 / b_min; // z.B. 1000 / -750 = -1.33 m^-1
+                BoxBounds::new(c_min, c_max).map(Some).map_err(|e| e.to_string())
+            }
+            // Fall C: Umklappen durch Plan erlaubt (z. B. min = -40 mm, max = +40 mm)
+            // min_bound ist die steilste konkave Grenze, max_bound die steilste konvexe Grenze
+            else {
+                let c_min = if b_min < 0.0 { 1000.0 / b_min } else { -50.0 };
+                let c_max = if b_max > 0.0 { 1000.0 / b_max } else { 50.0 };
+                BoxBounds::new(c_min, c_max).map(Some).map_err(|e| e.to_string())
+            }
+        } else if matches!(self.address, ParameterAddress::ConnectionDistance { .. }) {
+            BoxBounds::new(b_min * 1e-3, b_max * 1e-3)
+                .map(Some)
+                .map_err(|e| e.to_string())
+        } else {
+            BoxBounds::new(b_min, b_max)
+                .map(Some)
+                .map_err(|e| e.to_string())
+        }
+    }
 }
 
 /// Pre-flight validation severity.
@@ -98,19 +180,38 @@ impl OptimizationModel {
         self.run_preflight_validation();
     }
 
-    /// Adds a parameter from the schema as an active variable.
+    /// Adds a parameter from the schema as an active variable with reasonable initial bounds.
     pub fn add_variable_from_schema(&mut self, var: &DiscoveredVariable) {
-        // Prevent duplicate entries
         if self.variable_rows.iter().any(|r| r.address == var.address) {
             return;
         }
 
-        let val = var.initial_value;
-        let (min_b, max_b) = if val.abs() > 1e-6 {
-            let margin = val.abs() * 0.5;
-            (Some(val - margin), Some(val + margin))
+        let is_curv = matches!(var.address, ParameterAddress::SurfaceCurvature { .. });
+        let is_dist = matches!(var.address, ParameterAddress::ConnectionDistance { .. });
+
+        let (min_b, max_b) = if is_curv {
+            // Initial value is curvature c in [1/m]
+            if var.initial_value.abs() > 1e-6 {
+                let r_mm = 1000.0 / var.initial_value;
+                if r_mm > 0.0 {
+                    (Some(r_mm * 0.5), Some(r_mm * 2.0))
+                } else {
+                    (Some(r_mm * 2.0), Some(r_mm * 0.5))
+                }
+            } else {
+                (Some(-100.0), Some(100.0)) // Flat surface initial span
+            }
+        } else if is_dist {
+            // Distance is in meters, UI bounds in mm
+            let d_mm = var.initial_value * 1000.0;
+            (Some((d_mm * 0.7).max(1.0)), Some(d_mm * 1.5))
         } else {
-            (Some(-0.01), Some(0.01))
+            let val = var.initial_value;
+            if val.abs() > 1e-6 {
+                (Some(val * 0.7), Some(val * 1.5))
+            } else {
+                (Some(-0.1), Some(0.1))
+            }
         };
 
         self.variable_rows.push(UiVariableRow {
@@ -119,8 +220,8 @@ impl OptimizationModel {
             group_name: "Selected Parameters".to_string(),
             node_name: var.node_name.clone(),
             property_name: var.display_name.clone(),
-            current_value: val,
-            is_enabled: true, // User intentionally added this variable
+            current_value: var.initial_value,
+            is_enabled: true,
             min_bound: min_b,
             max_bound: max_b,
             coupling: None,
@@ -160,7 +261,6 @@ impl OptimizationModel {
 
         has_enabled_vars && has_operands && has_no_fatal_errors
     }
-
     /// Toggles the activation state of a variable.
     pub fn toggle_variable(&mut self, address: &ParameterAddress) {
         if let Some(row) = self.variable_rows.iter_mut().find(|r| &r.address == address) {
@@ -192,20 +292,37 @@ impl OptimizationModel {
         }
         self.run_preflight_validation();
     }
-
+    /// Applies default percentage bounds (e.g. ±20%) to all active variables.
+    pub fn apply_default_bounds(&mut self, factor: f64) {
+        for row in &mut self.variable_rows {
+            if row.is_curvature() {
+                if let Some(r_mm) = row.current_radius_mm() {
+                    if r_mm > 0.0 {
+                        row.min_bound = Some(r_mm * (1.0 - factor));
+                        row.max_bound = Some(r_mm * (1.0 + factor));
+                    } else {
+                        row.min_bound = Some(r_mm * (1.0 + factor));
+                        row.max_bound = Some(r_mm * (1.0 - factor));
+                    }
+                }
+            } else if matches!(row.address, ParameterAddress::ConnectionDistance { .. }) {
+                let d_mm = row.current_value * 1000.0;
+                row.min_bound = Some((d_mm * (1.0 - factor)).max(0.1));
+                row.max_bound = Some(d_mm * (1.0 + factor));
+            } else {
+                let val = row.current_value;
+                row.min_bound = Some(val * (1.0 - factor));
+                row.max_bound = Some(val * (1.0 + factor));
+            }
+        }
+        self.run_preflight_validation();
+    }
     /// Assembles the complete serializable payload expected by `POST /api/optimization/start`.
     pub fn build_optimization_config(&self) -> Result<OptimizationConfig, String> {
         let mut free_variables = Vec::new();
         let mut couplings = Vec::new();
 
         for row in &self.variable_rows {
-            // Apply subsystem scope filter if active
-            if let Some(scope_id) = self.scope_group_id {
-                if row.group_id != Some(scope_id) {
-                    continue;
-                }
-            }
-
             if let Some(rule) = &row.coupling {
                 couplings.push(ParameterCoupling {
                     target: row.address.clone(),
@@ -215,8 +332,7 @@ impl OptimizationModel {
                 let mut var = FreeVariable::new(row.address.clone(), row.property_name.clone())
                     .with_initial_value(row.current_value);
 
-                if let (Some(min), Some(max)) = (row.min_bound, row.max_bound) {
-                    let bounds = BoxBounds::new(min, max).map_err(|e| e.to_string())?;
+                if let Some(bounds) = row.solver_bounds()? {
                     var = var.with_bounds(bounds);
                 }
 
@@ -244,9 +360,7 @@ impl OptimizationModel {
     /// Validates variable bounds and checks couplings for cycles or conflicts.
     pub fn run_preflight_validation(&mut self) {
         let mut issues = Vec::new();
-        let mut target_set = HashSet::new();
 
-        // 1. Box bounds checks
         for row in &self.variable_rows {
             if row.is_enabled {
                 if let (Some(min), Some(max)) = (row.min_bound, row.max_bound) {
@@ -259,52 +373,12 @@ impl OptimizationModel {
                             ),
                             target_address: Some(row.address.clone()),
                         });
-                    } else if row.current_value < min || row.current_value > max {
-                        issues.push(ValidationIssue {
-                            severity: ValidationSeverity::Warning,
-                            message: format!(
-                                "{}: Current value ({:.3}) lies outside configured bounds [{min}, {max}].",
-                                row.node_name, row.current_value
-                            ),
-                            target_address: Some(row.address.clone()),
-                        });
-                    }
-                }
-            }
-
-            if row.coupling.is_some() {
-                target_set.insert(&row.address);
-            }
-        }
-
-        // 2. Coupling DAG cycle detection
-        for row in &self.variable_rows {
-            if let Some(rule) = &row.coupling {
-                let sources = match rule {
-                    CouplingType::Identical { source } | CouplingType::Opposite { source } => {
-                        vec![source]
-                    }
-                    CouplingType::Affine { source, .. } => vec![source],
-                    CouplingType::TotalLengthLock { other_segments, .. } => {
-                        other_segments.iter().collect()
-                    }
-                };
-
-                for &src in &sources {
-                    if src == &row.address {
-                        issues.push(ValidationIssue {
-                            severity: ValidationSeverity::Error,
-                            message: format!(
-                                "Self-referencing coupling detected on '{}'.",
-                                row.node_name
-                            ),
-                            target_address: Some(row.address.clone()),
-                        });
                     }
                 }
             }
         }
-        // Prüfen, ob eine ausgewählte Variable im Dokument gar nicht mehr existiert
+
+        // Check if selected variable still exists in schema
         if let Some(schema) = &self.schema {
             for row in &self.variable_rows {
                 if !schema.controllable_variables.iter().any(|v| v.address == row.address) {
@@ -319,6 +393,7 @@ impl OptimizationModel {
                 }
             }
         }
+
         self.validation_issues = issues;
     }
     /// Removes an operand by index.

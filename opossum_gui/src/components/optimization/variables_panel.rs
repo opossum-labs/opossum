@@ -12,7 +12,7 @@ use dioxus_free_icons::{
     icons::fa_solid_icons::{FaLink, FaPlus, FaSliders, FaTrash, FaXmark},
 };
 use dioxus_primitives::alert_dialog::AlertDialogContent;
-use opossum_optimization::{CouplingType, DiscoveredVariable};
+use opossum_optimization::{CouplingType, ParameterAddress};
 
 use super::state::OptimizationModel;
 
@@ -65,130 +65,133 @@ pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
                 tr {
                   th { style: "width: 25px;", "" }
                   th { "Node / Property" }
-                  th { style: "width: 75px;", "Current" }
-                  th { style: "width: 80px;", "Min Bound" }
-                  th { style: "width: 80px;", "Max Bound" }
-                  th { style: "width: 100px;", "Coupling" }
+                  th { style: "width: 95px;", "Current" }
+                  th { style: "width: 75px;", "Min (mm)" }
+                  th { style: "width: 75px;", "Max (mm)" }
+                  th { style: "width: 95px;", "Coupling" }
                   th { style: "width: 25px;", "" }
                 }
               }
               tbody {
                 for (idx , row) in rows.iter().enumerate() {
-                  tr {
-                    key: "{row.property_name}_{idx}",
-                    class: if !row.is_enabled && row.coupling.is_none() { "opacity-50" } else { "" },
+                  {
+                    let (main_val, sub_val) = row.display_current();
+                    rsx! {
+                      tr {
+                        key: "{row.property_name}_{idx}",
+                        class: if !row.is_enabled && row.coupling.is_none() { "opacity-50" } else { "" },
 
-                    // Checkbox: On/Off
-                    td { class: "text-center px-1",
-                      input {
-                        r#type: "checkbox",
-                        class: "form-check-input mt-0",
-                        checked: row.is_enabled,
-                        disabled: row.coupling.is_some(),
-                        onchange: {
-                            let addr = row.address.clone();
-                            move |_| props.model.write().toggle_variable(&addr)
-                        },
-                      }
-                    }
-
-                    // Node & Property
-                    td {
-                      div {
-                        class: "fw-bold text-info text-truncate",
-                        style: "max-width: 130px;",
-                        title: "{row.node_name}",
-                        "{row.node_name}"
-                      }
-                      div {
-                        class: "text-muted text-truncate",
-                        style: "max-width: 130px;",
-                        "{row.property_name}"
-                      }
-                    }
-
-                    // Current scalar
-                    td { class: "text-end text-light", "{row.current_value:.3}" }
-
-                    // Min Bound
-                    td {
-                      if row.coupling.is_none() {
-                        input {
-                          r#type: "number",
-                          class: "form-control form-control-sm bg-black text-light border-secondary p-0 px-1 font-monospace text-end",
-                          style: "height: 22px; font-size: 11px;",
-                          value: "{row.min_bound.unwrap_or(0.0)}",
-                          oninput: {
-                              let addr = row.address.clone();
-                              let max_val = row.max_bound;
-                              move |e| {
-                                  let new_min = e.value().parse::<f64>().ok();
-                                  props.model.write().update_bounds(&addr, new_min, max_val);
-                              }
-                          },
-                        }
-                      } else {
-                        span { class: "text-muted small", "-" }
-                      }
-                    }
-
-                    // Max Bound
-                    td {
-                      if row.coupling.is_none() {
-                        input {
-                          r#type: "number",
-                          class: "form-control form-control-sm bg-black text-light border-secondary p-0 px-1 font-monospace text-end",
-                          style: "height: 22px; font-size: 11px;",
-                          value: "{row.max_bound.unwrap_or(0.0)}",
-                          oninput: {
-                              let addr = row.address.clone();
-                              let min_val = row.min_bound;
-                              move |e| {
-                                  let new_max = e.value().parse::<f64>().ok();
-                                  props.model.write().update_bounds(&addr, min_val, new_max);
-                              }
-                          },
-                        }
-                      } else {
-                        span { class: "text-muted small", "-" }
-                      }
-                    }
-
-                    // Coupling
-                    td {
-                      if let Some(rule) = &row.coupling {
-                        span {
-                          class: "badge bg-warning text-dark d-inline-flex align-items-center gap-1 text-truncate",
-                          style: "max-width: 95px; cursor: pointer;",
-                          title: "Click to remove coupling",
-                          onclick: {
-                              let addr = row.address.clone();
-                              move |_| props.model.write().set_coupling(&addr, None)
-                          },
-                          Icon { icon: FaLink }
-                          match rule {
-                              CouplingType::Opposite { .. } => "Opposite",
-                              CouplingType::Identical { .. } => "Identical",
-                              CouplingType::Affine { .. } => "Affine",
-                              CouplingType::TotalLengthLock { .. } => "LengthLock",
+                        // Checkbox
+                        td { class: "text-center px-1",
+                          input {
+                            r#type: "checkbox",
+                            class: "form-check-input mt-0",
+                            checked: row.is_enabled,
+                            disabled: row.coupling.is_some(),
+                            onchange: {
+                                let addr = row.address.clone();
+                                move |_| props.model.write().toggle_variable(&addr)
+                            },
                           }
-                          Icon { icon: FaXmark }
                         }
-                      } else if row.is_enabled {
-                        span { class: "badge bg-secondary", "Free Var" }
-                      } else {
-                        span { class: "text-muted", "Fixed" }
-                      }
-                    }
 
-                    // Remove Variable Action
-                    td { class: "text-end px-1",
-                      button {
-                        class: "btn btn-outline-danger btn-sm p-0 border-0",
-                        style: "line-height: 1;",
-                        title: "Remove variable from optimization",
-                        onclick: move |_| props.model.write().remove_variable(idx),
-                        Icon { icon: FaTrash }
+                        // Node & Property
+                        td {
+                          div { class: "fw-bold text-info text-truncate", style: "max-width: 120px;", title: "{row.node_name}",
+                            "{row.node_name}"
+                          }
+                          div { class: "text-muted text-truncate", style: "max-width: 120px;", "{row.property_name}" }
+                        }
+
+                        // Current Value (Displays R = ... mm for curvatures)
+                        td { class: "text-end px-1",
+                          div { class: "text-light fw-bold", "{main_val}" }
+                          if let Some(sub) = sub_val {
+                            div { class: "text-muted", style: "font-size: 9px;", "{sub}" }
+                          }
+                        }
+
+                        // Min Bound Input (mm)
+                        td { class: "px-1",
+                          if row.coupling.is_none() {
+                            input {
+                              r#type: "number",
+                              class: "form-control form-control-sm bg-black text-light border-secondary p-0 px-1 font-monospace text-end",
+                              style: "height: 22px; font-size: 11px;",
+                              value: "{row.min_bound.unwrap_or(0.0):.1}",
+                              oninput: {
+                                  let addr = row.address.clone();
+                                  let max_val = row.max_bound;
+                                  move |e| {
+                                      let new_min = e.value().parse::<f64>().ok();
+                                      props.model.write().update_bounds(&addr, new_min, max_val);
+                                  }
+                              },
+                            }
+                          } else {
+                            span { class: "text-muted small", "-" }
+                          }
+                        }
+
+                        // Max Bound Input (mm)
+                        td { class: "px-1",
+                          if row.coupling.is_none() {
+                            input {
+                              r#type: "number",
+                              class: "form-control form-control-sm bg-black text-light border-secondary p-0 px-1 font-monospace text-end",
+                              style: "height: 22px; font-size: 11px;",
+                              value: "{row.max_bound.unwrap_or(0.0):.1}",
+                              oninput: {
+                                  let addr = row.address.clone();
+                                  let min_val = row.min_bound;
+                                  move |e| {
+                                      let new_max = e.value().parse::<f64>().ok();
+                                      props.model.write().update_bounds(&addr, min_val, new_max);
+                                  }
+                              },
+                            }
+                          } else {
+                            span { class: "text-muted small", "-" }
+                          }
+                        }
+
+                        // Coupling Badge
+                        td { class: "px-1",
+                          if let Some(rule) = &row.coupling {
+                            span {
+                              class: "badge bg-warning text-dark d-inline-flex align-items-center gap-1 text-truncate",
+                              style: "max-width: 90px; cursor: pointer;",
+                              title: "Click to remove coupling",
+                              onclick: {
+                                  let addr = row.address.clone();
+                                  move |_| props.model.write().set_coupling(&addr, None)
+                              },
+                              Icon { icon: FaLink }
+                              match rule {
+                                  CouplingType::Opposite { .. } => "Opposite",
+                                  CouplingType::Identical { .. } => "Identical",
+                                  CouplingType::Affine { .. } => "Affine",
+                                  CouplingType::TotalLengthLock { .. } => "LengthLock",
+                              }
+                              Icon { icon: FaXmark }
+                            }
+                          } else if row.is_enabled {
+                            span { class: "badge bg-secondary", "Free Var" }
+                          } else {
+                            span { class: "text-muted", "Fixed" }
+                          }
+                        }
+
+                        // Delete
+                        td { class: "text-end px-1",
+                          button {
+                            class: "btn btn-outline-danger btn-sm p-0 border-0",
+                            style: "line-height: 1;",
+                            title: "Remove variable",
+                            onclick: move |_| props.model.write().remove_variable(idx),
+                            Icon { icon: FaTrash }
+                          }
+                        }
                       }
                     }
                   }
@@ -196,9 +199,7 @@ pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
 
                 if rows.is_empty() {
                   tr {
-                    td {
-                      colspan: "7",
-                      class: "text-center text-muted py-4",
+                    td { colspan: "7", class: "text-center text-muted py-4",
                       "No variables selected. Click '+ Variable' to add tuning parameters."
                     }
                   }
@@ -209,14 +210,18 @@ pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
         }
       }
 
-      // Dialog: Add Variable from Schema
       if show_add_dialog() {
-        AddVariableDialog { model: props.model, open: show_add_dialog }
+        AddVariableDialog {
+          model: props.model,
+          open: show_add_dialog,
+        }
       }
 
-      // Dialog: Add Coupling
       if show_coupling_dialog() {
-        CouplingDialog { model: props.model, open: show_coupling_dialog }
+        CouplingDialog {
+          model: props.model,
+          open: show_coupling_dialog,
+        }
       }
     }
 }
@@ -237,7 +242,7 @@ fn AddVariableDialog(mut model: Signal<OptimizationModel>, mut open: Signal<bool
           AlertDialogDescription {
             div { class: "d-flex flex-column gap-3 text-light",
               p { class: "small text-muted mb-0",
-                "Select a property or connection distance to be adjusted by the solver."
+                "Select an optical parameter (curvature, thickness, distance) to be adjusted by the solver."
               }
 
               if let Some(schema) = schema_opt {
@@ -245,29 +250,46 @@ fn AddVariableDialog(mut model: Signal<OptimizationModel>, mut open: Signal<bool
                   div { class: "list-group list-group-flush small",
                     for var in schema.controllable_variables.into_iter().filter(|v| !v.is_read_only) {
                       {
-                          let is_already_added = current_rows.iter().any(|r| r.address == var.address);
-                          rsx! {
-                            button {
-                              r#type: "button",
-                              class: if is_already_added { "list-group-item bg-dark text-muted border-secondary d-flex justify-content-between align-items-center pe-none opacity-50" } else { "list-group-item list-group-item-action bg-dark text-light border-secondary d-flex justify-content-between align-items-center" },
-                              onclick: {
-                                  let v_clone = var.clone();
-                                  move |_| {
-                                      model.write().add_variable_from_schema(&v_clone);
-                                      open.set(false);
-                                  }
-                              },
-                              div {
-                                div { class: "fw-bold", "{var.node_name}" }
-                                div { class: "text-muted font-monospace", "{var.display_name} = {var.initial_value:.3}" }
-                              }
-                              if is_already_added {
-                                span { class: "badge bg-secondary", "Added" }
-                              } else {
-                                span { class: "badge bg-primary", "+ Add" }
-                              }
+                        let is_already_added = current_rows.iter().any(|r| r.address == var.address);
+                        let is_curv = matches!(var.address, ParameterAddress::SurfaceCurvature { .. });
+                        let val_display = if is_curv {
+                            if var.initial_value.abs() < 1e-9 {
+                                "Plan (R = ∞)".to_string()
+                            } else {
+                                format!("R = {:.1} mm", 1000.0 / var.initial_value)
+                            }
+                        } else if matches!(var.address, ParameterAddress::ConnectionDistance { .. }) {
+                            format!("{:.2} mm", var.initial_value * 1000.0)
+                        } else {
+                            format!("{:.3}", var.initial_value)
+                        };
+
+                        rsx! {
+                          button {
+                            r#type: "button",
+                            class: if is_already_added {
+                                "list-group-item bg-dark text-muted border-secondary d-flex justify-content-between align-items-center pe-none opacity-50"
+                            } else {
+                                "list-group-item list-group-item-action bg-dark text-light border-secondary d-flex justify-content-between align-items-center"
+                            },
+                            onclick: {
+                                let v_clone = var.clone();
+                                move |_| {
+                                    model.write().add_variable_from_schema(&v_clone);
+                                    open.set(false);
+                                }
+                            },
+                            div {
+                              div { class: "fw-bold", "{var.node_name}" }
+                              div { class: "text-muted font-monospace", "{var.display_name} — {val_display}" }
+                            }
+                            if is_already_added {
+                              span { class: "badge bg-secondary", "Added" }
+                            } else {
+                              span { class: "badge bg-primary", "+ Add" }
                             }
                           }
+                        }
                       }
                     }
                   }
@@ -326,9 +348,7 @@ fn CouplingDialog(mut model: Signal<OptimizationModel>, mut open: Signal<bool>) 
           AlertDialogDescription {
             div { class: "d-flex flex-column gap-3 text-light",
               div {
-                label { class: "form-label small text-warning mb-1",
-                  "Dependent Target Parameter"
-                }
+                label { class: "form-label small text-warning mb-1", "Dependent Target Parameter" }
                 select {
                   class: "form-select form-select-sm bg-black text-light border-secondary",
                   value: "{target_idx}",
@@ -343,29 +363,18 @@ fn CouplingDialog(mut model: Signal<OptimizationModel>, mut open: Signal<bool>) 
                 select {
                   class: "form-select form-select-sm bg-black text-light border-secondary",
                   value: "{rule_kind}",
-                  onchange: move |e| {
-                      rule_kind
-                          .set(
-                              match e.value().as_str() {
-                                  "Identical" => "Identical",
-                                  "Affine" => "Affine",
-                                  _ => "Opposite",
-                              },
-                          )
-                  },
-                  option { value: "Opposite",
-                    "Opposite: Target = -1.0 × Source (e.g. Symmetrical Lens R2 = -R1)"
-                  }
-                  option { value: "Identical",
-                    "Identical: Target = Source (e.g. Equidistant Spacings)"
-                  }
+                  onchange: move |e| rule_kind.set(match e.value().as_str() {
+                      "Identical" => "Identical",
+                      "Affine" => "Affine",
+                      _ => "Opposite",
+                  }),
+                  option { value: "Opposite", "Opposite: Target = -1.0 × Source (e.g. Symmetrical Lens R2 = -R1)" }
+                  option { value: "Identical", "Identical: Target = Source (e.g. Equidistant Spacings)" }
                   option { value: "Affine", "Affine: Target = factor × Source + offset" }
                 }
               }
               div {
-                label { class: "form-label small text-info mb-1",
-                  "Driving Source Variable"
-                }
+                label { class: "form-label small text-info mb-1", "Driving Source Variable" }
                 select {
                   class: "form-select form-select-sm bg-black text-light border-secondary",
                   value: "{source_idx}",

@@ -34,9 +34,9 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
     let mut current_cost = use_signal(|| 0.0_f64);
     let mut initial_cost = use_signal(|| 0.0_f64);
     let mut show_issue_drawer = use_signal(|| false);
-
+    let mut show_assistants = use_signal(|| false);
     // Coroutine receives progress events from background thread and updates UI signals safely
-    let sse_receiver = use_coroutine(
+    let _ = use_coroutine(
         move |mut rx: UnboundedReceiver<OptimizationProgressEvent>| async move {
             while let Some(event) = rx.next().await {
                 match event {
@@ -258,36 +258,57 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                     }
                   }
 
-                  // Rule Assistants Menu
-                  div { class: "dropdown",
+                  // Rule Assistants Menu (Controlled directly via Dioxus state)
+                  div { class: "dropdown position-relative",
                     button {
                       class: "btn btn-outline-info btn-sm dropdown-toggle d-flex align-items-center gap-1",
                       style: "height: 30px; font-size: 11px;",
                       r#type: "button",
-                      "data-bs-toggle": "dropdown",
+                      onclick: move |e| {
+                          e.stop_propagation();
+                          show_assistants.set(!show_assistants());
+                      },
                       Icon { icon: FaWandMagicSparkles }
                       "Rule Assistants"
                     }
-                    ul { class: "dropdown-menu dropdown-menu-dark shadow small",
-                      li {
-                        a {
-                          class: "dropdown-item",
-                          href: "#",
-                          onclick: move |_| {
-                              for row in &mut model.write().variable_rows {
-                                  let val = row.current_value;
-                                  row.min_bound = Some(val * 0.8);
-                                  row.max_bound = Some(val * 1.2);
-                              }
-                              model.write().run_preflight_validation();
-                          },
-                          "Add Default Box Bounds (±20%)"
+
+                    if show_assistants() {
+                      // Click-outside backdrop zum Schließen des Dropdowns
+                      div {
+                        style: "position: fixed; inset: 0; z-index: 999;",
+                        onclick: move |_| show_assistants.set(false),
+                      }
+
+                      ul {
+                        class: "dropdown-menu dropdown-menu-dark shadow small show position-absolute",
+                        style: "z-index: 1000; top: 100%; left: 0; display: block; min-width: 14rem;",
+                        li {
+                          a {
+                            class: "dropdown-item",
+                            href: "#",
+                            onclick: move |e| {
+                                e.prevent_default();
+                                model.write().apply_default_bounds(0.2);
+                                show_assistants.set(false);
+                            },
+                            "Add Default Box Bounds (±20%)"
+                          }
+                        }
+                        li {
+                          a {
+                            class: "dropdown-item",
+                            href: "#",
+                            onclick: move |e| {
+                                e.prevent_default();
+                                model.write().apply_default_bounds(0.5);
+                                show_assistants.set(false);
+                            },
+                            "Add Wide Box Bounds (±50%)"
+                          }
                         }
                       }
                     }
                   }
-
-                  // Run / Abort Control
                   // Run / Abort Control
                   Button {
                     variant: if is_running() { ButtonVariant::Destructive } else { ButtonVariant::Primary },
