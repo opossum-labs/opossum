@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 use opossum_optimization::{
-    BoxBounds, CouplingType, DiscoveredVariable, FreeVariable, ModelOptimizationSchema, OptimizationAlgorithm, OptimizationConfig, ParameterAddress, ParameterCoupling, StandardOperand, TargetValueOperand, ThresholdDirection, ThresholdOperand,
+    BoxBounds, CouplingType, DiscoveredVariable, FreeVariable, MetricSource, ModelOptimizationSchema, OptimizationAlgorithm, OptimizationConfig, ParameterAddress, ParameterCoupling, StandardOperand, TargetValueOperand, ThresholdDirection, ThresholdOperand,
 };
 
 /// UI-specific representation of a tunable variable row in the dense table.
@@ -152,20 +152,21 @@ impl Default for OptimizationModel {
 
 impl OptimizationModel {
    /// Initializes or refreshes the model using an extracted schema.
+    /// Populates or updates the active rows using newly discovered schema information.
     pub fn populate_from_schema(&mut self, schema: ModelOptimizationSchema) {
-        // 1. Synchronisiere alle bereits hinzugefügten Variablen mit den aktuellen Werten aus dem Modell
         for row in &mut self.variable_rows {
             if let Some(discovered) = schema
                 .controllable_variables
                 .iter()
                 .find(|v| v.address == row.address)
             {
+                row.group_id = discovered.group_id;
+                row.group_name = discovered.group_name.clone();
                 row.current_value = discovered.initial_value;
                 row.node_name = discovered.node_name.clone();
                 row.property_name = discovered.display_name.clone();
             }
         }
-
         self.schema = Some(schema);
         self.run_preflight_validation();
     }
@@ -190,7 +191,6 @@ impl OptimizationModel {
         let is_dist = matches!(var.address, ParameterAddress::ConnectionDistance { .. });
 
         let (min_b, max_b) = if is_curv {
-            // Initial value is curvature c in [1/m]
             if var.initial_value.abs() > 1e-6 {
                 let r_mm = 1000.0 / var.initial_value;
                 if r_mm > 0.0 {
@@ -199,10 +199,9 @@ impl OptimizationModel {
                     (Some(r_mm * 2.0), Some(r_mm * 0.5))
                 }
             } else {
-                (Some(-100.0), Some(100.0)) // Flat surface initial span
+                (Some(-100.0), Some(100.0))
             }
         } else if is_dist {
-            // Distance is in meters, UI bounds in mm
             let d_mm = var.initial_value * 1000.0;
             (Some((d_mm * 0.7).max(1.0)), Some(d_mm * 1.5))
         } else {
@@ -216,8 +215,8 @@ impl OptimizationModel {
 
         self.variable_rows.push(UiVariableRow {
             address: var.address.clone(),
-            group_id: None,
-            group_name: "Selected Parameters".to_string(),
+            group_id: var.group_id,
+            group_name: var.group_name.clone(),
             node_name: var.node_name.clone(),
             property_name: var.display_name.clone(),
             current_value: var.initial_value,
@@ -230,6 +229,80 @@ impl OptimizationModel {
         self.run_preflight_validation();
     }
 
+    /// Resolves the human-readable analyzer name for a given analyzer ID.
+    #[must_use]
+    pub fn analyzer_name(&self, analyzer_id: Uuid) -> String {
+        self.schema
+            .as_ref()
+            .and_then(|s| s.analyzers.iter().find(|a| a.id == analyzer_id))
+            .map(|a| a.name.clone())
+            .unwrap_or_else(|| "Analyzer".to_string())
+    }
+
+    /// Returns human-readable display components (badge_text, details) for an operand.
+    #[must_use]
+    pub fn describe_operand(&self, operand: &StandardOperand) -> (String, String) {
+        match operand {
+            StandardOperand::Target(t) => match &t.source {
+                MetricSource::Observable(obs) => {
+                    let aname = self.analyzer_name(obs.analyzer_id);
+                    let nname = self
+                        .schema
+                        .as_ref()
+                        .and_then(|s| {
+                            s.observable_metrics
+                                .iter()
+                                .find(|m| m.address.node_id == obs.node_id)
+                                .map(|m| m.node_name.clone())
+                        })
+                        .unwrap_or_else(|| "Detector".to_string());
+                    (
+                        format!("{aname}"),
+                        format!("{nname} → {}", obs.metric_name),
+                    )
+                }
+                MetricSource::Parameter(_) => ("Parameter".to_string(), t.name.clone()),
+            },
+            StandardOperand::Threshold(t) => match &t.source {
+                MetricSource::Observable(obs) => {
+                    let aname = self.analyzer_name(obs.analyzer_id);
+                    (
+                        format!("{aname}"),
+                        format!("Threshold on {}", obs.metric_name),
+                    )
+                }
+                MetricSource::Parameter(_) => ("Limit".to_string(), t.name.clone()),
+            },
+           StandardOperand::MinEdgeThickness(t) => {
+                let node_name = self
+                    .schema
+                    .as_ref()
+                    .and_then(|s| {
+                        s.edge_thickness_nodes
+                            .iter()
+                            .find(|n| n.node_id == t.node_id)
+                            .map(|n| n.node_name.clone())
+                    })
+                    .unwrap_or_else(|| t.node_id.to_string());
+                (
+                    "Geometry".to_string(),
+                    format!("{node_name} → Min Edge Thickness"),
+                )
+            }
+            StandardOperand::MaxTotalLength(_) => (
+                "Geometry".to_string(),
+                "Maximum System Track Length".to_string(),
+            ),
+            StandardOperand::TransmissionPenalty(t) => {
+                let aname = self.analyzer_name(t.address.analyzer_id);
+                (
+                    format!("{aname}"),
+                    "Vignetting / Loss Penalty".to_string(),
+                )
+            }
+        }
+    }
+    
     /// Removes a variable by index.
     pub fn remove_variable(&mut self, index: usize) {
         if index < self.variable_rows.len() {
@@ -283,7 +356,21 @@ impl OptimizationModel {
         }
         self.run_preflight_validation();
     }
+    /// Updates the lower bound (in designer units, mm) for a specific parameter.
+    pub fn set_min_bound(&mut self, address: &ParameterAddress, min: Option<f64>) {
+        if let Some(row) = self.variable_rows.iter_mut().find(|r| &r.address == address) {
+            row.min_bound = min;
+        }
+        self.run_preflight_validation();
+    }
 
+    /// Updates the upper bound (in designer units, mm) for a specific parameter.
+    pub fn set_max_bound(&mut self, address: &ParameterAddress, max: Option<f64>) {
+        if let Some(row) = self.variable_rows.iter_mut().find(|r| &r.address == address) {
+            row.max_bound = max;
+        }
+        self.run_preflight_validation();
+    }
     /// Updates the box bounds for a given variable.
     pub fn update_bounds(&mut self, address: &ParameterAddress, min: Option<f64>, max: Option<f64>) {
         if let Some(row) = self.variable_rows.iter_mut().find(|r| &r.address == address) {
