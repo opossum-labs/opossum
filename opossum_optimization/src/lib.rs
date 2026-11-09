@@ -28,6 +28,7 @@ pub use merit::{DEFAULT_BOUNDS_PENALTY_WEIGHT, DEFAULT_FATAL_PENALTY, MeritFunct
 pub use operand::{
     EvaluationContext, MaxTotalLengthOperand, MinEdgeThicknessOperand, Operand, StandardOperand,
     TargetValueOperand, ThresholdDirection, ThresholdOperand, TransmissionPenaltyOperand,
+    default_scale_for_metric,
 };
 pub use optimizer::OpticOptimizer;
 pub use progress::OptimizationProgressEvent;

@@ -42,18 +42,12 @@ pub struct OptimizationUndo {
 }
 
 impl OptimizationUndo {
-    // pub fn apply_old(&self, doc: &mut OpmDocument) -> OpmResult<()> {
-    //     for (addr, (old_val, _)) in &self.parameter_diff {
-    //         ParameterApplier::set_value(doc, addr, *old_val)?;
-    //     }
-    //     ParameterApplier::finalize_update(doc)
-    // }
-
     pub fn apply_new(&self, doc: &mut OpmDocument) -> OpmResult<()> {
         for (addr, (_, new_val)) in &self.parameter_diff {
             ParameterApplier::set_value(doc, addr, *new_val)?;
         }
-        ParameterApplier::finalize_update(doc)
+        ParameterApplier::finalize_update(doc)?;
+        doc.analyze_headless()
     }
 }
 

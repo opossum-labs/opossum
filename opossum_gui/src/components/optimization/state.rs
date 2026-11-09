@@ -2,7 +2,9 @@ use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 use opossum_optimization::{
-    BoxBounds, CouplingType, DiscoveredVariable, FreeVariable, MetricSource, ModelOptimizationSchema, OptimizationAlgorithm, OptimizationConfig, ParameterAddress, ParameterCoupling, StandardOperand, TargetValueOperand, ThresholdDirection, ThresholdOperand,
+    BoxBounds, CouplingType, DiscoveredVariable, FreeVariable, MetricSource,
+    ModelOptimizationSchema, OptimizationAlgorithm, OptimizationConfig, ParameterAddress,
+    ParameterCoupling, StandardOperand, TargetValueOperand, ThresholdDirection, ThresholdOperand,
 };
 
 /// UI-specific representation of a tunable variable row in the dense table.
@@ -75,20 +77,26 @@ impl UiVariableRow {
             if b_min > 0.0 && b_max > 0.0 {
                 let c_min = 1000.0 / b_max; // z.B. 1000 / 750 = 1.33 m^-1
                 let c_max = 1000.0 / b_min; // z.B. 1000 / 40  = 25.0 m^-1
-                BoxBounds::new(c_min, c_max).map(Some).map_err(|e| e.to_string())
+                BoxBounds::new(c_min, c_max)
+                    .map(Some)
+                    .map_err(|e| e.to_string())
             }
             // Fall B: Beide negativ (z. B. R in [-750 mm, -40 mm])
             else if b_min < 0.0 && b_max < 0.0 {
                 let c_min = 1000.0 / b_max; // z.B. 1000 / -40  = -25.0 m^-1
                 let c_max = 1000.0 / b_min; // z.B. 1000 / -750 = -1.33 m^-1
-                BoxBounds::new(c_min, c_max).map(Some).map_err(|e| e.to_string())
+                BoxBounds::new(c_min, c_max)
+                    .map(Some)
+                    .map_err(|e| e.to_string())
             }
             // Fall C: Umklappen durch Plan erlaubt (z. B. min = -40 mm, max = +40 mm)
             // min_bound ist die steilste konkave Grenze, max_bound die steilste konvexe Grenze
             else {
                 let c_min = if b_min < 0.0 { 1000.0 / b_min } else { -50.0 };
                 let c_max = if b_max > 0.0 { 1000.0 / b_max } else { 50.0 };
-                BoxBounds::new(c_min, c_max).map(Some).map_err(|e| e.to_string())
+                BoxBounds::new(c_min, c_max)
+                    .map(Some)
+                    .map_err(|e| e.to_string())
             }
         } else if matches!(self.address, ParameterAddress::ConnectionDistance { .. }) {
             BoxBounds::new(b_min * 1e-3, b_max * 1e-3)
@@ -151,7 +159,7 @@ impl Default for OptimizationModel {
 }
 
 impl OptimizationModel {
-   /// Initializes or refreshes the model using an extracted schema.
+    /// Initializes or refreshes the model using an extracted schema.
     /// Populates or updates the active rows using newly discovered schema information.
     pub fn populate_from_schema(&mut self, schema: ModelOptimizationSchema) {
         for row in &mut self.variable_rows {
@@ -256,10 +264,7 @@ impl OptimizationModel {
                                 .map(|m| m.node_name.clone())
                         })
                         .unwrap_or_else(|| "Detector".to_string());
-                    (
-                        format!("{aname}"),
-                        format!("{nname} → {}", obs.metric_name),
-                    )
+                    (format!("{aname}"), format!("{nname} → {}", obs.metric_name))
                 }
                 MetricSource::Parameter(_) => ("Parameter".to_string(), t.name.clone()),
             },
@@ -273,7 +278,7 @@ impl OptimizationModel {
                 }
                 MetricSource::Parameter(_) => ("Limit".to_string(), t.name.clone()),
             },
-           StandardOperand::MinEdgeThickness(t) => {
+            StandardOperand::MinEdgeThickness(t) => {
                 let node_name = self
                     .schema
                     .as_ref()
@@ -295,14 +300,11 @@ impl OptimizationModel {
             ),
             StandardOperand::TransmissionPenalty(t) => {
                 let aname = self.analyzer_name(t.address.analyzer_id);
-                (
-                    format!("{aname}"),
-                    "Vignetting / Loss Penalty".to_string(),
-                )
+                (format!("{aname}"), "Vignetting / Loss Penalty".to_string())
             }
         }
     }
-    
+
     /// Removes a variable by index.
     pub fn remove_variable(&mut self, index: usize) {
         if index < self.variable_rows.len() {
@@ -313,9 +315,13 @@ impl OptimizationModel {
             for row in &mut self.variable_rows {
                 if let Some(rule) = &row.coupling {
                     let has_ref = match rule {
-                        CouplingType::Identical { source } | CouplingType::Opposite { source } => source == &removed_addr,
+                        CouplingType::Identical { source } | CouplingType::Opposite { source } => {
+                            source == &removed_addr
+                        }
                         CouplingType::Affine { source, .. } => source == &removed_addr,
-                        CouplingType::TotalLengthLock { other_segments, .. } => other_segments.contains(&removed_addr),
+                        CouplingType::TotalLengthLock { other_segments, .. } => {
+                            other_segments.contains(&removed_addr)
+                        }
                     };
                     if has_ref {
                         row.coupling = None;
@@ -328,15 +334,25 @@ impl OptimizationModel {
 
     /// Checks if a valid optimization run can be started.
     pub fn can_start_optimization(&self) -> bool {
-        let has_enabled_vars = self.variable_rows.iter().any(|r| r.is_enabled && r.coupling.is_none());
+        let has_enabled_vars = self
+            .variable_rows
+            .iter()
+            .any(|r| r.is_enabled && r.coupling.is_none());
         let has_operands = !self.operands.is_empty();
-        let has_no_fatal_errors = !self.validation_issues.iter().any(|i| i.severity == ValidationSeverity::Error);
+        let has_no_fatal_errors = !self
+            .validation_issues
+            .iter()
+            .any(|i| i.severity == ValidationSeverity::Error);
 
         has_enabled_vars && has_operands && has_no_fatal_errors
     }
     /// Toggles the activation state of a variable.
     pub fn toggle_variable(&mut self, address: &ParameterAddress) {
-        if let Some(row) = self.variable_rows.iter_mut().find(|r| &r.address == address) {
+        if let Some(row) = self
+            .variable_rows
+            .iter_mut()
+            .find(|r| &r.address == address)
+        {
             row.is_enabled = !row.is_enabled;
             // A coupled variable cannot be simultaneously enabled as an independent free variable
             if row.is_enabled {
@@ -358,7 +374,11 @@ impl OptimizationModel {
     }
     /// Updates the lower bound (in designer units, mm) for a specific parameter.
     pub fn set_min_bound(&mut self, address: &ParameterAddress, min: Option<f64>) {
-        if let Some(row) = self.variable_rows.iter_mut().find(|r| &r.address == address) {
+        if let Some(row) = self
+            .variable_rows
+            .iter_mut()
+            .find(|r| &r.address == address)
+        {
             row.min_bound = min;
         }
         self.run_preflight_validation();
@@ -366,14 +386,27 @@ impl OptimizationModel {
 
     /// Updates the upper bound (in designer units, mm) for a specific parameter.
     pub fn set_max_bound(&mut self, address: &ParameterAddress, max: Option<f64>) {
-        if let Some(row) = self.variable_rows.iter_mut().find(|r| &r.address == address) {
+        if let Some(row) = self
+            .variable_rows
+            .iter_mut()
+            .find(|r| &r.address == address)
+        {
             row.max_bound = max;
         }
         self.run_preflight_validation();
     }
     /// Updates the box bounds for a given variable.
-    pub fn update_bounds(&mut self, address: &ParameterAddress, min: Option<f64>, max: Option<f64>) {
-        if let Some(row) = self.variable_rows.iter_mut().find(|r| &r.address == address) {
+    pub fn update_bounds(
+        &mut self,
+        address: &ParameterAddress,
+        min: Option<f64>,
+        max: Option<f64>,
+    ) {
+        if let Some(row) = self
+            .variable_rows
+            .iter_mut()
+            .find(|r| &r.address == address)
+        {
             row.min_bound = min;
             row.max_bound = max;
         }
@@ -468,7 +501,11 @@ impl OptimizationModel {
         // Check if selected variable still exists in schema
         if let Some(schema) = &self.schema {
             for row in &self.variable_rows {
-                if !schema.controllable_variables.iter().any(|v| v.address == row.address) {
+                if !schema
+                    .controllable_variables
+                    .iter()
+                    .any(|v| v.address == row.address)
+                {
                     issues.push(ValidationIssue {
                         severity: ValidationSeverity::Error,
                         message: format!(
@@ -519,6 +556,119 @@ impl OptimizationModel {
                 StandardOperand::MinEdgeThickness(t) => t.min_thickness = new_target,
                 _ => {}
             }
+        }
+        self.run_preflight_validation();
+    }
+
+    /// Returns human-readable display components: (badge_text, detail_text, operator_symbol)
+    #[must_use]
+    pub fn describe_operand_full(
+        &self,
+        operand: &StandardOperand,
+    ) -> (String, String, &'static str) {
+        match operand {
+            StandardOperand::Target(t) => match &t.source {
+                MetricSource::Observable(obs) => {
+                    let aname = self.analyzer_name(obs.analyzer_id);
+                    let nname = self
+                        .schema
+                        .as_ref()
+                        .and_then(|s| {
+                            s.observable_metrics
+                                .iter()
+                                .find(|m| m.address.node_id == obs.node_id)
+                                .map(|m| m.node_name.clone())
+                        })
+                        .unwrap_or_else(|| "Detector".to_string());
+                    (aname, format!("{nname} → {}", obs.metric_name), "=")
+                }
+                MetricSource::Parameter(_) => ("Parameter".to_string(), t.name.clone(), "="),
+            },
+            StandardOperand::Threshold(t) => {
+                let symbol = match t.direction {
+                    ThresholdDirection::Upper => "≤",
+                    ThresholdDirection::Lower => "≥",
+                };
+                match &t.source {
+                    MetricSource::Observable(obs) => {
+                        let aname = self.analyzer_name(obs.analyzer_id);
+                        let nname = self
+                            .schema
+                            .as_ref()
+                            .and_then(|s| {
+                                s.observable_metrics
+                                    .iter()
+                                    .find(|m| m.address.node_id == obs.node_id)
+                                    .map(|m| m.node_name.clone())
+                            })
+                            .unwrap_or_else(|| "Detector".to_string());
+                        (aname, format!("{nname} → {}", obs.metric_name), symbol)
+                    }
+                    MetricSource::Parameter(_) => ("Limit".to_string(), t.name.clone(), symbol),
+                }
+            }
+            StandardOperand::MinEdgeThickness(t) => {
+                let node_name = self
+                    .schema
+                    .as_ref()
+                    .and_then(|s| {
+                        s.edge_thickness_nodes
+                            .iter()
+                            .find(|n| n.node_id == t.node_id)
+                            .map(|n| n.node_name.clone())
+                    })
+                    .unwrap_or_else(|| t.node_id.to_string());
+                (
+                    "Geometry".to_string(),
+                    format!("{node_name} → Min Edge"),
+                    "≥",
+                )
+            }
+            StandardOperand::MaxTotalLength(_) => (
+                "Geometry".to_string(),
+                "Total Track Length".to_string(),
+                "≤",
+            ),
+            StandardOperand::TransmissionPenalty(t) => {
+                let aname = self.analyzer_name(t.address.analyzer_id);
+                (aname, "Transmission / Vignetting".to_string(), "≥")
+            }
+        }
+    }
+
+    /// Toggles the inequality direction for a Threshold operand (Upper <-> Lower).
+    pub fn toggle_threshold_direction(&mut self, index: usize) {
+        if let Some(StandardOperand::Threshold(t)) = self.operands.get_mut(index) {
+            t.direction = match t.direction {
+                ThresholdDirection::Upper => ThresholdDirection::Lower,
+                ThresholdDirection::Lower => ThresholdDirection::Upper,
+            };
+        }
+        self.run_preflight_validation();
+    }
+
+    /// Converts an observable operand between TargetValue and Threshold.
+    pub fn convert_operand_type(&mut self, index: usize) {
+        if let Some(op) = self.operands.get(index) {
+            let new_op = match op {
+                StandardOperand::Target(t) => StandardOperand::Threshold(ThresholdOperand {
+                    name: t.name.clone(),
+                    source: t.source.clone(),
+                    limit: t.target,
+                    direction: ThresholdDirection::Upper,
+                    weight: t.weight,
+                    scale: t.scale,
+                }),
+                StandardOperand::Threshold(t) => StandardOperand::Target(TargetValueOperand {
+                    name: t.name.clone(),
+                    source: t.source.clone(),
+                    target: t.limit,
+                    weight: t.weight,
+                    scale: t.scale,
+                }),
+                other => other.clone(),
+            };
+            self.operands[index] = new_op;
         }
         self.run_preflight_validation();
     }
@@ -576,14 +726,21 @@ impl OptimizationModel {
     /// Returns initial temperature if Simulated Annealing is active.
     pub fn sa_initial_temperature(&self) -> f64 {
         match self.algorithm {
-            OptimizationAlgorithm::SimulatedAnnealing { initial_temperature, .. } => initial_temperature,
+            OptimizationAlgorithm::SimulatedAnnealing {
+                initial_temperature,
+                ..
+            } => initial_temperature,
             _ => 1.0,
         }
     }
 
     /// Sets the initial temperature for Simulated Annealing.
     pub fn set_sa_initial_temperature(&mut self, temp: f64) {
-        if let OptimizationAlgorithm::SimulatedAnnealing { initial_temperature, .. } = &mut self.algorithm {
+        if let OptimizationAlgorithm::SimulatedAnnealing {
+            initial_temperature,
+            ..
+        } = &mut self.algorithm
+        {
             *initial_temperature = temp;
         }
     }
@@ -598,8 +755,46 @@ impl OptimizationModel {
 
     /// Sets the cooling rate alpha for Simulated Annealing.
     pub fn set_sa_cooling_rate(&mut self, rate: f64) {
-        if let OptimizationAlgorithm::SimulatedAnnealing { cooling_rate, .. } = &mut self.algorithm {
+        if let OptimizationAlgorithm::SimulatedAnnealing { cooling_rate, .. } = &mut self.algorithm
+        {
             *cooling_rate = rate.clamp(0.5, 0.999);
         }
+    }
+    /// Updates the operand target value from UI input, automatically converting mm to m for geometric constraints.
+    pub fn update_operand_target_ui(&mut self, index: usize, ui_value: f64) {
+        let is_geometric = matches!(
+            self.operands.get(index),
+            Some(StandardOperand::MinEdgeThickness(_)) | Some(StandardOperand::MaxTotalLength(_))
+        );
+        let model_val = if is_geometric { ui_value * 1e-3 } else { ui_value };
+        self.update_operand_target(index, model_val);
+    }
+    pub fn reset_to_initial_baseline(&mut self) {
+        if let Some(schema) = &self.schema {
+            for row in &mut self.variable_rows {
+                if let Some(discovered) = schema
+                    .controllable_variables
+                    .iter()
+                    .find(|v| v.address == row.address)
+                {
+                    row.current_value = discovered.initial_value;
+                    // Bounds passend zum ursprünglichen Wert neu initialisieren
+                    let is_curv = matches!(row.address, ParameterAddress::SurfaceCurvature { .. });
+                    let is_dist = matches!(row.address, ParameterAddress::ConnectionDistance { .. });
+                    if is_curv {
+                        if discovered.initial_value.abs() > 1e-6 {
+                            let r_mm = 1000.0 / discovered.initial_value;
+                            row.min_bound = Some(if r_mm > 0.0 { r_mm * 0.5 } else { r_mm * 2.0 });
+                            row.max_bound = Some(if r_mm > 0.0 { r_mm * 2.0 } else { r_mm * 0.5 });
+                        }
+                    } else if is_dist {
+                        let d_mm = discovered.initial_value * 1000.0;
+                        row.min_bound = Some((d_mm * 0.7).max(1.0));
+                        row.max_bound = Some(d_mm * 1.5);
+                    }
+                }
+            }
+        }
+        self.run_preflight_validation();
     }
 }

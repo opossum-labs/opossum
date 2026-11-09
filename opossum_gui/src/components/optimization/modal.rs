@@ -20,9 +20,9 @@ use opossum_optimization::{ModelOptimizationSchema, OptimizationProgressEvent};
 
 use super::{
     live_monitor_panel::LiveMonitorPanel,
-    merit_designer_panel::MeritDesignerPanel,
+    merit_designer_panel::{AddOperandDialog, MeritDesignerPanel},
     state::{OptimizationModel, ValidationSeverity},
-    variables_panel::VariablesPanel,
+    variables_panel::{AddVariableDialog, CouplingDialog, VariablesPanel},
 };
 
 #[component]
@@ -35,6 +35,12 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
     let mut initial_cost = use_signal(|| 0.0_f64);
     let mut show_issue_drawer = use_signal(|| false);
     let mut show_assistants = use_signal(|| false);
+
+    // Dialog state signals managed at the root level to prevent table stacking context clipping
+    let show_add_var_dialog = use_signal(|| false);
+    let show_coupling_dialog = use_signal(|| false);
+    let show_add_operand_dialog = use_signal(|| false);
+
     // Coroutine receives progress events from background thread and updates UI signals safely
     let _ = use_coroutine(
         move |mut rx: UnboundedReceiver<OptimizationProgressEvent>| async move {
@@ -99,7 +105,6 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
     });
 
     // Start optimization job and dispatch SSE stream into the coroutine channel
-    // Start optimization job with clean timing
     let mut start_optimization = move || {
         let config = match model.read().build_optimization_config() {
             Ok(cfg) => cfg,
@@ -108,7 +113,7 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                 return;
             }
         };
-        // UI-Limits auf den gewählten Algorithmus einstellen
+
         max_iterations.set(model.read().max_iterations());
         is_running.set(true);
 
@@ -117,7 +122,6 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
         // 1. UI-Thread Task: Updates Dioxus state upon receiving events
         spawn(async move {
             while let Some(event) = rx.recv().await {
-                // Im UI-Thread Task für SSE-Events:
                 match event {
                     OptimizationProgressEvent::Started {
                         initial_cost: cost,
@@ -142,7 +146,6 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                     } => {
                         current_cost.set(final_cost);
                         is_running.set(false);
-                        // Werte in der Tabelle auf die optimierten Endergebnisse aktualisieren:
                         model.write().update_values(&optimized_parameters);
                         *crate::NODE_DETAILS_REFRESH.write() += 1;
                     }
@@ -172,7 +175,6 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
         spawn(async move {
             let sse_tx = tx.clone();
 
-            // Connect to events stream
             spawn(async move {
                 if let Err(err) = subscribe_optimization_events(move |event| {
                     let _ = sse_tx.send(event);
@@ -183,7 +185,6 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                 }
             });
 
-            // Brief delay (50ms) to ensure HTTP SSE handshake is completed
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
             let res = post_start_optimization(config).await;
@@ -196,7 +197,7 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
 
     // Immediate abort reaction
     let mut abort_optimization = move || {
-        is_running.set(false); // Reset UI immediately so user gets instant feedback
+        is_running.set(false);
         spawn(async move {
             let res = post_abort_optimization().await;
             eval_action_run(res, Some(|msg| log::info!("{msg}")));
@@ -217,12 +218,13 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                 }),
             );
 
-            // Nach dem Undo die wiederhergestellten Werte direkt im Dialog aktualisieren
             let schema_res = get_optimization_schema().await;
             eval_action_run(
                 schema_res,
                 Some(move |schema| {
-                    model.write().populate_from_schema(schema);
+                    let mut m = model.write();
+                    m.populate_from_schema(schema);
+                    m.reset_to_initial_baseline();
                 }),
             );
         });
@@ -264,7 +266,7 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                       class: "btn btn-outline-info btn-sm dropdown-toggle d-flex align-items-center gap-1",
                       style: "height: 30px; font-size: 11px;",
                       r#type: "button",
-                      onclick: move |e| {
+                      onclick: move |e: MouseEvent| {
                           e.stop_propagation();
                           show_assistants.set(!show_assistants());
                       },
@@ -273,7 +275,6 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                     }
 
                     if show_assistants() {
-                      // Click-outside backdrop zum Schließen des Dropdowns
                       div {
                         style: "position: fixed; inset: 0; z-index: 999;",
                         onclick: move |_| show_assistants.set(false),
@@ -309,6 +310,7 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                       }
                     }
                   }
+
                   // Run / Abort Control
                   Button {
                     variant: if is_running() { ButtonVariant::Destructive } else { ButtonVariant::Primary },
@@ -376,17 +378,24 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                 }
               }
 
-              // 3-Column Layout with Real Data Signals
+              // 3-Column Layout with Root Signals
               div { class: "row g-3",
                 div { class: "col-lg-5 col-md-12",
-                  VariablesPanel { model }
+                  VariablesPanel {
+                    model,
+                    show_add_dialog: show_add_var_dialog,
+                    show_coupling_dialog,
+                  }
                 }
                 div { class: "col-lg-4 col-md-12",
-                  MeritDesignerPanel { model }
+                  MeritDesignerPanel {
+                    model,
+                    show_add_dialog: show_add_operand_dialog,
+                  }
                 }
                 div { class: "col-lg-3 col-md-12",
                   LiveMonitorPanel {
-                    model, // <-- Hier model übergeben
+                    model,
                     is_running: is_running(),
                     iteration: current_iteration(),
                     current_cost: current_cost(),
@@ -409,6 +418,19 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
             AlertDialogCancel { on_click: move |_| open.set(false), "Close Window" }
           }
         }
+      }
+
+      // Root-level sub-dialogs (rendered outside the table-scroll and card stacking contexts)
+      if show_add_var_dialog() {
+        AddVariableDialog { model, open: show_add_var_dialog }
+      }
+
+      if show_coupling_dialog() {
+        CouplingDialog { model, open: show_coupling_dialog }
+      }
+
+      if show_add_operand_dialog() {
+        AddOperandDialog { model, open: show_add_operand_dialog }
       }
     }
 }

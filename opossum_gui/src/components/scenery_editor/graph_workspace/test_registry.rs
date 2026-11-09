@@ -34,12 +34,6 @@ impl<K: Hash + Eq + Clone> IndexRegistry<K> {
             index
         }
     }
-
-    /// Resets all allocated indices and resets the counter to zero (e.g., when opening a new graph).
-    pub fn clear(&mut self) {
-        self.indices.clear();
-        self.next_index = 0;
-    }
 }
 
 /// Unique identity of an edge connecting two node ports.

@@ -22,13 +22,12 @@ use super::state::OptimizationModel;
 #[derive(Props, Clone, PartialEq)]
 pub struct VariablesPanelProps {
     pub model: Signal<OptimizationModel>,
+    pub show_add_dialog: Signal<bool>,
+    pub show_coupling_dialog: Signal<bool>,
 }
 
 #[component]
 pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
-    let mut show_add_dialog = use_signal(|| false);
-    let mut show_coupling_dialog = use_signal(|| false);
-
     let rows = props.model.read().variable_rows.clone();
 
     // Group rows by group_name while keeping the original row index for mutations
@@ -56,7 +55,7 @@ pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
               variant: ButtonVariant::Primary,
               size: ButtonSize::Sm,
               title: "Pick parameter from model schema",
-              onclick: move |_| show_add_dialog.set(true),
+              onclick: move |_| props.show_add_dialog.set(true),
               Icon { icon: FaPlus }
               "Variable"
             }
@@ -65,7 +64,7 @@ pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
               size: ButtonSize::Sm,
               disabled: rows.len() < 2,
               title: "Create parameter coupling (e.g. R2 = -R1)",
-              onclick: move |_| show_coupling_dialog.set(true),
+              onclick: move |_| props.show_coupling_dialog.set(true),
               Icon { icon: FaLink }
               "Link"
             }
@@ -77,7 +76,9 @@ pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
             table {
               class: "table table-dark table-hover table-sm align-middle mb-0 font-monospace",
               style: "font-size: 11px;",
-              thead { class: "table-active sticky-top",
+              thead {
+                class: "table-active sticky-top",
+                style: "z-index: 1;",
                 tr {
                   th { style: "width: 25px;", "" }
                   th { "Node / Property" }
@@ -239,20 +240,12 @@ pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
           }
         }
       }
-
-      if show_add_dialog() {
-        AddVariableDialog { model: props.model, open: show_add_dialog }
-      }
-
-      if show_coupling_dialog() {
-        CouplingDialog { model: props.model, open: show_coupling_dialog }
-      }
     }
 }
 
 /// Dialog allowing user to select controllable variables from the model schema grouped by NodeGroup and Node.
 #[component]
-fn AddVariableDialog(mut model: Signal<OptimizationModel>, mut open: Signal<bool>) -> Element {
+pub fn AddVariableDialog(mut model: Signal<OptimizationModel>, mut open: Signal<bool>) -> Element {
     let schema_opt = model.read().schema.clone();
     let current_rows = model.read().variable_rows.clone();
 
@@ -291,76 +284,81 @@ fn AddVariableDialog(mut model: Signal<OptimizationModel>, mut open: Signal<bool
         on_open_change: move |v| open.set(v),
         max_width: "46rem".to_string(),
         AlertDialogContent {
-          AlertDialogTitle { "Add Tuning Variable" }
-          AlertDialogDescription {
-            div { class: "d-flex flex-column gap-3 text-light",
-              p { class: "small text-muted mb-0",
-                "Select optical parameters organized by group and component:"
-              }
+          div {
+            class: "bg-dark text-light p-3 rounded border border-secondary shadow-lg",
+            style: "position: relative; z-index: 1060;",
 
-              if !grouped_hierarchy.is_empty() {
-                ScrollArea { height: "22rem",
-                  div { class: "d-flex flex-column gap-2",
-                    for (group_name , node_list) in grouped_hierarchy {
-                      div { class: "border border-secondary rounded overflow-hidden bg-black bg-opacity-50",
-                        // Level 1: NodeGroup Header
-                        div { class: "bg-black py-1 px-2 text-warning fw-bold small d-flex align-items-center gap-2 border-bottom border-secondary text-uppercase",
-                          Icon { icon: FaLayerGroup }
-                          span { "{group_name}" }
-                        }
+            AlertDialogTitle { "Add Tuning Variable" }
+            AlertDialogDescription {
+              div { class: "d-flex flex-column gap-3 text-light mt-2",
+                p { class: "small text-muted mb-0",
+                  "Select optical parameters organized by group and component:"
+                }
 
-                        // Level 2: Component Nodes
-                        div { class: "p-2 d-flex flex-column gap-2",
-                          for (node_name , vars) in node_list {
-                            div { class: "rounded border border-secondary border-opacity-50 bg-dark p-2",
-                              div { class: "fw-bold text-info small mb-1 pb-1 border-bottom border-secondary border-opacity-25 d-flex align-items-center justify-content-between",
-                                span { "{node_name}" }
-                                span {
-                                  class: "badge bg-secondary font-monospace",
-                                  style: "font-size: 9px;",
-                                  "{vars.len()} props"
+                if !grouped_hierarchy.is_empty() {
+                  ScrollArea { height: "22rem",
+                    div { class: "d-flex flex-column gap-2",
+                      for (group_name , node_list) in grouped_hierarchy {
+                        div { class: "border border-secondary rounded overflow-hidden bg-black bg-opacity-50",
+                          // Level 1: NodeGroup Header
+                          div { class: "bg-black py-1 px-2 text-warning fw-bold small d-flex align-items-center gap-2 border-bottom border-secondary text-uppercase",
+                            Icon { icon: FaLayerGroup }
+                            span { "{group_name}" }
+                          }
+
+                          // Level 2: Component Nodes
+                          div { class: "p-2 d-flex flex-column gap-2",
+                            for (node_name , vars) in node_list {
+                              div { class: "rounded border border-secondary border-opacity-50 bg-dark p-2",
+                                div { class: "fw-bold text-info small mb-1 pb-1 border-bottom border-secondary border-opacity-25 d-flex align-items-center justify-content-between",
+                                  span { "{node_name}" }
+                                  span {
+                                    class: "badge bg-secondary font-monospace",
+                                    style: "font-size: 9px;",
+                                    "{vars.len()} props"
+                                  }
                                 }
-                              }
 
-                              div { class: "list-group list-group-flush",
-                                for var in vars {
-                                  {
-                                      let is_already_added = current_rows.iter().any(|r| r.address == var.address);
-                                      let is_curv = matches!(var.address, ParameterAddress::SurfaceCurvature { .. });
-                                      let val_display = if is_curv {
-                                          if var.initial_value.abs() < 1e-9 {
-                                              "Plan (R = ∞)".to_string()
-                                          } else {
-                                              format!("R = {:.1} mm", 1000.0 / var.initial_value)
-                                          }
-                                      } else if matches!(var.address, ParameterAddress::ConnectionDistance { .. }) {
-                                          format!("{:.2} mm", var.initial_value * 1000.0)
-                                      } else {
-                                          format!("{:.3}", var.initial_value)
-                                      };
+                                div { class: "list-group list-group-flush",
+                                  for var in vars {
+                                    {
+                                        let is_already_added = current_rows.iter().any(|r| r.address == var.address);
+                                        let is_curv = matches!(var.address, ParameterAddress::SurfaceCurvature { .. });
+                                        let val_display = if is_curv {
+                                            if var.initial_value.abs() < 1e-9 {
+                                                "Plan (R = ∞)".to_string()
+                                            } else {
+                                                format!("R = {:.1} mm", 1000.0 / var.initial_value)
+                                            }
+                                        } else if matches!(var.address, ParameterAddress::ConnectionDistance { .. }) {
+                                            format!("{:.2} mm", var.initial_value * 1000.0)
+                                        } else {
+                                            format!("{:.3}", var.initial_value)
+                                        };
 
-                                      rsx! {
-                                        button {
-                                          r#type: "button",
-                                          class: if is_already_added { "list-group-item bg-transparent text-muted py-1 px-2 d-flex justify-content-between align-items-center pe-none opacity-50 border-0" } else { "list-group-item list-group-item-action bg-transparent text-light py-1 px-2 d-flex justify-content-between align-items-center rounded border-0" },
-                                          onclick: {
-                                              let v_clone = var.clone();
-                                              move |_| {
-                                                  model.write().add_variable_from_schema(&v_clone);
-                                                  open.set(false);
-                                              }
-                                          },
-                                          div { class: "d-flex align-items-center gap-2",
-                                            span { class: "font-monospace text-light", "{var.display_name}" }
-                                            span { class: "text-muted font-monospace small", "({val_display})" }
-                                          }
-                                          if is_already_added {
-                                            span { class: "badge bg-secondary", style: "font-size: 9px;", "Added" }
-                                          } else {
-                                            span { class: "badge bg-primary", style: "font-size: 9px;", "+ Add" }
+                                        rsx! {
+                                          button {
+                                            r#type: "button",
+                                            class: if is_already_added { "list-group-item bg-transparent text-muted py-1 px-2 d-flex justify-content-between align-items-center pe-none opacity-50 border-0" } else { "list-group-item list-group-item-action bg-transparent text-light py-1 px-2 d-flex justify-content-between align-items-center rounded border-0" },
+                                            onclick: {
+                                                let v_clone = var.clone();
+                                                move |_| {
+                                                    model.write().add_variable_from_schema(&v_clone);
+                                                    open.set(false);
+                                                }
+                                            },
+                                            div { class: "d-flex align-items-center gap-2",
+                                              span { class: "font-monospace text-light", "{var.display_name}" }
+                                              span { class: "text-muted font-monospace small", "({val_display})" }
+                                            }
+                                            if is_already_added {
+                                              span { class: "badge bg-secondary", style: "font-size: 9px;", "Added" }
+                                            } else {
+                                              span { class: "badge bg-primary", style: "font-size: 9px;", "+ Add" }
+                                            }
                                           }
                                         }
-                                      }
+                                    }
                                   }
                                 }
                               }
@@ -370,14 +368,14 @@ fn AddVariableDialog(mut model: Signal<OptimizationModel>, mut open: Signal<bool
                       }
                     }
                   }
+                } else {
+                  div { class: "text-muted small", "No model schema loaded." }
                 }
-              } else {
-                div { class: "text-muted small", "No model schema loaded." }
               }
             }
-          }
-          AlertDialogActions {
-            AlertDialogCancel { on_click: move |_| open.set(false), "Cancel" }
+            AlertDialogActions {
+              AlertDialogCancel { on_click: move |_| open.set(false), "Cancel" }
+            }
           }
         }
       }
@@ -386,7 +384,7 @@ fn AddVariableDialog(mut model: Signal<OptimizationModel>, mut open: Signal<bool
 
 /// Modal dialog to configure a parameter coupling rule.
 #[component]
-fn CouplingDialog(mut model: Signal<OptimizationModel>, mut open: Signal<bool>) -> Element {
+pub fn CouplingDialog(mut model: Signal<OptimizationModel>, mut open: Signal<bool>) -> Element {
     let vars = model.read().variable_rows.clone();
     let mut target_idx = use_signal(|| 0_usize);
     let mut source_idx = use_signal(|| if vars.len() > 1 { 1 } else { 0 });
@@ -421,76 +419,88 @@ fn CouplingDialog(mut model: Signal<OptimizationModel>, mut open: Signal<bool>) 
         on_open_change: move |v| open.set(v),
         max_width: "42rem".to_string(),
         AlertDialogContent {
-          AlertDialogTitle { "Create Parameter Coupling" }
-          AlertDialogDescription {
-            div { class: "d-flex flex-column gap-3 text-light",
-              div {
-                label { class: "form-label small text-warning mb-1",
-                  "Dependent Target Parameter"
-                }
-                select {
-                  class: "form-select form-select-sm bg-black text-light border-secondary",
-                  value: "{target_idx}",
-                  onchange: move |e| target_idx.set(e.value().parse().unwrap_or(0)),
-                  for (i , v) in vars.iter().enumerate() {
-                    option { value: "{i}", "{v.node_name} — {v.property_name}" }
+          div {
+            class: "bg-dark text-light p-3 rounded border border-secondary shadow-lg",
+            style: "position: relative; z-index: 1060;",
+
+            AlertDialogTitle { "Create Parameter Coupling" }
+            AlertDialogDescription {
+              div { class: "d-flex flex-column gap-3 text-light mt-2",
+                div {
+                  label { class: "form-label small text-warning mb-1",
+                    "Dependent Target Parameter"
                   }
-                }
-              }
-              div {
-                label { class: "form-label small text-info mb-1", "Coupling Rule" }
-                select {
-                  class: "form-select form-select-sm bg-black text-light border-secondary",
-                  value: "{rule_kind}",
-                  onchange: move |e| {
-                      rule_kind
-                          .set(
-                              match e.value().as_str() {
-                                  "Identical" => "Identical",
-                                  "Affine" => "Affine",
-                                  _ => "Opposite",
-                              },
-                          )
-                  },
-                  option { value: "Opposite",
-                    "Opposite: Target = -1.0 × Source (e.g. Symmetrical Lens R2 = -R1)"
-                  }
-                  option { value: "Identical",
-                    "Identical: Target = Source (e.g. Equidistant Spacings)"
-                  }
-                  option { value: "Affine", "Affine: Target = factor × Source + offset" }
-                }
-              }
-              div {
-                label { class: "form-label small text-info mb-1",
-                  "Driving Source Variable"
-                }
-                select {
-                  class: "form-select form-select-sm bg-black text-light border-secondary",
-                  value: "{source_idx}",
-                  onchange: move |e| source_idx.set(e.value().parse().unwrap_or(0)),
-                  for (i , v) in vars.iter().enumerate() {
-                    if i != target_idx() {
+                  select {
+                    class: "form-select form-select-sm bg-black text-light border-secondary",
+                    value: "{target_idx}",
+                    onchange: move |e| target_idx.set(e.value().parse().unwrap_or(0)),
+                    for (i , v) in vars.iter().enumerate() {
                       option { value: "{i}", "{v.node_name} — {v.property_name}" }
+                    }
+                  }
+                }
+                div {
+                  label { class: "form-label small text-info mb-1",
+                    "Coupling Rule"
+                  }
+                  select {
+                    class: "form-select form-select-sm bg-black text-light border-secondary",
+                    value: "{rule_kind}",
+                    onchange: move |e| {
+                        rule_kind
+                            .set(
+                                match e.value().as_str() {
+                                    "Identical" => "Identical",
+                                    "Affine" => "Affine",
+                                    _ => "Opposite",
+                                },
+                            )
+                    },
+                    option { value: "Opposite",
+                      "Opposite: Target = -1.0 × Source (e.g. Symmetrical Lens R2 = -R1)"
+                    }
+                    option { value: "Identical",
+                      "Identical: Target = Source (e.g. Equidistant Spacings)"
+                    }
+                    option { value: "Affine",
+                      "Affine: Target = factor × Source + offset"
+                    }
+                  }
+                }
+                div {
+                  label { class: "form-label small text-info mb-1",
+                    "Driving Source Variable"
+                  }
+                  select {
+                    class: "form-select form-select-sm bg-black text-light border-secondary",
+                    value: "{source_idx}",
+                    onchange: move |e| source_idx.set(e.value().parse().unwrap_or(0)),
+                    for (i , v) in vars.iter().enumerate() {
+                      if i != target_idx() {
+                        option { value: "{i}",
+                          "{v.node_name} — {v.property_name}"
+                        }
+                      }
                     }
                   }
                 }
               }
             }
-          }
-          AlertDialogActions {
-            AlertDialogCancel { on_click: move |_| open.set(false), "Cancel" }
-            Button {
-              variant: ButtonVariant::Primary,
-              size: ButtonSize::Sm,
-              onclick: create_coupling,
-              "Add Coupling"
+            AlertDialogActions {
+              AlertDialogCancel { on_click: move |_| open.set(false), "Cancel" }
+              Button {
+                variant: ButtonVariant::Primary,
+                size: ButtonSize::Sm,
+                onclick: create_coupling,
+                "Add Coupling"
+              }
             }
           }
         }
       }
     }
 }
+
 /// Local controlled text input for numeric bounds.
 /// Commits value changes only on blur or when the Enter key is pressed,
 /// formatting to up to 3 decimal places without redundant trailing zeros.
@@ -543,9 +553,9 @@ fn BoundInput(value: Option<f64>, on_commit: EventHandler<Option<f64>>) -> Eleme
         class: "form-control form-control-sm bg-black text-light border-secondary p-0 px-1 font-monospace text-end",
         style: "height: 22px; font-size: 11px;",
         value: "{text}",
-        oninput: move |e| text.set(e.value()),
+        oninput: move |e: FormEvent| text.set(e.value()),
         onblur: move |_| commit(),
-        onkeydown: move |e| {
+        onkeydown: move |e: KeyboardEvent| {
             if e.key() == Key::Enter {
                 commit();
             }
