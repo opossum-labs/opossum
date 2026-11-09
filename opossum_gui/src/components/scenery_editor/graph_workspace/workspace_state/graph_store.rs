@@ -2,7 +2,10 @@ use crate::components::scenery_editor::{
     NodeElement, NodeType, SelectedNode,
     constants::{NODE_WIDTH, SUGIYAMA_VERT_PATH_FACTOR, SUGIYAMA_VERTEX_SPACING},
     edges::edge_element::EdgeElement,
-    graph_workspace::EditorState,
+    graph_workspace::{
+        EditorState,
+        test_registry::{EdgeKey, IndexRegistry},
+    },
     ports::ports_component::Ports,
 };
 use dioxus::{
@@ -108,26 +111,14 @@ pub struct GraphStore {
     edges: Vec<EdgeElement>,
     node_selection: NodeSelection,
     mapped_ports: PortMap,
-    next_node_index: usize, // unique node ID for playwright tests
-    next_edge_index: usize, // unique edge ID for playwright tests
+    /// Persistent sequential test indices for nodes across undo/redo actions.
+    node_indices: IndexRegistry<Uuid>,
+    /// Persistent sequential test indices for edges across undo/redo actions.
+    edge_indices: IndexRegistry<EdgeKey>,
 }
 
 #[store(pub)]
 impl<Lens> Store<GraphStore, Lens> {
-    /// Generates the next sequential node index and increments the internal counter.
-    fn fetch_next_node_index(&mut self) -> usize {
-        let current_index = *self.next_node_index().read();
-        *self.next_node_index().write() += 1;
-        current_index
-    }
-
-    /// Generates the next sequential edge index and increments the internal counter.
-    fn fetch_next_edge_index(&mut self) -> usize {
-        let current_index = *self.next_edge_index().read();
-        *self.next_edge_index().write() += 1;
-        current_index
-    }
-
     /// Inserts a new edge, or - if one with the same `(src_uuid, src_port, target_uuid,
     /// target_port)` identity already exists - updates it in place instead of duplicating it.
     /// A full-tab refill (e.g. the GUI's `process_fill_graph_of_group`, which re-fetches a
@@ -150,7 +141,9 @@ impl<Lens> Store<GraphStore, Lens> {
             return;
         }
         drop(edges);
-        let index = self.fetch_next_edge_index();
+        // Fetch or restore the persistent edge test index
+        let edge_key = EdgeKey::from(&connect_info);
+        let index = self.edge_indices().write().get_or_create(edge_key);
         self.edges()
             .write()
             .push(EdgeElement::new(connect_info, index));
@@ -210,11 +203,12 @@ impl<Lens> Store<GraphStore, Lens> {
         }
     }
     fn add_nodes(&mut self, nodes: &[NodeInfo]) {
-        self.nodes().write().extend(
-            nodes
-                .iter()
-                .map(|node| (node.uuid(), node_element_with_amp_state(node))),
-        );
+        for node in nodes {
+            let mut node_element = node_element_with_amp_state(node);
+            let index = self.node_indices().write().get_or_create(node.uuid());
+            node_element.set_node_index(index);
+            self.nodes().insert(node.uuid(), node_element);
+        }
     }
     fn add_analyzers(&mut self, analyzers: &[AnalyzerItemDto]) {
         self.nodes()
@@ -314,7 +308,11 @@ impl<Lens> Store<GraphStore, Lens> {
     /// A `NodeElement` representing the newly added reference node.
     fn add_new_reference_node(&mut self, ref_node_info: &NodeInfo) -> NodeElement {
         let mut node_element = node_element_with_amp_state(ref_node_info);
-        node_element.set_node_index(self.fetch_next_node_index());
+        let index = self
+            .node_indices()
+            .write()
+            .get_or_create(ref_node_info.uuid());
+        node_element.set_node_index(index);
         let id = ref_node_info.uuid();
         let nr_of_nodes = self.nodes().len();
         node_element.set_z_index(nr_of_nodes + 1);
@@ -344,7 +342,8 @@ impl<Lens> Store<GraphStore, Lens> {
     /// * `node_info`: The `NodeInfo` containing the type and position of the new node.
     fn add_new_optical_node(&mut self, node_info: &NodeInfo) {
         let mut node_element = node_element_with_amp_state(node_info);
-        node_element.set_node_index(self.fetch_next_node_index());
+        let index = self.node_indices().write().get_or_create(node_info.uuid());
+        node_element.set_node_index(index);
         self.nodes().insert(node_info.uuid(), node_element.clone());
         self.set_node_active(node_info.uuid(), node_element.z_index(), true);
     }
@@ -355,7 +354,7 @@ impl<Lens> Store<GraphStore, Lens> {
     /// * `new_analyzer`: The `NewAnalyzerInfo` containing the type and position of the new analyzer.
     /// * `analyzer_id`: The unique identifier for the new analyzer.
     fn add_new_analyzer(&mut self, new_analyzer: NewAnalyzerInfo, analyzer_id: Uuid) {
-        let node_index = self.fetch_next_node_index();
+        let node_index = self.node_indices().write().get_or_create(analyzer_id);
         let (x, y) = new_analyzer.gui_position;
         let mut node_element = NodeElement::new(
             format!("{}", new_analyzer.analyzer_type),
