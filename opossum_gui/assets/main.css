@@ -81,9 +81,9 @@ body {
     position: relative;       
     display: flex;
     align-items: center;
-    justify-content: center;  
+    justify-content: center;
     height: 30px;
-    padding: 0 24px;         
+    padding: 0;
     font-size: 13px;
     color: #cccccc;
     background-color: #2d2d2d;
@@ -107,15 +107,50 @@ body {
     border-bottom: 1px solid rgb(71, 71, 71);
 }
 
+/* While the editor is split, the front tab of the pane whose graph the sidebar edits. */
+.editor-tab.focused-pane {
+    box-shadow: inset 0 1px 0 #3794ff;
+}
+
+/* "Move this tab to the other pane", at the end of each pane's tab bar. */
+.editor-tab-move {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: none;
+    border-bottom: 1px solid rgb(71, 71, 71);
+    background: none;
+    color: #969696;
+    cursor: pointer;
+}
+
+.editor-tab-move:hover:not(:disabled) {
+    color: rgb(212, 212, 212);
+    background-color: rgb(92, 92, 92);
+}
+
+.editor-tab-move:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
 
 .tab-container{
         border-bottom: 1px solid rgb(71, 71, 71);
 }
 
+/* Fills the whole tab - the padding is here rather than on the tab - so a right-click anywhere on
+   the tab reaches the context menu handler that sits on this element. */
 .editor-tab .tab-inner {
     display: flex;
     justify-content: center;
     align-items: center;
+    height: 100%;
+    padding: 0 24px;
 }
 
 .editor-tab .tab-inner span {
@@ -174,21 +209,13 @@ body {
 }
 
 .graph-editor-container,
-.graph-editor-tab-content,
 .graph-editor,
 .graph-view-container,
 .tab-content {
     display: flex;
-    flex-grow: 1; 
+    flex-grow: 1;
     min-height: 0;
-    min-width: 0;  
-}
-
-.graph-editor-tab-content{
-    position: relative;
-    padding: 0;
-    overflow: hidden;
-    outline: none;
+    min-width: 0;
 }
 
 .graph-editor {
@@ -204,19 +231,210 @@ body {
     cursor:default!important;
 }
 
-.editor-tabs {
-    display: flex;
-    flex-direction: column;
+/* The editor's panes: a row of tab bars above a row of panels. The columns come from the component -
+   one pane, or two with the handle between them in a column of its own - and so does each bar's and
+   panel's column. */
+.editor-split {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
     height: 100%;
     flex: 1;
     min-height: 0;
-
+    min-width: 0;
+    position: relative;
+    overflow: hidden;
+    outline: none;
 }
 
-.editor-tabs > [role="tabpanel"] {
-    flex: 1;
+/* One pane's tab bar. `min-width: 0` lets it scroll instead of widening its column. */
+.editor-tabs {
+    grid-row: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.editor-split > [role="tabpanel"] {
+    grid-row: 2;
     display: flex;
     min-height: 0;
+    min-width: 0;
+}
+
+.editor-splitter {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    position: relative;
+    z-index: 2;
+}
+
+/* The line stays thin, but it can be grabbed a few pixels either side of it: an invisible strip
+   reaching into both panes, above their content. */
+.editor-splitter::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -4px;
+    right: -4px;
+}
+
+/* An invisible bar across the whole grid, there only to be measured: its width is the width both
+   panes share. */
+.editor-split-gauge {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    align-self: start;
+    height: 0;
+    pointer-events: none;
+}
+
+/* While the handle between the panes is dragged: the resize cursor everywhere the pointer goes, no
+   text selection, and the panels out of the way - neither a graph nor the 3D view reacts to a
+   pointer merely passing over it, and the moves still reach the listeners around them. */
+.resizing,
+.resizing * {
+    cursor: ew-resize !important;
+    user-select: none;
+}
+
+.resizing .editor-split > [role="tabpanel"] {
+    pointer-events: none;
+}
+
+/* While a tab is dragged to another pane: the grabbing hand everywhere, and the panels out of the way
+   as during a resize - the drop zones above them take the pointer instead. */
+.tab-dragging,
+.tab-dragging * {
+    cursor: grabbing !important;
+    user-select: none;
+}
+
+.tab-dragging .editor-split > [role="tabpanel"] {
+    pointer-events: none;
+}
+
+/* Where a dragged tab can be dropped: invisible until the pointer is over it, then tinted with the
+   same blue that marks the focused pane. */
+.tab-drop-zone {
+    z-index: 3;
+}
+
+.tab-drop-zone.hovered {
+    background-color: rgba(55, 148, 255, 0.18);
+    box-shadow: inset 0 0 0 1px rgba(55, 148, 255, 0.6);
+}
+
+/* The label following a dragged tab. */
+.tab-drag-ghost {
+    position: fixed;
+    z-index: 1000;
+    pointer-events: none;
+    padding: 4px 10px;
+    font-size: 13px;
+    color: #cccccc;
+    background-color: #363636;
+    border: 1px solid rgb(71, 71, 71);
+    border-radius: 3px;
+    box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.3);
+    white-space: nowrap;
+}
+
+/* The 3D view fills its tab: a status strip of its own height, and the canvas taking everything
+   left. The canvas measures itself against this container, so the container needs a definite
+   height - an automatic one collapses it to zero and shows a blank area with no error anywhere. */
+.scene-view {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+}
+
+/* What the 3D view reports about itself. It used to be a toolbar; everything it can be told moved
+   into the 3D View menu but the analyzer it follows, which is chosen here where its effect shows. So
+   it is one line of text over a canvas, the same thing the graph's breadcrumb bar is. Same grey, same
+   height as `.graph-breadcrumbs`, so switching between a graph tab and this one does not move the
+   canvas underneath. */
+.scene-view-status {
+    height: 20px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0 6px;
+    background-color: #363636;
+    border-bottom: 1px solid #252525;
+}
+
+/* The analyzer the view follows; a click lists the others to follow instead. */
+.scene-view-analyzer {
+    flex-shrink: 0;
+    padding: 0 4px;
+    border-radius: 3px;
+    color: #d0d0d0;
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+
+.scene-view-analyzer:hover {
+    background-color: #4a4a4a;
+}
+
+/* The false colors the light is drawn in: the shortest wavelength, a bar of the colors, the longest. */
+.scene-view-spectrum {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: #d0d0d0;
+    font-size: 0.75rem;
+}
+
+.scene-view-spectrum-bar {
+    width: 80px;
+    height: 8px;
+    border-radius: 2px;
+}
+
+/* What was left out of the scene; a click lists it, and an entry goes to it in the graph. */
+.scene-view-skipped {
+    color: #f0a500;
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+
+.scene-view-skipped:hover {
+    text-decoration: underline;
+}
+
+/* Why nothing of the model can be drawn. One line in the strip's fixed height; the whole message is
+   in the tooltip. */
+.scene-view-notice {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: #ff7b72;
+    font-size: 0.75rem;
+}
+
+.scene-view-count {
+    margin-left: auto;
+    color: #9e9e9e;
+    font-size: 0.75rem;
+}
+
+/* A labelled input among the 3D View menu's entries: label text and control side by side. No colour
+   of its own - unlike the view's own dark strip, a dropdown menu is light and sets the text colour
+   itself, and the greyed-out state is a `text-muted` this must not override. */
+.scene-view-menu-control {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin: 0;
+    white-space: nowrap;
 }
 
 
@@ -722,7 +940,7 @@ body {
     display: flex !important;
     align-items: flex-end;
     gap: 4px;
-    padding-top: 0.8rem !important;
+    padding-top: 1.1rem !important;
     padding-bottom: 0.2rem !important;
     max-height: none !important;
     height: auto !important;
@@ -735,7 +953,8 @@ body {
     color: #ebebeb !important;
     border: none !important;
 }
-.material-btn:hover{
+/* Only real buttons react to hover; the AdHoc badge shares the look but is not clickable. */
+button.material-btn:hover{
     background-color: rgb(169, 169, 169) !important;
 }
 
@@ -743,6 +962,14 @@ body {
     flex: 1 1 0;
     min-width: 0;
     color: rgb(235, 235, 235);
+}
+
+/* Readonly (e.g. reference node): grayed like a disabled input; `[disabled]` also drops the hover. */
+.material-prop-display[disabled] .material-prop-name {
+    color: rgb(141, 141, 141);
+}
+.material-prop-display[disabled] .badge {
+    opacity: 0.5;
 }
 
 /* Static (non-collapsible) analyzer config sections (see `StaticSection` in accordion.rs): reuse

@@ -113,23 +113,6 @@ input[type=number] {
   color: rgb(141, 141, 141) !important;
 }
 
-.dynamic-list{
-    border-radius: 0;
-    border: none;
-    max-height: 100px;
-    overflow: auto;
-}
-
-.dynamic-list>li{
-    margin: 0 0.5rem;
-    border: none;
-    border-bottom: 1px solid gray;
-    padding: 0.25rem 0.25rem 0rem 0.25rem;
-    font-size: small;
-    grid-template-columns: 110px auto auto; 
-    column-gap: 0.1rem;
-}
-
 #laserlinesubmit, #energylaserlinesubmit, #polygonPointSubmit, #boreSubmit{
     background-color:rgb(70, 70, 70) !important;
     width: 100%;
@@ -141,14 +124,20 @@ input[type=number] {
 #laserlinesubmit:hover, #energylaserlinesubmit:hover, #polygonPointSubmit:hover, #boreSubmit:hover{
       background-color:rgb(105, 104, 104) !important;
 }
+/* A bore the core refuses: no hover highlight, reddish text; the title says why. */
+#boreSubmit.refused, #boreSubmit.refused:hover{
+    background-color:rgb(70, 70, 70) !important;
+    color:rgb(240, 140, 140);
+    cursor: not-allowed;
+}
 
-#laserLineList, #energylaserLineList, #polygonPointList, #dynamicList{
+#laserLineList, #energylaserLineList, #polygonPointList{
   border-radius: 0;
   border: none;
   max-height: 100px;
   overflow: auto;
 }
-#laserLineList >li, #energylaserLineList >li, #polygonPointList >li, #dynamicList >li{
+#laserLineList >li, #energylaserLineList >li, #polygonPointList >li{
   margin: 0 0.5rem;
   border: none;
   border-bottom: 1px solid gray;

@@ -183,6 +183,7 @@ mod tests {
             Analyzer, AnalyzerType, GhostFocusConfig, RayTraceConfig,
             ghostfocus::GhostFocusAnalyzer, raytrace::RayTracingAnalyzer,
         },
+        coatings::{CoatingType, SplittingConfigBuilder},
         core_optics::{Alignable, OpticNode, PortType, node_attr::NodePositioning},
         degree,
         gain::{ConstGain, GainModel},
@@ -190,10 +191,12 @@ mod tests {
         material::{MATERIAL, Material},
         millimeter, nanometer,
         nodes::{
-            BeamSplitter, CylindricLens, Dummy, EnergyMeter, FluenceDetector, IdealFilter, Lens,
-            NodeGroup, ParabolicMirror, ParaxialSurface, RayPropagationVisualizer,
-            ReflectiveGrating, SourcePort, Spectrometer, SpotDiagram, ThinMirror, WaveFront, Wedge,
-            collimated_line_ray_builder, round_collimated_ray_builder,
+            BeamSplitter, BoredMirror, CylindricLens, Dummy, EnergyMeter, FluenceDetector,
+            IdealFilter, Lens, NodeGroup, ParabolicMirror, ParaxialSurface,
+            RayPropagationVisualizer, ReflectiveGrating, SourcePort, Spectrometer, SpotDiagram,
+            ThinMirror, WaveFront, Wedge, collimated_line_ray_builder,
+            ideal_filter::{EdgeFilter, EdgeFilterType, SpectralFilterBuilder},
+            round_collimated_ray_builder,
         },
         refractive_index::RefrIndexConst,
         utils::test_helper::helper::check_logs,
@@ -247,6 +250,59 @@ mod tests {
     fn a_document_without_amplifier_nodes_writes_none() -> OpmResult<()> {
         let document = OpmDocument::default();
         assert!(!document.to_opm_file_string()?.contains("amplifier_nodes"));
+        Ok(())
+    }
+
+    /// A beam splitter whose surface splits by a spectrum keeps the filter parameters defining it,
+    /// not a spectrum built from them.
+    #[test]
+    fn a_spectral_separator_survives_a_file_round_trip() -> OpmResult<()> {
+        let short_pass =
+            SplittingConfigBuilder::Spectrum(SpectralFilterBuilder::EdgeFilter(EdgeFilter::new(
+                EdgeFilterType::ShortPass,
+                nanometer!(1000.0),
+                0.0..1.0,
+                None,
+                nanometer!(500.0)..nanometer!(1500.0),
+                nanometer!(1.0),
+            )?));
+        let mut document = OpmDocument::default();
+        let splitter_id = document
+            .scenery_mut()
+            .add_node(BeamSplitter::new("splitter", &short_pass)?)?;
+
+        let reloaded = OpmDocument::from_string(&document.to_opm_file_string()?)?;
+        let surface = reloaded
+            .scenery()
+            .with_node_attr(splitter_id, |attr| attr.get_property("surface").cloned())??;
+        let Proptype::SurfaceConfig(config) = surface else {
+            panic!("a beam splitter must carry a surface property")
+        };
+        assert_eq!(config.coating(), &CoatingType::Separator(short_pass));
+        Ok(())
+    }
+
+    /// A surface coating the node does not take, such as a beam splitter's surface without a
+    /// separator, falls back to the default when the file is loaded.
+    #[test]
+    fn an_invalid_surface_coating_in_a_file_falls_back_to_the_default() -> OpmResult<()> {
+        let mut document = OpmDocument::default();
+        let splitter_id = document.scenery_mut().add_node(BeamSplitter::default())?;
+        let serialized = document.to_opm_file_string()?;
+        assert!(serialized.contains("coating: Separator(FixedRatio(0.5))"));
+
+        let without_separator = serialized.replace("Separator(FixedRatio(0.5))", "IdealAR");
+        let reloaded = OpmDocument::from_string(&without_separator)?;
+        let surface = reloaded
+            .scenery()
+            .with_node_attr(splitter_id, |attr| attr.get_property("surface").cloned())??;
+        let Proptype::SurfaceConfig(config) = surface else {
+            panic!("a beam splitter must carry a surface property")
+        };
+        assert_eq!(
+            config.coating(),
+            &CoatingType::Separator(SplittingConfigBuilder::default())
+        );
         Ok(())
     }
 
@@ -718,7 +774,7 @@ mod tests {
         let reloaded_doc = OpmDocument::from_string(&ron_str)?;
         assert_eq!(reloaded_doc.embedded_materials.len(), 1);
 
-        let all_reloaded_nodes = reloaded_doc.scenery().collect_all_nodes_recursive()?;
+        let all_reloaded_nodes = reloaded_doc.scenery().collect_all_nodes_recursive();
         let mut found_restored_material = false;
 
         for node_ref in all_reloaded_nodes {
@@ -882,6 +938,7 @@ mod tests {
             ReflectiveGrating::default().with_rot_from_littrow(nanometer!(1000.0), degree!(0.0))?,
         )?;
         let i_16 = scenery.add_node(ThinMirror::default())?;
+        let i_17 = scenery.add_node(BoredMirror::default())?;
 
         scenery.connect_nodes(i_0, "output_1", i_1, "input_1", millimeter!(5.0))?;
         scenery.connect_nodes(i_1, "out1_trans1_refl2", i_2, "input_1", millimeter!(5.0))?;
@@ -899,8 +956,13 @@ mod tests {
         scenery.connect_nodes(i_13, "output_1", i_14, "input_1", millimeter!(5.0))?;
         scenery.connect_nodes(i_14, "output_1", i_15, "input_1", millimeter!(50.0))?;
         scenery.connect_nodes(i_15, "output_1", i_16, "input_1", millimeter!(50.0))?;
+        // The bored mirror gets the collimated light the splitter reflects, which runs along its
+        // bore; the converging light at the end of the chain would partly hit the wall of the bore.
+        scenery.connect_nodes(i_1, "out2_trans2_refl1", i_17, "input_1", millimeter!(50.0))?;
 
-        let ray_builder = round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 1)?;
+        // Three rings, so that the light the bored mirror reflects around its bore still covers an
+        // area whose fluence can be estimated, not just a single ring.
+        let ray_builder = round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 3)?;
         let mut config = RayTraceConfig::default();
         config.map_source(i_0, ray_builder.clone());
 

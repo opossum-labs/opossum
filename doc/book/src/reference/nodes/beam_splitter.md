@@ -4,21 +4,21 @@
 
 ## Analysis
 
-For energy analysis, the spectrum arriving at each input is split according to the `splitter config`: the transmitted part leaves through the output of the same number (e.g. `input_1` → `out1_trans1_refl2`), the reflected part through the other output (e.g. `input_1` → `out2_trans2_refl1`).
+For energy analysis, the spectrum arriving at each input is split according to the `Separator` coating of the `surface` (see [Properties](#properties)): the transmitted part leaves through the output of the same number (e.g. `input_1` → `out1_trans1_refl2`), the reflected part through the other output (e.g. `input_1` → `out2_trans2_refl1`).
 
-For ray tracing, the beam splitter acts as a thin splitting surface lying in the plane of the node. The `splitter config` defines the transmission of this surface; everything that is not transmitted is reflected. The coating of its `surface` is not used for the split (see [Surfaces](../nodes.md#surfaces)). Transmitted rays keep their direction, while reflected rays are deflected according to the laws of reflection. The same holds for the optical axis, so nodes connected to the reflected output are placed along the *reflected* axis (see [Geometry](../../concepts/geometry.md)).
+For ray tracing, the beam splitter acts as a thin splitting surface lying in the plane of the node. The coating of its `surface` is the split: what the coating does not reflect is transmitted (see [Surfaces](../nodes.md#surfaces)). Transmitted rays keep their direction, while reflected rays are deflected according to the laws of reflection. The same holds for the optical axis, so nodes connected to the reflected output are placed along the *reflected* axis (see [Geometry](../../concepts/geometry.md)).
 
 Like a mirror, a beam splitter with an alignment of 0° therefore reflects the light directly back towards the source. To deflect the reflected beam by 90°, rotate the beam splitter in the `Node Editor` panel under the `Alignment` section, e.g. by setting the **Roll Angle** to **45°**.
 
 ## Positioning
 
-During the alignment run (which precedes ray tracing and ghost-focus analysis), the beam splitter is placed from the optical axis of one of its inputs, and that axis is then split onto the two outputs so the following nodes can be placed in turn.
+During the alignment run (which precedes ray tracing and ghost-focus analysis), the beam splitter is placed from the optical axis of one of its inputs, and the axis of every input is then split onto the two outputs so the following nodes can be placed in turn. The axis is always split half and half, whatever the coating of the `surface`: both outputs are placed even if the coating sends all light to one of them or the alignment wavelength lies outside its spectrum.
 
 **Which input places the splitter.** If `input_1` carries the optical axis it is used; otherwise `input_2` is used. A beam splitter can therefore be positioned from either input on its own — connecting only `input_2` works just as well as connecting only `input_1`.
 
 **Where the second input's beam comes from.** Both inputs share the same splitting surface. Because a beam entering `input_2` passes straight through to `out2_trans2_refl1`, its optical axis must arrive travelling in the direction that leaves `out2` — the mirror image, on the splitting surface, of the `input_1` axis. For an untilted beam splitter (0°) this is the direction straight back towards a source on the opposite side; for one rolled to fold the beam by 90°, it is the folded (sideways) direction. The up direction is mirrored to match, so both inputs share a consistent frame.
 
-**Both inputs connected.** When both inputs carry an axis, the splitter is placed from `input_1` — deterministically, regardless of the order in which the two arms happen to be traced — and the axis reaching `input_2` is then checked against that placement. If the two do not agree (different direction, wrong distance along the axis, or a sideways miss), OPOSSUM keeps the placement from `input_1` and logs a warning describing the deviation and the exact position and direction the `input_2` beam would need to be consistent. See [Geometry → Beam Combiners and Parallel Paths](../../concepts/geometry.md#beam-combiners-and-parallel-paths) for the details and for the case of two independent sources.
+**Both inputs connected.** When both inputs carry an axis, the splitter is placed from `input_1` — deterministically, regardless of the order in which the two arms happen to be traced — and the axis reaching `input_2` is then checked against that placement. If the two do not agree (different direction, wrong distance along the axis, or a sideways miss), OPOSSUM keeps the placement from `input_1` and logs a warning describing the deviation and the exact position and direction the `input_2` beam would need to be consistent. Either way both axes are passed on: the outputs carry the axis of `input_1` first, which places the nodes behind them, and that of `input_2` after it, so the [3D view](../scene_view.md) draws both arms on through the splitter — and an arm that does not agree visibly leaves it beside the other. See [Geometry → Beam Combiners and Parallel Paths](../../concepts/geometry.md#beam-combiners-and-parallel-paths) for the details and for the case of two independent sources.
 
 ## Ports
 
@@ -40,11 +40,11 @@ During the alignment run (which precedes ray tracing and ghost-focus analysis), 
 
 ## Properties
 
-`splitter config`
-: Splitter configuration. This parameter defines how incoming beams are split or merged respectively. Possible options are:
+`surface`
+: Coating and laser induced damage threshold of the splitting surface (see [Surfaces](../nodes.md#surfaces)). The coating defines how incoming beams are split or merged respectively. The surface is a splitting surface, so it takes only a `Separator`, by default one that transmits half of the light. A `Separator` transmits according to its splitting configuration and reflects the rest, whatever the angle of incidence:
 
-- Ratio: The incoming light is split according to a fixed (wavelength-independent) transmission between 0.0 and 1.0. A value of 1.0 fully transmits both inputs (`input_1` → `out1_trans1_refl2`, `input_2` → `out2_trans2_refl1`), while a value of 0.0 fully reflects them (`input_1` → `out2_trans2_refl1`, `input_2` → `out1_trans1_refl2`).
-- Spectrum: The incoming light is split with respect to its wavelength. The provided spectrum defines a wavelength-dependent transmission between 0.0 and 1.0.
+- Fixed Ratio: The incoming light is split according to a fixed (wavelength-independent) transmission between 0.0 and 1.0. A value of 1.0 fully transmits both inputs (`input_1` → `out1_trans1_refl2`, `input_2` → `out2_trans2_refl1`), while a value of 0.0 fully reflects them (`input_1` → `out2_trans2_refl1`, `input_2` → `out1_trans1_refl2`).
+- Spectral filter: The incoming light is split with respect to its wavelength. The provided spectrum defines a wavelength-dependent transmission between 0.0 and 1.0.
 
 `optic shape`
-: Transversal extent of the splitting surface. Only rays within it are split. A ray outside of it, or through one of its bores, follows the analyzer's missed surface strategy: with `Ignore` (always in a ghost focus analysis) it passes on as transmitted light, with `Stop` it is lost. A bore therefore models a scraper mirror whose hole lets part of the beam pass (see [Optic shape](../nodes.md#optic-shape)). Defaults to a circle of 12.5 mm radius; `Open` is refused.
+: Transversal extent of the splitting surface. Only rays within it are split. A ray outside of it follows the analyzer's missed surface strategy: with `Ignore` (always in a ghost focus analysis) it passes on as transmitted light, with `Stop` it is lost (see [Optic shape](../nodes.md#optic-shape)). Defaults to a circle of 12.5 mm radius; `Open` and a bore are refused. A scraper mirror, whose hole lets part of the beam pass, is a [bored mirror](bored_mirror.md).

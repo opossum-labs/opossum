@@ -26,7 +26,7 @@ use opossum_core::material::Material;
 use opossum_registry::AssetRegistry;
 use std::path::PathBuf;
 
-use crate::{SIDEBAR_COLLAPSED, SIDEBAR_WIDTH};
+use crate::{SCENE_VIEW_OPEN, SIDEBAR_COLLAPSED, SIDEBAR_WIDTH};
 
 #[cfg(feature = "desktop")]
 use crate::{components::simulation::simulation_window::SimulationWindow, platform::ProcessHandle};
@@ -121,7 +121,7 @@ pub fn App() -> Element {
     provide_context(backend_status);
 
     // Asynchronous backend health check on startup
-    use_future(move || async move {
+    let mut backend_status_future = use_future(move || async move {
         match get_api_welcome().await {
             Ok(msg) if msg.contains("OPOSSUM backend") => {
                 info!("Backend connection established: {msg}");
@@ -262,6 +262,7 @@ pub fn App() -> Element {
         }
         AppCommand::Refresh => {
             node_editor_command_handler.call(Some(NodeEditorCommand::Refresh));
+            backend_status_future.restart();
         }
         AppCommand::Settings => {
             show_settings.set(true);
@@ -283,6 +284,12 @@ pub fn App() -> Element {
         }
         AppCommand::AutoLayout => {
             node_editor_command_handler.call(Some(NodeEditorCommand::AutoLayout));
+        }
+        AppCommand::ToggleSceneView => {
+            // Purely which view is on screen, so it never reaches the document - which is also why
+            // it is not routed through `NodeEditorCommand` like the graph commands around it.
+            let open = SCENE_VIEW_OPEN();
+            *SCENE_VIEW_OPEN.write() = !open;
         }
         AppCommand::Undo => {
             node_editor_command_handler.call(Some(NodeEditorCommand::Undo));
@@ -323,6 +330,9 @@ pub fn App() -> Element {
         match &cmd {
             AppCommand::Simulate
             | AppCommand::AutoLayout
+            // The view fetches the model from the backend as soon as it opens, so opening it
+            // while disconnected would show an empty scene and an error rather than nothing.
+            | AppCommand::ToggleSceneView
             | AppCommand::NewProject
             | AppCommand::OpenTrigger
             | AppCommand::Save

@@ -62,6 +62,8 @@ For example, if a light source or signal needs to be split into multiple paths, 
 
 Each connection displays a numeric value representing the spatial separation between the connected nodes (the distance along the optical axis). For a detailed discussion on element placement, please refer to the [Concepts](../concepts/concepts.md) section. For this example, set the distance between the sourceport and the first lens to **10 mm**, and the distance between the two lenses to **200 mm**.
 
+A connection into a reference node usually shows no distance: the reference takes the placement of the node it refers to, so a distance would change nothing. The field appears only where the distance does place something — when the light reaches the reference before the node it refers to, or when a source with an automatic position stands in front of it (see [Geometry → Multi-pass and Reference Nodes](../concepts/geometry.md#multi-pass-and-reference-nodes)).
+
 Numeric values can be entered manually, with units, and unit prefixes are supported. For example, distances can be specified from millimeters (mm) to kilometers (km), including metric system prefixes from quecto (q) to quetta (Q). The system automatically reads these prefixes and converts the values into a standard internal unit.
 
 You can easily delete a node by selecting it and pressing the 'Delete' key on the keyboard if it was created by mistake or is no longer needed.
@@ -112,7 +114,7 @@ Almost every editing action in the GUI can be undone and redone:
 - The history holds the last 100 steps and is cleared when a file is loaded or a new document is created. Undo and redo count as modifications, so the document is marked as unsaved afterwards.
 - The reflective grating's Littrow alignment aids (reference wavelength, incident/diffracted mode) are entry helpers, not stored with the model, so they are not undoable — only the resulting alignment is.
 - The RayTrace analyzer's spectral-distribution laser-line list and the Energy analyzer's laser-line list work the same way: the wavelength/intensity (or wavelength/energy) fields for the line currently being entered are not sent to the backend until "Add laser line" is pressed, so only adding or deleting a line is undoable, not the individual field edits leading up to it.
-- The bore list of an `optic shape` follows the same pattern: the shape, offset and rotation fields of the bore currently being drafted are not sent to the backend until "Add bore" or "Update bore" is pressed. Each add, update, or delete of a bore is its own undo step, but the field edits leading up to it are not individually undoable. Choosing another kind of edge starts a fresh edge without bores; one undo brings back the previous edge with its bores.
+- The bore of a bored mirror's `optic shape` follows the same pattern: the shape, offset, rotation and tilt fields of the bore are not sent to the backend until "Update bore" is pressed. Each update of the bore is its own undo step, but the field edits leading up to it are not individually undoable. Choosing another kind of edge starts a fresh edge of that kind and keeps the bore; one undo brings back the previous edge. An edit of the edge that OPOSSUM refuses, such as a polygon that crosses itself while its corners are being entered, stays in the editor but is not sent to the backend; the edge is saved once it is valid again.
 
 # Groups
 

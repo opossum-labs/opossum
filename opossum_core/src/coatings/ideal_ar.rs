@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
 use super::{Coating, CoatingType};
-use crate::light::Ray;
+use crate::{error::OpmResult, light::Ray};
 use nalgebra::Vector3;
 use uom::si::f64::Ratio;
 
@@ -17,8 +17,8 @@ impl Coating for IdealAR {
         _incoming_ray: &Ray,
         _surface_normal: Vector3<f64>,
         _n2: f64,
-    ) -> Ratio {
-        0.0.into()
+    ) -> OpmResult<Ratio> {
+        Ok(0.0.into())
     }
 }
 impl From<IdealAR> for CoatingType {
@@ -45,7 +45,7 @@ mod test {
         let surface_normal = vector![0.0, 0.0, -1.0];
         assert!(
             coating
-                .calc_reflectivity(&ray, surface_normal, 1.5)
+                .calc_reflectivity(&ray, surface_normal, 1.5)?
                 .is_zero()
         );
         Ok(())

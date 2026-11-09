@@ -230,6 +230,22 @@ impl OpticGraph {
         connections
     }
 
+    /// Returns the connections of this [`OpticGraph`] whose distance placed a node in the last
+    /// positioning run (see [`LightFlow::placed_by_distance`](crate::light::LightFlow::placed_by_distance)).
+    ///
+    /// A distance into a node placed absolutely, or into a reference taking the placement of the
+    /// node it refers to, places nothing: such a connection is not listed.
+    #[must_use]
+    pub fn placing_connections(&self) -> Vec<ConnectionInfo> {
+        // Both iterate the edges in the order of their index.
+        self.connections()
+            .into_iter()
+            .zip(self.g.edge_weights())
+            .filter(|(_, flow)| flow.placed_by_distance())
+            .map(|(connection, _)| connection)
+            .collect()
+    }
+
     /// Returns all outgoing connections from the node with the given [`Uuid`].
     ///
     /// Each outgoing connection is represented as a [`ConnectionInfo`], including
@@ -375,6 +391,25 @@ impl OpticGraph {
             "# of outgoing edges > # of output ports ???"
         );
         Ok(nr_of_outgoing_edges < nr_of_output_ports)
+    }
+
+    /// Returns `true` if the given internal port of a node is mapped to one of this group's
+    /// external output ports.
+    ///
+    /// Respects graph inversion: when the graph is inverted the input port map acts as the
+    /// effective output map, as it does when a ray-trace run records a group's outputs.
+    ///
+    /// # Arguments
+    ///
+    /// * `node_id` - UUID of the internal node whose port is being checked.
+    /// * `port` - Internal port name to look up.
+    pub(crate) fn is_mapped_output_port(&self, node_id: Uuid, port: &str) -> bool {
+        let portmap = if self.is_inverted() {
+            self.port_map(&PortType::Input)
+        } else {
+            self.port_map(&PortType::Output)
+        };
+        portmap.contains_port_of_node(node_id, port)
     }
 
     /// Recursively finds all nodes of type "source port" and returns their UUIDs.

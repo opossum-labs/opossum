@@ -1,211 +1,30 @@
-use nalgebra::{Rotation3, Vector3};
-
 use crate::{
-    analyzers::{
-        AnalyzerType, RayTraceConfig, propagation_strategy::PropagationStrategy,
-        raytrace::AnalysisRayTrace,
-    },
-    core_optics::{NodeAttrExt, OpticNodeExt, node_attr::HasNodeAttr},
-    error::{OpmResult, OpossumError},
-    light::{LightData, LightResult, Rays, rays::ReflectedPart},
-    meter,
+    analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
+    error::OpmResult,
+    light::LightResult,
+    nodes::splitter::Splitter,
     utils::geom_transformation::Isometry,
 };
 
-use super::{BeamSplitter, SplittingConfig};
+use super::BeamSplitter;
 
 impl AnalysisRayTrace for BeamSplitter {
-    /// Splits the rays arriving at both inputs on the splitting surface and merges them per output.
-    ///
-    /// An alignment run reaches this through a reference (to the splitter or to a group holding
-    /// it). It then places the following nodes by geometry alone, exactly like
-    /// [`AnalysisRayTrace::calc_node_positions`]: the splitting ratio must not decide where the
-    /// optical axis runs.
     fn analyze(
         &mut self,
         incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
-        if config.is_positioning_run() {
-            if incoming_data.is_empty() {
-                return Ok(LightResult::default());
-            }
-            return AnalysisRayTrace::calc_node_positions(self, incoming_data, config);
-        }
-        let (input_port1, input_port2) = if self.inverted() {
-            ("out1_trans1_refl2", "out2_trans2_refl1")
-        } else {
-            ("input_1", "input_2")
-        };
-        let in1 = incoming_data.get(input_port1);
-        let in2 = incoming_data.get(input_port2);
-        let (out1_data, out2_data) =
-            self.analyze_raytrace(in1, in2, &AnalyzerType::RayTrace(config.clone()))?;
-        if let Some(out1_data) = out1_data
-            && let Some(out2_data) = out2_data
-        {
-            let (target1, target2) = if self.inverted() {
-                ("input_1", "input_2")
-            } else {
-                ("out1_trans1_refl2", "out2_trans2_refl1")
-            };
-            Ok(LightResult::from([
-                (target1.into(), out1_data),
-                (target2.into(), out2_data),
-            ]))
-        } else {
-            Ok(LightResult::default())
-        }
+        self.split_rays(incoming_data, config)
     }
-    /// Calculates the outgoing axis rays of this [`BeamSplitter`] for positioning the following nodes.
-    ///
-    /// The axis rays arriving at an input are split on the splitting surface. The first input is used
-    /// when it carries axis data, otherwise the second input. For the first input the transmitted rays
-    /// position the nodes behind the first output and the reflected rays those behind the second; for
-    /// the second input the roles are swapped, since its transmission exits the second output and its
-    /// reflection the first. All output ports are swapped, if the beam splitter is inverted.
-    ///
-    /// # Arguments
-    ///
-    /// * `incoming_data` - the axis rays arriving at the input ports.
-    /// * `config` - the ray tracing configuration.
-    ///
-    /// # Returns
-    ///
-    /// The axis rays leaving both output ports.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if there are no geometric axis rays at either input or the
-    /// splitting surface cannot be found.
     fn calc_node_positions(
         &mut self,
         incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
-        let (input_1, input_2, out_1, out_2) = if self.inverted() {
-            (
-                "out1_trans1_refl2",
-                "out2_trans2_refl1",
-                "input_1",
-                "input_2",
-            )
-        } else {
-            (
-                "input_1",
-                "input_2",
-                "out1_trans1_refl2",
-                "out2_trans2_refl1",
-            )
-        };
-        // Transmission keeps the beam direction, reflection exits on the other output. So the first
-        // input feeds (out_1, out_2) with its (transmitted, reflected) rays; the second input, whose
-        // transmission continues into out_2, feeds them in swapped order.
-        let light_result = if let Some(input) = incoming_data.get(input_1) {
-            let (transmitted, reflected) = self.split_axis_rays(input, input_1, config)?;
-            LightResult::from([
-                (out_1.into(), LightData::Geometric(transmitted)),
-                (out_2.into(), LightData::Geometric(reflected)),
-            ])
-        } else if let Some(input) = incoming_data.get(input_2) {
-            let (transmitted, reflected) = self.split_axis_rays(input, input_2, config)?;
-            LightResult::from([
-                (out_2.into(), LightData::Geometric(transmitted)),
-                (out_1.into(), LightData::Geometric(reflected)),
-            ])
-        } else {
-            return Err(OpossumError::Analysis(
-                "could not calc optical axis for beam splitter".into(),
-            ));
-        };
-        Ok(light_result)
+        self.split_axis(incoming_data, config)
     }
-    /// Returns the local frame from which the optical axis enters the given input port.
-    ///
-    /// The first input keeps the default (identity) frame: its axis enters along local +z through
-    /// the local origin. The second input arrives on the same splitting plane from the direction of
-    /// the beam that leaves the second output, i.e. mirrored on that plane, so its frame is the
-    /// mirror image of the identity frame. See `doc/book` (geometry: beam combiners) for the
-    /// convention. The second input is `input_2`, or `out2_trans2_refl1` when inverted.
-    ///
-    /// # Arguments
-    ///
-    /// * `port_name` - the input port the axis enters.
-    ///
-    /// # Returns
-    ///
-    /// The identity frame for the first input, the mirrored frame for the second.
     fn axis_entrance_frame(&self, port_name: &str) -> Isometry {
-        let second_input = if self.inverted() {
-            "out2_trans2_refl1"
-        } else {
-            "input_2"
-        };
-        if port_name != second_input {
-            return Isometry::identity();
-        }
-        // Splitting plane in node-local coordinates: unit normal `n` = alignment applied to +z,
-        // through the alignment's translation `t`. The second input's axis is the +z axis mirrored
-        // on that plane: entry point `q` (origin mirrored) and direction `d` (+z mirrored).
-        let alignment = (*self.node_attr().alignment()).unwrap_or_else(Isometry::identity);
-        let n = alignment.transform_vector_f64(&Vector3::z());
-        let t = alignment.translation();
-        let t_vec = Vector3::new(t.x.value, t.y.value, t.z.value);
-        let q = 2.0 * n.dot(&t_vec) * n;
-        let d = Vector3::z() - 2.0 * Vector3::z().dot(&n) * n;
-        let up = Rotation3::rotation_between(&Vector3::z(), &d)
-            .map_or_else(Vector3::y, |rot| rot * Vector3::y());
-        Isometry::new_from_view(meter!(q.x, q.y, q.z), d, up)
-    }
-}
-
-impl BeamSplitter {
-    /// Splits the axis rays arriving at `port_name` on the splitting surface for a positioning run.
-    ///
-    /// Positioning is purely geometric: a fixed 50:50 split leaves energy in both branches, so
-    /// neither is invalidated by an energy threshold downstream, and no alignment wavelength has to
-    /// lie inside a splitting spectrum.
-    ///
-    /// # Arguments
-    ///
-    /// * `input` - the axis rays arriving at the port.
-    /// * `port_name` - the input port (and its splitting surface).
-    /// * `config` - the ray tracing configuration (for the missed-surface strategy).
-    ///
-    /// # Returns
-    ///
-    /// The transmitted and the reflected axis rays, in that order.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if `input` is not [`LightData::Geometric`], the splitting
-    /// surface cannot be found, or the split fails.
-    fn split_axis_rays(
-        &mut self,
-        input: &LightData,
-        port_name: &str,
-        config: &RayTraceConfig,
-    ) -> OpmResult<(Rays, Rays)> {
-        let LightData::Geometric(rays) = input else {
-            return Err(OpossumError::Analysis(format!(
-                "expected Rays value at `{port_name}` port"
-            )));
-        };
-        let mut transmitted = rays.clone();
-        let face = self.face_of_port(port_name)?;
-        let Some(geometry) = self.node_attr_mut().runtime_geometry_mut() else {
-            return Err(OpossumError::OpticPort(
-                "input optic surface not found".into(),
-            ));
-        };
-        let reflected = geometry.interact_with_rays(
-            face,
-            &mut transmitted,
-            &SplittingConfig::Ratio(0.5),
-            ReflectedPart::Branch,
-            *config.missed_surface_strategy(),
-        )?;
-        Ok((transmitted, reflected))
+        self.second_input_frame(port_name)
     }
 }
 
@@ -216,15 +35,16 @@ mod test {
 
     use crate::{
         analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
-        core_optics::{OpticNode, OpticNodeExt, node_attr::NodePositioning},
+        coatings::SplittingConfigBuilder,
+        core_optics::{Alignable, OpticNode, OpticNodeExt, node_attr::NodePositioning},
         degree,
         error::OpmResult,
         joule,
         light::{LightData, LightResult, Ray, Rays},
         millimeter, nanometer,
         nodes::{
-            BeamSplitter, Dummy, NodeGroup, NodeReference, SourcePort, SplittingConfigBuilder,
-            ThinMirror, round_collimated_ray_builder,
+            BeamSplitter, Dummy, NodeGroup, NodeReference, SourcePort, ThinMirror,
+            round_collimated_ray_builder,
         },
         prelude::{AnalyzerType, OpmDocument},
         utils::geom_transformation::Isometry,
@@ -772,8 +592,8 @@ mod test {
         let mut bs = BeamSplitter::new("bs", &SplittingConfigBuilder::FixedRatio(0.5))?;
         bs.set_alignment(millimeter!(0., 0., 0.), degree!(0., 45., 0.))?;
         let bs = scenery.add_node(bs)?;
-        // The reference is added after the (still unplaced) beam splitter and sits before it in the
-        // beam path, so it is a forward reference: it is positioned first and then places the target.
+        // The reference is reached while the beam splitter it refers to is still unplaced, so it is
+        // a forward reference: it is positioned first and then places the target.
         let bs_ref = NodeReference::from_node(&scenery.node(bs)?)?;
         let bs_ref = scenery.add_node(bs_ref)?;
         let dummy = scenery.add_node(Dummy::new("out"))?;
@@ -781,11 +601,10 @@ mod test {
         scenery.connect_nodes(
             bs_ref,
             "out2_trans2_refl1",
-            bs,
+            dummy,
             "input_1",
             millimeter!(50.0),
         )?;
-        scenery.connect_nodes(bs, "out1_trans1_refl2", dummy, "input_1", millimeter!(50.0))?;
 
         let mut config = RayTraceConfig::default();
         config.map_source(
@@ -903,6 +722,101 @@ mod test {
         let (back_pos, back_dir) = placed(&scenery, back);
         assert_abs_diff_eq!(back_pos, mm(0., 0., 50.), epsilon = 1e-9);
         assert_abs_diff_eq!(back_dir, -Vector3::z(), epsilon = 1e-9);
+        Ok(())
+    }
+    /// A Mach-Zehnder interferometer in the x-z plane, every leg 100 mm and a dummy 50 mm behind
+    /// each output of the second splitter.
+    ///
+    /// The first splitter at z = 100 mm passes the axis on along +z to a mirror that turns it to −x,
+    /// and reflects it along −x to a mirror that turns it to +z. Both arms meet at the second
+    /// splitter at (−100, 0, 200) mm: the first through `input_1`, the second through `input_2`.
+    ///
+    /// Returns the scenery and the source, the splitters, the mirrors and the dummies, in the order
+    /// the light meets them.
+    fn mach_zehnder() -> OpmResult<(NodeGroup, [uuid::Uuid; 7])> {
+        let mut scenery = NodeGroup::default();
+        let src = scenery.add_node(SourcePort::default())?;
+        let mut first = BeamSplitter::new("first", &SplittingConfigBuilder::FixedRatio(0.5))?;
+        first.set_alignment(millimeter!(0., 0., 0.), degree!(0., 45., 0.))?;
+        let first = scenery.add_node(first)?;
+        let along = scenery.add_node(ThinMirror::new("along").with_tilt(degree!(0., 45., 0.))?)?;
+        let aside = scenery.add_node(ThinMirror::new("aside").with_tilt(degree!(0., -45., 0.))?)?;
+        let mut second = BeamSplitter::new("second", &SplittingConfigBuilder::FixedRatio(0.5))?;
+        second.set_alignment(millimeter!(0., 0., 0.), degree!(0., -45., 0.))?;
+        let second = scenery.add_node(second)?;
+        let out_1 = scenery.add_node(Dummy::new("out 1"))?;
+        let out_2 = scenery.add_node(Dummy::new("out 2"))?;
+        let leg = millimeter!(100.0);
+        scenery.connect_nodes(src, "output_1", first, "input_1", leg)?;
+        scenery.connect_nodes(first, "out1_trans1_refl2", along, "input_1", leg)?;
+        scenery.connect_nodes(first, "out2_trans2_refl1", aside, "input_1", leg)?;
+        scenery.connect_nodes(along, "output_1", second, "input_1", leg)?;
+        scenery.connect_nodes(aside, "output_1", second, "input_2", leg)?;
+        let behind = millimeter!(50.0);
+        scenery.connect_nodes(second, "out1_trans1_refl2", out_1, "input_1", behind)?;
+        scenery.connect_nodes(second, "out2_trans2_refl1", out_2, "input_1", behind)?;
+        Ok((scenery, [src, first, along, aside, second, out_1, out_2]))
+    }
+    /// Pins the placement of a Mach-Zehnder interferometer: the second splitter is placed by its
+    /// first input, the second arm agrees with it, and each output goes on along both arms alike.
+    #[test]
+    fn a_mach_zehnder_is_placed_by_the_first_input_of_its_second_splitter() -> OpmResult<()> {
+        let (mut scenery, [src, first, along, aside, second, out_1, out_2]) = mach_zehnder()?;
+
+        testing_logger::setup();
+        position(&mut scenery, src)?;
+
+        testing_logger::validate(|logs| {
+            let warnings: Vec<&str> = logs
+                .iter()
+                .filter(|l| l.level == log::Level::Warn)
+                .map(|l| l.body.as_str())
+                .collect();
+            assert!(warnings.is_empty(), "the arms agree: {warnings:?}");
+        });
+        for (node, position, facing) in [
+            (first, mm(0., 0., 100.), Vector3::z()),
+            (along, mm(0., 0., 200.), Vector3::z()),
+            (aside, mm(-100., 0., 100.), -Vector3::x()),
+            (second, mm(-100., 0., 200.), -Vector3::x()),
+            (out_1, mm(-150., 0., 200.), -Vector3::x()),
+            (out_2, mm(-100., 0., 250.), Vector3::z()),
+        ] {
+            let (placed_at, placed_facing) = placed(&scenery, node);
+            assert_abs_diff_eq!(placed_at, position, epsilon = 1e-9);
+            assert_abs_diff_eq!(placed_facing, facing, epsilon = 1e-9);
+        }
+        Ok(())
+    }
+    /// The optical axis of both arms of a Mach-Zehnder interferometer is drawn: the second
+    /// splitter passes on what arrives at its second input as well, not only what places it.
+    #[test]
+    fn the_axis_of_both_arms_of_a_mach_zehnder_leaves_it() -> OpmResult<()> {
+        let (scenery, [src, _, _, aside, ..]) = mach_zehnder()?;
+        let mut document = OpmDocument::new(scenery);
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            src,
+            round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 1)?,
+        );
+        document.add_analyzer(AnalyzerType::RayTrace(config));
+        let (aside_at, _) = placed(&document.placed_scenery(None)?, aside);
+
+        let axes = document.positioning_rays(None)?;
+
+        assert_eq!(axes.len(), 2, "one end behind each output");
+        for axis in &axes {
+            let via_aside = axis.iter().any(|ray| {
+                ray.position_history_with_current().row_iter().any(|point| {
+                    let point = Vector3::new(point[0].value, point[1].value, point[2].value);
+                    (point - aside_at).norm() < 1e-9
+                })
+            });
+            assert!(
+                via_aside,
+                "an axis leaves through each output by the second arm"
+            );
+        }
         Ok(())
     }
 }

@@ -19,9 +19,7 @@ use crate::components::node_editor::{
 use crate::{OPOSSUM_UI_LOGS, api};
 use dioxus::prelude::*;
 use opossum_core::{
-    prelude::Properties,
-    properties::validator::Validator,
-    types::api_types::NodeInfo,
+    prelude::Properties, properties::validator::Validator, types::api_types::NodeInfo,
 };
 use std::collections::BTreeMap;
 

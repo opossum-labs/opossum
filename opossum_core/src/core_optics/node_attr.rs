@@ -279,6 +279,10 @@ impl NodeAttr {
         &self.props
     }
 
+    /// Returns a mutable reference to the properties of this node.
+    pub const fn properties_mut(&mut self) -> &mut Properties {
+        &mut self.props
+    }
     /// Returns a reference to a property value by name.
     ///
     /// # Errors
@@ -469,6 +473,7 @@ mod test {
         apertures::{CircleShape, Outline},
         core_optics::PortType,
         geometry::Geometry,
+        material::Material,
         millimeter,
     };
 
@@ -478,7 +483,8 @@ mod test {
             millimeter!(f64::INFINITY),
             millimeter!(f64::INFINITY),
             millimeter!(10.0),
-            Outline::new(CircleShape::new(millimeter!(5.0))?, Vec::new())?,
+            Outline::new(CircleShape::new(millimeter!(5.0))?, None)?,
+            Material::default(),
         )
     }
 

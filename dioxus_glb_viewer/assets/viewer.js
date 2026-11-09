@@ -1,0 +1,1167 @@
+/**
+ * dioxus_glb_viewer — three.js viewer module
+ *
+ * No importmap needed: three.js addons use relative imports, and this module
+ * receives the absolute base URL of the three.js directory as `threeBase`.
+ *
+ * Loaded via `await import(viewerUrl)` from the boot script.
+ * The browser caches the module so multiple GlbViewer instances share the same module namespace.
+ *
+ * Exports: createViewer(canvasId, options, send, threeBase) -> Viewer object
+ */
+
+// ─── Entry point ─────────────────────────────────────────────────────────────
+
+/**
+ * Creates a viewer instance for a canvas.
+ *
+ * @param {string}   canvasId  - DOM ID of the <canvas> element (polled until available).
+ * @param {object}   options   - ViewerOptions object from Rust (snake_case fields).
+ * @param {function} send      - Callback for sending events to Rust: send({event, ...}).
+ * @param {string}   threeBase - Absolute URL of the three.js asset directory.
+ * @returns {Promise<object>}  - Viewer object with `.apply(op)` and `.dispose()`.
+ */
+export async function createViewer(canvasId, options, send, threeBase) {
+    const THREE          = await import(threeBase + '/three.module.js');
+    const { OrbitControls } = await import(threeBase + '/examples/jsm/controls/OrbitControls.js');
+    const { GLTFLoader }    = await import(threeBase + '/examples/jsm/loaders/GLTFLoader.js');
+    const canvas = await waitForElement(canvasId, 10_000);
+    if (!canvas) {
+        throw new Error(`Canvas #${canvasId} not found after 10 s`);
+    }
+
+    // ── Check for WebGL context ─────────────────────────────────────────────
+    if (!canvas.getContext('webgl2') && !canvas.getContext('webgl')) {
+        throw new Error('WebGL not available (VM, RDP, or outdated graphics driver?)');
+    }
+
+    // ── Renderer ────────────────────────────────────────────────────────────
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.shadowMap.enabled = true;
+    // Soft edges: the shadow frustum is fitted tightly to the scene (see updateShadowCamera),
+    // so plain PCF would otherwise show the shadow map's texels as a hard, blocky rim.
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.setPixelRatio(Math.min(typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1, 2));
+
+    // ── Scene, camera, controls ─────────────────────────────────────────────
+    const scene    = new THREE.Scene();
+    scene.background = new THREE.Color(options.background);
+
+    const camera = new THREE.PerspectiveCamera(options.fov_degrees, 1, 0.01, 10_000);
+    camera.position.set(...options.initial_camera);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(...options.initial_target);
+    controls.enableDamping = false;
+    controls.zoomSpeed = 2.0;
+    controls.update();
+
+    // ── Lights ──────────────────────────────────────────────────────────────
+    const ambient = new THREE.AmbientLight(0xffffff, options.ambient_intensity);
+    const sun     = new THREE.DirectionalLight(0xffffff, options.directional_intensity);
+    sun.position.set(1, 2, 1.5);
+
+    sun.castShadow = true;
+    // Adjust shadow quality/resolution
+    sun.shadow.mapSize.width = 1024;  // default is 512
+    sun.shadow.mapSize.height = 1024;
+    sun.shadow.bias = -0.0005;       // reduces shadow artifacts
+
+    // updateShadowCamera() aims the sun at the scene centre; its target must be in the graph
+    // for its world matrix (and thus the light direction) to update. The (1,2,1.5) position
+    // above is the fallback direction used until the first model fixes the frustum.
+    scene.add(ambient, sun, sun.target);
+
+    // ── Grid ────────────────────────────────────────────────────────────────
+    let grid = null;
+    if (options.grid) {
+        grid = new THREE.GridHelper(20, 20);
+        scene.add(grid);
+    }
+
+    // ── GLTFLoader ──────────────────────────────────────────────────────────
+    const loader = new GLTFLoader();
+
+    // ── Picking infrastructure ───────────────────────────────────────────────
+    const raycaster = new THREE.Raycaster();
+
+    // ── Instance state ──────────────────────────────────────────────────────
+    /** id -> { root: THREE.Group, helper: THREE.LineSegments|null } — see `setSelected` */
+    const objects      = new Map();
+    /** id -> generation counter (prevents stale load callbacks) */
+    const generations  = new Map();
+    /** transport key -> array of Base64 chunk strings */
+    const pendingBytes = new Map();
+
+    let hasAutoFitted = false;
+    let needsResize   = true;
+    let disposed      = false;
+    // Set whenever the set of visible models changes; consumed once per frame in the RAF loop to
+    // refit the sun's shadow frustum. A flag (not a per-frame recompute) keeps the Box3 pass off
+    // the hot path when nothing moved.
+    let shadowCameraDirty = true;
+
+    // ── Orientation gizmo (ViewHelper) ───────────────────────────────────────
+    const clock = new THREE.Clock();
+    let viewHelper = null;
+
+    /**
+     * Lazily creates or disposes the ViewHelper depending on `enabled`.
+     * The import is deferred so viewers that never enable the gizmo pay no cost.
+     *
+     * Race guard: both the boot path and the first `set_options` op may call
+     * ensureGizmo(true) while the dynamic import is still in flight.  After the
+     * await, we check `viewHelper` again — if the other concurrent call already
+     * constructed it we return immediately instead of constructing a second one
+     * (which would overwrite the first and leak its GPU resources).
+     *
+     * Errors from the import or construction are caught and forwarded to Rust via
+     * the `send` callback as a `{ event: 'error', message }` payload, matching the
+     * shape already used by other error paths in the boot script.
+     *
+     * @param {boolean} enabled - Whether the gizmo should be active.
+     */
+    async function ensureGizmo(enabled) {
+        if (enabled && !viewHelper) {
+            try {
+                const { ViewHelper } =
+                    await import(threeBase + '/examples/jsm/helpers/ViewHelper.js');
+                // The viewer may have been torn down (or disabled again) while we awaited.
+                // Also guard against a concurrent ensureGizmo(true) that finished first.
+                if (disposed || !currentOptions.orientation_gizmo || viewHelper) return;
+                viewHelper = new ViewHelper(camera, renderer.domElement);
+                viewHelper.center = controls.target;
+            } catch (e) {
+                send({
+                    event: 'error',
+                    message: 'Could not create the orientation gizmo: ' +
+                        String((e && e.message) || e),
+                });
+            }
+        } else if (!enabled && viewHelper) {
+            viewHelper.dispose();
+            viewHelper = null;
+        }
+    }
+
+    // ── Ground (optional, host-supplied) ────────────────────────────────────
+    // A floor that reaches to the horizon. The host supplies the image, the size of one copy of it
+    // in the world and the height; the viewer only tiles it. It is one plane, resized with the
+    // zoom and moved under the camera target every frame (see updateGround), with a radial fade so
+    // its rim is never seen.
+    //
+    // Deliberately NOT an entry of `objects`: fitView() and picking look only there, so the ground
+    // is never framed and never hit. It does receive the models' shadows (receiveShadow), which
+    // the sun casts once updateShadowCamera() has fitted its frustum to the scene.
+    //
+    // The plane is opaque and its rim fade is a colour blend towards the background done in-shader
+    // (fadeGroundMaterial), NOT an alpha fade. That matters because three.js renders only opaque
+    // objects into the buffer transmissive glass refracts: a transparent floor would vanish from
+    // it and not be seen through a lens, an opaque one is.
+
+    /** Half the plane's width, as a multiple of the camera's distance to its target. */
+    const GROUND_REACH = 20;
+    /** The plane is never narrower than this many tiles, however close the camera gets. */
+    const GROUND_MIN_TILES = 64;
+    /** Fraction of the plane's half-width that stays fully opaque before the fade begins. */
+    const GROUND_FADE_START = 0.6;
+
+    /** { mesh, map, url, tile, height } while a ground is shown, else null. */
+    let ground = null;
+
+    /**
+     * Shows, moves, replaces or removes the ground to match `spec`.
+     *
+     * `set_options` arrives on every option change, so a spec that only differs in height moves
+     * the existing plane rather than fetching its image again.
+     *
+     * @param {object|null} spec - `{ height, tile_url, tile_size }` from Rust, or null for no ground.
+     */
+    function applyGround(spec) {
+        const usable = !!spec && Number.isFinite(spec.tile_size) && spec.tile_size > 0
+            && Number.isFinite(spec.height);
+        if (spec && !usable) {
+            send({ event: 'error',
+                   message: 'Ground not drawn: its tile size must be a positive number and its '
+                          + 'height a finite one' });
+        }
+        if (!usable) { disposeGround(); shadowCameraDirty = true; return; }
+        if (ground && ground.url === spec.tile_url && ground.tile === spec.tile_size) {
+            ground.height = spec.height; // updateGround() applies it on the next frame
+            shadowCameraDirty = true;    // the ground plane's height feeds the shadow frustum's depth
+            return;
+        }
+        disposeGround();
+
+        const map = new THREE.TextureLoader().load(spec.tile_url, undefined, undefined, () => {
+            send({ event: 'error', message: 'Could not load the ground image ' + spec.tile_url });
+        });
+        map.colorSpace = THREE.SRGBColorSpace;
+        map.wrapS = THREE.RepeatWrapping;
+        map.wrapT = THREE.RepeatWrapping;
+        // Seen at a grazing angle almost everywhere, so anisotropic filtering is what keeps the
+        // near floor sharp and the far floor free of moiré.
+        map.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+        // Opaque, so the plane is written into the buffer that transmissive glass refracts and the
+        // table is therefore seen through a lens. The rim fade is done in-shader (fadeGroundMaterial)
+        // by blending the colour towards the background, not by turning the plane transparent, which
+        // would drop it from that buffer again.
+        const material = new THREE.MeshStandardMaterial({
+            map,
+            roughness: 0.9,
+            metalness: 0.0,
+        });
+        fadeGroundMaterial(material);
+        // Unit square in XZ facing +y; updateGround() scales it. Seen from above only, so orbiting
+        // below the floor still shows the scene.
+        const geometry = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+        const mesh = new THREE.Mesh(geometry, material);
+        // Catch the optics' shadows. They fall in the centre under the models; at the faded rim the
+        // shadow blends away together with the floor, which is exactly right.
+        mesh.receiveShadow = true;
+        scene.add(mesh);
+        ground = { mesh, map, url: spec.tile_url, tile: spec.tile_size, height: spec.height };
+        updateGround();
+        shadowCameraDirty = true; // a new ground plane changes where shadows land
+    }
+
+    /**
+     * Resizes the ground with the zoom and moves it under the camera target. Called every frame.
+     *
+     * The plane is an even number of tiles wide and its centre sits on a whole tile, so the
+     * image's origin always falls on a tile corner: the plane moves, the pattern stays put.
+     */
+    function updateGround() {
+        if (!ground) return;
+        const tile = ground.tile;
+        const wanted = Math.min(
+            Math.max(camera.position.distanceTo(controls.target) * GROUND_REACH * 2,
+                     GROUND_MIN_TILES * tile),
+            camera.far,
+        );
+        const tiles = 2 * Math.ceil(wanted / (2 * tile));
+        ground.mesh.scale.set(tiles * tile, 1, tiles * tile);
+        ground.map.repeat.set(tiles, tiles);
+        ground.mesh.position.set(
+            Math.round(controls.target.x / tile) * tile,
+            ground.height,
+            Math.round(controls.target.z / tile) * tile,
+        );
+    }
+
+    /** Removes the ground and releases its GPU resources. */
+    function disposeGround() {
+        if (!ground) return;
+        scene.remove(ground.mesh);
+        ground.mesh.geometry.dispose();
+        ground.mesh.material.dispose();
+        ground.map.dispose();
+        ground = null;
+    }
+
+    /**
+     * Patches a ground material so its colour fades into the background towards the plane's rim:
+     * untouched out to GROUND_FADE_START of the half-width, fully the background colour at the rim
+     * and beyond. This keeps the material opaque (unlike an alpha fade), which is what lets the
+     * floor be seen through transmissive glass.
+     *
+     * The radial factor is computed from the plane's own local coordinates (±0.5), so it is
+     * independent of the zoom-driven scale and of the texture's tiling. The blend runs just before
+     * tone mapping, where `gl_FragColor` is still linear, so at the rim the pixel equals the
+     * background colour exactly (uFadeColor is the linear `background` option).
+     *
+     * The compiled shader is stored on `material.userData.groundShader` so applyOptions can keep
+     * uFadeColor in step with a later background change.
+     *
+     * @param {THREE.MeshStandardMaterial} material - the ground material to patch in place.
+     */
+    function fadeGroundMaterial(material) {
+        material.onBeforeCompile = (shader) => {
+            // The background colour, not scene.background: that may be a panorama (see
+            // applyBackground), and a pixel can only fade into one colour.
+            shader.uniforms.uFadeColor = { value: new THREE.Color(currentOptions.background) };
+            shader.uniforms.uFadeStart = { value: GROUND_FADE_START };
+            // Carry the plane's local XZ (±0.5) to the fragment stage. The plane is only four
+            // vertices, so the radius must be taken PER FRAGMENT here, not per vertex — a per-vertex
+            // radius is 0.707 at every corner and would interpolate to a constant, fading the whole
+            // floor. Local position interpolates linearly across the flat quad, so length() in the
+            // fragment recovers the true radial distance.
+            shader.vertexShader = 'varying vec2 vGroundXZ;\n' + shader.vertexShader.replace(
+                '#include <begin_vertex>',
+                '#include <begin_vertex>\n    vGroundXZ = position.xz;',
+            );
+            shader.fragmentShader =
+                'uniform vec3 uFadeColor;\nuniform float uFadeStart;\nvarying vec2 vGroundXZ;\n'
+                + shader.fragmentShader.replace(
+                    '#include <tonemapping_fragment>',
+                    'gl_FragColor.rgb = mix(gl_FragColor.rgb, uFadeColor, '
+                        + 'smoothstep(uFadeStart, 1.0, length(vGroundXZ) * 2.0));'
+                        + '\n\t#include <tonemapping_fragment>',
+                );
+            material.userData.groundShader = shader;
+        };
+    }
+
+    // AbortController for all DOM listeners (ac.abort() removes them all at once)
+    const ac = new AbortController();
+
+    // ── Resize via ResizeObserver (NOT window.resize) ───────────────────────
+    // window.resize does not fire when a splitter narrows the panel.
+    const ro = new ResizeObserver(() => { needsResize = true; });
+    ro.observe(canvas);
+
+    function resize() {
+        const w = Math.max(1, Math.floor(canvas.clientWidth));
+        const h = Math.max(1, Math.floor(canvas.clientHeight));
+        // false = no inline CSS: three would otherwise set width/height attributes which
+        // would re-trigger ResizeObserver → feedback loop.
+        renderer.setSize(w, h, false);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        needsResize = false;
+    }
+
+    // ── RAF loop ─────────────────────────────────────────────────────────────
+    renderer.setAnimationLoop(() => {
+        if (disposed) return;
+        // Self-shutdown: canvas detached from DOM (unmount without a Destroy op).
+        if (!canvas.isConnected) { dispose(); return; }
+        if (needsResize) resize();
+        controls.update(); // needed for enableDamping
+        updateGround();
+        if (shadowCameraDirty) { updateShadowCamera(); shadowCameraDirty = false; }
+        renderer.render(scene, camera);
+        // Overlay the orientation gizmo after the main scene is rendered.
+        // autoClear must be false so the gizmo's internal renderer.render() does not
+        // wipe the frame; ViewHelper saves/restores the viewport itself.
+        if (viewHelper) {
+            const delta = clock.getDelta();
+            if (viewHelper.animating) viewHelper.update(delta);
+            renderer.autoClear = false;
+            viewHelper.render(renderer);
+            renderer.autoClear = true;
+        }
+    });
+
+    // ── Picking ───────────────────────────────────────────────────────────────
+    let pointerDown = null;
+
+    canvas.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0) return;
+        pointerDown = { x: e.clientX, y: e.clientY, id: e.pointerId };
+    }, { signal: ac.signal });
+
+    canvas.addEventListener('pointercancel', () => { pointerDown = null; }, { signal: ac.signal });
+
+    canvas.addEventListener('pointerup', (e) => {
+        const start = pointerDown;
+        pointerDown = null;
+        if (!start || e.pointerId !== start.id || e.button !== 0) return;
+        // Distance threshold 4 px: orbit drags are not a pick.
+        // Time threshold intentionally NOT used — a slow deliberate click is a click.
+        if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > 4) return;
+
+        // Let the gizmo consume axis clicks before scene picking.
+        if (viewHelper && viewHelper.handleClick(e)) return;
+
+        // NDC from CSS box (not canvas.width): at devicePixelRatio != 1 the values would otherwise be wrong.
+        const rect = canvas.getBoundingClientRect();
+        const ndc  = new THREE.Vector2(
+             ((e.clientX - rect.left) / rect.width)  * 2 - 1,
+            -((e.clientY - rect.top)  / rect.height) * 2 + 1,
+        );
+        raycaster.setFromCamera(ndc, camera);
+
+        // Only raycast against model roots (NOT scene.children, because GridHelper and the ground
+        // are also raycastable and would produce hits without a glbId).
+        const roots = [];
+        for (const entry of objects.values()) {
+            if (entry.root.visible) roots.push(entry.root);
+        }
+        // Lines and points are annotations (rays, paths), not objects: they are never picked. three.js
+        // hits a line within `params.Line.threshold` world units (1 by default), so a drawn ray would
+        // otherwise swallow nearly every click on whatever sits behind it.
+        const hit = raycaster
+            .intersectObjects(roots, true)
+            .find((h) => !h.object.isLine && !h.object.isPoints);
+
+        if (hit) {
+            send({
+                event:     'pick',
+                id:        findGlbId(hit.object),
+                mesh_name: hit.object.name || null,
+                point:     [hit.point.x, hit.point.y, hit.point.z],
+                shift:     e.shiftKey,
+                ctrl:      e.ctrlKey || e.metaKey,
+                alt:       e.altKey,
+            });
+        } else {
+            send({ event: 'pick', id: null, mesh_name: null, point: null,
+                   shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey });
+        }
+    }, { signal: ac.signal });
+
+    // ── Model operations ─────────────────────────────────────────────────────
+
+    /** Walks up from a mesh to the Group with userData.glbId. */
+    function findGlbId(obj) {
+        for (let o = obj; o; o = o.parent) {
+            if (o.userData && typeof o.userData.glbId === 'string') return o.userData.glbId;
+        }
+        return null;
+    }
+
+    function applyTransform(root, t) {
+        root.position.set(...t.position);
+        root.rotation.set(...t.rotation_euler_xyz); // Euler XYZ, radians
+        root.scale.set(...t.scale);
+    }
+
+    /**
+     * Axis-aligned box around a model's geometry, in the MODEL'S OWN frame.
+     *
+     * `THREE.Box3.setFromObject` (and `THREE.BoxHelper` with it) fits the box to the world axes,
+     * which for a tilted component is far larger than the component itself — a grating turned 45°
+     * gets a box reaching 41% too far. Measuring in the model's own frame instead gives the box the
+     * component deserves; the caller turns it back with the model's world matrix.
+     *
+     * @param {THREE.Object3D} root - The model root to measure.
+     * @returns {THREE.Box3} The box in `root`'s local frame; empty if the model holds no geometry.
+     */
+    function localBounds(root) {
+        root.updateWorldMatrix(true, true);
+        const toLocal = new THREE.Matrix4().copy(root.matrixWorld).invert();
+        const relative = new THREE.Matrix4();
+        const corner = new THREE.Vector3();
+        const box = new THREE.Box3();
+        root.traverse((o) => {
+            if (!o.isMesh || !o.geometry) return;
+            if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+            const bounds = o.geometry.boundingBox;
+            if (!bounds) return;
+            // Each mesh sits somewhere below the root, so its own geometry is carried up into the
+            // root's frame rather than read off as it is.
+            relative.multiplyMatrices(toLocal, o.matrixWorld);
+            for (let i = 0; i < 8; i++) {
+                // Bit 0/1/2 of `i` picks min or max on x/y/z, which walks all eight corners.
+                corner.set(
+                    i & 1 ? bounds.max.x : bounds.min.x,
+                    i & 2 ? bounds.max.y : bounds.min.y,
+                    i & 4 ? bounds.max.z : bounds.min.z,
+                );
+                box.expandByPoint(corner.applyMatrix4(relative));
+            }
+        });
+        return box;
+    }
+
+    /**
+     * Wireframe outline of a box, drawn with a transform the caller sets itself.
+     *
+     * `matrixAutoUpdate` is off: the outline holds a box in a model's own frame and is moved by
+     * copying that model's world matrix into `matrix`, so turning or moving the model never rebuilds
+     * the geometry.
+     *
+     * @param {THREE.Box3} box - The box to outline, in the model's local frame.
+     * @param {THREE.Color} color - Colour of the lines.
+     * @returns {THREE.LineSegments} The outline, not yet added to the scene.
+     */
+    function boxOutline(box, color) {
+        const corners = [];
+        for (let i = 0; i < 8; i++) {
+            corners.push(
+                i & 1 ? box.max.x : box.min.x,
+                i & 2 ? box.max.y : box.min.y,
+                i & 4 ? box.max.z : box.min.z,
+            );
+        }
+        // The twelve edges as index pairs: corners differing in exactly one of the three bits.
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(corners, 3));
+        geometry.setIndex([0, 1, 2, 3, 4, 5, 6, 7, 0, 2, 1, 3, 4, 6, 5, 7, 0, 4, 1, 5, 2, 6, 3, 7]);
+        const outline = new THREE.LineSegments(
+            geometry,
+            // transparent keeps the outline out of the glass-transmission buffer (so a lens never
+            // refracts it into ghosts); no depth write/test draws it over the glass rather than
+            // being clipped by a lens surface bulging in front of the selected node.
+            new THREE.LineBasicMaterial({
+                color, toneMapped: false, transparent: true, depthWrite: false, depthTest: false,
+            }),
+        );
+        outline.matrixAutoUpdate = false;
+        return outline;
+    }
+
+    function setSelected(id, selected) {
+        const entry = objects.get(id);
+        if (!entry) return;
+        if (selected) {
+            if (!entry.helper) {
+                const box = localBounds(entry.root);
+                // A model without geometry has nothing to outline; leave it unmarked rather than
+                // drawing a degenerate box at the origin.
+                if (box.isEmpty()) return;
+                const h = boxOutline(box, new THREE.Color(currentOptions.selection_color));
+                h.matrix.copy(entry.root.matrixWorld);
+                // Kept beside the model rather than inside it: as a child it would be faded by
+                // `setOpacity` along with the component and counted into `sceneBounds`.
+                scene.add(h);
+                entry.helper = h;
+            }
+        } else {
+            if (entry.helper) {
+                scene.remove(entry.helper);
+                entry.helper.geometry.dispose();
+                entry.helper.material.dispose();
+                entry.helper = null;
+            }
+        }
+    }
+
+    /** Recursively disposes all GPU resources of a scene group. */
+    function disposeSceneGraph(root) {
+        root.traverse((o) => {
+            if (o.geometry) o.geometry.dispose();
+            const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : []);
+            for (const m of mats) {
+                // Dispose all texture properties of the material (map, normalMap, aoMap, …)
+                for (const k of Object.keys(m)) {
+                    const v = m[k];
+                    if (v && typeof v === 'object' && v.isTexture) v.dispose();
+                }
+                m.dispose();
+            }
+        });
+    }
+
+    function removeObject(id) {
+        const entry = objects.get(id);
+        if (!entry) return;
+        if (entry.helper) {
+            scene.remove(entry.helper);
+            entry.helper.geometry.dispose();
+            entry.helper.material.dispose();
+        }
+        scene.remove(entry.root);
+        disposeSceneGraph(entry.root);
+        objects.delete(id);
+        shadowCameraDirty = true; // the scene bounds shrank
+    }
+
+    /**
+     * Bounding box of all visible models - never the grid or the ground, which are not in
+     * `objects`. May be empty (no visible model); callers check with `.isEmpty()`.
+     *
+     * @returns {THREE.Box3}
+     */
+    function sceneBounds() {
+        const box = new THREE.Box3();
+        for (const entry of objects.values()) {
+            if (entry.root.visible) box.expandByObject(entry.root);
+        }
+        return box;
+    }
+
+    /** Frames all visible models - never the grid or the ground, which are not in `objects`. MOVES THE CAMERA. */
+    function fitView() {
+        const box = sceneBounds();
+        if (box.isEmpty()) return;
+        const center = box.getCenter(new THREE.Vector3());
+        const size   = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const fov    = camera.fov * (Math.PI / 180);
+        const dist   = (maxDim / 2) / Math.tan(fov / 2) * 1.5;
+        const dir    = camera.position.clone().sub(controls.target).normalize();
+        camera.position.copy(center.clone().add(dir.multiplyScalar(dist)));
+        controls.target.copy(center);
+        controls.update();
+    }
+
+    function maybeAutoFit() {
+        if (!currentOptions.fit_on_first_load || hasAutoFitted) return;
+        hasAutoFitted = true;
+        fitView();
+    }
+
+    /** Direction the sunlight comes from, kept fixed (matches the original sun.position). */
+    const SUN_DIR = new THREE.Vector3(1, 2, 1.5).normalize();
+    const shadowSphere = new THREE.Sphere();
+
+    /**
+     * Aims the sun at the scene centre and shrinks its orthographic shadow frustum to just
+     * enclose the models AND the ground patch their shadows fall on, so the 1024² shadow map is
+     * spent on the optics and not on empty space. Does nothing while no model is visible, leaving
+     * the fallback sun.position in place.
+     *
+     * The frustum's width only needs to cover the models: a caster and its shadow are colinear
+     * with the light, so they project to the same spot in the shadow map. Its DEPTH, however, must
+     * reach past the models down to the ground — otherwise the ground lies behind the far plane
+     * and the shadow is clipped (a small model then shows no shadow at all, a large one a shadow
+     * cut off in a straight line).
+     */
+    function updateShadowCamera() {
+        const box = sceneBounds();
+        if (box.isEmpty()) return;
+        box.getBoundingSphere(shadowSphere);
+        const center = shadowSphere.center;
+        const r    = Math.max(shadowSphere.radius, 1e-3);
+        // Where shadows land: the ground plane if there is one, else the lowest model surface.
+        const groundY = ground ? ground.height : box.min.y;
+        // Distance along the light ray from the scene centre down to that plane. Colinear with the
+        // light, so it adds only depth (never width) to what the shadow camera must cover.
+        const drop   = Math.max((center.y - groundY) / SUN_DIR.y, 0);
+        const margin = r * 0.1 + 1e-3;
+        const dist   = r * 4;
+        sun.position.copy(center).addScaledVector(SUN_DIR, dist);
+        sun.target.position.copy(center);
+        sun.target.updateMatrixWorld();
+        const cam = sun.shadow.camera;
+        cam.left = -r - margin; cam.right = r + margin;
+        cam.top  =  r + margin; cam.bottom = -r - margin;
+        cam.near = Math.max(dist - r - margin, 0.01);
+        cam.far  = dist + r + drop + margin;
+        cam.updateProjectionMatrix();
+    }
+
+    // ── Base64 → ArrayBuffer ─────────────────────────────────────────────────
+    function base64ToArrayBuffer(b64) {
+        if (typeof Uint8Array.fromBase64 === 'function') {
+            return Uint8Array.fromBase64(b64).buffer;
+        }
+        const bin = atob(b64);
+        const out = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+        return out.buffer;
+    }
+
+    // ── Fat lines ─────────────────────────────────────────────────────────────
+    // WebGL draws GL_LINES exactly one pixel wide on most platforms (ANGLE on Windows ignores
+    // `linewidth`), and glTF has no line width at all. A wider line is therefore drawn as the
+    // three.js "fat line" add-on instead: LineSegments2 renders each segment as a screen-space quad
+    // of `line_width` pixels. The add-on is imported only once a line actually has to be widened.
+    let fatLineModules = null;
+
+    function loadFatLineModules() {
+        if (!fatLineModules) {
+            fatLineModules = Promise.all([
+                import(threeBase + '/examples/jsm/lines/LineSegments2.js'),
+                import(threeBase + '/examples/jsm/lines/LineSegmentsGeometry.js'),
+                import(threeBase + '/examples/jsm/lines/LineMaterial.js'),
+            ]);
+        }
+        return fatLineModules;
+    }
+
+    /**
+     * Brings every line under `root` to the current `line_width`.
+     *
+     * Lines already widened get the new width. Plain lines are replaced by fat lines once the width
+     * exceeds one pixel; at one pixel they are left as they are, so a viewer that never asks for
+     * wider lines draws exactly what the file holds and never loads the add-on.
+     */
+    async function thickenLines(root) {
+        const width = currentOptions.line_width;
+        const plain = [];
+        root.traverse((o) => {
+            if (o.isLineSegments2) o.material.linewidth = width;
+            else if (o.isLineSegments) plain.push(o);
+        });
+        if (width <= 1 || plain.length === 0) return;
+
+        const [{ LineSegments2 }, { LineSegmentsGeometry }, { LineMaterial }] =
+            await loadFatLineModules();
+        for (const line of plain) {
+            if (!line.parent) continue;
+            // Resolve the index (glTF lines are indexed) into one position pair per segment.
+            const pos   = line.geometry.attributes.position;
+            const index = line.geometry.index;
+            const count = index ? index.count : pos.count;
+            const flat  = new Float32Array(count * 3);
+            for (let i = 0; i < count; i++) {
+                const v = index ? index.getX(i) : i;
+                flat[3 * i]     = pos.getX(v);
+                flat[3 * i + 1] = pos.getY(v);
+                flat[3 * i + 2] = pos.getZ(v);
+            }
+            const src = line.material;
+            const fat = new LineSegments2(
+                new LineSegmentsGeometry().setPositions(flat),
+                new LineMaterial({
+                    color:       src.color.clone(),
+                    linewidth:   width,
+                    transparent: src.transparent,
+                    opacity:     src.opacity,
+                    depthWrite:  src.depthWrite,
+                    depthTest:   src.depthTest,
+                    blending:    src.blending,
+                }),
+            );
+            fat.name = line.name;
+            fat.renderOrder = line.renderOrder;
+            fat.position.copy(line.position);
+            fat.quaternion.copy(line.quaternion);
+            fat.scale.copy(line.scale);
+            // A fat line is a mesh, but still an annotation: never picked (see the click handler),
+            // and it casts no shadow - its quads would throw wide smears onto the ground.
+            fat.raycast = () => {};
+            fat.castShadow = false;
+            // Keep what the file gave the line, so a later opacity change still scales that and
+            // not the value an earlier change left behind, and keeps an overlay one (see setOpacity).
+            if (src.userData.ownOpacity) {
+                fat.material.userData.ownOpacity = src.userData.ownOpacity;
+            }
+            if (src.userData.overlay) fat.material.userData.overlay = src.userData.overlay;
+            line.parent.add(fat);
+            line.parent.remove(line);
+            line.geometry.dispose();
+            src.dispose();
+        }
+    }
+
+    // ── Overlay ───────────────────────────────────────────────────────────────
+    /**
+     * Marks every material under `root` as an annotation overlay (or clears the mark).
+     *
+     * An overlay material is forced into the transparent render pass by `setOpacity`, so it draws
+     * after the glass-transmission buffer is captured and never appears refracted through a lens.
+     * The flag is stored on the material and read back by `setOpacity`, which owns the actual
+     * transparency, depth and blending state - this only records the intent. Call it before
+     * `setOpacity`.
+     *
+     * An overlay's lines are drawn in the order the file lists them. Without depth the line drawn
+     * last covers the others, and three.js would otherwise order them by their distance to the
+     * camera, so the color of a crossing would jump as the view turns.
+     */
+    function setOverlay(root, overlay) {
+        let order = 0;
+        root.traverse((o) => {
+            if (!o.material) return;
+            o.renderOrder = overlay ? ++order : 0;
+            for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+                m.userData.overlay = overlay;
+            }
+        });
+    }
+
+    // ── Opacity ───────────────────────────────────────────────────────────────
+    /**
+     * Draws every material under `root` at `factor` times its own opacity.
+     *
+     * What the file gave a material - opacity, transparency, depth writing and testing - is
+     * remembered on first use, so the factor always scales the original and 1 restores it exactly.
+     * Below 1 a material stops writing depth: overlapping translucent lines would otherwise hide
+     * each other in draw order instead of adding up. An overlay material (see `setOverlay`) is kept
+     * transparent at any opacity - so it stays out of the glass-transmission buffer and is never
+     * refracted - and has depth testing off too, so it draws over a lens rather than being clipped
+     * by the glass surface bulging in front of it. How an overlay blends is `setBlending`'s.
+     */
+    function setOpacity(root, factor) {
+        root.traverse((o) => {
+            if (!o.material) return;
+            for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+                m.userData.ownOpacity ??= {
+                    opacity: m.opacity, transparent: m.transparent,
+                    depthWrite: m.depthWrite, depthTest: m.depthTest, blending: m.blending,
+                };
+                const own = m.userData.ownOpacity;
+                const overlay = m.userData.overlay ?? false;
+                const transparent = own.transparent || factor < 1 || overlay;
+                // Switching transparency changes the shader program, which only a recompile does.
+                if (m.transparent !== transparent) m.needsUpdate = true;
+                m.transparent = transparent;
+                m.opacity     = own.opacity * factor;
+                m.depthWrite  = (factor < 1 || overlay) ? false : own.depthWrite;
+                m.depthTest   = overlay ? false : own.depthTest;
+            }
+        });
+        setBlending(root);
+    }
+
+    /**
+     * Blends every overlay material under `root` as the `overlay_blending` option says.
+     *
+     * Additive, an overlay adds its color to what lies behind it, as light does, and a crossing
+     * mixes the same whatever order its lines are drawn in. Ordered, it keeps the blending the file
+     * gave it, and `setOverlay`'s drawing order decides which line shows. Other materials always
+     * keep their own. Reads what `setOpacity` remembered, so call it after that.
+     */
+    function setBlending(root) {
+        const additive = currentOptions.overlay_blending === 'additive';
+        root.traverse((o) => {
+            if (!o.material) return;
+            for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+                const own = m.userData.ownOpacity;
+                if (!own) continue;
+                m.blending = (m.userData.overlay && additive) ? THREE.AdditiveBlending : own.blending;
+            }
+        });
+    }
+
+    // ── Load logic with generation counter ────────────────────────────────────
+    function load(op) {
+        const gen = (generations.get(op.id) || 0) + 1;
+        generations.set(op.id, gen);
+        removeObject(op.id);
+
+        const onLoad = async (gltf) => {
+            if (generations.get(op.id) !== gen) {
+                // A newer request has overtaken this load — release GPU resources.
+                disposeSceneGraph(gltf.scene);
+                return;
+            }
+            const root = gltf.scene;
+            try {
+                await thickenLines(root);
+            } catch (e) {
+                // The lines stay one pixel wide; the model itself is still worth showing.
+                send({ event: 'error',
+                       message: `lines could not be widened: ${(e && e.message) || e}` });
+            }
+            // The add-on import is awaited above, so a newer request may have overtaken us since.
+            if (generations.get(op.id) !== gen) {
+                disposeSceneGraph(root);
+                return;
+            }
+            root.userData.glbId = op.id;
+            // Every mesh both casts and receives: the models shadow the ground and each other.
+            // GLTFLoader leaves both flags false, so they must be set here on the fresh graph.
+            // Fat lines are meshes too, but annotations, and keep the flags thickenLines gave them.
+            root.traverse((o) => {
+                if (o.isMesh && !o.isLineSegments2) { o.castShadow = true; o.receiveShadow = true; }
+            });
+            applyTransform(root, op.transform);
+            root.visible = op.visible;
+            // Before setOpacity: it reads the overlay mark to decide the transparent/depth state.
+            setOverlay(root, op.overlay ?? false);
+            setOpacity(root, op.opacity);
+            scene.add(root);
+            objects.set(op.id, { root, helper: null });
+            if (op.selected) setSelected(op.id, true);
+            shadowCameraDirty = true; // a new model changes the scene bounds
+            send({ event: 'loaded', id: op.id });
+            maybeAutoFit();
+        };
+
+        const onError = (err) => {
+            if (generations.get(op.id) !== gen) return;
+            send({ event: 'load_error', id: op.id,
+                   message: String((err && err.message) || err) });
+        };
+
+        if (op.source.kind === 'url') {
+            loader.load(op.source.url, onLoad, undefined, onError);
+        } else {
+            // Bytes path: assemble chunks and parse
+            const chunks = pendingBytes.get(op.source.key) || [];
+            pendingBytes.delete(op.source.key);
+            try {
+                const b64    = chunks.join('');
+                const buffer = base64ToArrayBuffer(b64);
+                // path = '' because .glb is self-contained (no external references)
+                loader.parse(buffer, '', onLoad, onError);
+            } catch (e) {
+                onError(e);
+            }
+        }
+    }
+
+    // ── Environment ───────────────────────────────────────────────────────────
+    // Transmissive glass (KHR_materials_transmission) renders what is behind the surface, so with
+    // nothing around the scene there is nothing to refract and the material comes out black. The
+    // map is built only when one is asked for: a viewer that never wants it pays neither the
+    // import nor the render-to-cubemap.
+    //
+    // An environment is "none", "room" or { horizon: { above, below } } (see `Environment` in
+    // model.rs). It is compared by its JSON, so a horizon with other colours builds a new map.
+    let environmentKey = JSON.stringify('none');
+    let environmentMap = null;
+
+    /**
+     * Draws a horizon as an equirectangular panorama: `above` over eye level, `below` under it,
+     * blending across a narrow band at the horizon. It lightens towards the zenith and darkens
+     * towards the nadir, so a curved mirror still shows which way is up.
+     *
+     * @param {{above: string, below: string}} colours - CSS colours of the two halves.
+     * @returns {HTMLCanvasElement}
+     */
+    function horizonPanorama({ above, below }) {
+        const image = document.createElement('canvas');
+        image.width  = 1024;
+        image.height = 512;
+        const g = image.getContext('2d');
+        const shade = (colour, toward, amount) =>
+            new THREE.Color(colour).lerp(new THREE.Color(toward), amount).getStyle();
+        const gradient = g.createLinearGradient(0, 0, 0, image.height);
+        gradient.addColorStop(0,    shade(above, '#ffffff', 0.3));
+        gradient.addColorStop(0.47, above);
+        gradient.addColorStop(0.53, below);
+        gradient.addColorStop(1,    shade(below, '#000000', 0.5));
+        g.fillStyle = gradient;
+        g.fillRect(0, 0, image.width, image.height);
+        return image;
+    }
+
+    /**
+     * Fetches a 2:1 panorama: an `.hdr` through the vendored RGBELoader, which keeps brightness
+     * beyond white, anything else as an ordinary image.
+     *
+     * @param {string} url - where the panorama is; a path ending in `.hdr` is read as Radiance HDR.
+     * @returns {Promise<THREE.Texture>} the panorama, not yet filtered for reflections.
+     */
+    async function loadPanorama(url) {
+        if (url.split(/[?#]/)[0].toLowerCase().endsWith('.hdr')) {
+            const { RGBELoader } =
+                await import(threeBase + '/examples/jsm/loaders/RGBELoader.js');
+            return new RGBELoader().loadAsync(url);
+        }
+        const texture = await new THREE.TextureLoader().loadAsync(url);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        return texture;
+    }
+
+    /**
+     * Builds the environment map an environment asks for.
+     *
+     * @param {string|object} spec - the environment, as `applyEnvironment` takes it.
+     * @returns {Promise<THREE.Texture|null>} the map, or null for no environment.
+     */
+    async function environmentMapOf(spec) {
+        if (spec === 'room') {
+            const { RoomEnvironment } =
+                await import(threeBase + '/examples/jsm/environments/RoomEnvironment.js');
+            const pmrem = new THREE.PMREMGenerator(renderer);
+            const room  = new RoomEnvironment();
+            const map   = pmrem.fromScene(room).texture;
+            // Generator and room were scaffolding; only the cube texture outlives this call.
+            pmrem.dispose();
+            room.dispose();
+            return map;
+        }
+        if (spec && spec.horizon) {
+            const pmrem   = new THREE.PMREMGenerator(renderer);
+            const texture = new THREE.CanvasTexture(horizonPanorama(spec.horizon));
+            texture.colorSpace = THREE.SRGBColorSpace;
+            texture.mapping    = THREE.EquirectangularReflectionMapping;
+            const map = pmrem.fromEquirectangular(texture).texture;
+            // As above: only the filtered map outlives this call.
+            pmrem.dispose();
+            texture.dispose();
+            return map;
+        }
+        if (spec && spec.image) {
+            const texture = await loadPanorama(spec.image.url);
+            texture.mapping = THREE.EquirectangularReflectionMapping;
+            const pmrem = new THREE.PMREMGenerator(renderer);
+            const map   = pmrem.fromEquirectangular(texture).texture;
+            // As above: only the filtered map outlives this call.
+            pmrem.dispose();
+            texture.dispose();
+            return map;
+        }
+        return null;
+    }
+
+    /**
+     * Puts the plain background colour behind the scene, or the environment map when
+     * `environment_background` asks for it and the map has arrived.
+     */
+    function applyBackground() {
+        scene.background = currentOptions.environment_background && environmentMap
+            ? environmentMap
+            : new THREE.Color(currentOptions.background);
+    }
+
+    async function applyEnvironment(spec) {
+        const key = JSON.stringify(spec);
+        if (key === environmentKey) return;
+        environmentKey = key;
+
+        if (environmentMap) { environmentMap.dispose(); environmentMap = null; }
+        scene.environment = null;
+        applyBackground(); // the old map may be the background, and it is gone
+        let map;
+        try {
+            map = await environmentMapOf(spec);
+        } catch (e) {
+            if (!disposed && environmentKey === key) {
+                send({ event: 'error', message: `Environment not drawn: ${(e && e.message) || e}` });
+            }
+            return;
+        }
+        if (!map) return;
+
+        // Building a map may await an import or a download, so the viewer may have been torn down in
+        // the meantime - and a second call may have overtaken this one. Either way this map is no
+        // longer the wanted one.
+        if (disposed || environmentKey !== key) { map.dispose(); return; }
+        environmentMap = map;
+        scene.environment = map;
+        applyBackground();
+    }
+
+    // ── Options ───────────────────────────────────────────────────────────────
+    let currentOptions = options;
+    void applyEnvironment(options.environment);
+    scene.environmentIntensity = options.environment_intensity;
+    void ensureGizmo(options.orientation_gizmo);
+    applyGround(options.ground);
+
+    function applyOptions(opts) {
+        currentOptions = opts;
+        applyBackground();
+        // The ground fades to the background colour at its rim; keep that colour in step. The shader
+        // is absent until the material first compiles, so this only updates a ground already drawn.
+        const groundShader = ground && ground.mesh.material.userData.groundShader;
+        if (groundShader) groundShader.uniforms.uFadeColor.value.set(opts.background);
+        ambient.intensity = opts.ambient_intensity;
+        sun.intensity     = opts.directional_intensity;
+        void applyEnvironment(opts.environment);
+        scene.environmentIntensity = opts.environment_intensity;
+        // Grid: add/remove based on flag
+        if (opts.grid && !grid) {
+            grid = new THREE.GridHelper(20, 20);
+            scene.add(grid);
+        } else if (!opts.grid && grid) {
+            scene.remove(grid);
+            grid.geometry.dispose();
+            grid.material.dispose();
+            grid = null;
+        }
+        // Orientation gizmo: create/destroy live when the option is toggled.
+        void ensureGizmo(opts.orientation_gizmo);
+        applyGround(opts.ground);
+        // Selection colour: update existing helpers
+        for (const entry of objects.values()) {
+            if (entry.helper) {
+                entry.helper.material.color.set(opts.selection_color);
+            }
+            // Line width and overlay blending apply to models already on screen too.
+            thickenLines(entry.root).catch((e) => send({ event: 'error',
+                message: `lines could not be widened: ${(e && e.message) || e}` }));
+            setBlending(entry.root);
+        }
+    }
+
+    // ── Op dispatcher ─────────────────────────────────────────────────────────
+    function apply(op) {
+        switch (op.op) {
+            case 'add':
+                load(op);
+                break;
+            case 'reload':
+                load(op);
+                break;
+            case 'remove':
+                removeObject(op.id);
+                break;
+            case 'set_transform': {
+                const entry = objects.get(op.id);
+                if (entry) {
+                    applyTransform(entry.root, op.transform);
+                    if (entry.helper) {
+                        // The outline holds the box in the model's own frame, so following the model
+                        // is a matrix copy — no refit of the geometry, and the box stays as tight as
+                        // it was however the model is turned.
+                        entry.root.updateWorldMatrix(true, false);
+                        entry.helper.matrix.copy(entry.root.matrixWorld);
+                    }
+                    shadowCameraDirty = true; // a moved model changes the scene bounds
+                }
+                break;
+            }
+            case 'set_visible': {
+                const entry = objects.get(op.id);
+                if (entry) {
+                    entry.root.visible = op.visible;
+                    shadowCameraDirty = true; // (un)hiding a model changes the visible bounds
+                }
+                break;
+            }
+            case 'set_selected':
+                setSelected(op.id, op.selected);
+                break;
+            case 'set_opacity': {
+                const entry = objects.get(op.id);
+                if (entry) setOpacity(entry.root, op.opacity);
+                break;
+            }
+            case 'set_options':
+                applyOptions(op.options);
+                break;
+            case 'fit_view':
+                fitView();
+                break;
+            case 'reset_camera':
+                camera.position.set(...currentOptions.initial_camera);
+                controls.target.set(...currentOptions.initial_target);
+                controls.update();
+                break;
+            case 'clear':
+                for (const id of [...objects.keys()]) removeObject(id);
+                break;
+            case 'bytes_begin': {
+                // Byte stream start: create empty chunk array
+                pendingBytes.set(op.key, new Array(op.chunks));
+                break;
+            }
+            case 'bytes_chunk': {
+                const arr = pendingBytes.get(op.key);
+                if (arr) arr[op.seq] = op.b64;
+                break;
+            }
+            default:
+                console.warn('[dxglb] Unknown op:', op.op);
+        }
+    }
+
+    // ── Full resource release ─────────────────────────────────────────────────
+    function dispose() {
+        if (disposed) return;
+        disposed = true;
+        renderer.setAnimationLoop(null);  // stop RAF loop
+        ro.disconnect();
+        ac.abort();                       // remove all listeners at once
+        controls.dispose();
+        for (const id of [...objects.keys()]) removeObject(id);
+        if (grid) { scene.remove(grid); grid.geometry.dispose(); grid.material.dispose(); grid = null; }
+        if (viewHelper) { viewHelper.dispose(); viewHelper = null; }
+        disposeGround();
+        if (environmentMap) { environmentMap.dispose(); environmentMap = null; }
+        scene.environment = null;
+        scene.clear();
+        renderer.dispose();
+        // Explicitly release the WebGL context (browsers cap at ~16 simultaneous contexts)
+        if (typeof renderer.forceContextLoss === 'function') renderer.forceContextLoss();
+    }
+
+    return { apply, dispose };
+}
+
+// ─── Helper functions ─────────────────────────────────────────────────────────
+
+/**
+ * Polls until the canvas element is available.
+ * Uses setTimeout instead of requestAnimationFrame because rAF does not fire in hidden or
+ * minimised windows — a viewer in a collapsed panel would otherwise hang forever.
+ *
+ * @param {string} id         - DOM ID of the target element.
+ * @param {number} timeoutMs  - Maximum wait time in milliseconds.
+ * @returns {Promise<Element|null>}
+ */
+function waitForElement(id, timeoutMs) {
+    return new Promise((resolve) => {
+        const el = document.getElementById(id);
+        if (el) { resolve(el); return; }
+
+        const interval = setInterval(() => {
+            const found = document.getElementById(id);
+            if (found) { clearInterval(interval); clearTimeout(timer); resolve(found); }
+        }, 16);
+
+        const timer = setTimeout(() => {
+            clearInterval(interval);
+            resolve(null);
+        }, timeoutMs);
+    });
+}

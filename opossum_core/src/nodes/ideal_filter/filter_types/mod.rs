@@ -12,7 +12,7 @@ use uom::si::f64::Ratio;
 use std::fmt::Display;
 
 use crate::{
-    coatings::CoatingType,
+    coatings::Coating,
     core_optics::{
         hit_map::rays_hit_map::HitPoint,
         surface_effect::{Refraction, SurfaceEffect},
@@ -152,11 +152,14 @@ impl SurfaceEffect for FilterType {
         &self,
         ray: &mut Ray,
         hit: &SurfaceHit,
-        coating: &CoatingType,
+        coating: &dyn Coating,
     ) -> OpmResult<(Option<Ray>, Option<HitPoint>)> {
         let split = Refraction(None).act_at(ray, hit, coating)?;
         ray.filter_energy(self)?;
         Ok(split)
+    }
+    fn acts_in_bores(&self) -> bool {
+        false
     }
 }
 impl TryFrom<f64> for FilterTypeBuilder {
@@ -181,7 +184,7 @@ mod test {
     /// would be (see [`Ray::filter_energy`]). A ray that misses it keeps its energy.
     #[test]
     fn a_filter_attenuates_the_rays_that_hit_it() -> OpmResult<()> {
-        let outline = Outline::new(CircleShape::new(millimeter!(5.0))?, Vec::new())?;
+        let outline = Outline::new(CircleShape::new(millimeter!(5.0))?, None)?;
         let mut plane = Geometry::plane(Some(outline));
         let ray_at =
             |y| Ray::new_collimated(millimeter!(0.0, y, -10.0), nanometer!(1054.0), joule!(1.0));

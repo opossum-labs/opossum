@@ -23,12 +23,15 @@ use uuid::Uuid;
 use crate::{
     analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
     apertures::Outline,
+    coatings::Coating,
     core_optics::{optic_surface::OpticSurface, surface_effect::SurfaceEffect},
     error::{OpmResult, OpossumError},
     geometry::{
         Assembly, Extruded, Face, FaceIndex, ParametricSolid, Rim, SurfaceShape, body::Body,
     },
     light::{Ray, Rays, rays::ReflectedPart},
+    material::Material,
+    properties::proptype::AssetRef,
     utils::geom_transformation::Isometry,
 };
 
@@ -40,9 +43,9 @@ pub enum Geometry {
     /// Two faces capping a profile extruded along an axis: lens, cylindric lens, wedge, plate.
     Extruded(Box<Extruded>),
     /// A solid bounded by several faces: the intersection of the inner sides of all of them.
-    Parametric(ParametricSolid),
+    Parametric(Box<ParametricSolid>),
     /// Several solids, each with its own material, sharing interfaces.
-    Assembly(Assembly),
+    Assembly(Box<Assembly>),
 }
 
 impl Geometry {
@@ -54,6 +57,7 @@ impl Geometry {
     /// * `rear_radius` - radius of curvature of the rear face; infinite for a flat face.
     /// * `center_thickness` - distance between the two vertices.
     /// * `outline` - the transversal extent (optic shape).
+    /// * `material` - the material of the lens, embedded or still referenced.
     ///
     /// # Errors
     ///
@@ -64,12 +68,14 @@ impl Geometry {
         rear_radius: Length,
         center_thickness: Length,
         outline: Outline,
+        material: impl Into<AssetRef<Material>>,
     ) -> OpmResult<Self> {
         Self::two_faced(
             SurfaceShape::spherical(front_radius)?,
             SurfaceShape::spherical(rear_radius)?,
             Isometry::new_along_z(center_thickness)?,
             outline,
+            material.into(),
         )
     }
     /// A cylindrical singlet lens: two cylindrical (or flat) faces a center thickness apart.
@@ -80,6 +86,7 @@ impl Geometry {
     /// * `rear_radius` - radius of curvature of the rear face; infinite for a flat face.
     /// * `center_thickness` - distance between the two vertices.
     /// * `outline` - the transversal extent (optic shape).
+    /// * `material` - the material of the lens, embedded or still referenced.
     ///
     /// # Errors
     ///
@@ -90,12 +97,14 @@ impl Geometry {
         rear_radius: Length,
         center_thickness: Length,
         outline: Outline,
+        material: impl Into<AssetRef<Material>>,
     ) -> OpmResult<Self> {
         Self::two_faced(
             SurfaceShape::cylindrical(front_radius)?,
             SurfaceShape::cylindrical(rear_radius)?,
             Isometry::new_along_z(center_thickness)?,
             outline,
+            material.into(),
         )
     }
     /// A wedge: two flat faces, the rear one tilted about the local x axis.
@@ -105,6 +114,7 @@ impl Geometry {
     /// * `center_thickness` - distance between the two faces on the axis.
     /// * `wedge_angle` - tilt of the rear face.
     /// * `outline` - the transversal extent (optic shape).
+    /// * `material` - the material of the wedge, embedded or still referenced.
     ///
     /// # Errors
     ///
@@ -113,6 +123,7 @@ impl Geometry {
         center_thickness: Length,
         wedge_angle: Angle,
         outline: Outline,
+        material: impl Into<AssetRef<Material>>,
     ) -> OpmResult<Self> {
         let tilt = Isometry::new(
             Point3::origin(),
@@ -123,6 +134,7 @@ impl Geometry {
             SurfaceShape::Plane,
             Isometry::new_along_z(center_thickness)?.append(&tilt),
             outline,
+            material.into(),
         )
     }
     /// A single surface.
@@ -197,6 +209,7 @@ impl Geometry {
     /// * `rear` - the shape of the rear face.
     /// * `rear_vertex` - position and orientation of the rear face's vertex relative to the node.
     /// * `outline` - the transversal extent (optic shape).
+    /// * `material` - the material between the two faces.
     ///
     /// # Errors
     ///
@@ -206,12 +219,14 @@ impl Geometry {
         rear: SurfaceShape,
         rear_vertex: Isometry,
         outline: Outline,
+        material: AssetRef<Material>,
     ) -> OpmResult<Self> {
         Ok(Self::Extruded(Box::new(Extruded::new(
             Isometry::identity(),
             Face::new(front, Isometry::identity()),
             Face::new(rear, rear_vertex),
             outline,
+            material,
         )?)))
     }
     /// Move this geometry by an isometry, such as the placement of its node.
@@ -230,8 +245,8 @@ impl Geometry {
         match self {
             Self::Surface(surface) => &**surface,
             Self::Extruded(extruded) => &**extruded,
-            Self::Parametric(parametric) => parametric,
-            Self::Assembly(assembly) => assembly,
+            Self::Parametric(parametric) => &**parametric,
+            Self::Assembly(assembly) => &**assembly,
         }
     }
     /// Return the kind of geometry this is, as [`Geometry::kind`] does, mutably.
@@ -239,8 +254,8 @@ impl Geometry {
         match self {
             Self::Surface(surface) => &mut **surface,
             Self::Extruded(extruded) => &mut **extruded,
-            Self::Parametric(parametric) => parametric,
-            Self::Assembly(assembly) => assembly,
+            Self::Parametric(parametric) => &mut **parametric,
+            Self::Assembly(assembly) => &mut **assembly,
         }
     }
     /// Return the face with the given number (see [`GeometryKind::surface`]).
@@ -259,7 +274,8 @@ impl Geometry {
     /// Return where a ray meets one face of this geometry.
     ///
     /// The ray meets the unbounded surface of the face (see [`Face::intersect`]), and the point
-    /// counts only where the face reaches (see [`GeometryKind::includes`]).
+    /// counts only where the face reaches (see [`GeometryKind::includes`]). A hit in a bore holds
+    /// no material and is not recorded (see [`GeometryKind::bored_rim`]).
     ///
     /// # Arguments
     ///
@@ -275,11 +291,13 @@ impl Geometry {
         let kind = self.kind();
         let surface = kind.surface(face)?.face();
         let (point, normal) = surface.intersect(ray)?;
+        let on_material = !kind.bored_rim(face).is_some_and(|rim| rim.in_bore(&point));
         kind.includes(face, &point).then(|| SurfaceHit {
             point,
             normal,
             local_point: surface.frame().inverse_transform_point(&point),
-            recorded: kind.window().is_none_or(|window| window.contains(&point)),
+            on_material,
+            recorded: on_material && kind.window().is_none_or(|window| window.contains(&point)),
         })
     }
 }
@@ -301,19 +319,23 @@ impl Geometry {
     /// that misses it follows the missed surface strategy. At a hit, the effect acts on the ray (see
     /// [`SurfaceEffect::act_at`]) and, if the ray sends a part back, on its helper rays as well; the
     /// surface records the hit in its hit map. Which of the two parts is the intended beam is
-    /// recorded on both (see [`ReflectedPart`]).
+    /// recorded on both (see [`ReflectedPart`]). The coating of the surface is built once for the
+    /// whole bundle. A ray in a bore passes untouched, whatever the missed surface strategy, unless
+    /// the effect acts there as well (see [`SurfaceEffect::acts_in_bores`]).
     ///
     /// # Arguments
     ///
     /// * `face` - the number of the face.
-    /// * `rays` - the bundle. Its rays are moved to the surface and continue as the transmitted part.
+    /// * `rays` - the bundle. Its rays are moved to the surface and continue as the transmitted part;
+    ///   a ray passing a bore untouched stays where it was.
     /// * `effect` - what the surface does to a ray that hits it.
     /// * `part` - what the reflected part is to the bundle.
     /// * `missed` - what happens to a ray that misses the surface.
     ///
     /// # Returns
     ///
-    /// The bundle of reflected parts.
+    /// The bundle of reflected parts. Where that is the intended beam, it also holds the rays the
+    /// surface stopped (see [`ReflectedPart::record_stop`]).
     ///
     /// # Warnings
     ///
@@ -322,8 +344,8 @@ impl Geometry {
     ///
     /// # Errors
     ///
-    /// This function returns an error if there is no such face, if the effect fails for a ray or if
-    /// a hit cannot be recorded.
+    /// This function returns an error if there is no such face, if its coating cannot be built, if
+    /// the effect fails for a ray or if a hit cannot be recorded.
     pub fn interact_with_rays(
         &mut self,
         face: FaceIndex,
@@ -332,7 +354,8 @@ impl Geometry {
         part: ReflectedPart,
         missed: MissedSurfaceStrategy,
     ) -> OpmResult<Rays> {
-        let coating = *self.surface_of_mut(face)?.coating();
+        let coating = Box::<dyn Coating>::try_from(self.surface_of_mut(face)?.coating())?;
+        let acts_at = |hit: &SurfaceHit| hit.on_material() || effect.acts_in_bores();
         let uuid = rays.uuid();
         let mut valid_rays_found = false;
         let mut rays_missed = false;
@@ -344,9 +367,13 @@ impl Geometry {
             let Some(surface_hit) = self.intersect(face, ray) else {
                 missed.apply_to(ray);
                 rays_missed = true;
+                part.record_stop(ray, &mut reflected_rays);
                 continue;
             };
-            let (reflected, hit_point) = effect.act_at(ray, &surface_hit, &coating)?;
+            if !acts_at(&surface_hit) {
+                continue;
+            }
+            let (reflected, hit_point) = effect.act_at(ray, &surface_hit, coating.as_ref())?;
             if let Some(mut reflected) = reflected {
                 if let (Some(helpers), Some(reflected_helpers)) =
                     (ray.helper_rays_mut(), reflected.helper_rays_mut())
@@ -358,8 +385,11 @@ impl Geometry {
                             missed.apply_to(helper);
                             continue;
                         };
+                        if !acts_at(&helper_hit) {
+                            continue;
+                        }
                         if let (Some(helper_reflected), _) =
-                            effect.act_at(helper, &helper_hit, &coating)?
+                            effect.act_at(helper, &helper_hit, coating.as_ref())?
                         {
                             reflected_helper.set_direction(helper_reflected.direction())?;
                         }
@@ -369,6 +399,7 @@ impl Geometry {
                 reflected_rays.add_ray(reflected);
             } else {
                 rays_missed = true;
+                part.record_stop(ray, &mut reflected_rays);
             }
             if let Some(hit_point) = hit_point {
                 hit_points.push((hit_point, ray.number_of_bounces()));
@@ -453,6 +484,7 @@ pub struct SurfaceHit {
     point: Point3<Length>,
     normal: Vector3<f64>,
     local_point: Point3<Length>,
+    on_material: bool,
     recorded: bool,
 }
 
@@ -473,8 +505,14 @@ impl SurfaceHit {
     pub const fn local_point(&self) -> Point3<Length> {
         self.local_point
     }
-    /// Return whether the hit is recorded: it is not only outside the window of a detector (see
-    /// [`GeometryKind::window`]).
+    /// Return whether the hit lies on the material of the face, rather than in a bore through it
+    /// (see [`GeometryKind::bored_rim`]).
+    #[must_use]
+    pub const fn on_material(&self) -> bool {
+        self.on_material
+    }
+    /// Return whether the hit is recorded: it lies on the material and, on a detector, within its
+    /// window (see [`GeometryKind::window`]).
     #[must_use]
     pub const fn recorded(&self) -> bool {
         self.recorded
@@ -485,7 +523,8 @@ impl SurfaceHit {
 ///
 /// The faces of a geometry are numbered. What a face means, for instance which one light enters
 /// through, is not decided here but by the node using the geometry. Every kind answers each
-/// question itself.
+/// question itself. A new kind is also drawn by `opossum_scene`, whose dispatch over [`Geometry`]
+/// stops compiling until it is.
 pub trait GeometryKind {
     /// Return the optic surface of the face with the given number.
     ///
@@ -526,6 +565,21 @@ pub trait GeometryKind {
     /// `true` if the face reaches to this point; `false` if the point lies on the surface beyond
     /// the edge of the face, or if there is no such face.
     fn includes(&self, face: FaceIndex, point: &Point3<Length>) -> bool;
+    /// Return the rim of a face with a bore through it.
+    ///
+    /// A bore lies within the component, it only holds no material: light there passes the face
+    /// untouched (see [`Geometry::interact_with_rays`]). The face reaches into the bore (see
+    /// [`GeometryKind::includes`]), so the optical axis is placed by the edge alone.
+    ///
+    /// # Arguments
+    ///
+    /// - `face`: the number of the face.
+    ///
+    /// # Returns
+    ///
+    /// The rim, whose outline has the bore; `None` if the face has no bore or if there is no such
+    /// face.
+    fn bored_rim(&self, face: FaceIndex) -> Option<&Rim>;
     /// Return the window a detector records within, or `None` if all light on its faces is recorded.
     ///
     /// A window is no boundary: light outside it passes the face like light inside, it is just not
@@ -615,6 +669,11 @@ impl SurfaceGeometry {
     }
     /// The number of the one face of a surface.
     pub const FACE: FaceIndex = FaceIndex::new(0);
+    /// Return how far this surface reaches sideways (see [`SurfaceExtent`]).
+    #[must_use]
+    pub const fn extent(&self) -> &SurfaceExtent {
+        &self.extent
+    }
 }
 
 /// A surface ends at its edge, if it has one. The window of a detector is no edge: the surface
@@ -634,9 +693,16 @@ impl GeometryKind for SurfaceGeometry {
     }
     fn includes(&self, face: FaceIndex, point: &Point3<Length>) -> bool {
         GeometryKind::surface(self, face).is_some_and(|surface| match &self.extent {
-            SurfaceExtent::Edge(rim) => rim.bounds(surface.face(), point),
+            SurfaceExtent::Edge(rim) => rim.reaches(surface.face(), point),
             SurfaceExtent::Open | SurfaceExtent::Window(_) => true,
         })
+    }
+    fn bored_rim(&self, face: FaceIndex) -> Option<&Rim> {
+        let rim = match &self.extent {
+            SurfaceExtent::Edge(rim) => Some(rim),
+            SurfaceExtent::Open | SurfaceExtent::Window(_) => None,
+        };
+        rim.filter(|rim| face == Self::FACE && rim.outline().bore().is_some())
     }
     fn window(&self) -> Option<&Rim> {
         match &self.extent {
@@ -661,33 +727,26 @@ mod test {
     use super::*;
     use crate::{
         analyzers::RayTraceConfig,
-        apertures::CircleShape,
-        coatings::{CoatingConstantR, CoatingType},
+        apertures::{Bore, CircleShape},
+        coatings::{CoatingConstantR, CoatingType, SplittingConfig, SplittingConfigBuilder},
         core_optics::surface_effect::Refraction,
         degree,
         distributions::{fluence::general_gaussian::General2DGaussian, position::Hexapolar},
         gain::Inversion,
         geometry::{Parabola, Part, Side, Sphere},
-        joule,
-        light::Spectrum,
-        material::Material,
-        meter, millimeter, nanometer,
-        nodes::{
-            SplittingConfig,
-            ideal_filter::{EdgeFilter, EdgeFilterType},
-        },
-        percent,
-        properties::proptype::AssetRef,
-        radian,
-        refractive_index::{RefrIndexConst, refr_index_vaccuum},
+        joule, meter, millimeter, nanometer,
+        nodes::ideal_filter::{EdgeFilter, EdgeFilterType, SpectralFilterBuilder},
+        percent, radian,
+        refractive_index::{RefrIndexConst, RefractiveIndexType, refr_index_vaccuum},
         utils::test_helper::helper::check_logs,
     };
     use approx::assert_abs_diff_eq;
+    use nalgebra::Vector3;
     use nalgebra::vector;
     use uom::si::{energy::joule, f64::Energy, length::millimeter};
 
     fn circle() -> OpmResult<Outline> {
-        Outline::new(CircleShape::new(millimeter!(12.5))?, Vec::new())
+        Outline::new(CircleShape::new(millimeter!(12.5))?, None)
     }
     /// Return the frame of the face with the given number.
     fn frame_of(geometry: &Geometry, index: FaceIndex) -> OpmResult<Isometry> {
@@ -716,6 +775,7 @@ mod test {
             millimeter!(f64::INFINITY),
             millimeter!(5.0),
             circle()?,
+            Material::default(),
         )?;
         assert_eq!(geometry.kind().face_count(), 2);
         assert_abs_diff_eq!(
@@ -736,7 +796,12 @@ mod test {
     }
     #[test]
     fn a_wedge_tilts_its_rear_face() -> OpmResult<()> {
-        let geometry = Geometry::wedge(millimeter!(10.0), degree!(5.0), circle()?)?;
+        let geometry = Geometry::wedge(
+            millimeter!(10.0),
+            degree!(5.0),
+            circle()?,
+            Material::default(),
+        )?;
         let normal =
             frame_of(&geometry, Extruded::REAR)?.transform_vector_f64(&nalgebra::Vector3::z());
         assert_abs_diff_eq!(normal.y, -(5.0_f64.to_radians().sin()), epsilon = 1e-12);
@@ -755,6 +820,7 @@ mod test {
                 millimeter!(-80.0),
                 millimeter!(5.0),
                 circle()?,
+                Material::default(),
             )?,
             Geometry::surface(axis, SurfaceShape::Plane, vertex, Some(circle()?))?,
         ];
@@ -783,13 +849,15 @@ mod test {
     /// moves its faces along; a single surface encloses none.
     #[test]
     fn every_kind_of_solid_numbers_its_faces_and_encloses_a_volume() -> OpmResult<()> {
-        let parametric = Geometry::Parametric(ParametricSolid::new(vec![(
-            Face::new(SurfaceShape::Plane, Isometry::identity()),
-            Side::Behind,
-        )])?);
-        let glass = AssetRef::Inline(Material::from(&RefrIndexConst::new(1.5)?));
-        let part = Part::new(&Isometry::identity(), parametric.clone(), glass)?;
-        let assembly = Geometry::Assembly(Assembly::new(vec![part], vec![])?);
+        let parametric = Geometry::Parametric(Box::new(ParametricSolid::new(
+            vec![(
+                Face::new(SurfaceShape::Plane, Isometry::identity()),
+                Side::Behind,
+            )],
+            Material::from(&RefrIndexConst::new(1.5)?),
+        )?));
+        let part = Part::new(&Isometry::identity(), parametric.clone())?;
+        let assembly = Geometry::Assembly(Box::new(Assembly::new(vec![part], vec![])?));
         let frame = Isometry::new(millimeter!(1.0, -2.0, 30.0), degree!(10.0, 5.0, 0.0))?;
         for mut geometry in [parametric, assembly] {
             assert_eq!(geometry.kind().face_count(), 1);
@@ -834,12 +902,25 @@ mod test {
         for radius in [10.0, -10.0] {
             let curved = millimeter!(radius);
             for (front, rear) in [(curved, flat), (flat, curved)] {
-                let error = Geometry::singlet(front, rear, millimeter!(5.0), circle()?)
-                    .expect_err("a curvature tighter than the outline was accepted");
+                let error = Geometry::singlet(
+                    front,
+                    rear,
+                    millimeter!(5.0),
+                    circle()?,
+                    Material::default(),
+                )
+                .expect_err("a curvature tighter than the outline was accepted");
                 assert!(error.to_string().contains("does not reach"), "{error}");
             }
             assert!(
-                Geometry::cylindrical_singlet(curved, flat, millimeter!(5.0), circle()?).is_err()
+                Geometry::cylindrical_singlet(
+                    curved,
+                    flat,
+                    millimeter!(5.0),
+                    circle()?,
+                    Material::default()
+                )
+                .is_err()
             );
             let mirror = |outline| {
                 Geometry::surface(
@@ -853,7 +934,16 @@ mod test {
             // An unbounded surface has no edge to reach.
             assert!(mirror(None).is_ok());
         }
-        assert!(Geometry::singlet(millimeter!(12.5), flat, millimeter!(5.0), circle()?).is_ok());
+        assert!(
+            Geometry::singlet(
+                millimeter!(12.5),
+                flat,
+                millimeter!(5.0),
+                circle()?,
+                Material::default()
+            )
+            .is_ok()
+        );
         // A parabola opens without end, so even a short focal length reaches any edge.
         let parabola = SurfaceShape::Parabola(Parabola::new(millimeter!(1.0))?);
         assert!(
@@ -967,6 +1057,7 @@ mod test {
                 Isometry::new_along_z(millimeter!(20.0))?,
             ),
             circle()?,
+            Material::default(),
         )?));
         // Extruded along the node's x axis, the profile reaches around it in y and z; the front face
         // lies at x = 3 mm.
@@ -1031,7 +1122,7 @@ mod test {
     #[test]
     fn the_rim_is_measured_across_its_axis() -> OpmResult<()> {
         let tilted = Isometry::new(millimeter!(0.0, 0.0, 0.0), degree!(30.0, 0.0, 0.0))?;
-        let circle = Outline::new(CircleShape::new(millimeter!(5.0))?, Vec::new())?;
+        let circle = Outline::new(CircleShape::new(millimeter!(5.0))?, None)?;
         let plane = Geometry::surface(
             Isometry::identity(),
             SurfaceShape::Plane,
@@ -1055,20 +1146,23 @@ mod test {
     #[test]
     fn a_face_of_a_parametric_solid_is_hit_up_to_the_other_faces() -> OpmResult<()> {
         let side = Isometry::new(millimeter!(5.0, 0.0, 5.0), degree!(0.0, 90.0, 0.0))?;
-        let solid = Geometry::Parametric(ParametricSolid::new(vec![
-            (
-                Face::new(SurfaceShape::Plane, Isometry::identity()),
-                Side::Behind,
-            ),
-            (
-                Face::new(
-                    SurfaceShape::Plane,
-                    Isometry::new_along_z(millimeter!(10.0))?,
+        let solid = Geometry::Parametric(Box::new(ParametricSolid::new(
+            vec![
+                (
+                    Face::new(SurfaceShape::Plane, Isometry::identity()),
+                    Side::Behind,
                 ),
-                Side::InFront,
-            ),
-            (Face::new(SurfaceShape::Plane, side), Side::InFront),
-        ])?);
+                (
+                    Face::new(
+                        SurfaceShape::Plane,
+                        Isometry::new_along_z(millimeter!(10.0))?,
+                    ),
+                    Side::InFront,
+                ),
+                (Face::new(SurfaceShape::Plane, side), Side::InFront),
+            ],
+            Material::default(),
+        )?));
         assert!(
             solid
                 .intersect(FaceIndex::new(0), &ray_along_z(4.9, 0.0)?)
@@ -1383,18 +1477,20 @@ mod test {
         assert!(reflected.parent_id().is_none());
         Ok(())
     }
-    #[test]
-    fn splitting_by_spectrum() -> OpmResult<()> {
-        let spectrum: Spectrum = EdgeFilter::new(
+    /// A short pass transmitting below 1000 nm, defined from 500 nm to 1500 nm.
+    fn short_pass() -> OpmResult<EdgeFilter> {
+        EdgeFilter::new(
             EdgeFilterType::ShortPass,
             nanometer!(1000.0),
             0.0..1.0,
             None,
             nanometer!(500.0)..nanometer!(1500.0),
             nanometer!(1.0),
-        )?
-        .into();
-        let config = SplittingConfig::Spectrum(spectrum);
+        )
+    }
+    #[test]
+    fn splitting_by_spectrum() -> OpmResult<()> {
+        let config = SplittingConfig::Spectrum(short_pass()?.into());
         let mut rays = Rays::default();
         rays.add_ray(collimated_ray_along_z(nanometer!(999.0))?);
         rays.add_ray(collimated_ray_along_z(nanometer!(1001.0))?);
@@ -1405,6 +1501,43 @@ mod test {
 
         let mut rays = Rays::from(collimated_ray_along_z(nanometer!(1501.0))?);
         assert!(split(&mut plane, &mut rays, &config).is_err());
+        Ok(())
+    }
+    /// Split a bundle at face 0 of the given component by the coating of its surface, keeping
+    /// both parts.
+    fn split_by_coating(geometry: &mut Geometry, rays: &mut Rays) -> OpmResult<Rays> {
+        geometry.interact_with_rays(
+            FaceIndex::new(0),
+            rays,
+            &Refraction(None),
+            ReflectedPart::Branch,
+            MissedSurfaceStrategy::Stop,
+        )
+    }
+    #[test]
+    fn a_separator_coating_splits_like_its_configuration() -> OpmResult<()> {
+        let mut rays = Rays::from(collimated_ray_along_z(nanometer!(1000.0))?);
+        let separator = SplittingConfigBuilder::FixedRatio(0.6).into();
+        let mut plane = coated(tilted_splitting_plane()?, separator)?;
+        let reflected = split_by_coating(&mut plane, &mut rays)?;
+        assert_abs_diff_eq!(rays.total_energy().get::<joule>(), 0.6);
+        assert_abs_diff_eq!(reflected.total_energy().get::<joule>(), 0.4);
+        Ok(())
+    }
+    #[test]
+    fn a_separator_coating_splits_by_spectrum() -> OpmResult<()> {
+        let separator =
+            SplittingConfigBuilder::Spectrum(SpectralFilterBuilder::EdgeFilter(short_pass()?));
+        let mut plane = coated(tilted_splitting_plane()?, separator.into())?;
+        let mut rays = Rays::default();
+        rays.add_ray(collimated_ray_along_z(nanometer!(999.0))?);
+        rays.add_ray(collimated_ray_along_z(nanometer!(1001.0))?);
+        let reflected = split_by_coating(&mut plane, &mut rays)?;
+        assert_eq!(energies(&rays), [joule!(1.0), joule!(0.0)]);
+        assert_eq!(energies(&reflected), [joule!(0.0), joule!(1.0)]);
+
+        let mut rays = Rays::from(collimated_ray_along_z(nanometer!(1501.0))?);
+        assert!(split_by_coating(&mut plane, &mut rays).is_err());
         Ok(())
     }
     #[test]
@@ -1431,12 +1564,185 @@ mod test {
     fn bounded_plane() -> OpmResult<Geometry> {
         Ok(Geometry::plane(Some(Outline::new(
             CircleShape::new(millimeter!(5.0))?,
-            Vec::new(),
+            None,
         )?)))
     }
     /// A ray along z, the given distance off the axis in y.
     fn ray_at(y: f64) -> OpmResult<Ray> {
         Ray::new_collimated(millimeter!(0.0, y, -10.0), nanometer!(1000.0), joule!(1.0))
+    }
+    /// A plane through the node, its component a ring: 5 mm around the node's axis with a bore of
+    /// 2 mm around it.
+    fn ring_plane() -> OpmResult<Geometry> {
+        Ok(Geometry::plane(Some(Outline::new(
+            CircleShape::new(millimeter!(5.0))?,
+            Some(Bore::new(
+                CircleShape::new(millimeter!(2.0))?,
+                millimeter!(0.0, 0.0),
+                degree!(0.0),
+            )),
+        )?)))
+    }
+    /// A bore lies within the face: a ray through it meets the face, but no material, so the hit
+    /// is not recorded. A ray beside the edge meets nothing.
+    #[test]
+    fn a_ray_through_a_bore_meets_the_face_but_no_material() -> OpmResult<()> {
+        let ring = ring_plane()?;
+        for (y, material) in [(0.0, Some(false)), (3.0, Some(true)), (6.0, None)] {
+            let hit = ring.intersect(SurfaceGeometry::FACE, &ray_at(y)?);
+            assert_eq!(hit.map(|hit| hit.on_material()), material, "at {y} mm");
+            assert_eq!(hit.map(|hit| hit.recorded()), material, "at {y} mm");
+        }
+        Ok(())
+    }
+    /// Light through a bore passes the surface untouched, even where the strategy stops rays that
+    /// miss it: it keeps its way, sends nothing back and leaves no hit. The coating acts on the
+    /// material only.
+    #[test]
+    fn light_through_a_bore_passes_untouched() -> OpmResult<()> {
+        let mut ring = coated(
+            ring_plane()?,
+            CoatingConstantR::new(percent!(100.0))?.into(),
+        )?;
+        let mut rays = Rays::from(vec![ray_at(0.0)?, ray_at(3.0)?]);
+        let reflected = split_by_coating(&mut ring, &mut rays)?;
+        assert_eq!(energies(&rays), [joule!(1.0), joule!(0.0)]);
+        assert_eq!(energies(&reflected), [joule!(1.0)]);
+        let through = rays
+            .iter()
+            .next()
+            .ok_or_else(|| OpossumError::Other("the bundle lost its ray".into()))?;
+        assert!(through.valid());
+        assert_eq!(through.position(), millimeter!(0.0, 0.0, -10.0));
+        assert_eq!(through.direction(), Vector3::z());
+        let hits = ring
+            .surface_of_mut(SurfaceGeometry::FACE)?
+            .get_rays_hit_map(0, rays.uuid())
+            .map(|hit_map| hit_map.hit_map().len());
+        assert_eq!(hits, Some(1), "only the ray on the material leaves a hit");
+        Ok(())
+    }
+    /// Light through the bore of a body passes both faces unbent, even where the strategy stops
+    /// rays that miss them; light on the material is refracted into the glass.
+    #[test]
+    fn light_through_the_bore_of_a_body_passes_unbent() -> OpmResult<()> {
+        let mut plate = Geometry::singlet(
+            millimeter!(f64::INFINITY),
+            millimeter!(f64::INFINITY),
+            millimeter!(10.0),
+            Outline::new(
+                CircleShape::new(millimeter!(5.0))?,
+                Some(Bore::new(
+                    CircleShape::new(millimeter!(2.0))?,
+                    millimeter!(0.0, 0.0),
+                    degree!(0.0),
+                )),
+            )?,
+            Material::from(&RefrIndexConst::new(1.5)?),
+        )?;
+        let slanted = vector![0.0, 0.05, 1.0].normalize();
+        let ray_from = |y: f64| {
+            Ray::new(
+                millimeter!(0.0, y, -10.0),
+                slanted,
+                nanometer!(1000.0),
+                joule!(1.0),
+            )
+        };
+        let mut rays = Rays::from(vec![ray_from(0.0)?, ray_from(3.0)?]);
+        let glass = RefractiveIndexType::from(RefrIndexConst::new(1.5)?);
+        for (face, index) in [
+            (Extruded::FRONT, &glass),
+            (Extruded::REAR, &refr_index_vaccuum()),
+        ] {
+            plate.interact_with_rays(
+                face,
+                &mut rays,
+                &Refraction(Some(index)),
+                ReflectedPart::Ghost,
+                MissedSurfaceStrategy::Stop,
+            )?;
+        }
+        let mut rays = rays.iter();
+        let (through, beside) = (
+            rays.next()
+                .ok_or_else(|| OpossumError::Other("no ray".into()))?,
+            rays.next()
+                .ok_or_else(|| OpossumError::Other("no ray".into()))?,
+        );
+        assert!(through.valid());
+        assert_eq!(through.position(), millimeter!(0.0, 0.0, -10.0));
+        assert_abs_diff_eq!(through.direction(), slanted, epsilon = 1e-12);
+        assert!(beside.valid());
+        assert_abs_diff_eq!(beside.position().z.value, 0.01, epsilon = 1e-12);
+        assert!(
+            beside.position().y.value > 0.0035,
+            "refracted towards the axis"
+        );
+        Ok(())
+    }
+    /// A bore tilted by 45° about y runs through a 6 mm plate along its own axis: a ray along that
+    /// axis meets both faces in the bore, while one along the axis of the plate meets the front
+    /// face in the bore and the rear face on the material, 6 mm beside where the bore comes out.
+    #[test]
+    fn a_tilted_bore_runs_through_a_plate_along_its_own_axis() -> OpmResult<()> {
+        let plate = Geometry::singlet(
+            millimeter!(f64::INFINITY),
+            millimeter!(f64::INFINITY),
+            millimeter!(6.0),
+            Outline::new(
+                CircleShape::new(millimeter!(12.5))?,
+                Some(
+                    Bore::new(
+                        CircleShape::new(millimeter!(1.0))?,
+                        millimeter!(0.0, 0.0),
+                        degree!(0.0),
+                    )
+                    .with_tilt(degree!(0.0), degree!(45.0)),
+                ),
+            )?,
+            Material::from(&RefrIndexConst::new(1.5)?),
+        )?;
+        let along = vector![-1.0, 0.0, 1.0].normalize();
+        let along_the_bore = Ray::new(
+            millimeter!(10.0, 0.0, -10.0),
+            along,
+            nanometer!(1000.0),
+            joule!(1.0),
+        )?;
+        let along_the_plate = ray_at(0.0)?;
+        let on_material = |face, ray: &Ray| {
+            plate
+                .intersect(face, ray)
+                .map(|hit| (hit.point(), hit.on_material()))
+        };
+        assert_eq!(
+            on_material(Extruded::FRONT, &along_the_bore),
+            Some((millimeter!(0.0, 0.0, 0.0), false))
+        );
+        let rear = on_material(Extruded::REAR, &along_the_bore)
+            .ok_or_else(|| OpossumError::Other("the ray missed the rear face".into()))?;
+        assert_abs_diff_eq!(rear.0.x.value, -0.006, epsilon = 1e-12);
+        assert!(!rear.1, "the ray along the bore leaves through it");
+        assert_eq!(
+            on_material(Extruded::FRONT, &along_the_plate).map(|(_, material)| material),
+            Some(false)
+        );
+        assert_eq!(
+            on_material(Extruded::REAR, &along_the_plate).map(|(_, material)| material),
+            Some(true)
+        );
+        Ok(())
+    }
+    /// The neutral split that places the optical axis brings its own coating, so the axis sees
+    /// the edge only: in the bore it is split as on the material.
+    #[test]
+    fn the_axis_is_split_in_a_bore_as_on_the_material() -> OpmResult<()> {
+        let mut rays = Rays::from(ray_at(0.0)?);
+        let reflected = split(&mut ring_plane()?, &mut rays, &SplittingConfig::Ratio(0.5))?;
+        assert_eq!(energies(&rays), [joule!(0.5)]);
+        assert_eq!(energies(&reflected), [joule!(0.5)]);
+        Ok(())
     }
     /// Propagate bundles forward through the passive surface of a face of a component.
     fn propagate(
@@ -1505,7 +1811,8 @@ mod test {
             millimeter!(f64::INFINITY),
             millimeter!(f64::INFINITY),
             millimeter!(10.0),
-            Outline::new(CircleShape::new(millimeter!(5.0))?, Vec::new())?,
+            Outline::new(CircleShape::new(millimeter!(5.0))?, None)?,
+            Material::default(),
         )?;
         let mut bundles = vec![Rays::from(ray_at(0.0)?)];
         propagate(

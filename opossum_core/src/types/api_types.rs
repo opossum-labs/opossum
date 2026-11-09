@@ -954,3 +954,127 @@ pub struct UndoRedoResponse {
     pub can_undo: bool,
     pub can_redo: bool,
 }
+
+/// One drawable component of a model, as the 3D scene manifest lists it.
+///
+/// The geometry itself is deliberately not part of this: it is fetched per component, which is what
+/// lets a component that merely moved be updated without transferring its mesh again.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, ToSchema)]
+pub struct SceneNodeEntry {
+    /// The component's node UUID, which is also the `uid` written into the glTF `extras`.
+    pub uid: Uuid,
+    /// The UUID of the graph that directly contains the component.
+    ///
+    /// Lets a viewer reveal a clicked component in the graph editor without having to ask the
+    /// backend where it lives: the manifest already learns this from the same walk that finds the
+    /// component in the first place.
+    pub group: Uuid,
+    /// The component's name, for labelling it in a viewer.
+    pub name: String,
+    /// A hash over the component's mesh and material.
+    ///
+    /// Two entries carrying the same hash have byte-identical geometry, and an entry whose hash has
+    /// not changed since the previous manifest needs no new mesh. Moving a component leaves it
+    /// untouched: the mesh is held in the component's own frame, the placement travels beside it in
+    /// [`Self::position`] and [`Self::rotation`].
+    pub geometry: String,
+    /// Where the component sits, in metres.
+    ///
+    /// `f32`, because this is what a 3D view draws with and nothing is computed from it. Its
+    /// relative precision is about 1 part in 10 million, so a component ten metres down the beam
+    /// line is placed to roughly a micrometre — far below anything a picture of the setup can show.
+    /// An optical calculation would ask the model, not this.
+    pub position: [f32; 3],
+    /// The component's rotation, as a quaternion in the order `(x, y, z, w)`.
+    ///
+    /// A quaternion rather than Euler angles on purpose. Euler angles need an order to mean
+    /// anything, and every renderer picks its own — three.js composes XYZ, Babylon.js YXZ — so
+    /// stating them here would bake one renderer's convention into a type the whole workspace
+    /// shares. A quaternion is unambiguous and has no singularities; converting it is the job of
+    /// whoever knows which renderer is on the other end.
+    pub rotation: [f32; 4],
+}
+
+/// A drawable component that was left out of the scene, with a reason.
+///
+/// A component is skipped when it is drawable but cannot be placed (has no positioning result)
+/// or when its shape cannot be built (meshing failed, invalid geometry). The reason is what
+/// the backend would otherwise only log to the server console, carried here so a viewer can
+/// display it to the user rather than silently showing an incomplete scene.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, ToSchema, Eq)]
+pub struct SkippedSceneNode {
+    /// The component's node UUID.
+    pub uid: Uuid,
+    /// The UUID of the graph that directly contains the component, so that a viewer can take the
+    /// user to it in the graph editor - just as [`SceneNodeEntry::group`] does for a drawn one.
+    pub group: Uuid,
+    /// The component's name, for labelling it in error messages.
+    pub name: String,
+    /// Why the component was left out of the scene.
+    pub reason: String,
+}
+
+/// The analyzer a 3D view of a model is drawn after.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, ToSchema, Eq)]
+pub struct SceneAnalyzer {
+    /// The analyzer's UUID, for asking for the same one again.
+    pub uid: Uuid,
+    /// The name the analyzer is shown by: its own, or else its type's.
+    pub name: String,
+}
+
+/// The false colors a 3D view draws light of several wavelengths in, for a legend.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, ToSchema)]
+pub struct SceneSpectrum {
+    /// The shortest wavelength of the sources, in nanometers, drawn in the first color.
+    pub shortest_nm: f64,
+    /// The longest wavelength of the sources, in nanometers, drawn in the last color.
+    pub longest_nm: f64,
+    /// The colors from the shortest to the longest wavelength, evenly spaced, as sRGB.
+    pub colors: Vec<[f32; 3]>,
+}
+
+/// Every drawable component of a model, with its placement but without its geometry.
+///
+/// This is the cheap half of a 3D view. A viewer fetches it whenever the model changed and compares
+/// it against what it already shows, so that only the components that really changed shape have
+/// their mesh fetched afterwards.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default, ToSchema)]
+pub struct SceneManifest {
+    /// One entry per component that can be drawn, in the order the model walks them.
+    pub nodes: Vec<SceneNodeEntry>,
+    /// Components that were drawable but could not be added to the scene, with a reason for each.
+    ///
+    /// A viewer can show these to tell the user which components are missing and why, rather than
+    /// leaving them to wonder why part of the setup is not shown.
+    #[serde(default)]
+    pub skipped: Vec<SkippedSceneNode>,
+    /// Why nothing of the model can be drawn, if that is so.
+    ///
+    /// Set when the model cannot be placed at all - the optical axis cannot be traced through it,
+    /// say - and `nodes` and `skipped` are empty then. A viewer shows this instead of a picture that
+    /// no longer matches the model.
+    #[serde(default)]
+    pub notice: Option<String>,
+    /// The analyzer the placement follows, or `None` if the model has none.
+    ///
+    /// Named even when the model cannot be placed after it, so that a viewer can offer to follow
+    /// another one instead.
+    #[serde(default)]
+    pub analyzer: Option<SceneAnalyzer>,
+    /// The false colors the light of the analyzer's sources is drawn in, or `None` if it is drawn
+    /// in the colors of its wavelength - light of a single wavelength, or no light at all.
+    #[serde(default)]
+    pub spectrum: Option<SceneSpectrum>,
+    /// A digest of what the optical axis is served as for the same analyzer, or `None` if the
+    /// model cannot be placed.
+    ///
+    /// It changes exactly when the axis does, so a viewer that names it in the axis's address
+    /// fetches the axis again only then, as `geometry` does for a component.
+    #[serde(default)]
+    pub axis: Option<String>,
+    /// A digest of what the rays are served as for the same analyzer and ray settings, like
+    /// `axis`; `None` if no rays were asked for or the model cannot be placed.
+    #[serde(default)]
+    pub rays: Option<String>,
+}

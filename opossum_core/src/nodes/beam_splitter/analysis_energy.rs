@@ -44,12 +44,13 @@ mod test {
 
     use crate::{
         analyzers::energy::{AnalysisEnergy, EnergyConfig},
+        coatings::SplittingConfigBuilder,
         core_optics::OpticNode,
         error::OpmResult,
         joule,
         light::{LightData, LightResult, spectrum_helper::create_he_ne_spec},
         nanometer,
-        nodes::{BeamSplitter, SplittingConfigBuilder},
+        nodes::BeamSplitter,
         prelude::{
             EdgeFilter, EdgeFilterType, EnergyDataBuilder, EnergyLaserLines, LightDataBuilder,
             SpectralFilterBuilder,

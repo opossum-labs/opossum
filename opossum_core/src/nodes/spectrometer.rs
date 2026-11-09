@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 use opm_macros_lib::OpmNode;
 use serde::{Deserialize, Serialize};
-use uom::si::length::nanometer;
+use uom::si::length::{meter, nanometer};
 
 use crate::{
     analyzers::{
@@ -10,6 +10,7 @@ use crate::{
     },
     core_optics::{
         NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, SurfacePorts,
+        observable::{MetricDimension, ObservableDescriptor},
         optic_node::APERTURE_LIMIT_NOTE,
     },
     error::OpmResult,
@@ -19,7 +20,7 @@ use crate::{
     },
     light::{LightData, Rays, Spectrum},
     nodes::NodeRegistration,
-    properties::{Properties, Proptype},
+    properties::{Properties, Proptype, validator::Validator},
     reporting::node_report::{NodeReport, NodeReportResult},
 };
 use std::fmt::{Debug, Display};
@@ -89,9 +90,13 @@ impl Default for Spectrometer {
             )
             .unwrap();
         node_attr
-            .create_property(
+            .create_property_with_validator(
                 OPTIC_SHAPE,
                 "window the light is recorded within",
+                Validator::OpticShape {
+                    may_be_open: true,
+                    bored: false,
+                },
                 default_square_optic_shape().into(),
             )
             .unwrap();
@@ -177,6 +182,7 @@ impl OpticNode for Spectrometer {
             self.cross_section()?,
         )?))
     }
+
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
     }
@@ -198,7 +204,6 @@ impl OpticNode for Spectrometer {
 
         let mut report = NodeReport::new(self.node_type(), self.name(), uuid, props);
 
-        // Standardized report note instead of a property
         if self.apodization_warning {
             report.add_note(crate::reporting::report_note::ReportNote::new(
                 crate::reporting::report_note::ReportLevel::Warning,
@@ -211,6 +216,63 @@ impl OpticNode for Spectrometer {
 
     fn set_light_data(&mut self, ld: Option<LightData>) {
         self.light_data = ld;
+    }
+
+    fn observable_metrics(&self, _analyzer: AnalyzerKind) -> Vec<ObservableDescriptor> {
+        vec![
+            ObservableDescriptor::new(
+                "center wavelength",
+                "Spectral center wavelength (first moment)",
+                MetricDimension::Length,
+            )
+            .with_default_target(0.0),
+            ObservableDescriptor::new(
+                "peak wavelength",
+                "Spectral peak wavelength",
+                MetricDimension::Length,
+            )
+            .with_default_target(0.0),
+            ObservableDescriptor::new(
+                "bandwidth rms",
+                "Spectral RMS bandwidth",
+                MetricDimension::Length,
+            )
+            .with_default_target(0.0),
+            ObservableDescriptor::new(
+                "fwhm",
+                "Full width at half maximum (FWHM)",
+                MetricDimension::Length,
+            )
+            .with_default_target(0.0),
+            ObservableDescriptor::new(
+                "total energy",
+                "Total integrated spectral energy",
+                MetricDimension::Energy,
+            )
+            .with_default_target(0.0),
+        ]
+    }
+
+    fn read_observable(&self, metric_name: &str) -> Option<f64> {
+        let spectrum = self.get_spectrum()?;
+        let lower = metric_name.to_lowercase();
+        match lower.as_str() {
+            "center wavelength" | "central wavelength" | "centroid wavelength" => {
+                let center = spectrum.center_wavelength();
+                if center.value.is_finite() && center.value > 0.0 {
+                    Some(center.get::<meter>())
+                } else {
+                    None
+                }
+            }
+            "peak wavelength" => spectrum.peak_wavelength().map(|l| l.get::<meter>()),
+            "bandwidth rms" | "spectral bandwidth rms" | "bandwidth" => {
+                spectrum.spectral_bandwidth_rms().map(|l| l.get::<meter>())
+            }
+            "fwhm" | "bandwidth fwhm" => spectrum.fwhm().map(|l| l.get::<meter>()),
+            "total energy" | "energy" => Some(spectrum.total_energy()),
+            _ => None,
+        }
     }
 }
 impl Debug for Spectrometer {
@@ -286,31 +348,31 @@ mod test {
     }
     #[test]
     fn new() -> OpmResult<()> {
-        let meter = Spectrometer::new("test", SpectrometerType::HR2000)?;
-        assert_eq!(meter.name(), "test");
-        assert!(meter.light_data.is_none());
-        assert_eq!(meter.spectrometer_type(), SpectrometerType::HR2000);
+        let sm = Spectrometer::new("test", SpectrometerType::HR2000)?;
+        assert_eq!(sm.name(), "test");
+        assert!(sm.light_data.is_none());
+        assert_eq!(sm.spectrometer_type(), SpectrometerType::HR2000);
         Ok(())
     }
     #[test]
     fn set_meter_type() -> OpmResult<()> {
-        let mut meter = Spectrometer::new("test", SpectrometerType::Ideal)?;
-        meter.set_spectrometer_type(SpectrometerType::HR2000)?;
-        assert_eq!(meter.spectrometer_type(), SpectrometerType::HR2000);
+        let mut sm = Spectrometer::new("test", SpectrometerType::Ideal)?;
+        sm.set_spectrometer_type(SpectrometerType::HR2000)?;
+        assert_eq!(sm.spectrometer_type(), SpectrometerType::HR2000);
         Ok(())
     }
     #[test]
     fn ports() {
-        let meter = Spectrometer::default();
-        assert_eq!(meter.ports().names(&PortType::Input), vec!["input_1"]);
-        assert_eq!(meter.ports().names(&PortType::Output), vec!["output_1"]);
+        let sm = Spectrometer::default();
+        assert_eq!(sm.ports().names(&PortType::Input), vec!["input_1"]);
+        assert_eq!(sm.ports().names(&PortType::Output), vec!["output_1"]);
     }
     #[test]
     fn ports_inverted() -> OpmResult<()> {
-        let mut meter = Spectrometer::default();
-        meter.set_inverted(true)?;
-        assert_eq!(meter.ports().names(&PortType::Input), vec!["output_1"]);
-        assert_eq!(meter.ports().names(&PortType::Output), vec!["input_1"]);
+        let mut sm = Spectrometer::default();
+        sm.set_inverted(true)?;
+        assert_eq!(sm.ports().names(&PortType::Input), vec!["output_1"]);
+        assert_eq!(sm.ports().names(&PortType::Output), vec!["input_1"]);
         Ok(())
     }
     #[test]
@@ -395,6 +457,58 @@ mod test {
         assert_eq!(nr_of_props, 2);
         assert!(node_props.contains("Spectrum"));
         assert!(node_props.contains("Model"));
+        Ok(())
+    }
+    #[test]
+    fn observable_metrics_spectrometer() {
+        let spectrometer = Spectrometer::default();
+        // Spectrometer metrics are valid across all analyzer kinds
+        for kind in [
+            AnalyzerKind::Energy,
+            AnalyzerKind::RayTrace,
+            AnalyzerKind::GhostFocus,
+        ] {
+            let metrics = spectrometer.observable_metrics(kind);
+            assert_eq!(metrics.len(), 5);
+            assert_eq!(metrics[0].name, "center wavelength");
+            assert_eq!(metrics[0].dimension, MetricDimension::Length);
+            assert_eq!(metrics[1].name, "peak wavelength");
+            assert_eq!(metrics[1].dimension, MetricDimension::Length);
+            assert_eq!(metrics[2].name, "bandwidth rms");
+            assert_eq!(metrics[2].dimension, MetricDimension::Length);
+            assert_eq!(metrics[3].name, "fwhm");
+            assert_eq!(metrics[3].dimension, MetricDimension::Length);
+            assert_eq!(metrics[4].name, "total energy");
+            assert_eq!(metrics[4].dimension, MetricDimension::Energy);
+        }
+    }
+    #[test]
+    fn read_observable_spectrometer() -> OpmResult<()> {
+        let mut spectrometer = Spectrometer::default();
+        assert_eq!(spectrometer.read_observable("center wavelength"), None);
+
+        // 1. Evaluate with spectral light data (He-Ne laser at 632.8 nm, 1.0 J)
+        spectrometer.set_light_data(Some(LightData::Energy(create_he_ne_spec(1.0)?)));
+
+        let center_wvl = spectrometer
+            .read_observable("center wavelength")
+            .expect("Center wavelength must be measurable");
+        approx::assert_relative_eq!(center_wvl, 632.8e-9, epsilon = 1.0e-9);
+
+        let peak_wvl = spectrometer
+            .read_observable("peak wavelength")
+            .expect("Peak wavelength must be measurable");
+        approx::assert_relative_eq!(peak_wvl, 632.8e-9, epsilon = 1.0e-9);
+
+        let energy = spectrometer
+            .read_observable("total energy")
+            .expect("Total energy must be measurable");
+        approx::assert_relative_eq!(energy, 1.0, epsilon = 1.0e-6);
+
+        // Case-insensitivity check
+        assert!(spectrometer.read_observable("Center Wavelength").is_some());
+        assert!(spectrometer.read_observable("fwhm").is_some());
+        assert_eq!(spectrometer.read_observable("invalid_metric"), None);
         Ok(())
     }
 }

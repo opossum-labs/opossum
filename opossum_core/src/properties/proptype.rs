@@ -19,8 +19,7 @@ use crate::{
     },
     material::Material,
     nodes::{
-        Metertype, SpectrometerType, SplittingConfigBuilder, SpotDiagramData, WaveFrontMap,
-        WavefrontDecomposition,
+        Metertype, SpectrometerType, SpotDiagramData, WaveFrontMap, WavefrontDecomposition,
         fluence_detector::{Fluence, fluence_data::FluenceData},
         ideal_filter::FilterTypeBuilder,
         ray_propagation_visualizer::RayPositionHistories,
@@ -131,15 +130,13 @@ pub enum Proptype {
     // FilterType(FilterType),
     /// Property for storing a [`FilterTypeBuilder`] of an [`IdealFilter`](crate::nodes::IdealFilter) node.
     FilterTypeBuilder(FilterTypeBuilder),
-    /// Property for storing a [`SplittingConfig`](crate::nodes::SplittingConfig) of an [`BeamSplitter`](crate::nodes::BeamSplitter) node.
-    SplittingConfigBuilder(SplittingConfigBuilder),
     /// Property for storing a [`SpectrometerType`] of a [`Sepctrometer`](crate::nodes::Spectrometer) node.
     SpectrometerType(SpectrometerType),
     /// Property for storing a [`Metertype`] of an [`Energymeter`](crate::nodes::EnergyMeter) node.
     Metertype(Metertype),
     /// An [`Uuid`] for identifying an optical node.
     Uuid(Uuid),
-    /// The optic shape of a component: an outline on its axis with bores through it.
+    /// The optic shape of a component: an outline on its axis, possibly with a bore through it.
     OpticShape(OpticShape),
     /// A property for storing a [`Spectrum`].
     Spectrum(Spectrum),

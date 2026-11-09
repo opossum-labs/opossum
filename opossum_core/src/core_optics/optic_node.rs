@@ -13,12 +13,12 @@ use crate::{
     core_optics::{
         NodeAttrExt, OpticNodeExt, OpticPorts, SurfacePorts,
         node_attr::{HasNodeAttr, NodePositioning},
-        volumetric::Volumetric,
+        observable::ObservableDescriptor,
     },
     error::{OpmResult, OpossumError},
     geometry::{FaceIndex, Geometry},
     light::LightData,
-    nodes::fluence_detector::Fluence,
+    nodes::{EdgeThickness, fluence_detector::Fluence},
     reporting::node_report::NodeReportResult,
     utils::geom_transformation::Isometry,
 };
@@ -105,20 +105,21 @@ pub trait OpticNode: VisualNode + HasNodeAttr + OpticNodeAny {
     /// Installs the node's surfaces anew from its **current** properties and placement, which also
     /// builds the body between them as the node's medium (see
     /// [`OpticNodeExt::install_geometry`](crate::core_optics::OpticNodeExt::install_geometry)), so
-    /// [`Volumetric::propagate_inside_medium`] (Phase B) reads the very surfaces rays are traced at.
-    /// If the operating point provides a gain model that reads the inversion, the
+    /// [`OpticNodeExt::pass_through_volume_generic`] (Phase B) reads the very surfaces rays are
+    /// traced at. If the operating point provides a gain model that reads the inversion, the
     /// [`InversionField`](crate::gain::InversionField) is built from the pump configuration and stored
-    /// in that medium; otherwise the inversion stays `None`. Non-volume nodes return immediately,
-    /// without installing surfaces or touching the medium.
+    /// in that medium; otherwise the inversion stays `None`. A node whose geometry encloses no volume
+    /// (see [`OpticNodeExt::encloses_volume`]) returns immediately, without installing surfaces or
+    /// touching the medium.
     ///
     /// [`NodeGroup`](crate::nodes::NodeGroup) overrides this to recurse into every child node.
     ///
     /// # Errors
     ///
-    /// Returns an error if the node's surfaces cannot be installed, if the node encloses no body, or
-    /// if building the inversion field fails.
+    /// Returns an error if the node's geometry cannot be derived, if its surfaces cannot be
+    /// installed, or if building the inversion field fails.
     fn prepare_volume(&mut self, strategy: &dyn PropagationStrategy) -> OpmResult<()> {
-        if self.as_volume().is_none() {
+        if !self.encloses_volume()? {
             return Ok(());
         }
         self.update_surfaces()?;
@@ -220,15 +221,6 @@ pub trait OpticNode: VisualNode + HasNodeAttr + OpticNodeAny {
         Ok(())
     }
 
-    /// Return this node as a [`Volumetric`] element, if it encloses a volume of material.
-    ///
-    /// # Returns
-    ///
-    /// `Some(&dyn Volumetric)` if the element represents a medium, or `None` otherwise.
-    fn as_volume(&self) -> Option<&dyn Volumetric> {
-        None
-    }
-
     /// Return [`NodeReportResult`] of the current state of this [`OpticNode`].
     ///
     /// Override this function in detector nodes to provide analysis output.
@@ -239,6 +231,24 @@ pub trait OpticNode: VisualNode + HasNodeAttr + OpticNodeAny {
     /// Returns an error if the concrete report calculation fails.
     fn node_report(&self, _uuid: &str, _analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {
         Ok(NodeReportResult::None)
+    }
+    /// Returns observable metrics available for the specified analyzer kind.
+    /// Returns an empty vector if this node cannot record data for this analysis mode.
+    fn observable_metrics(&self, _analyzer: AnalyzerKind) -> Vec<ObservableDescriptor> {
+        Vec::new()
+    }
+    /// Reads the scalar value (in SI base units) of a recorded metric after an analysis run.
+    /// Returns `None` if no simulation data is available or the key is not recognized.
+    fn read_observable(&self, _metric_name: &str) -> Option<f64> {
+        None
+    }
+    /// Returns an [`OpticNode`] dowcasted to an [`EdgeThickness`] trait object
+    /// if possible.
+    ///
+    /// This function should be implemented by `Lens` and `CylindricLens` to implement optimization operands dealing
+    /// with edge thicknesses.
+    fn as_edge_thickness(&self) -> Option<&dyn EdgeThickness> {
+        None
     }
 }
 

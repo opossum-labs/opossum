@@ -49,10 +49,10 @@ fn plane_benchmarks(c: &mut Criterion) {
 
     // --- Benchmarks ---
     group.bench_function("on-axis hit", |b| {
-        b.iter(|| surface.intersect(&on_axis_ray))
+        b.iter(|| surface.intersect(&on_axis_ray));
     });
     group.bench_function("off-axis hit", |b| {
-        b.iter(|| surface.intersect(&off_axis_ray))
+        b.iter(|| surface.intersect(&off_axis_ray));
     });
     group.bench_function("angled hit", |b| b.iter(|| surface.intersect(&angled_ray)));
     group.bench_function("miss", |b| b.iter(|| surface.intersect(&miss_ray)));
@@ -85,10 +85,10 @@ fn sphere_benchmarks(c: &mut Criterion) {
 
     // --- Benchmarks ---
     group.bench_function("on-axis hit", |b| {
-        b.iter(|| surface.intersect(&on_axis_ray))
+        b.iter(|| surface.intersect(&on_axis_ray));
     });
     group.bench_function("off-axis hit", |b| {
-        b.iter(|| surface.intersect(&off_axis_ray))
+        b.iter(|| surface.intersect(&off_axis_ray));
     });
     group.bench_function("angled hit", |b| b.iter(|| surface.intersect(&angled_ray)));
     group.bench_function("miss", |b| b.iter(|| surface.intersect(&miss_ray)));
@@ -120,10 +120,10 @@ fn cylinder_benchmarks(c: &mut Criterion) {
 
     // --- Benchmarks ---
     group.bench_function("on-axis hit", |b| {
-        b.iter(|| surface.intersect(&on_axis_ray))
+        b.iter(|| surface.intersect(&on_axis_ray));
     });
     group.bench_function("off-axis hit", |b| {
-        b.iter(|| surface.intersect(&off_axis_ray))
+        b.iter(|| surface.intersect(&off_axis_ray));
     });
     group.bench_function("angled hit", |b| b.iter(|| surface.intersect(&angled_ray)));
     group.bench_function("miss", |b| b.iter(|| surface.intersect(&miss_ray)));
@@ -161,10 +161,10 @@ fn parabola_benchmarks(c: &mut Criterion) {
 
     // --- Benchmarks ---
     group.bench_function("on-axis hit", |b| {
-        b.iter(|| surface.intersect(&on_axis_ray))
+        b.iter(|| surface.intersect(&on_axis_ray));
     });
     group.bench_function("off-axis hit", |b| {
-        b.iter(|| surface.intersect(&off_axis_ray))
+        b.iter(|| surface.intersect(&off_axis_ray));
     });
     group.bench_function("angled hit", |b| b.iter(|| surface.intersect(&angled_ray)));
     group.bench_function("miss", |b| b.iter(|| surface.intersect(&miss_ray)));

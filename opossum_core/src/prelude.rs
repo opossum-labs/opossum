@@ -3,6 +3,7 @@ pub use super::{
     analyzers::{AnalyzerType, EnergyConfig, GhostFocusConfig, RayTraceConfig},
     apertures::{Aperture, ApertureShape, ApertureType, OpticShape},
     centimeter,
+    coatings::SplittingConfigBuilder,
     core_optics::{Alignable, OpticNode, PortType, VisualNode},
     degree,
     error::{OpmResult, OpossumError},
@@ -14,11 +15,10 @@ pub use super::{
     },
     meter, micrometer, millimeter, nanometer,
     nodes::{
-        BeamSplitter, ConnectionInfo, CylindricLens, Dummy, EnergyMeter, FluenceDetector,
-        IdealFilter, Lens, Metertype, NodeGroup, NodeReference, ParabolicMirror, ParaxialSurface,
-        RayPropagationVisualizer, ReflectiveGrating, SourcePort, Spectrometer, SpectrometerType,
-        SplittingConfigBuilder, SpotDiagram, ThinMirror, WaveFront, Wedge,
-        collimated_line_ray_builder,
+        BeamSplitter, BoredMirror, ConnectionInfo, CylindricLens, Dummy, EnergyMeter,
+        FluenceDetector, IdealFilter, Lens, Metertype, NodeGroup, NodeReference, ParabolicMirror,
+        ParaxialSurface, RayPropagationVisualizer, ReflectiveGrating, SourcePort, Spectrometer,
+        SpectrometerType, SpotDiagram, ThinMirror, WaveFront, Wedge, collimated_line_ray_builder,
         ideal_filter::{
             BandFilter, BandFilterType, EdgeFilter, EdgeFilterType, FilterTypeBuilder,
             SpectralFilterBuilder,

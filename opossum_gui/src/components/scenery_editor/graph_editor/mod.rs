@@ -2,6 +2,7 @@ mod breadcrumb_component;
 pub mod graph_editor_component;
 mod graph_view_component;
 mod hooks;
+mod tab_layout;
 pub use breadcrumb_component::BreadCrumbs;
 pub use graph_editor_component::{GraphEditor, SidebarView};
 pub use graph_view_component::GraphViewEditor;

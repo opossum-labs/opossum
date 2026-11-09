@@ -1,0 +1,396 @@
+//! Export features layered on the core: materials + extensions, node metadata,
+//! mesh instancing, layer selection, index width and the origin shift.
+
+use nalgebra::{Isometry3, Point3};
+use optoscene::{
+    Layer, Material, MaterialId, Scene, SceneNode, SceneOptions, SurfacePatch, TriMesh,
+};
+use serde_json::Value;
+
+/// Parses the JSON chunk of a GLB into a [`Value`].
+fn glb_json(glb: &[u8]) -> Value {
+    let json_len = u32::from_le_bytes(glb[12..16].try_into().unwrap()) as usize;
+    serde_json::from_slice(&glb[20..20 + json_len]).unwrap()
+}
+
+/// Registers a neutral opaque material.
+fn opaque(scene: &mut Scene) -> MaterialId {
+    scene.add_material(Material::Opaque {
+        color: [0.5, 0.5, 0.5, 1.0],
+        metallic: 0.0,
+        roughness: 1.0,
+    })
+}
+
+/// A unit quad centered on the origin (so its AABB center is the node origin).
+fn centered_quad(material: MaterialId) -> TriMesh {
+    TriMesh {
+        patches: vec![SurfacePatch {
+            name: None,
+            positions: vec![
+                Point3::new(-0.5, -0.5, 0.0),
+                Point3::new(0.5, -0.5, 0.0),
+                Point3::new(0.5, 0.5, 0.0),
+                Point3::new(-0.5, 0.5, 0.0),
+            ],
+            normals: None,
+            colors: None,
+            indices: vec![[0, 1, 2], [0, 2, 3]],
+            material,
+        }],
+    }
+}
+
+/// Adds an optics-layer node at the identity transform.
+fn add_optics_node(scene: &mut Scene, uid: &str, mesh: optoscene::MeshId) {
+    scene
+        .add_node(SceneNode {
+            uid: uid.to_string(),
+            name: uid.to_string(),
+            mesh: Some(mesh),
+            transform: Isometry3::identity(),
+            layer: Layer::Optics,
+            data: None,
+        })
+        .expect("node added");
+}
+
+#[test]
+fn glass_material_has_all_extensions() {
+    let mut scene = Scene::new(SceneOptions::default());
+    let glass = scene.add_material(Material::Glass {
+        color: [0.9, 0.95, 1.0],
+        ior: 1.5,
+        thickness: 0.01,
+        metallic: 0.0,
+        opacity: 1.0,
+    });
+    let mesh = scene.add_mesh(centered_quad(glass)).unwrap();
+    add_optics_node(&mut scene, "glass", mesh);
+
+    let json = glb_json(&scene.to_glb().unwrap());
+    let extensions = &json["materials"][0]["extensions"];
+    assert!(extensions.get("KHR_materials_transmission").is_some());
+    assert!(extensions.get("KHR_materials_ior").is_some());
+    assert!(extensions.get("KHR_materials_volume").is_some());
+    assert_eq!(extensions["KHR_materials_ior"]["ior"], 1.5);
+
+    let used: Vec<&str> = json["extensionsUsed"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(Value::as_str)
+        .collect();
+    assert!(used.contains(&"KHR_materials_transmission"));
+    assert!(used.contains(&"KHR_materials_ior"));
+    assert!(used.contains(&"KHR_materials_volume"));
+
+    // Fallback loading in other viewers must stay possible.
+    assert!(json.get("extensionsRequired").is_none());
+}
+
+/// Exports a scene holding one quad in the given material and returns that material's glTF.
+fn exported_material(material: Material) -> Value {
+    let mut scene = Scene::new(SceneOptions::default());
+    let id = scene.add_material(material);
+    let mesh = scene.add_mesh(centered_quad(id)).unwrap();
+    add_optics_node(&mut scene, "quad", mesh);
+    glb_json(&scene.to_glb().unwrap())["materials"][0].clone()
+}
+
+#[test]
+fn partly_mirrored_glass_is_metallic_and_blended() {
+    let glass = exported_material(Material::Glass {
+        color: [0.9, 0.95, 1.0],
+        ior: 1.5,
+        thickness: 0.01,
+        metallic: 0.25,
+        opacity: 0.75,
+    });
+    assert_eq!(glass["pbrMetallicRoughness"]["metallicFactor"], 0.25);
+    assert_eq!(glass["pbrMetallicRoughness"]["baseColorFactor"][3], 0.75);
+    assert_eq!(glass["alphaMode"], "BLEND");
+}
+
+#[test]
+fn materials_that_differ_only_in_metallic_or_opacity_stay_apart() {
+    let mut scene = Scene::new(SceneOptions::default());
+    let glass = |metallic, opacity| Material::Glass {
+        color: [0.9, 0.95, 1.0],
+        ior: 1.5,
+        thickness: 0.01,
+        metallic,
+        opacity,
+    };
+    let mirror = |metallic, opacity| Material::Mirror {
+        color: [0.9, 0.9, 0.9],
+        roughness: 0.05,
+        metallic,
+        opacity,
+    };
+    let clear = scene.add_material(glass(0.0, 1.0));
+    assert_eq!(scene.add_material(glass(0.0, 1.0)), clear);
+    assert_ne!(scene.add_material(glass(1.0, 1.0)), clear);
+    assert_ne!(scene.add_material(glass(0.0, 0.5)), clear);
+    let solid = scene.add_material(mirror(1.0, 1.0));
+    assert_ne!(scene.add_material(mirror(0.0, 1.0)), solid);
+    assert_ne!(scene.add_material(mirror(1.0, 0.5)), solid);
+}
+
+#[test]
+fn a_mirror_is_opaque_unless_its_opacity_says_otherwise() {
+    let mirror = |metallic, opacity| {
+        exported_material(Material::Mirror {
+            color: [0.9, 0.9, 0.9],
+            roughness: 0.05,
+            metallic,
+            opacity,
+        })
+    };
+    let solid = mirror(1.0, 1.0);
+    assert_eq!(solid["pbrMetallicRoughness"]["metallicFactor"], 1.0);
+    assert!(solid.get("alphaMode").is_none());
+    let pane = mirror(0.0, 0.25);
+    assert_eq!(pane["pbrMetallicRoughness"]["metallicFactor"], 0.0);
+    assert_eq!(pane["pbrMetallicRoughness"]["baseColorFactor"][3], 0.25);
+    assert_eq!(pane["alphaMode"], "BLEND");
+}
+
+#[test]
+fn iridescent_material_carries_the_iridescence_extension() {
+    let mut scene = Scene::new(SceneOptions::default());
+    let iridescent = scene.add_material(Material::Iridescent {
+        color: [0.8, 0.8, 0.85],
+        roughness: 0.1,
+        iridescence: 1.0,
+        iridescence_ior: 1.3,
+        iridescence_thickness_min: 100.0,
+        iridescence_thickness_max: 400.0,
+    });
+    let mesh = scene.add_mesh(centered_quad(iridescent)).unwrap();
+    add_optics_node(&mut scene, "grating", mesh);
+
+    let json = glb_json(&scene.to_glb().unwrap());
+    let extension = &json["materials"][0]["extensions"]["KHR_materials_iridescence"];
+    assert_eq!(extension["iridescenceFactor"], 1.0);
+    assert_eq!(extension["iridescenceIor"], 1.3);
+    assert_eq!(extension["iridescenceThicknessMinimum"], 100.0);
+    assert_eq!(extension["iridescenceThicknessMaximum"], 400.0);
+
+    let lists_iridescence = json["extensionsUsed"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(Value::as_str)
+        .any(|ext| ext == "KHR_materials_iridescence");
+    assert!(lists_iridescence, "iridescence missing from extensionsUsed");
+
+    // The extension must not be required, so viewers that do not know it still load the mesh.
+    assert!(json.get("extensionsRequired").is_none());
+}
+
+#[test]
+fn textured_material_exports_image_sampler_and_texcoords() {
+    let mut scene = Scene::new(SceneOptions::default());
+    let textured = scene.add_material(Material::Textured {
+        // Arbitrary bytes: the exporter embeds them verbatim and never decodes them.
+        image_png: vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A],
+        tint: [1.0, 1.0, 1.0, 1.0],
+        metallic: 0.0,
+        roughness: 0.8,
+        uv_scale: 40.0,
+    });
+    let mesh = scene.add_mesh(centered_quad(textured)).unwrap();
+    add_optics_node(&mut scene, "table", mesh);
+
+    let json = glb_json(&scene.to_glb().unwrap());
+
+    // The only material points at the only texture through baseColorTexture.
+    assert_eq!(
+        json["materials"][0]["pbrMetallicRoughness"]["baseColorTexture"]["index"], 0,
+        "the textured material must reference the exported texture"
+    );
+
+    // That texture binds the only image and the only sampler, which repeats.
+    assert_eq!(json["textures"][0]["source"], 0);
+    assert_eq!(json["textures"][0]["sampler"], 0);
+    assert_eq!(json["images"][0]["mimeType"], "image/png");
+    assert_eq!(json["samplers"][0]["wrapS"], 10497);
+    assert_eq!(json["samplers"][0]["wrapT"], 10497);
+
+    // The primitive carries generated texture coordinates.
+    assert!(
+        json["meshes"][0]["primitives"][0]["attributes"]
+            .get("TEXCOORD_0")
+            .is_some(),
+        "a textured primitive must carry a TEXCOORD_0 attribute"
+    );
+
+    // Textures are core glTF, so nothing must be required for a viewer to load the mesh.
+    assert!(json.get("extensionsRequired").is_none());
+}
+
+#[test]
+fn identical_meshes_are_instanced() {
+    let mut scene = Scene::new(SceneOptions::default());
+    let material = opaque(&mut scene);
+    let first = scene.add_mesh(centered_quad(material)).unwrap();
+    let second = scene.add_mesh(centered_quad(material)).unwrap();
+    assert_eq!(first, second);
+
+    add_optics_node(&mut scene, "a", first);
+    add_optics_node(&mut scene, "b", second);
+
+    let gltf = gltf::Gltf::from_slice(&scene.to_glb().unwrap()).unwrap();
+    assert_eq!(gltf.document.meshes().count(), 1);
+    assert_eq!(
+        gltf.document
+            .nodes()
+            .filter(|node| node.mesh().is_some())
+            .count(),
+        2
+    );
+}
+
+#[test]
+fn origin_defaults_to_aabb_center() {
+    let mut scene = Scene::new(SceneOptions::default());
+    let material = opaque(&mut scene);
+    let mesh = scene.add_mesh(centered_quad(material)).unwrap();
+    scene
+        .add_node(SceneNode {
+            uid: "far".to_string(),
+            name: "far".to_string(),
+            mesh: Some(mesh),
+            transform: Isometry3::translation(1000.0, 0.0, 0.0),
+            layer: Layer::Optics,
+            data: None,
+        })
+        .unwrap();
+
+    let json = glb_json(&scene.to_glb().unwrap());
+    let nodes = json["nodes"].as_array().unwrap();
+
+    let content = nodes
+        .iter()
+        .find(|node| node.get("mesh").is_some())
+        .unwrap();
+    for value in content["translation"].as_array().unwrap() {
+        assert!(value.as_f64().unwrap().abs() < 1e-4);
+    }
+
+    let root = nodes
+        .iter()
+        .find(|node| node["name"] == "optoscene_root")
+        .unwrap();
+    let origin = root["extras"]["origin"].as_array().unwrap();
+    assert!((origin[0].as_f64().unwrap() - 1000.0).abs() < 1e-6);
+    assert!(origin[1].as_f64().unwrap().abs() < 1e-6);
+    assert!(origin[2].as_f64().unwrap().abs() < 1e-6);
+}
+
+#[test]
+fn node_extras_carry_uid_layer_and_data() {
+    let mut scene = Scene::new(SceneOptions {
+        origin: Some(Point3::origin()),
+        ..SceneOptions::default()
+    });
+    let material = opaque(&mut scene);
+    let mesh = scene.add_mesh(centered_quad(material)).unwrap();
+    scene
+        .add_node(SceneNode {
+            uid: "node-uid".to_string(),
+            name: "node".to_string(),
+            mesh: Some(mesh),
+            transform: Isometry3::identity(),
+            layer: Layer::Optics,
+            data: Some(serde_json::json!({ "focal_length_m": 0.1 })),
+        })
+        .unwrap();
+
+    let glb = scene.to_glb().unwrap();
+    let gltf = gltf::Gltf::from_slice(&glb).unwrap();
+    let node = gltf
+        .document
+        .nodes()
+        .find(|node| node.mesh().is_some())
+        .unwrap();
+    let raw = node.extras().as_ref().expect("extras present");
+    let extras: Value = serde_json::from_str(raw.get()).unwrap();
+    assert_eq!(extras["uid"], "node-uid");
+    assert_eq!(extras["layer"], "optics");
+    assert_eq!(extras["data"]["focal_length_m"], 0.1);
+}
+
+#[test]
+fn index_type_switches_at_65536_vertices() {
+    assert_eq!(index_component_type(&glb_with_vertices(65_535)), 5123);
+    assert_eq!(index_component_type(&glb_with_vertices(65_536)), 5125);
+}
+
+/// The `componentType` of the SCALAR (index) accessor.
+fn index_component_type(glb: &[u8]) -> u64 {
+    let json = glb_json(glb);
+    json["accessors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|accessor| accessor["type"] == "SCALAR")
+        .unwrap()["componentType"]
+        .as_u64()
+        .unwrap()
+}
+
+/// Builds a GLB whose single patch has `count` vertices and one triangle.
+fn glb_with_vertices(count: usize) -> Vec<u8> {
+    let mut scene = Scene::new(SceneOptions::default());
+    let material = opaque(&mut scene);
+    let mut positions = vec![Point3::origin(); count];
+    positions[1] = Point3::new(1.0, 0.0, 0.0);
+    positions[2] = Point3::new(0.0, 1.0, 0.0);
+    let mesh = scene
+        .add_mesh(TriMesh {
+            patches: vec![SurfacePatch {
+                name: None,
+                positions,
+                normals: None,
+                colors: None,
+                indices: vec![[0, 1, 2]],
+                material,
+            }],
+        })
+        .unwrap();
+    add_optics_node(&mut scene, "node", mesh);
+    scene.to_glb().unwrap()
+}
+
+#[test]
+fn layer_to_glb_excludes_other_layers() {
+    let mut scene = Scene::new(SceneOptions {
+        origin: Some(Point3::origin()),
+        ..SceneOptions::default()
+    });
+    let material = opaque(&mut scene);
+    let mesh = scene.add_mesh(centered_quad(material)).unwrap();
+    for (uid, layer) in [("optic", Layer::Optics), ("aux", Layer::Aux)] {
+        scene
+            .add_node(SceneNode {
+                uid: uid.to_string(),
+                name: uid.to_string(),
+                mesh: Some(mesh),
+                transform: Isometry3::identity(),
+                layer,
+                data: None,
+            })
+            .unwrap();
+    }
+
+    let json = glb_json(&scene.layer_to_glb(Layer::Optics).unwrap());
+    let nodes = json["nodes"].as_array().unwrap();
+    let layers: Vec<&str> = nodes
+        .iter()
+        .filter_map(|node| node.get("extras")?.get("layer")?.as_str())
+        .collect();
+    assert!(layers.contains(&"optics"));
+    assert!(!layers.contains(&"aux"));
+}

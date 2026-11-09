@@ -61,6 +61,21 @@ impl RectangleShape {
         self.side_length.set(Point2::new(self.width(), height))?;
         Ok(())
     }
+
+    /// The four corners of this rectangle in its own frame, counter-clockwise.
+    ///
+    /// The outline and the edge of an [`OutlineShape`](super::OutlineShape) are built from these,
+    /// so they are named once.
+    #[must_use]
+    pub fn corners(&self) -> [Point2<Length>; 4] {
+        let (half_width, half_height) = (self.width() / 2., self.height() / 2.);
+        [
+            Point2::new(half_width, half_height),
+            Point2::new(-half_width, half_height),
+            Point2::new(-half_width, -half_height),
+            Point2::new(half_width, -half_height),
+        ]
+    }
 }
 impl Shape for RectangleShape {
     fn transmission_factor(&self, point: &Point3<Length>) -> f64 {

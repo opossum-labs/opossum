@@ -8,7 +8,7 @@ use crate::{
         propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
         raytrace::AnalysisRayTrace,
     },
-    coatings::CoatingType,
+    coatings::Coating,
     core_optics::{
         NodeAttr, OpticNode, OpticNodeExt, PortType, SurfacePorts, hit_map::rays_hit_map::HitPoint,
         node_attr::HasNodeAttr, surface_effect::SurfaceEffect,
@@ -30,7 +30,7 @@ use nalgebra::Vector3;
 use opm_macros_lib::OpmNode;
 use std::f64::consts::PI;
 use uom::si::{
-    angle::radian,
+    angle::{degree, radian},
     f64::{Angle, Length},
     length::nanometer,
     linear_number_density::per_millimeter,
@@ -93,7 +93,10 @@ impl Default for ReflectiveGrating {
             .create_property_with_validator(
                 OPTIC_SHAPE,
                 "transversal extent of the component",
-                Validator::OpticShapeIsBounded,
+                Validator::OpticShape {
+                    may_be_open: false,
+                    bored: false,
+                },
                 default_square_optic_shape().into(),
             )
             .unwrap();
@@ -122,12 +125,26 @@ impl ReflectiveGrating {
         Ok(grating)
     }
 
-    /// Set the angle of a grating such that the incoming ray has an angle of `angle` to littrow
+    /// Return the Littrow angle of this grating for a given wavelength.
+    ///
+    /// Tilted by this angle about the y axis, the grating sends its diffraction order straight back
+    /// along the incoming beam.
+    ///
+    /// # Arguments
+    ///
+    /// - `wavelength`: the wavelength the angle is wanted for
+    ///
+    /// # Returns
+    ///
+    /// The Littrow angle.
+    ///
     /// # Errors
+    ///
     /// This function errors if
     /// - the diffraction order cannot be read from the properties
     /// - the line density cannot be read from the properties
-    pub fn with_rot_from_littrow(self, wavelength: Length, angle: Angle) -> OpmResult<Self> {
+    /// - no Littrow angle exists, because the diffraction order is evanescent at this wavelength
+    pub fn littrow_angle(&self, wavelength: Length) -> OpmResult<Angle> {
         let Ok(Proptype::I32(diffraction_order)) = self.node_attr.get_property("diffraction order")
         else {
             return Err(OpossumError::Analysis(
@@ -148,14 +165,24 @@ impl ReflectiveGrating {
                 diffraction_order
             )));
         }
-        let littrow = x.asin();
-        self.with_tilt(radian!(0., littrow + angle.get::<radian>(), 0.0))
+        Ok(Angle::new::<radian>(x.asin()))
+    }
+    /// Set the angle of a grating such that the incoming ray has an angle of `angle` to littrow
+    /// # Errors
+    /// This function errors if
+    /// - the diffraction order cannot be read from the properties
+    /// - the line density cannot be read from the properties
+    /// - no Littrow angle exists at this wavelength (see [`Self::littrow_angle`])
+    pub fn with_rot_from_littrow(self, wavelength: Length, angle: Angle) -> OpmResult<Self> {
+        let littrow = self.littrow_angle(wavelength)?;
+        self.with_tilt(radian!(0., (littrow + angle).get::<radian>(), 0.0))
     }
     /// Set the angle of a grating such that the outgoing ray has an angle of `angle` to littrow
     /// # Errors
     /// This function errors if
     /// - the diffraction order cannot be read from the properties
     /// - the line density cannot be read from the properties
+    /// - no Littrow angle exists at this wavelength (see [`Self::littrow_angle`])
     pub fn to_rot_from_littrow(self, wavelength: Length, angle: Angle) -> OpmResult<Self> {
         let Ok(Proptype::I32(diffraction_order)) = self.node_attr.get_property("diffraction order")
         else {
@@ -167,13 +194,60 @@ impl ReflectiveGrating {
         else {
             return Err(OpossumError::Analysis("cannot read line density".into()));
         };
-        let littrow =
-            (to_f64(*diffraction_order) * wavelength.value * line_density.value / 2.).asin();
+        let littrow = self.littrow_angle(wavelength)?.get::<radian>();
         let angle_in_rad = angle.get::<radian>();
         let rot_angle = (to_f64(*diffraction_order) * wavelength.value)
             .mul_add(line_density.value, -(littrow + angle_in_rad).sin())
             .asin();
         self.with_tilt(radian!(0.0, rot_angle, 0.0))
+    }
+    /// Explain why the optical axis ends at this grating during a positioning run.
+    ///
+    /// The axis ray only disappears at a grating when the diffraction order does not propagate at
+    /// the grating's tilt (it is evanescent) - a positioning ray always hits the surface, since the
+    /// grating was just placed on it. The usual cause is a grating that was never tilted, so the
+    /// message names the Littrow angle to tilt it by, where one exists.
+    ///
+    /// # Arguments
+    ///
+    /// - `diffraction_order`: the order the grating diffracts into
+    /// - `line_density`: the grating's line density
+    /// - `wavelength`: the wavelength of the lost axis ray
+    ///
+    /// # Returns
+    ///
+    /// A message for the user saying what happened and how to fix it.
+    fn lost_axis_message(
+        &self,
+        diffraction_order: i32,
+        line_density: LinearDensity,
+        wavelength: Length,
+    ) -> String {
+        let what = format!(
+            "diffraction order {diffraction_order} of '{}' ({:.1} lines/mm)",
+            self.node_attr.name(),
+            line_density.get::<per_millimeter>()
+        );
+        let nm = wavelength.get::<nanometer>();
+        let fix = self.littrow_angle(wavelength).map_or_else(
+            |_| {
+                format!(
+                    "No tilt makes this order propagate at {nm:.1} nm: the wavelength is too long \
+                     for this line density and order."
+                )
+            },
+            |littrow| {
+                format!(
+                    "Tilt it by its Littrow angle of {:.2}° about the y axis to diffract {nm:.1} nm \
+                     back along the incoming beam.",
+                    littrow.get::<degree>()
+                )
+            },
+        );
+        format!(
+            "{what} does not propagate at {nm:.1} nm with the grating's current tilt (evanescent), \
+             so the optical axis ends at this grating. {fix}"
+        )
     }
 }
 impl AnalysisGhostFocus for ReflectiveGrating {
@@ -241,6 +315,14 @@ impl AnalysisRayTrace for ReflectiveGrating {
                 return Err(OpossumError::Analysis("cannot read line density".into()));
             };
 
+            // In a positioning run this bundle is the optical axis. If the grating swallows it, the
+            // positioning has to stop here, and only the grating can say why. The wavelength is
+            // taken from the ray itself: the axis ray's energy does not weight a central wavelength.
+            let axis_wavelength = if config.is_positioning_run() {
+                rays.iter().find(|ray| ray.valid()).map(Ray::wavelength)
+            } else {
+                None
+            };
             let iso = self.effective_surface_iso(in_port)?;
             let diffraction = Diffraction {
                 index: refr_index_vaccuum(),
@@ -261,6 +343,15 @@ impl AnalysisRayTrace for ReflectiveGrating {
                 ReflectedPart::Main,
                 *config.missed_surface_strategy(),
             )?;
+            if let Some(wavelength) = axis_wavelength
+                && diffracted_rays.nr_of_rays(true) == 0
+            {
+                return Err(OpossumError::Analysis(self.lost_axis_message(
+                    diffraction_order,
+                    line_density,
+                    wavelength,
+                )));
+            }
             // The optical axis is placed by geometry alone; its energy does not decide where it
             // runs.
             if !config.is_positioning_run() {
@@ -291,13 +382,16 @@ impl SurfaceEffect for Diffraction {
         &self,
         ray: &mut Ray,
         hit: &SurfaceHit,
-        _coating: &CoatingType,
+        _coating: &dyn Coating,
     ) -> OpmResult<(Option<Ray>, Option<HitPoint>)> {
         let n2 = self.index.get_refractive_index(ray.wavelength())?;
         Ok((
             ray.diffract_at(hit, n2, self.grating_vector, &self.order)?,
             None,
         ))
+    }
+    fn acts_in_bores(&self) -> bool {
+        false
     }
 }
 
@@ -424,6 +518,24 @@ mod test {
         assert_eq!(err_msg, OpossumError::Analysis("Wavelength 1000 nm is too large for grating constant 5000 lines/mm and order 1 (evanescent waves)".into()));
         Ok(())
     }
+    /// The default grating is the one a user drops into a model untilted; the angle it needs at
+    /// 1000 nm is what the positioning error tells them to tilt it by.
+    #[test]
+    fn littrow_angle_of_the_default_grating() -> OpmResult<()> {
+        let littrow = ReflectiveGrating::default().littrow_angle(nanometer!(1000.0))?;
+        // asin(-1 * 1000 nm * 1740 lines/mm / 2) = asin(-0.87)
+        assert_relative_eq!(littrow.get::<degree>(), -60.4586, epsilon = 1e-3);
+        Ok(())
+    }
+    /// Above a wavelength of 2 / (order * line density) no tilt at all sends the order back.
+    #[test]
+    fn littrow_angle_does_not_exist_for_too_long_a_wavelength() {
+        assert!(
+            ReflectiveGrating::default()
+                .littrow_angle(nanometer!(1200.0))
+                .is_err()
+        );
+    }
     #[test]
     fn optic_shape_absent_in_file() -> OpmResult<()> {
         test_optic_shape_absent_in_file::<ReflectiveGrating>()
@@ -538,6 +650,7 @@ mod test {
         }
         Ok(())
     }
+
     /// Trace one ray of 1 J at 1000 nm from 10 mm in front of a grating along z.
     fn diffracted_by(node: &mut ReflectiveGrating) -> OpmResult<(Rays, Rays)> {
         let incoming = Rays::from(Ray::new_collimated(
@@ -621,6 +734,22 @@ mod test {
             vec!["rays totally reflected or missed a surface"],
         );
         assert_eq!(diffracted.nr_of_rays(true), 0);
+        Ok(())
+    }
+    /// A ray an evanescent order stops goes on in the outgoing bundle, invalid, with its path up
+    /// to the grating, so a drawing shows where it was lost instead of losing the whole ray.
+    #[test]
+    fn a_ray_an_evanescent_order_stops_ends_on_the_grating() -> OpmResult<()> {
+        let mut node = placed_at_origin::<ReflectiveGrating>()?;
+
+        let (_, diffracted) = diffracted_by(&mut node)?;
+
+        let stopped: Vec<&Ray> = diffracted.iter().collect();
+        assert_eq!(stopped.len(), 1, "the stopped ray goes on");
+        assert!(!stopped[0].valid());
+        let path = stopped[0].position_history_with_current();
+        assert_eq!(path.nrows(), 2, "from its start to the grating");
+        assert_relative_eq!(stopped[0].position().z.value, 0.0, epsilon = 1e-12);
         Ok(())
     }
 }

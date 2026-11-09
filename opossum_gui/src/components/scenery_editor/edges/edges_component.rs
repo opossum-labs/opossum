@@ -1,8 +1,13 @@
-use crate::components::scenery_editor::{
-    EditorStateStoreExt, GraphState,
-    constants::EDGE_BEZIER_OFFSET,
-    edges::{define_bezier_path, edge_component::EdgeComponent},
-    graph_workspace::{GraphStateStoreExt, GraphStoreStoreExt},
+use std::collections::HashSet;
+
+use crate::{
+    SCENE_REVISION, api,
+    components::scenery_editor::{
+        EditorStateStoreExt, GraphState,
+        constants::EDGE_BEZIER_OFFSET,
+        edges::{define_bezier_path, edge_component::EdgeComponent},
+        graph_workspace::{GraphStateStoreExt, GraphStoreStoreExt},
+    },
 };
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_core::prelude::*;
@@ -84,14 +89,40 @@ impl EdgeCreation {
         self.end_port.as_ref()
     }
 }
+/// Draw the connections of the graph.
+///
+/// Which of them place a node by their distance is asked anew on every model change, as the 3D
+/// view asks for its model: whether a distance places a node depends on the whole model, not on
+/// the connection alone. Until the answer is there, or if it cannot be had, none does.
 #[component]
 pub fn EdgesComponent() -> Element {
     let graph_state = use_context::<ReadStore<GraphState>>();
     let graph_store = graph_state.graph_store();
+    let placing = use_resource(move || async move {
+        SCENE_REVISION();
+        let graph_id = graph_state.graph_info().read().id;
+        api::get_placing_connections(graph_id).await
+    });
+    let placing_ports = use_memo(move || {
+        placing
+            .read()
+            .as_ref()
+            .and_then(|fetched| fetched.as_ref().ok())
+            .map(|connections| {
+                connections
+                    .iter()
+                    .map(|c| (c.src_uuid(), c.src_port().to_owned()))
+                    .collect::<HashSet<_>>()
+            })
+            .unwrap_or_default()
+    });
     rsx! {
         for edge in graph_store.edges().iter() {
             EdgeComponent {
                 key: "{edge.read().src_uuid()}-{edge.read().src_port()}-{edge.read().target_uuid()}-{edge.read().target_port()}",
+                distance_places: placing_ports
+                    .read()
+                    .contains(&(edge.read().src_uuid(), edge.read().src_port().to_owned())),
                 edge,
             }
         }

@@ -10,7 +10,7 @@ use crate::{
             edges::edges_component::{EdgeCreation, EdgePort, NewEdgeCreationStart},
             graph_workspace::{
                 EditorStateStoreExt, GraphStateStoreExt, GraphStoreStoreExt,
-                GraphsWorkspaceStateStoreExt, workspace_state::GraphInfo,
+                GraphsWorkspaceStateStoreExt,
             },
         },
     },
@@ -115,20 +115,34 @@ pub fn use_on_mouse_enter(
     })
 }
 
+/// Creates the context-menu handler of a node port inside a group: "Map port to group" for an
+/// unmapped port, "Remove port map from group" and "Jump to mapped port" for a mapped one.
+/// The tab's graph info is read at click time, so a renamed parent group is never stale.
+///
+/// # Arguments
+/// * `workspace` - the graph workspace (root scenery id, tabs).
+/// * `graph_store` - the graph store of the tab the port is shown in.
+/// * `node_id` - the node the port belongs to.
+/// * `port_name` - the name of the port.
+/// * `port_type` - whether the port is an input or an output.
+///
+/// # Returns
+/// The handler; it opens no menu in the root scenery tab.
 pub fn use_on_context_menu(
     workspace: ReadStore<GraphsWorkspaceState>,
     graph_store: Store<GraphStore, impl Readable<Target = GraphStore> + 'static>,
-    graph_info: GraphInfo,
     node_id: Uuid,
     port_name: String,
     port_type: PortType,
 ) -> EventHandler<MouseEvent> {
     let mapped_ports = graph_store.mapped_ports();
+    let graph_state = use_context::<ReadStore<GraphState>>();
     EventHandler::new(move |event: MouseEvent| {
         event.prevent_default();
         event.stop_propagation();
         let x_coord = event.page_coordinates().x;
         let y_coord = event.page_coordinates().y;
+        let graph_info = graph_state.graph_info().peek().clone();
         let root_tab = *workspace.root_scenery_id().read();
         if graph_info.id != root_tab {
             let mut cx_menu = CxMenu::new(x_coord, y_coord, vec![]);

@@ -13,7 +13,7 @@ use opossum_core::{
 use uuid::Uuid;
 
 use super::Command;
-use crate::{error::BackEndErrorResponse, helper_functions::parent_group_id_or_self};
+use crate::error::BackEndErrorResponse;
 
 /// Helper function to convert an [`OpticRef`] into the [`NodeInfo`] expected by GUI updates.
 fn node_info(node: &OpticRef) -> NodeInfo {
@@ -204,7 +204,9 @@ pub(super) fn describe_graph_delta(
             }]
         }
         GraphDelta::PortMapped(mapping) | GraphDelta::PortUnmapped(mapping) => {
-            let parent_id = parent_group_id_or_self(document.scenery(), mapping.group_id)
+            let parent_id = document
+                .scenery()
+                .parent_group_id_or_self(mapping.group_id)
                 .unwrap_or(mapping.group_id);
             vec![
                 DocumentChange::GraphNeedsRefresh {

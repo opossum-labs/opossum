@@ -13,7 +13,7 @@ use opossum_core::{
     },
     nanometer,
     nodes::NodeGroup,
-    opm_document::AnalyzerInfo,
+    opm_document::{AnalyzerInfo, OpmDocument},
     prelude::AnalyzerType,
     types::api_types::{AnalyzerItemDto, ErrorResponse, NewAnalyzerInfo, SourcePortDto},
 };
@@ -99,6 +99,64 @@ pub fn create_default_ray_builder(default_wvl: Option<Length>) -> RayDataBuilder
         }
         RayDataBuilder::from(rds)
     })
+}
+
+/// Gives the new source port `source` light in every analyzer of `document`: the light `original`
+/// has there if it has some, otherwise the default light of a new source.
+///
+/// # Arguments
+///
+/// - `document`: the model whose analyzers to change
+/// - `source`: the new source port
+/// - `original`: the source port it was copied from, if any
+///
+/// # Returns
+///
+/// The commands that undo the change, one per analyzer changed.
+pub fn light_new_source(
+    document: &mut OpmDocument,
+    source: Uuid,
+    original: Option<Uuid>,
+) -> Vec<Command> {
+    let mut inverses = Vec::new();
+    let analyzer_ids: Vec<Uuid> = document.analyzers().keys().copied().collect();
+    for id in analyzer_ids {
+        let Some(analyzer_info) = document.analyzer_mut(id) else {
+            continue;
+        };
+        let default_wvl = analyzer_info.default_wavelength();
+        let old = analyzer_info.analyzer_type().clone();
+        let mut new = old.clone();
+        match &mut new {
+            AnalyzerType::Energy(config) => {
+                let light = original
+                    .and_then(|original| config.get_source(&original).cloned())
+                    .unwrap_or_else(|| create_default_energy_builder(default_wvl));
+                config.map_source(source, light);
+            }
+            AnalyzerType::RayTrace(config) => {
+                let light = original
+                    .and_then(|original| config.get_source(&original).cloned())
+                    .unwrap_or_else(|| create_default_ray_builder(default_wvl));
+                config.map_source(source, light);
+            }
+            AnalyzerType::GhostFocus(config) => {
+                let light = original
+                    .and_then(|original| config.get_source(&original).cloned())
+                    .unwrap_or_else(|| create_default_ray_builder(default_wvl));
+                config.map_source(source, light);
+            }
+        }
+        if new != old {
+            analyzer_info.set_analyzer_type(&new);
+            inverses.push(Command::PatchAnalyzer(Box::new(PatchAnalyzer {
+                id,
+                old: new,
+                new: old,
+            })));
+        }
+    }
+    inverses
 }
 
 /// Add an analyzer to the model

@@ -75,8 +75,8 @@ impl Coating for CoatingConstantR {
         _incoming_ray: &Ray,
         _surface_normal: Vector3<f64>,
         _n2: f64,
-    ) -> Ratio {
-        *self.reflectivity.get()
+    ) -> OpmResult<Ratio> {
+        Ok(*self.reflectivity.get())
     }
 }
 impl From<CoatingConstantR> for CoatingType {
@@ -116,7 +116,7 @@ mod test {
         let ray = Ray::origin_along_z(nanometer!(1000.0), joule!(1.0))?;
         let surface_normal = vector![0.0, 0.0, -1.0];
         assert_eq!(
-            coating.calc_reflectivity(&ray, surface_normal, 1.5),
+            coating.calc_reflectivity(&ray, surface_normal, 1.5)?,
             percent!(50.0)
         );
         Ok(())

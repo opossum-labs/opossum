@@ -4,6 +4,7 @@ use crate::distributions::spectral::laser_lines::MIN_WAVELENGTH_DIFF_NM;
 use crate::geometry::Rim;
 use crate::{
     J_per_cm2, centimeter,
+    coatings::SplittingConfig,
     core_optics::hit_map::fluence_estimator::FluenceEstimator,
     degree,
     distributions::{
@@ -17,7 +18,6 @@ use crate::{
     light::{Ray, Spectrum},
     meter, millimeter, nanometer,
     nodes::{
-        SplittingConfig,
         fluence_detector::{Fluence, fluence_data::FluenceData},
         ray_propagation_visualizer::{RayPositionHistories, RayPositionHistorySpectrum},
     },
@@ -101,6 +101,23 @@ impl ReflectedPart {
                 transmitted.clear_pos_hist();
             }
             Self::Branch => reflected.reduce_bounce_counter(),
+        }
+    }
+    /// Hands a ray the surface stopped to the bundle of reflected parts, if that is the bundle the
+    /// ray would have gone on in.
+    ///
+    /// The intended beam of a reflection is its reflected part, so a ray stopped there goes on in
+    /// it - invalid, with its path up to where it stopped. Behind a ghost or the second beam of a
+    /// beam splitter the incoming bundle goes on, which holds the stopped ray already.
+    ///
+    /// # Arguments
+    ///
+    /// * `ray` - the ray that hit or missed the surface; a ray still valid is left out.
+    /// * `reflected` - the bundle of reflected parts.
+    pub fn record_stop(self, ray: &Ray, reflected: &mut Rays) {
+        match self {
+            Self::Main if !ray.valid() => reflected.add_ray(ray.clone()),
+            Self::Main | Self::Ghost | Self::Branch => {}
         }
     }
     /// Links the bundle of reflected parts to the bundle the rays came in with.
@@ -1187,69 +1204,43 @@ impl Rays {
     ///
     /// # Errors
     ///
-    /// This function errors if the minimum wavelength of the unique wavelengths can not be calculated. Normally, this cannot happen,
-    /// since the wavlengths of a ray are finite from begin with.
-    ///
-    /// # Panics
-    ///
-    /// This function might only theoretically panic since internally an unwrap command is used.
+    /// This function errors if the bundle holds no rays to split.
     pub fn split_ray_bundle_by_wavelength(
         &self,
         wavelength_bin_size: Length,
         valid_only: bool,
     ) -> OpmResult<(Vec<Self>, Vec<Length>)> {
         let unique_wavelengths = self.get_unique_wavelengths(valid_only)?;
-        let num_split_bundles = unique_wavelengths.len();
-        if num_split_bundles == 1 {
-            Ok((vec![self.clone()], unique_wavelengths))
-        } else if num_split_bundles == 0 {
-            Err(OpossumError::Other(
+        let Some(&start_wvl) = unique_wavelengths.first() else {
+            return Err(OpossumError::Other(
                 "No rays in this bundle! Cannot split ray bundle by wavelengths!".into(),
-            ))
-        } else {
-            //get "start" wavelength: smallest wavelength reduced by half a bin size
-            let start_wvl = *unique_wavelengths.first().unwrap();
-            let start_wvl_f64 = (start_wvl - wavelength_bin_size / 2.).get::<nanometer>();
-
-            //for calculation, get bin size in units instead of length quantity
-            let bin_size: f64 = wavelength_bin_size.get::<nanometer>();
-
-            //initialize vectors
-            let mut ray_bundles = Vec::<Self>::with_capacity(num_split_bundles);
-            let mut ray_center_wavelength = Vec::<Length>::with_capacity(num_split_bundles);
-
-            //loop over all rays and sort them into a new ray bundle according to their wavelengths
-            for ray in self.ray_bundle.iter().filter(|r| r.valid() || !valid_only) {
-                let r_wvl = ray.wavelength().get::<nanometer>();
-                let insertion_index = ((r_wvl - start_wvl_f64) / bin_size).floor();
-                if ray_bundles.is_empty() {
-                    ray_bundles.push(Self::from(vec![ray.clone()]));
-                    ray_center_wavelength.push(start_wvl + insertion_index * wavelength_bin_size);
-                } else {
-                    let len_bundles = ray_bundles.len();
-                    for (i, bundle) in ray_bundles.clone().iter().enumerate() {
-                        let bundle_wvl = bundle.ray_bundle[0].wavelength().get::<nanometer>();
-                        let insertion_index_bundle =
-                            ((bundle_wvl - start_wvl_f64) / bin_size).floor();
-                        if relative_eq!(insertion_index_bundle, insertion_index) {
-                            ray_bundles[i].add_ray(ray.clone());
-                            break;
-                        } else if insertion_index < insertion_index_bundle {
-                            ray_bundles.insert(i, Self::from(vec![ray.clone()]));
-                            ray_center_wavelength
-                                .insert(i, start_wvl + insertion_index * wavelength_bin_size);
-                            break;
-                        } else if i == len_bundles - 1 {
-                            ray_bundles.push(Self::from(vec![ray.clone()]));
-                            ray_center_wavelength
-                                .push(start_wvl + insertion_index * wavelength_bin_size);
-                        }
-                    }
-                }
-            }
-
-            Ok((ray_bundles, ray_center_wavelength))
+            ));
+        };
+        if unique_wavelengths.len() == 1 {
+            return Ok((vec![self.clone()], unique_wavelengths));
         }
+        // The bins start half a bin below the smallest wavelength.
+        let start_wvl_f64 = (start_wvl - wavelength_bin_size / 2.).get::<nanometer>();
+        let bin_size: f64 = wavelength_bin_size.get::<nanometer>();
+
+        // `bins` holds the number of each bundle's bin, ascending.
+        let mut bins = Vec::<f64>::with_capacity(unique_wavelengths.len());
+        let mut ray_bundles = Vec::<Self>::with_capacity(unique_wavelengths.len());
+        let mut ray_center_wavelength = Vec::<Length>::with_capacity(unique_wavelengths.len());
+        for ray in self.ray_bundle.iter().filter(|r| r.valid() || !valid_only) {
+            let bin = ((ray.wavelength().get::<nanometer>() - start_wvl_f64) / bin_size).floor();
+            let at = bins.partition_point(|&other| other < bin);
+            if bins.get(at).is_some_and(|&other| relative_eq!(other, bin))
+                && let Some(bundle) = ray_bundles.get_mut(at)
+            {
+                bundle.add_ray(ray.clone());
+            } else {
+                bins.insert(at, bin);
+                ray_bundles.insert(at, Self::from(vec![ray.clone()]));
+                ray_center_wavelength.insert(at, start_wvl + bin * wavelength_bin_size);
+            }
+        }
+        Ok((ray_bundles, ray_center_wavelength))
     }
 
     /// Get the position history of all rays in this ray bundle
@@ -1522,9 +1513,9 @@ mod test {
     };
     use crate::{
         apertures::{CircleShape, Outline},
-        centimeter, joule, meter, millimeter, nanometer,
-        nodes::SplittingConfig,
-        radian,
+        centimeter,
+        coatings::SplittingConfig,
+        joule, meter, millimeter, nanometer, radian,
         refractive_index::RefrIndexConst,
         utils::test_helper::helper::check_logs,
     };
@@ -1695,6 +1686,41 @@ mod test {
 
         assert_eq!(split_bundles[0].ray_bundle.len(), 25);
         assert_eq!(split_bundles[1].ray_bundle.len(), 5);
+        Ok(())
+    }
+    #[test]
+    fn splitting_interleaved_wavelengths_keeps_the_order_of_the_rays_in_each_bin() -> OpmResult<()>
+    {
+        // A source with a spectrum emits all its wavelengths at one point before moving to the next.
+        let mut rays = Rays::default();
+        for x in 0..4 {
+            for nm in [1053.0, 527.0, 351.0] {
+                rays.add_ray(Ray::new_collimated(
+                    meter!(f64::from(x), 0.0, 0.0),
+                    nanometer!(nm),
+                    joule!(1.0),
+                )?);
+            }
+        }
+        // Within the 1 nm bin of 527 nm, so it joins that bin last.
+        rays.add_ray(Ray::new_collimated(
+            meter!(9.0, 0.0, 0.0),
+            nanometer!(527.3),
+            joule!(1.0),
+        )?);
+
+        let (bins, wavelengths) = rays.split_ray_bundle_by_wavelength(nanometer!(1.), false)?;
+
+        let centers: Vec<f64> = wavelengths.iter().map(|w| w.get::<nanometer>()).collect();
+        assert_eq!(centers.len(), 3);
+        for (center, expected) in centers.iter().zip([351.0, 527.0, 1053.0]) {
+            assert_relative_eq!(*center, expected, max_relative = 1e-12);
+        }
+        let starts =
+            |bin: &Rays| -> Vec<f64> { bin.iter().map(|ray| ray.position().x.value).collect() };
+        assert_eq!(starts(&bins[0]), vec![0.0, 1.0, 2.0, 3.0]);
+        assert_eq!(starts(&bins[1]), vec![0.0, 1.0, 2.0, 3.0, 9.0]);
+        assert_eq!(starts(&bins[2]), vec![0.0, 1.0, 2.0, 3.0]);
         Ok(())
     }
     #[test]
@@ -2047,7 +2073,7 @@ mod test {
             joule!(1.0),
         )?);
         let rim = Rim::new(
-            Outline::new(CircleShape::new(millimeter!(0.5))?, Vec::new())?,
+            Outline::new(CircleShape::new(millimeter!(0.5))?, None)?,
             Isometry::identity(),
         );
         assert!(rays.invalidate_outside(&rim));

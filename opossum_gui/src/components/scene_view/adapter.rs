@@ -1,0 +1,625 @@
+//! Turning a model's scene manifest into the object list the 3D viewer renders.
+//!
+//! This is the whole seam between what the backend exports and `dioxus_glb_viewer`, which draws it.
+//! Neither side knows about the other: the backend states what the components are and where they
+//! sit, the viewer states how it wants to be told, and this module carries one into the other.
+//!
+//! There is deliberately no arithmetic here. The placement is stated in the manifest already in the
+//! precision a renderer works in, and the rotation convention belongs to the viewer, because only it
+//! knows which Euler order its `Transform` means. What is left is the part that is genuinely this
+//! application's own: which component becomes which object, and where its geometry is fetched from.
+//!
+//! That split is also what makes updates cheap. The viewer diffs the list it is handed and sends
+//! only what changed, so as long as a component keeps its `id` and its source URL, moving it costs
+//! a transform and no geometry at all.
+//!
+//! The one thing the view adds of its own is the optical table under the setup, see
+//! [`table_ground`]. It is presentation only, so it lives here rather than in the model. Drawn
+//! light - the optical axis - comes from the backend like the components, but as objects of its own
+//! that are no node of the graph; see [`ray_object`].
+
+use std::collections::HashSet;
+
+// The prelude, not just `Asset` and `asset!`: the macro expands to a path through `manganis`, which
+// only the prelude brings into scope.
+use dioxus::prelude::*;
+use dioxus_glb_viewer::{
+    Environment, GlbObject, GlbSource, Ground, PickEvent, Transform, ViewerOptions,
+};
+use opossum_core::types::api_types::SceneManifest;
+use uuid::Uuid;
+
+use crate::{api::scene_node_url, components::scenery_editor::GraphsWorkspaceAction};
+
+/// One cell of the optical table's hole raster, tiled across the floor of the 3D view.
+#[allow(clippy::volatile_composites)]
+const TABLE_TILE: Asset = asset!("/assets/optical_table_tile.png");
+/// Height of the table surface, in metres. The beam runs at y = 0 through the components' centres,
+/// so the table sits below it like a real bench and does not cut through the optics.
+const TABLE_HEIGHT_M: f32 = -0.075;
+/// Spacing of the table's holes, in metres - the common 25 mm breadboard raster. One copy of
+/// [`TABLE_TILE`] holds one hole.
+const TABLE_PITCH_M: f32 = 0.025;
+/// The 360° panorama shipped for the 3D View menu's **HDR environment**.
+#[allow(clippy::volatile_composites)]
+const SCENE_ENVIRONMENT: Asset = asset!("/assets/scene_environment.hdr");
+/// The two tones of the calm horizon mirrors and glass reflect by default. Both are darker than the
+/// background and the table, so a mirror stands out against them instead of vanishing.
+const HORIZON_ABOVE: &str = "#667079";
+const HORIZON_BELOW: &str = "#46474a";
+/// Describe a model's components the way the 3D viewer wants them.
+///
+/// The node uuid becomes the object id, which is what a click in the 3D view reports back and what
+/// ties it to a node in the graph. The geometry is referenced by URL rather than sent along: the
+/// webview fetches it itself, so meshes never travel through the JavaScript bridge.
+///
+/// Every component is drawn as opaque as its file says: how see-through each of its faces is, the
+/// backend decides from the face's coating.
+///
+/// # Arguments
+///
+/// - `manifest`: the components of the model, as the backend listed them
+/// - `base_url`: the backend's root, which the geometry URLs are built from
+///
+/// # Returns
+///
+/// One object per component, in the order the manifest names them.
+pub fn objects_of(manifest: &SceneManifest, base_url: &str) -> Vec<GlbObject> {
+    manifest
+        .nodes
+        .iter()
+        .map(|node| GlbObject {
+            id: node.uid.to_string(),
+            // Only the hash in the URL decides whether the viewer refetches: the URL is compared by
+            // value, so a component that merely moved keeps it and is never reloaded.
+            source: GlbSource::Url(scene_node_url(base_url, node.uid, &node.geometry)),
+            transform: Transform::from_quaternion(node.position, node.rotation),
+            visible: true,
+            // Selection lives with whoever handles the clicks, not with the geometry.
+            selected: false,
+            opacity: 1.0,
+            // A real component, drawn as the file has it - not an annotation overlay.
+            overlay: false,
+        })
+        .collect()
+}
+
+/// The object id of the optical axis in the 3D view.
+pub const AXIS_OBJECT_ID: &str = "rays:axis";
+/// The object id of the light of the model's sources in the 3D view.
+pub const RAYS_OBJECT_ID: &str = "rays:trace";
+
+/// Whether an object of the 3D view is drawn light rather than a component of the model.
+///
+/// Ray objects share the `rays:` prefix. They are no node of the graph, so a click never selects
+/// them and they do not count as components.
+///
+/// # Arguments
+///
+/// - `id`: the object's id
+///
+/// # Returns
+///
+/// `true` for a ray object.
+pub fn is_ray_object(id: &str) -> bool {
+    id.starts_with("rays:")
+}
+
+/// Mark each component object selected exactly when its node is in `selected`.
+///
+/// This is how the graph's selection reaches the 3D view: an object's id is its node's uuid
+/// stringified (see [`objects_of`]), so an object is boxed when that uuid is in the set and cleared
+/// when it is not. Ray objects (the `rays:` prefix, see [`is_ray_object`]) are never a node of the
+/// graph and never receive a selection box.
+///
+/// # Arguments
+///
+/// - `objects`: the 3D view's object list, whose `selected` flags are set in place
+/// - `selected`: the ids of the nodes selected in the graph
+pub fn apply_node_selection(objects: &mut [GlbObject], selected: &HashSet<Uuid>) {
+    for object in objects.iter_mut() {
+        object.selected = !is_ray_object(&object.id)
+            && object
+                .id
+                .parse::<Uuid>()
+                .is_ok_and(|uid| selected.contains(&uid));
+    }
+}
+
+/// Describe drawn light - the optical axis, say - as an object of the 3D view.
+///
+/// The backend delivers ray paths in world coordinates, the same frame the manifest places the
+/// components in, so the object keeps the identity transform.
+///
+/// Drawn as an overlay: its lines render in the transparent pass so a lens's glass never refracts
+/// them into ghost copies, and mix where they cross as the viewer options say (see
+/// [`GlbObject::overlay`]).
+///
+/// # Arguments
+///
+/// - `id`: the object's id, starting with `rays:` (see [`is_ray_object`])
+/// - `url`: where the webview fetches the rays from
+/// - `visible`: whether the rays are shown
+/// - `opacity`: how opaque the rays are drawn, `0.0` to `1.0`
+///
+/// # Returns
+///
+/// The object, unselected.
+pub fn ray_object(id: &str, url: String, visible: bool, opacity: f32) -> GlbObject {
+    GlbObject {
+        id: id.to_owned(),
+        source: GlbSource::Url(url),
+        transform: Transform::default(),
+        visible,
+        selected: false,
+        opacity,
+        overlay: true,
+    }
+}
+
+/// Describe the optical table under the setup as the 3D viewer's ground.
+///
+/// The viewer tiles the hole image across a floor that reaches to the horizon. It is not a
+/// component of the model: the viewer never frames it on "Fit view" and a click never hits it.
+///
+/// # Returns
+///
+/// The ground: the table's hole tile, repeated every [`TABLE_PITCH_M`], at [`TABLE_HEIGHT_M`].
+pub fn table_ground() -> Ground {
+    Ground {
+        height: TABLE_HEIGHT_M,
+        // An asset of this application, so the webview loads it from its own origin.
+        tile_url: TABLE_TILE.to_string(),
+        tile_size: TABLE_PITCH_M,
+    }
+}
+
+/// Set what the 3D view's mirrors and glass reflect, and what lies behind the setup.
+///
+/// With the HDR the shipped panorama is both: it is reflected and seen behind the setup, at its own
+/// brightness. Without it the background colour stays behind the setup, and mirrors and glass
+/// reflect the calm horizon at twice the strength, so a mirror reads as a mirror against it.
+///
+/// # Arguments
+///
+/// - `options`: the view's options, changed in place
+/// - `hdr`: whether the shipped HDR panorama is used
+pub fn set_environment(options: &mut ViewerOptions, hdr: bool) {
+    if hdr {
+        // An asset of this application, so the webview loads it from its own origin.
+        options.environment = Environment::Image {
+            url: SCENE_ENVIRONMENT.to_string(),
+        };
+        options.environment_intensity = 1.0;
+        options.environment_background = true;
+    } else {
+        options.environment = Environment::Horizon {
+            above: HORIZON_ABOVE.into(),
+            below: HORIZON_BELOW.into(),
+        };
+        options.environment_intensity = 2.0;
+        options.environment_background = false;
+    }
+}
+
+/// Turn a click in the 3D view into the action that reveals the node it hit.
+///
+/// The pick only reports which object was hit; the graph it lives in comes from looking the uid
+/// back up in the manifest, which is where the backend filled it in during the same walk that
+/// found the component in the first place. The action never brings the node's graph tab to the
+/// front - the whole point of clicking in the 3D view is to keep looking at it.
+///
+/// # Arguments
+///
+/// - `picked`: what the viewer reported for the click
+/// - `manifest`: the components of the model, as the backend listed them
+///
+/// # Returns
+///
+/// The action that selects the node and opens its properties, or `None` for a miss, or a pick
+/// whose id the manifest no longer lists (a stale click racing a refresh).
+pub fn reveal_action_for_pick(
+    picked: &PickEvent,
+    manifest: &SceneManifest,
+) -> Option<GraphsWorkspaceAction> {
+    let uid: Uuid = picked.id.as_ref()?.parse().ok()?;
+    let group = manifest.nodes.iter().find(|node| node.uid == uid)?.group;
+    Some(GraphsWorkspaceAction::RevealNode {
+        node_id: uid,
+        graph_id: group,
+        bring_to_front: false,
+    })
+}
+
+/// Turn a click in the 3D view into the action it should trigger.
+///
+/// This mirrors the 2D graph canvas: a hit reveals the node it landed on (as
+/// `reveal_action_for_pick` does), and a click on empty space clears the selection so the
+/// properties sidebar deselects too, not just the 3D selection box.
+///
+/// # Arguments
+///
+/// - `picked`: what the viewer reported for the click
+/// - `manifest`: the components of the model, as the backend listed them
+///
+/// # Returns
+///
+/// [`GraphsWorkspaceAction::RevealNode`] for a hit, [`GraphsWorkspaceAction::ClearSelectedNodesInActiveTab`]
+/// for a click on empty space, or `None` for a pick whose id the manifest no longer lists (a stale
+/// click racing a refresh), which must leave the selection untouched.
+pub fn action_for_pick(
+    picked: &PickEvent,
+    manifest: &SceneManifest,
+) -> Option<GraphsWorkspaceAction> {
+    match picked.id {
+        // A click on empty space: clear the selection, mirroring the 2D canvas.
+        None => Some(GraphsWorkspaceAction::ClearSelectedNodesInActiveTab),
+        // A hit reveals the node; a stale id (no longer in the manifest) triggers nothing.
+        Some(_) => reveal_action_for_pick(picked, manifest),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use opossum_core::types::api_types::SceneNodeEntry;
+
+    /// One component, as the backend would list it.
+    fn entry(uid: Uuid) -> SceneNodeEntry {
+        SceneNodeEntry {
+            uid,
+            group: Uuid::new_v4(),
+            name: "lens".to_owned(),
+            geometry: "deadbeefdeadbeef".to_owned(),
+            position: [0.0, 0.0, 0.25],
+            rotation: [0.0, 0.0, 0.0, 1.0],
+        }
+    }
+
+    /// A pick, the way `dioxus_glb_viewer` reports it. Only `id` matters to
+    /// [`reveal_action_for_pick`]; the rest is never read.
+    fn pick(id: Option<Uuid>) -> PickEvent {
+        PickEvent {
+            id: id.map(|uid| uid.to_string()),
+            mesh_name: None,
+            point: None,
+            shift: false,
+            ctrl: false,
+            alt: false,
+        }
+    }
+
+    /// The uuid is what ties an object in the 3D view back to a node in the graph, and the hash is
+    /// what decides whether its mesh is fetched again.
+    #[test]
+    fn every_component_becomes_an_object_carrying_its_uuid_and_hash() {
+        let uid = Uuid::new_v4();
+        let manifest = SceneManifest {
+            nodes: vec![entry(uid)],
+            ..SceneManifest::default()
+        };
+
+        let objects = objects_of(&manifest, "http://localhost:8001");
+
+        assert_eq!(objects.len(), 1);
+        assert_eq!(objects[0].id, uid.to_string());
+        assert!(objects[0].visible);
+        assert!(!objects[0].selected);
+        assert_eq!(
+            objects[0].opacity.to_bits(),
+            1.0_f32.to_bits(),
+            "a component is drawn as opaque as its file says; the backend decides per face"
+        );
+        let GlbSource::Url(url) = &objects[0].source else {
+            panic!("a component's geometry is fetched by url, not carried as bytes");
+        };
+        assert!(
+            url.contains(&uid.to_string()),
+            "{url} does not name the node"
+        );
+        assert!(
+            url.ends_with("v=deadbeefdeadbeef"),
+            "{url} has no geometry hash"
+        );
+    }
+
+    /// The placement travels through untouched. Rounding or re-deriving it here would be a second
+    /// opinion about where a component sits, and the point of the manifest is that there is only
+    /// one.
+    #[test]
+    fn a_components_placement_is_passed_through_unchanged() {
+        let manifest = SceneManifest {
+            nodes: vec![entry(Uuid::new_v4())],
+            ..SceneManifest::default()
+        };
+
+        let objects = objects_of(&manifest, "http://localhost:8001");
+
+        assert_same(objects[0].transform.position, [0.0, 0.0, 0.25], "position");
+        assert_same(
+            objects[0].transform.rotation_euler_xyz,
+            [0.0, 0.0, 0.0],
+            "rotation",
+        );
+        assert_same(objects[0].transform.scale, [1.0, 1.0, 1.0], "scale");
+    }
+
+    /// Compare three numbers that were only ever copied, never computed.
+    fn assert_same(actual: [f32; 3], wanted: [f32; 3], what: &str) {
+        let off = actual
+            .iter()
+            .zip(wanted)
+            .map(|(got, want)| (got - want).abs())
+            .fold(0.0_f32, f32::max);
+        assert!(off < 1e-6, "{what}: {actual:?} instead of {wanted:?}");
+    }
+
+    /// Two components keep their own identities, and the order the manifest names them in is the
+    /// order they are handed over in — the viewer's diff keys on the id, but a stable order keeps
+    /// an op log readable.
+    #[test]
+    fn several_components_keep_their_order_and_identity() {
+        let first = Uuid::new_v4();
+        let second = Uuid::new_v4();
+        let manifest = SceneManifest {
+            nodes: vec![entry(first), entry(second)],
+            ..SceneManifest::default()
+        };
+
+        let objects = objects_of(&manifest, "http://localhost:8001");
+
+        assert_eq!(objects.len(), 2);
+        assert_eq!(objects[0].id, first.to_string());
+        assert_eq!(objects[1].id, second.to_string());
+    }
+
+    /// The graph's selection reaches the 3D view by uuid: a component whose node is selected is
+    /// boxed, one whose node is not is cleared, and a ray object is never boxed even when the set
+    /// is non-empty. Clearing the selection clears every box.
+    #[test]
+    fn node_selection_boxes_the_selected_components_and_never_the_rays() {
+        let selected = Uuid::new_v4();
+        let unselected = Uuid::new_v4();
+        let manifest = SceneManifest {
+            nodes: vec![entry(selected), entry(unselected)],
+            ..SceneManifest::default()
+        };
+        let mut objects = objects_of(&manifest, "http://localhost:8001");
+        objects.push(ray_object(
+            AXIS_OBJECT_ID,
+            "http://localhost/axis.glb".to_owned(),
+            true,
+            1.0,
+        ));
+
+        apply_node_selection(&mut objects, &HashSet::from([selected]));
+
+        assert!(objects[0].selected, "the selected node must be boxed");
+        assert!(!objects[1].selected, "an unselected node must not be boxed");
+        assert!(
+            !objects[2].selected,
+            "a ray object is no node of the graph and must never be boxed"
+        );
+
+        apply_node_selection(&mut objects, &HashSet::new());
+        assert!(
+            objects.iter().all(|object| !object.selected),
+            "clearing the selection must clear every box"
+        );
+    }
+
+    /// The table has to sit below the beam, or it cuts through every component centred on it - and
+    /// the viewer refuses a tile size that is not positive, which would leave no floor at all.
+    #[test]
+    fn the_table_lies_below_the_beam_with_a_usable_tile() {
+        let ground = table_ground();
+        assert!(ground.height < 0.0, "table at {} m", ground.height);
+        assert!(ground.tile_size > 0.0, "tile size {} m", ground.tile_size);
+        assert!(!ground.tile_url.is_empty());
+    }
+
+    /// With the HDR switch on, the shipped panorama is reflected and seen behind the setup at its own
+    /// brightness; off, the background colour stays and mirrors reflect the calm horizon, twice as
+    /// strong. Either way the switch decides all three settings, so flipping it back restores them.
+    #[test]
+    fn the_hdr_switch_picks_the_panorama_or_the_horizon() {
+        let mut options = ViewerOptions::default();
+        set_environment(&mut options, true);
+        let Environment::Image { url } = &options.environment else {
+            panic!(
+                "the HDR switch did not choose a panorama: {:?}",
+                options.environment
+            );
+        };
+        assert!(
+            url.contains("scene_environment") && url.ends_with(".hdr"),
+            "{url}"
+        );
+        assert!(options.environment_background);
+        assert_eq!(options.environment_intensity.to_bits(), 1.0_f32.to_bits());
+
+        set_environment(&mut options, false);
+        assert_eq!(
+            options.environment,
+            Environment::Horizon {
+                above: "#667079".into(),
+                below: "#46474a".into(),
+            }
+        );
+        assert!(!options.environment_background);
+        assert_eq!(options.environment_intensity.to_bits(), 2.0_f32.to_bits());
+    }
+
+    /// A hit reveals the node in the graph the manifest says it actually lives in, and never brings
+    /// that graph's tab in front of the 3D view - the whole point of clicking there in the first
+    /// place.
+    #[test]
+    fn a_hit_reveals_the_node_without_leaving_the_3d_view() {
+        let uid = Uuid::new_v4();
+        let manifest = SceneManifest {
+            nodes: vec![entry(uid)],
+            ..SceneManifest::default()
+        };
+
+        let action = reveal_action_for_pick(&pick(Some(uid)), &manifest)
+            .expect("a hit on a listed component reveals it");
+
+        let GraphsWorkspaceAction::RevealNode {
+            node_id,
+            graph_id,
+            bring_to_front,
+        } = action
+        else {
+            panic!("a 3D pick must reveal the node it hit, not any other action");
+        };
+        assert_eq!(node_id, uid);
+        assert_eq!(graph_id, manifest.nodes[0].group);
+        assert!(
+            !bring_to_front,
+            "a 3D pick must not bring the graph tab in front of the 3D view"
+        );
+    }
+
+    /// Clicking empty space reports no id and must reveal nothing.
+    #[test]
+    fn a_miss_reveals_nothing() {
+        let manifest = SceneManifest {
+            nodes: vec![entry(Uuid::new_v4())],
+            ..SceneManifest::default()
+        };
+
+        assert!(reveal_action_for_pick(&pick(None), &manifest).is_none());
+    }
+
+    /// A click can race a manifest refresh and report an id the manifest just stopped listing; that
+    /// must not be turned into an action for a node that may not even exist any more.
+    #[test]
+    fn a_stale_id_reveals_nothing() {
+        let manifest = SceneManifest {
+            nodes: vec![entry(Uuid::new_v4())],
+            ..SceneManifest::default()
+        };
+
+        assert!(reveal_action_for_pick(&pick(Some(Uuid::new_v4())), &manifest).is_none());
+    }
+
+    /// A click on empty space clears the selection, so the properties sidebar deselects too and not
+    /// just the 3D box. This is the bug the wrapper fixes: a miss used to trigger no action at all.
+    #[test]
+    fn a_miss_clears_the_selection_in_the_active_tab() {
+        let manifest = SceneManifest {
+            nodes: vec![entry(Uuid::new_v4())],
+            ..SceneManifest::default()
+        };
+
+        assert!(
+            matches!(
+                action_for_pick(&pick(None), &manifest),
+                Some(GraphsWorkspaceAction::ClearSelectedNodesInActiveTab)
+            ),
+            "an empty-space click must clear the selection"
+        );
+    }
+
+    /// A hit reveals the node it landed on, exactly as [`reveal_action_for_pick`] does.
+    #[test]
+    fn a_hit_reveals_the_node_through_action_for_pick() {
+        let uid = Uuid::new_v4();
+        let manifest = SceneManifest {
+            nodes: vec![entry(uid)],
+            ..SceneManifest::default()
+        };
+
+        let Some(GraphsWorkspaceAction::RevealNode { node_id, .. }) =
+            action_for_pick(&pick(Some(uid)), &manifest)
+        else {
+            panic!("a hit must reveal the node it landed on");
+        };
+        assert_eq!(node_id, uid);
+    }
+
+    /// A stale hit (an id the manifest no longer lists) must leave the selection untouched, not
+    /// clear it: it was an attempt to hit a component, not a click on empty space.
+    #[test]
+    fn a_stale_hit_does_not_clear_the_selection() {
+        let manifest = SceneManifest {
+            nodes: vec![entry(Uuid::new_v4())],
+            ..SceneManifest::default()
+        };
+
+        assert!(
+            action_for_pick(&pick(Some(Uuid::new_v4())), &manifest).is_none(),
+            "a stale hit must not be turned into a clear-selection action"
+        );
+    }
+
+    /// The axis arrives in world coordinates, so it is not moved, and it is told apart from the
+    /// components by its id alone.
+    #[test]
+    fn the_axis_is_a_ray_object_left_where_it_is() {
+        let axis = ray_object(
+            AXIS_OBJECT_ID,
+            "http://localhost/axis.glb".to_owned(),
+            false,
+            0.25,
+        );
+
+        assert!(is_ray_object(&axis.id));
+        assert!(is_ray_object(RAYS_OBJECT_ID));
+        assert_eq!(axis.transform, Transform::default());
+        assert!(!axis.visible && !axis.selected);
+        assert_eq!(axis.opacity.to_bits(), 0.25_f32.to_bits());
+        assert!(
+            !is_ray_object(&Uuid::new_v4().to_string()),
+            "a component is no ray object"
+        );
+    }
+
+    /// The viewer reloads an object exactly when its URL changes, so the axis URL is the same for
+    /// the same digest - an edit that does not move the axis reloads nothing - and new for a new
+    /// one.
+    #[test]
+    fn the_axis_url_changes_exactly_with_its_digest() {
+        let base = "http://localhost:8001";
+        assert_eq!(
+            crate::api::scene_axis_url(base, "a", None),
+            crate::api::scene_axis_url(base, "a", None)
+        );
+        assert_ne!(
+            crate::api::scene_axis_url(base, "a", None),
+            crate::api::scene_axis_url(base, "b", None)
+        );
+        assert!(crate::api::scene_axis_url(base, "a", None).starts_with(base));
+    }
+
+    /// The same holds for the rays, whose URL is also new for a new number of rays or a new way of
+    /// drawing their spectrum, or the viewer would keep showing the old rays.
+    #[test]
+    fn the_rays_url_changes_exactly_with_their_digest_and_settings() {
+        let url = |digest, max_rays, full_spectrum| {
+            crate::api::scene_rays_url(
+                "http://localhost:8001",
+                digest,
+                max_rays,
+                full_spectrum,
+                None,
+            )
+        };
+        assert_eq!(url("a", 500, false), url("a", 500, false));
+        assert_ne!(url("a", 500, false), url("b", 500, false));
+        assert_ne!(url("a", 500, false), url("a", 50, false));
+        assert_ne!(url("a", 500, false), url("a", 500, true));
+    }
+
+    /// The axis and the rays follow the analyzer the components were placed after, so their URLs
+    /// name it - and name none when the model is drawn after its default.
+    #[test]
+    fn the_light_follows_the_analyzer_the_components_were_placed_after() {
+        let base = "http://localhost:8001";
+        let analyzer = Uuid::new_v4();
+        let named = format!("analyzer={analyzer}");
+        assert!(crate::api::scene_axis_url(base, "a", Some(analyzer)).contains(&named));
+        assert!(crate::api::scene_rays_url(base, "a", 500, false, Some(analyzer)).contains(&named));
+        assert!(!crate::api::scene_axis_url(base, "a", None).contains("analyzer"));
+    }
+}

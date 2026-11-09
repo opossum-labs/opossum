@@ -1,0 +1,18 @@
+/* dioxus_glb_viewer — base styles */
+
+.dxglb-root {
+    /* Takes up all available space; the host app controls the size via class/style. */
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    display: block;
+}
+
+.dxglb-canvas {
+    /* Fills the wrapper completely — three.js reads clientWidth/clientHeight for resize.
+       `display: block` prevents the default inline gap below canvas elements. */
+    display: block;
+    width: 100%;
+    height: 100%;
+}

@@ -16,7 +16,7 @@ use crate::{
     analyzers::energy::{AnalysisEnergy, EnergyConfig},
     core_optics::{NodeAttrExt, OpticRef, PortType, node_attr::NodePositioning},
     error::{OpmResult, OpossumError},
-    light::{LightData, LightResult},
+    light::{LightData, LightResult, Rays},
     nanometer,
     nodes::NodeGroup,
     radian,
@@ -438,7 +438,8 @@ impl OpticGraph {
     /// The node is placed from the first connected input port (in the ports' deterministic declared
     /// order) that carries axis data, turned about the axis by the up direction the axis ray carries.
     /// Every further connected port is only checked against that placement: an inconsistent one is
-    /// reported as a warning (with a suggested fix), not an error, and the placement is kept.
+    /// reported as a warning (with a suggested fix), not an error, and the placement is kept. The
+    /// connection into every port read is marked as one whose distance placed the node.
     ///
     /// # Errors
     ///
@@ -471,23 +472,18 @@ impl OpticGraph {
                 continue;
             };
             let distance_from_predecessor = self.distance_from_predecessor(node_id, &port_name)?;
+            self.mark_placed_by_distance(idx, &port_name);
             let node = &mut self.g[idx];
 
             if let Some(group) = node.as_any_mut().downcast_mut::<NodeGroup>() {
                 group.add_input_port_distance(&port_name, distance_from_predecessor);
             }
-            let LightData::Geometric(rays) = incoming else {
-                return Err(OpossumError::Analysis(
-                    "expected LightData::Geometric at input port".into(),
-                ));
-            };
-            let Some(ray) = rays.into_iter().next() else {
+            let arriving = self.axis_arriving_at(node_id, &port_name, incoming)?;
+            let Some(ray) = arriving.iter().next() else {
                 return Err(OpossumError::Analysis(
                     "no rays in this ray bundle. cannot position nodes".into(),
                 ));
             };
-            let mut ray = ray.to_owned();
-            ray.propagate(distance_from_predecessor)?;
             let world_frame = ray.to_isometry()?;
             let entrance_frame = self.axis_entrance_frame_of(node_id, &port_name);
             if let Some(placed_iso) = self.g[idx].positioning().effective_position().copied() {
@@ -516,13 +512,49 @@ impl OpticGraph {
         }
         Ok(())
     }
+    /// Returns the optical axis arriving at an input port of a node, carried from where its
+    /// predecessor left it up to where the node sits.
+    ///
+    /// # Arguments
+    ///
+    /// * `node_id` - the node the axis arrives at.
+    /// * `port_name` - the input port it arrives through.
+    /// * `incoming` - the light on the edge into that port.
+    ///
+    /// # Returns
+    ///
+    /// The axis bundle with its valid rays propagated by the distance from the predecessor; the
+    /// first of them is the axis itself.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the light is not geometric, if the distance from the
+    /// predecessor cannot be determined or if a ray cannot be propagated.
+    pub(crate) fn axis_arriving_at(
+        &self,
+        node_id: Uuid,
+        port_name: &str,
+        incoming: &LightData,
+    ) -> OpmResult<Rays> {
+        let LightData::Geometric(rays) = incoming else {
+            return Err(OpossumError::Analysis(
+                "expected LightData::Geometric at input port".into(),
+            ));
+        };
+        let distance = self.distance_from_predecessor(node_id, port_name)?;
+        let mut arriving = rays.clone();
+        for ray in arriving.iter_mut().filter(|ray| ray.valid()) {
+            ray.propagate(distance)?;
+        }
+        Ok(arriving)
+    }
     /// Returns the axis entrance frame of input port `port_name` of the node `node_id`.
     ///
     /// This is the local frame from which the optical axis enters the port (see
     /// [`AnalysisRayTrace::axis_entrance_frame`]). It is the identity for ordinary single-input
     /// nodes. For a reference proxy the referenced target answers, since the proxy has no geometry
     /// of its own. Returns the identity if the node cannot be found.
-    fn axis_entrance_frame_of(&mut self, node_id: Uuid, port_name: &str) -> Isometry {
+    pub(super) fn axis_entrance_frame_of(&mut self, node_id: Uuid, port_name: &str) -> Isometry {
         let Some(idx) = self.node_idx_by_uuid(node_id) else {
             return Isometry::identity();
         };
@@ -582,10 +614,11 @@ impl OpticGraph {
 mod test {
     use super::*;
     use crate::{
+        coatings::SplittingConfigBuilder,
         core_optics::OpticNode,
         core_optics::PortType,
         light::spectrum_helper::create_he_ne_spec,
-        nodes::{BeamSplitter, Dummy, NodeReference, SourcePort, SplittingConfigBuilder},
+        nodes::{BeamSplitter, Dummy, NodeReference, SourcePort},
         utils::{geom_transformation::Isometry, test_helper::helper::check_logs},
     };
     use approx::assert_abs_diff_eq;

@@ -6,7 +6,7 @@
 //! [`Geometry::interact`](crate::geometry::Geometry::interact)).
 
 use crate::{
-    coatings::CoatingType, core_optics::hit_map::rays_hit_map::HitPoint, error::OpmResult,
+    coatings::Coating, core_optics::hit_map::rays_hit_map::HitPoint, error::OpmResult,
     geometry::SurfaceHit, light::Ray, refractive_index::RefractiveIndexType,
 };
 
@@ -35,8 +35,14 @@ pub trait SurfaceEffect {
         &self,
         ray: &mut Ray,
         hit: &SurfaceHit,
-        coating: &CoatingType,
+        coating: &dyn Coating,
     ) -> OpmResult<(Option<Ray>, Option<HitPoint>)>;
+    /// Return whether this effect acts at a hit in a bore as at a hit on the material (see
+    /// [`SurfaceHit::on_material`]).
+    ///
+    /// Light passes a bore untouched: there is no material to act on it. Only a construction of
+    /// the optical axis acts there, since a component is placed by its edge alone.
+    fn acts_in_bores(&self) -> bool;
 }
 
 /// Refraction by Snell's law, the coating of the surface splitting off a reflected part (see
@@ -51,12 +57,15 @@ impl SurfaceEffect for Refraction<'_> {
         &self,
         ray: &mut Ray,
         hit: &SurfaceHit,
-        coating: &CoatingType,
+        coating: &dyn Coating,
     ) -> OpmResult<(Option<Ray>, Option<HitPoint>)> {
         let n2 = self
             .0
             .map(|index| index.get_refractive_index(ray.wavelength()))
             .transpose()?;
         ray.refract_at(hit, coating, n2)
+    }
+    fn acts_in_bores(&self) -> bool {
+        false
     }
 }
