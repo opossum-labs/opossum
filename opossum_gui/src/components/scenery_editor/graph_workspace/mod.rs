@@ -1,3 +1,4 @@
+mod test_registry;
 pub(super) mod workspace_action;
 pub(super) mod workspace_handlers;
 pub(super) mod workspace_state;
