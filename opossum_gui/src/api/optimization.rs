@@ -33,7 +33,7 @@ pub async fn get_optimization_schema() -> Result<ModelOptimizationSchema, String
 /// or if serialization/parsing fails (HTTP 400).
 pub async fn post_start_optimization(config: OptimizationConfig) -> Result<String, String> {
     HTTP_API_CLIENT()
-        .post::<OptimizationConfig, String>("/api/optimization/start", config)
+        .post_ron::<OptimizationConfig, String>("/api/optimization/start", config)
         .await
 }
 
