@@ -221,8 +221,22 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                     select {
                       class: "form-select form-select-sm bg-black text-light border-secondary font-monospace py-0 px-2",
                       style: "width: 15.5rem; height: 30px; font-size: 11px;",
-                      option { value: "all", selected: true,
-                        "Entire Optical Setup"
+                      value: model
+                          .read()
+                          .scope_group_id
+                          .map(|id| id.to_string())
+                          .unwrap_or_else(|| "all".to_string()),
+                      onchange: move |e| {
+                          let val = e.value();
+                          if val == "all" {
+                              model.write().set_scope(None);
+                          } else if let Ok(parsed_id) = uuid::Uuid::parse_str(&val) {
+                              model.write().set_scope(Some(parsed_id));
+                          }
+                      },
+                      option { value: "all", "Entire Optical Setup" }
+                      for (group_id , group_name) in model.read().available_groups() {
+                        option { value: "{group_id}", "{group_name}" }
                       }
                     }
                   }

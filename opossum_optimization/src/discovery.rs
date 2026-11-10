@@ -25,12 +25,14 @@ pub struct DiscoveredVariable {
 }
 
 /// Metadata for an observable physical metric produced by an analyzer.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct DiscoveredObservable {
-    pub address: ObservableAddress,
+    pub group_id: Option<uuid::Uuid>,
+    pub group_name: String,
     pub analyzer_name: String,
     pub analyzer_kind: String,
     pub node_name: String,
+    pub address: ObservableAddress,
     pub descriptor: ObservableDescriptor,
 }
 

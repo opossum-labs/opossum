@@ -109,6 +109,14 @@ impl UiVariableRow {
     }
 }
 
+/// UI-specific representation of a merit function operand.
+#[derive(Clone, PartialEq, Debug)]
+pub struct UiOperandRow {
+    pub operand: StandardOperand,
+    pub group_id: Option<Uuid>,
+    pub is_enabled: bool,
+}
+
 /// Pre-flight validation severity.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ValidationSeverity {
@@ -131,7 +139,7 @@ pub struct OptimizationModel {
     /// Flattened inventory of all discoverable parameters.
     pub variable_rows: Vec<UiVariableRow>,
     /// Configured merit operands.
-    pub operands: Vec<StandardOperand>,
+    pub operands: Vec<UiOperandRow>,
     /// Solver algorithm and termination settings.
     pub algorithm: OptimizationAlgorithm,
     /// Target cost threshold for early stopping.
@@ -278,13 +286,13 @@ impl OptimizationModel {
             .variable_rows
             .iter()
             .any(|r| r.is_enabled && r.coupling.is_none());
-        let has_operands = !self.operands.is_empty();
+        let has_enabled_operands = self.operands.iter().any(|op| op.is_enabled);
         let has_no_fatal_errors = !self
             .validation_issues
             .iter()
             .any(|i| i.severity == ValidationSeverity::Error);
 
-        has_enabled_vars && has_operands && has_no_fatal_errors
+        has_enabled_vars && has_enabled_operands && has_no_fatal_errors
     }
     /// Toggles the activation state of a variable.
     pub fn toggle_variable(&mut self, address: &ParameterAddress) {
@@ -383,18 +391,25 @@ impl OptimizationModel {
             }
         }
 
+        let active_operands: Vec<StandardOperand> = self
+            .operands
+            .iter()
+            .filter(|op| op.is_enabled)
+            .map(|op| op.operand.clone())
+            .collect();
+
         if free_variables.is_empty() {
             return Err("At least one free variable must be enabled.".to_string());
         }
 
-        if self.operands.is_empty() {
-            return Err("At least one merit operand must be specified.".to_string());
+        if active_operands.is_empty() {
+            return Err("At least one merit operand must be enabled.".to_string());
         }
 
         Ok(OptimizationConfig {
             free_variables,
             couplings,
-            operands: self.operands.clone(),
+            operands: active_operands,
             algorithm: self.algorithm.clone(),
             target_cost: self.target_cost,
         })
@@ -453,8 +468,8 @@ impl OptimizationModel {
 
     /// Updates the weight of an operand.
     pub fn update_operand_weight(&mut self, index: usize, weight: f64) {
-        if let Some(op) = self.operands.get_mut(index) {
-            match op {
+        if let Some(row) = self.operands.get_mut(index) {
+            match &mut row.operand {
                 StandardOperand::Target(t) => t.weight = weight,
                 StandardOperand::Threshold(t) => t.weight = weight,
                 StandardOperand::MaxTotalLength(t) => t.weight = weight,
@@ -464,16 +479,25 @@ impl OptimizationModel {
         }
     }
 
-    /// Adds a new operand to the merit function.
+    /// Adds a new operand to the merit function, automatically resolving group scope.
     pub fn add_operand(&mut self, operand: StandardOperand) {
-        self.operands.push(operand);
+        let gid = self.resolve_operand_group_id(&operand);
+        let is_enabled = match self.scope_group_id {
+            Some(target_gid) => gid == Some(target_gid),
+            None => true,
+        };
+        self.operands.push(UiOperandRow {
+            operand,
+            group_id: gid,
+            is_enabled,
+        });
         self.run_preflight_validation();
     }
 
     /// Updates the target goal of an operand (if applicable).
     pub fn update_operand_target(&mut self, index: usize, new_target: f64) {
-        if let Some(op) = self.operands.get_mut(index) {
-            match op {
+        if let Some(row) = self.operands.get_mut(index) {
+            match &mut row.operand {
                 StandardOperand::Target(t) => t.target = new_target,
                 StandardOperand::Threshold(t) => t.limit = new_target,
                 StandardOperand::MinEdgeThickness(t) => t.min_thickness = new_target,
@@ -561,11 +585,13 @@ impl OptimizationModel {
 
     /// Toggles the inequality direction for a Threshold operand (Upper <-> Lower).
     pub fn toggle_threshold_direction(&mut self, index: usize) {
-        if let Some(StandardOperand::Threshold(t)) = self.operands.get_mut(index) {
-            t.direction = match t.direction {
-                ThresholdDirection::Upper => ThresholdDirection::Lower,
-                ThresholdDirection::Lower => ThresholdDirection::Upper,
-            };
+        if let Some(row) = self.operands.get_mut(index) {
+            if let StandardOperand::Threshold(t) = &mut row.operand {
+                t.direction = match t.direction {
+                    ThresholdDirection::Upper => ThresholdDirection::Lower,
+                    ThresholdDirection::Lower => ThresholdDirection::Upper,
+                };
+            }
         }
         self.run_preflight_validation();
     }
@@ -651,7 +677,7 @@ impl OptimizationModel {
     /// Updates the operand target value from UI input, automatically converting mm to m for geometric constraints.
     pub fn update_operand_target_ui(&mut self, index: usize, ui_value: f64) {
         let is_geometric = matches!(
-            self.operands.get(index),
+            self.operands.get(index).map(|r| &r.operand),
             Some(StandardOperand::MinEdgeThickness(_)) | Some(StandardOperand::MaxTotalLength(_))
         );
         let model_val = if is_geometric {
@@ -687,6 +713,110 @@ impl OptimizationModel {
                     }
                 }
             }
+        }
+        self.run_preflight_validation();
+    }
+    /// Returns all unique groups (id, name) present in the schema variables and observables.
+    pub fn available_groups(&self) -> Vec<(Uuid, String)> {
+        let mut groups = Vec::new();
+        if let Some(schema) = &self.schema {
+            for var in &schema.controllable_variables {
+                if let Some(gid) = var.group_id {
+                    if !groups.iter().any(|(id, _)| id == &gid) {
+                        groups.push((gid, var.group_name.clone()));
+                    }
+                }
+            }
+            for obs in &schema.observable_metrics {
+                if let Some(gid) = obs.group_id {
+                    if !groups.iter().any(|(id, _)| id == &gid) {
+                        groups.push((gid, obs.group_name.clone()));
+                    }
+                }
+            }
+        }
+        groups.sort_by(|a, b| a.1.cmp(&b.1));
+        groups
+    }
+
+    /// Sets the active optimization scope and enables only relevant variables and operands.
+    pub fn set_scope(&mut self, scope: Option<Uuid>) {
+        self.scope_group_id = scope;
+
+        match scope {
+            Some(target_gid) => {
+                // 1. Filter variables: enable matching group, disable all others
+                for var in &mut self.variable_rows {
+                    if var.group_id == Some(target_gid) {
+                        if var.coupling.is_none() {
+                            var.is_enabled = true;
+                        }
+                    } else {
+                        var.is_enabled = false;
+                    }
+                }
+
+                // 2. Filter operands: enable matching group, disable all others
+                for op in &mut self.operands {
+                    op.is_enabled = op.group_id == Some(target_gid);
+                }
+            }
+            None => {
+                // "all" scope: reactivate all independent variables and all operands
+                for var in &mut self.variable_rows {
+                    if var.coupling.is_none() {
+                        var.is_enabled = true;
+                    }
+                }
+                for op in &mut self.operands {
+                    op.is_enabled = true;
+                }
+            }
+        }
+
+        self.run_preflight_validation();
+    }
+
+    /// Resolves the group ID for an operand based on its referenced node ID in the schema.
+    pub fn resolve_operand_group_id(&self, operand: &StandardOperand) -> Option<Uuid> {
+        let schema = self.schema.as_ref()?;
+        match operand {
+            StandardOperand::Target(t) => match &t.source {
+                MetricSource::Observable(obs) => schema
+                    .observable_metrics
+                    .iter()
+                    .find(|m| m.address.node_id == obs.node_id)
+                    .and_then(|m| m.group_id),
+                MetricSource::Parameter(_) => None,
+            },
+            StandardOperand::Threshold(t) => match &t.source {
+                MetricSource::Observable(obs) => schema
+                    .observable_metrics
+                    .iter()
+                    .find(|m| m.address.node_id == obs.node_id)
+                    .and_then(|m| m.group_id),
+                MetricSource::Parameter(_) => None,
+            },
+            StandardOperand::MinEdgeThickness(t) => schema
+                .controllable_variables
+                .iter()
+                .find(|v| match &v.address {
+                    ParameterAddress::SurfaceCurvature { node_id, .. } => *node_id == t.node_id,
+                    _ => false,
+                })
+                .and_then(|v| v.group_id),
+            StandardOperand::TransmissionPenalty(t) => schema
+                .observable_metrics
+                .iter()
+                .find(|m| m.address.node_id == t.address.node_id)
+                .and_then(|m| m.group_id),
+            StandardOperand::MaxTotalLength(_) => None,
+        }
+    }
+    /// Toggles the activation state of an individual operand.
+    pub fn toggle_operand(&mut self, index: usize) {
+        if let Some(row) = self.operands.get_mut(index) {
+            row.is_enabled = !row.is_enabled;
         }
         self.run_preflight_validation();
     }

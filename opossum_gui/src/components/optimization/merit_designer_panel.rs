@@ -59,6 +59,7 @@ pub fn MeritDesignerPanel(mut props: MeritDesignerProps) -> Element {
                 class: "table-active sticky-top",
                 style: "z-index: 1;",
                 tr {
+                  th { style: "width: 25px;", "" } // Checkbox Spalte
                   th { "Channel / Metric" }
                   th {
                     style: "width: 45px;",
@@ -158,13 +159,12 @@ struct OperandRowProps {
 fn OperandRow(mut props: OperandRowProps) -> Element {
     let model_read = props.model.read();
     let idx = props.index;
-
-    let Some(op) = model_read.operands.get(idx) else {
+    let Some(op_row) = model_read.operands.get(idx) else {
         return rsx! {};
     };
-
+    let op = &op_row.operand;
+    let is_enabled = op_row.is_enabled;
     let (badge_text, detail_text, op_symbol) = model_read.describe_operand_full(op);
-
     let (target_val, weight_val) = match op {
         StandardOperand::Target(t) => (t.target, t.weight),
         StandardOperand::Threshold(t) => (t.limit, t.weight),
@@ -172,20 +172,26 @@ fn OperandRow(mut props: OperandRowProps) -> Element {
         StandardOperand::MaxTotalLength(t) => (t.max_length * 1000.0, t.weight),
         StandardOperand::TransmissionPenalty(t) => (t.expected_rays, t.weight),
     };
-
     let is_threshold = matches!(op, StandardOperand::Threshold(_));
     let is_target = matches!(op, StandardOperand::Target(_));
-
     let badge_class = if badge_text == "Geometry" {
         "badge bg-warning text-dark font-sans"
     } else {
         "badge bg-primary text-light font-sans text-truncate"
     };
-
     drop(model_read);
 
     rsx! {
-      tr {
+      tr { class: if !is_enabled { "opacity-50" } else { "" },
+        // Checkbox column
+        td { class: "text-center px-1",
+          input {
+            r#type: "checkbox",
+            class: "form-check-input mt-0",
+            checked: is_enabled,
+            onchange: move |_| props.model.write().toggle_operand(idx),
+          }
+        }
         // Operand description & analyzer channel
         td {
           div { class: "d-flex align-items-center gap-1 mb-1",
@@ -202,7 +208,6 @@ fn OperandRow(mut props: OperandRowProps) -> Element {
             "{detail_text}"
           }
         }
-
         // Operator Symbol / Toggle button
         td { class: "text-center px-1",
           if is_threshold {
@@ -210,6 +215,7 @@ fn OperandRow(mut props: OperandRowProps) -> Element {
               class: "btn btn-outline-warning btn-sm p-0 fw-bold border-secondary font-monospace",
               style: "width: 28px; height: 22px; line-height: 20px;",
               title: "Click to toggle between upper (≤) and lower (≥) bound",
+              disabled: !is_enabled,
               onclick: move |_| props.model.write().toggle_threshold_direction(idx),
               "{op_symbol}"
             }
@@ -225,7 +231,6 @@ fn OperandRow(mut props: OperandRowProps) -> Element {
             span { class: "badge bg-secondary font-monospace", "{op_symbol}" }
           }
         }
-
         // Target/Limit Value Input
         td { class: "px-1",
           OperandNumberInput {
@@ -233,7 +238,6 @@ fn OperandRow(mut props: OperandRowProps) -> Element {
             on_commit: move |val| props.model.write().update_operand_target_ui(idx, val),
           }
         }
-
         // Weight Input
         td { class: "px-1",
           OperandNumberInput {
@@ -241,7 +245,6 @@ fn OperandRow(mut props: OperandRowProps) -> Element {
             on_commit: move |val| props.model.write().update_operand_weight(idx, val),
           }
         }
-
         // Delete
         td { class: "text-end px-1",
           button {

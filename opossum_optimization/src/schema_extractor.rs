@@ -23,9 +23,12 @@ impl SchemaExtractor {
     pub fn extract(doc: &OpmDocument) -> ModelOptimizationSchema {
         let mut schema = ModelOptimizationSchema::default();
 
-        // 1. Build a complete name lookup map for all nodes and groups across the scenery
+        // 1. Build complete name and group lookup maps for all nodes and groups across the scenery
         let mut node_names = HashMap::new();
         Self::collect_all_node_names(doc.scenery(), &mut node_names);
+
+        let mut node_groups = HashMap::new();
+        Self::collect_node_groups(doc.scenery(), "", &mut node_groups);
 
         // 2. Extract controllable variables from the scenery recursively
         Self::extract_from_group(doc.scenery(), "", &node_names, &mut schema);
@@ -63,6 +66,11 @@ impl SchemaExtractor {
                 }
                 let node_id = node_ref.uuid();
                 let node_name = node_ref.name().to_string();
+                let (group_id, group_name) = node_groups
+                    .get(&node_id)
+                    .cloned()
+                    .unwrap_or((None, "Main System".to_string()));
+
                 for descriptor in metrics {
                     schema.observable_metrics.push(DiscoveredObservable {
                         address: ObservableAddress {
@@ -70,6 +78,8 @@ impl SchemaExtractor {
                             node_id,
                             metric_name: descriptor.name.clone(),
                         },
+                        group_id,
+                        group_name: group_name.clone(),
                         analyzer_name: analyzer_name.clone(),
                         analyzer_kind: analyzer_kind.clone(),
                         node_name: node_name.clone(),
@@ -92,6 +102,35 @@ impl SchemaExtractor {
             map.insert(node_ref.uuid(), node_ref.name().to_string());
             if let Some(sub_group) = node_ref.as_any().downcast_ref::<NodeGroup>() {
                 Self::collect_all_node_names(sub_group, map);
+            }
+        }
+    }
+
+    /// Recursively maps each node to its parent group ID and formatted group path.
+    fn collect_node_groups(
+        group: &NodeGroup,
+        parent_path: &str,
+        map: &mut HashMap<Uuid, (Option<Uuid>, String)>,
+    ) {
+        let group_id = group.node_attr().uuid();
+        let raw_title = group.node_attr().name();
+        let current_group_name = if parent_path.is_empty() {
+            if raw_title.is_empty() || raw_title == "scenery" {
+                "Main System".to_string()
+            } else {
+                raw_title.to_string()
+            }
+        } else {
+            format!("{parent_path} / {raw_title}")
+        };
+
+        for node_ref in group.nodes() {
+            map.insert(
+                node_ref.uuid(),
+                (Some(group_id), current_group_name.clone()),
+            );
+            if let Some(sub_group) = node_ref.as_any().downcast_ref::<NodeGroup>() {
+                Self::collect_node_groups(sub_group, &current_group_name, map);
             }
         }
     }
