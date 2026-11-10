@@ -34,7 +34,8 @@ impl ParameterApplier {
                     1.0 / value
                 };
                 doc.scenery_mut().with_node_attr_mut(*node_id, |attr| {
-                    attr.properties_mut().set_internal_f64(property_name, radius_m)
+                    attr.properties_mut()
+                        .set_internal_f64(property_name, radius_m)
                 })?
             }
 

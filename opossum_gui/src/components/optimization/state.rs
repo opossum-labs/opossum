@@ -1,10 +1,9 @@
-use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 use opossum_optimization::{
     BoxBounds, CouplingType, DiscoveredVariable, FreeVariable, MetricSource,
     ModelOptimizationSchema, OptimizationAlgorithm, OptimizationConfig, ParameterAddress,
-    ParameterCoupling, StandardOperand, TargetValueOperand, ThresholdDirection, ThresholdOperand,
+    ParameterCoupling, StandardOperand, ThresholdDirection,
 };
 
 /// UI-specific representation of a tunable variable row in the dense table.
@@ -247,64 +246,6 @@ impl OptimizationModel {
             .unwrap_or_else(|| "Analyzer".to_string())
     }
 
-    /// Returns human-readable display components (badge_text, details) for an operand.
-    #[must_use]
-    pub fn describe_operand(&self, operand: &StandardOperand) -> (String, String) {
-        match operand {
-            StandardOperand::Target(t) => match &t.source {
-                MetricSource::Observable(obs) => {
-                    let aname = self.analyzer_name(obs.analyzer_id);
-                    let nname = self
-                        .schema
-                        .as_ref()
-                        .and_then(|s| {
-                            s.observable_metrics
-                                .iter()
-                                .find(|m| m.address.node_id == obs.node_id)
-                                .map(|m| m.node_name.clone())
-                        })
-                        .unwrap_or_else(|| "Detector".to_string());
-                    (format!("{aname}"), format!("{nname} → {}", obs.metric_name))
-                }
-                MetricSource::Parameter(_) => ("Parameter".to_string(), t.name.clone()),
-            },
-            StandardOperand::Threshold(t) => match &t.source {
-                MetricSource::Observable(obs) => {
-                    let aname = self.analyzer_name(obs.analyzer_id);
-                    (
-                        format!("{aname}"),
-                        format!("Threshold on {}", obs.metric_name),
-                    )
-                }
-                MetricSource::Parameter(_) => ("Limit".to_string(), t.name.clone()),
-            },
-            StandardOperand::MinEdgeThickness(t) => {
-                let node_name = self
-                    .schema
-                    .as_ref()
-                    .and_then(|s| {
-                        s.edge_thickness_nodes
-                            .iter()
-                            .find(|n| n.node_id == t.node_id)
-                            .map(|n| n.node_name.clone())
-                    })
-                    .unwrap_or_else(|| t.node_id.to_string());
-                (
-                    "Geometry".to_string(),
-                    format!("{node_name} → Min Edge Thickness"),
-                )
-            }
-            StandardOperand::MaxTotalLength(_) => (
-                "Geometry".to_string(),
-                "Maximum System Track Length".to_string(),
-            ),
-            StandardOperand::TransmissionPenalty(t) => {
-                let aname = self.analyzer_name(t.address.analyzer_id);
-                (format!("{aname}"), "Vignetting / Loss Penalty".to_string())
-            }
-        }
-    }
-
     /// Removes a variable by index.
     pub fn remove_variable(&mut self, index: usize) {
         if index < self.variable_rows.len() {
@@ -391,23 +332,6 @@ impl OptimizationModel {
             .iter_mut()
             .find(|r| &r.address == address)
         {
-            row.max_bound = max;
-        }
-        self.run_preflight_validation();
-    }
-    /// Updates the box bounds for a given variable.
-    pub fn update_bounds(
-        &mut self,
-        address: &ParameterAddress,
-        min: Option<f64>,
-        max: Option<f64>,
-    ) {
-        if let Some(row) = self
-            .variable_rows
-            .iter_mut()
-            .find(|r| &r.address == address)
-        {
-            row.min_bound = min;
             row.max_bound = max;
         }
         self.run_preflight_validation();
@@ -647,41 +571,6 @@ impl OptimizationModel {
         self.run_preflight_validation();
     }
 
-    /// Converts an observable operand between TargetValue and Threshold.
-    pub fn convert_operand_type(&mut self, index: usize) {
-        if let Some(op) = self.operands.get(index) {
-            let new_op = match op {
-                StandardOperand::Target(t) => StandardOperand::Threshold(ThresholdOperand {
-                    name: t.name.clone(),
-                    source: t.source.clone(),
-                    limit: t.target,
-                    direction: ThresholdDirection::Upper,
-                    weight: t.weight,
-                    scale: t.scale,
-                }),
-                StandardOperand::Threshold(t) => StandardOperand::Target(TargetValueOperand {
-                    name: t.name.clone(),
-                    source: t.source.clone(),
-                    target: t.limit,
-                    weight: t.weight,
-                    scale: t.scale,
-                }),
-                other => other.clone(),
-            };
-            self.operands[index] = new_op;
-        }
-        self.run_preflight_validation();
-    }
-
-    /// Toggles all variables within a specific group on or off.
-    pub fn toggle_all_in_group(&mut self, group_name: &str, enable: bool) {
-        for row in &mut self.variable_rows {
-            if row.group_name == group_name && row.coupling.is_none() {
-                row.is_enabled = enable;
-            }
-        }
-        self.run_preflight_validation();
-    }
     /// Returns the active algorithm identifier as a string key.
     pub fn algorithm_kind(&self) -> &'static str {
         match self.algorithm {
@@ -766,7 +655,11 @@ impl OptimizationModel {
             self.operands.get(index),
             Some(StandardOperand::MinEdgeThickness(_)) | Some(StandardOperand::MaxTotalLength(_))
         );
-        let model_val = if is_geometric { ui_value * 1e-3 } else { ui_value };
+        let model_val = if is_geometric {
+            ui_value * 1e-3
+        } else {
+            ui_value
+        };
         self.update_operand_target(index, model_val);
     }
     pub fn reset_to_initial_baseline(&mut self) {
@@ -780,7 +673,8 @@ impl OptimizationModel {
                     row.current_value = discovered.initial_value;
                     // Bounds passend zum ursprünglichen Wert neu initialisieren
                     let is_curv = matches!(row.address, ParameterAddress::SurfaceCurvature { .. });
-                    let is_dist = matches!(row.address, ParameterAddress::ConnectionDistance { .. });
+                    let is_dist =
+                        matches!(row.address, ParameterAddress::ConnectionDistance { .. });
                     if is_curv {
                         if discovered.initial_value.abs() > 1e-6 {
                             let r_mm = 1000.0 / discovered.initial_value;

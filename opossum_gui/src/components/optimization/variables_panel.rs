@@ -389,8 +389,8 @@ pub fn CouplingDialog(mut model: Signal<OptimizationModel>, mut open: Signal<boo
     let mut target_idx = use_signal(|| 0_usize);
     let mut source_idx = use_signal(|| if vars.len() > 1 { 1 } else { 0 });
     let mut rule_kind = use_signal(|| "Opposite");
-    let mut affine_factor = use_signal(|| -1.0_f64);
-    let mut affine_offset = use_signal(|| 0.0_f64);
+    let affine_factor = use_signal(|| -1.0_f64);
+    let affine_offset = use_signal(|| 0.0_f64);
 
     let create_coupling = move |_| {
         let rows = model.read().variable_rows.clone();

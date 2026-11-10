@@ -1,4 +1,3 @@
-use crate::components::primitives::button::{Button, ButtonSize, ButtonVariant};
 use dioxus::prelude::*;
 use dioxus_free_icons::{
     Icon,
@@ -96,7 +95,7 @@ pub fn LiveMonitorPanel(mut props: LiveMonitorProps) -> Element {
             }
           }
         }
-// Algorithm-Specific Controls for Simulated Annealing
+        // Algorithm-Specific Controls for Simulated Annealing
         if current_algo_kind == "SimulatedAnnealing" {
           div { class: "row g-2 mb-2 p-2 rounded bg-black bg-opacity-50 border border-secondary",
             div { class: "col-6",

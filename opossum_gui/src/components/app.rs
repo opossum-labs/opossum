@@ -1,13 +1,24 @@
 // --- Common imports ---
 use crate::{
-    APP_CONFIG, api::get_api_welcome, backend_status::BackendStatus, components::{
-        catalog_editor::{CatalogSynchronizer, MaterialCatalog}, context_menu::cx_menu::{ContextMenu, CxtCommand}, logger::logger_component::Logger, menu_bar::{
+    APP_CONFIG,
+    api::get_api_welcome,
+    backend_status::BackendStatus,
+    components::{
+        catalog_editor::{CatalogSynchronizer, MaterialCatalog},
+        context_menu::cx_menu::{ContextMenu, CxtCommand},
+        logger::logger_component::Logger,
+        menu_bar::{
             menu_bar_component::{AppCommand, MenuBar},
             project_helper::{select_open_path, select_save_path},
-        }, optimization::OptimizationModal, primitives::alert_dialog::{
+        },
+        optimization::OptimizationModal,
+        primitives::alert_dialog::{
             AlertDialog, AlertDialogAction, AlertDialogActions, AlertDialogCancel,
             AlertDialogDescription, AlertDialogTitle,
-        }, scenery_editor::{GraphEditor, NodeEditorCommand}, settings_dialog::SettingsDialog, short_cuts::{PendingAction, SHORTCUTS, Shortcut},
+        },
+        scenery_editor::{GraphEditor, NodeEditorCommand},
+        settings_dialog::SettingsDialog,
+        short_cuts::{PendingAction, SHORTCUTS, Shortcut},
     },
 };
 use dioxus::prelude::*;

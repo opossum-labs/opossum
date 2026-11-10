@@ -221,13 +221,14 @@ impl MeritFunction {
 
         // 2. Clone blueprint and apply candidate parameters
         let mut working_doc = self.blueprint.clone();
-        let parameter_map = match ParameterResolver::resolve(&self.free_variables, &self.couplings, x) {
-            Ok(map) => map,
-            Err(_) => {
-                let fallback_val = (self.fatal_penalty / (n_ops + n_vars) as f64).sqrt();
-                return DVector::from_element(n_ops + n_vars, fallback_val);
-            }
-        };
+        let parameter_map =
+            match ParameterResolver::resolve(&self.free_variables, &self.couplings, x) {
+                Ok(map) => map,
+                Err(_) => {
+                    let fallback_val = (self.fatal_penalty / (n_ops + n_vars) as f64).sqrt();
+                    return DVector::from_element(n_ops + n_vars, fallback_val);
+                }
+            };
 
         for (address, value) in parameter_map {
             if ParameterApplier::set_value(&mut working_doc, &address, value).is_err() {

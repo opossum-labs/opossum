@@ -12,5 +12,5 @@ pub mod short_cuts;
 pub mod simulation;
 // pub mod plot;
 pub mod catalog_editor;
-pub mod primitives;
 pub mod optimization;
+pub mod primitives;

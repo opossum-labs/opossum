@@ -1,12 +1,19 @@
 use argmin::{
-    core::{Executor, State, TerminationReason}, solver::{
-        linesearch::{BacktrackingLineSearch, MoreThuenteLineSearch, condition::ArmijoCondition}, neldermead::NelderMead, quasinewton::LBFGS, simulatedannealing::{SATempFunc, SimulatedAnnealing},
+    core::{Executor, State, TerminationReason},
+    solver::{
+        linesearch::{BacktrackingLineSearch, condition::ArmijoCondition},
+        neldermead::NelderMead,
+        quasinewton::LBFGS,
     },
 };
 use std::sync::{Arc, atomic::AtomicBool};
 
 use crate::{
-    DampedLeastSquares, OptimizationConfig, OptimizationProgressEvent, algorithm::OptimizationAlgorithm, applier::ParameterApplier, coupling::ParameterCoupling, dls::DlsIterState, merit::MeritFunction, operand::Operand, progress::ProgressObserver, reader::MetricReader, resolver::ParameterResolver, summary::OptimizationSummary, variable::{FiniteDifferenceMethod, FreeVariable},
+    DampedLeastSquares, OptimizationConfig, OptimizationProgressEvent,
+    algorithm::OptimizationAlgorithm, applier::ParameterApplier, asa::AdaptiveSimulatedAnnealing,
+    coupling::ParameterCoupling, dls::DlsIterState, merit::MeritFunction, operand::Operand,
+    progress::ProgressObserver, reader::MetricReader, resolver::ParameterResolver,
+    summary::OptimizationSummary, variable::FreeVariable,
 };
 use opossum_core::{
     error::{OpmResult, OpossumError},
@@ -300,13 +307,16 @@ impl<'a> OpticOptimizer<'a> {
                 let merit = merit.with_gradient_method(gradient_method);
 
                 // Armijo condition with relaxed slope c1 = 1e-4
-                let condition = ArmijoCondition::new(1e-4)
-                    .map_err(|e| OpossumError::Other(format!("Failed to create Armijo condition: {e}")))?;
+                let condition = ArmijoCondition::new(1e-4).map_err(|e| {
+                    OpossumError::Other(format!("Failed to create Armijo condition: {e}"))
+                })?;
 
                 // Robust geometric backtracking line search (contraction rho = 0.8)
                 let linesearch = BacktrackingLineSearch::new(condition)
                     .rho(0.8)
-                    .map_err(|e| OpossumError::Other(format!("Failed to set backtracking line search: {e}")))?;
+                    .map_err(|e| {
+                        OpossumError::Other(format!("Failed to set backtracking line search: {e}"))
+                    })?;
 
                 let solver = LBFGS::new(linesearch, history_size)
                     .with_tolerance_grad(gradient_tolerance)
@@ -327,18 +337,11 @@ impl<'a> OpticOptimizer<'a> {
                 max_iterations,
                 initial_temperature,
                 cooling_rate,
-                stall_best,
-                stall_accepted,
-                reannealing_fixed,
+                ..
             } => {
-                let mut solver = SimulatedAnnealing::new(initial_temperature)
-                    .map_err(|e| OpossumError::Other(format!("Failed to init SA: {e}")))?
-                    .with_temp_func(SATempFunc::Exponential(cooling_rate))
-                    .with_stall_best(stall_best)
-                    .with_stall_accepted(stall_accepted);
-                if let Some(reanneal_steps) = reannealing_fixed {
-                    solver = solver.with_reannealing_fixed(reanneal_steps);
-                }
+                let solver =
+                    AdaptiveSimulatedAnnealing::new(&merit, initial_temperature, cooling_rate)
+                        .with_adaptation_cycle(20);
                 Executor::new(merit, solver)
                     .configure(|state| {
                         state
@@ -448,12 +451,15 @@ impl<'a> OpticOptimizer<'a> {
             } => {
                 let merit = merit.with_gradient_method(gradient_method);
 
-                let condition = ArmijoCondition::new(1e-4)
-                    .map_err(|e| OpossumError::Other(format!("Failed to create Armijo condition: {e}")))?;
+                let condition = ArmijoCondition::new(1e-4).map_err(|e| {
+                    OpossumError::Other(format!("Failed to create Armijo condition: {e}"))
+                })?;
 
                 let linesearch = BacktrackingLineSearch::new(condition)
                     .rho(0.8)
-                    .map_err(|e| OpossumError::Other(format!("Failed to set backtracking line search: {e}")))?;
+                    .map_err(|e| {
+                        OpossumError::Other(format!("Failed to set backtracking line search: {e}"))
+                    })?;
 
                 let solver = LBFGS::new(linesearch, history_size)
                     .with_tolerance_grad(gradient_tolerance)
@@ -475,18 +481,13 @@ impl<'a> OpticOptimizer<'a> {
                 max_iterations,
                 initial_temperature,
                 cooling_rate,
-                stall_best,
-                stall_accepted,
-                reannealing_fixed,
+                ..
             } => self.execute_simulated_annealing(
                 merit,
                 initial_vector,
                 max_iterations,
                 initial_temperature,
                 cooling_rate,
-                stall_best,
-                stall_accepted,
-                reannealing_fixed,
             ),
             OptimizationAlgorithm::Dls {
                 max_iterations,
@@ -551,52 +552,6 @@ impl<'a> OpticOptimizer<'a> {
         })
     }
 
-    fn execute_lbfgs(
-        &self,
-        merit: MeritFunction,
-        initial_vector: Vec<f64>,
-        max_iterations: u64,
-        gradient_tolerance: f64,
-        history_size: usize,
-        gradient_method: FiniteDifferenceMethod,
-    ) -> OpmResult<SolverOutcome> {
-        let merit = merit.with_gradient_method(gradient_method);
-        let linesearch = MoreThuenteLineSearch::new()
-            .with_c(1e-4, 0.9)
-            .map_err(|e| OpossumError::Other(format!("Failed to set line search: {e}")))?;
-        let solver = LBFGS::new(linesearch, history_size)
-            .with_tolerance_grad(gradient_tolerance)
-            .map_err(|e| OpossumError::Other(format!("Failed to set tolerance: {e}")))?;
-
-        let res = Executor::new(merit, solver)
-            .configure(|state| {
-                state
-                    .param(initial_vector)
-                    .max_iters(max_iterations)
-                    .target_cost(self.target_cost)
-            })
-            .run()
-            .map_err(|e| OpossumError::Other(format!("L-BFGS failed: {e}")))?;
-
-        let state = res.state();
-        let best_params = state
-            .best_param
-            .clone()
-            .ok_or_else(|| OpossumError::Other("L-BFGS produced no solution".to_string()))?;
-
-        let converged = match state.get_termination_reason() {
-            Some(TerminationReason::TargetCostReached | TerminationReason::SolverConverged) => true,
-            _ => state.best_cost <= self.target_cost,
-        };
-
-        Ok(SolverOutcome {
-            best_params,
-            final_cost: state.best_cost,
-            iterations: state.iter,
-            converged,
-        })
-    }
-
     #[allow(clippy::too_many_arguments)]
     fn execute_simulated_annealing(
         &self,
@@ -605,19 +560,9 @@ impl<'a> OpticOptimizer<'a> {
         max_iterations: u64,
         initial_temperature: f64,
         cooling_rate: f64,
-        stall_best: u64,
-        stall_accepted: u64,
-        reannealing_fixed: Option<u64>,
     ) -> OpmResult<SolverOutcome> {
-        let mut solver = SimulatedAnnealing::new(initial_temperature)
-            .map_err(|e| OpossumError::Other(format!("Failed to init Simulated Annealing: {e}")))?
-            .with_temp_func(SATempFunc::Exponential(cooling_rate))
-            .with_stall_best(stall_best)
-            .with_stall_accepted(stall_accepted);
-
-        if let Some(reanneal_steps) = reannealing_fixed {
-            solver = solver.with_reannealing_fixed(reanneal_steps);
-        }
+        let solver = AdaptiveSimulatedAnnealing::new(&merit, initial_temperature, cooling_rate)
+            .with_adaptation_cycle(20);
 
         let res = Executor::new(merit, solver)
             .configure(|state| {

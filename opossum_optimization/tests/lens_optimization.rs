@@ -3,7 +3,8 @@ mod common;
 use common::build_kepler_setup;
 use opossum_core::{error::OpmResult, micrometer, millimeter};
 use opossum_optimization::{
-    BoxBounds, FreeVariable, MetricReader, ObservableAddress, OpticOptimizer, OptimizationAlgorithm, ParameterAddress, ParameterCoupling, TargetValueOperand,
+    BoxBounds, FreeVariable, MetricReader, ObservableAddress, OpticOptimizer,
+    OptimizationAlgorithm, ParameterAddress, ParameterCoupling, TargetValueOperand,
 };
 
 #[test]

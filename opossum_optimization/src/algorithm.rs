@@ -79,8 +79,8 @@ impl OptimizationAlgorithm {
             max_iterations: 10_000,
             initial_temperature: 100.0, // Should be roughly comparable to initial merit cost
             cooling_rate: 0.995,        // Slow geometric cooling
-            stall_best: u64::MAX,       // Do not abort early just because no new global best was found
-            stall_accepted: 1_000,      // Terminate only after 1000 consecutive rejected steps
+            stall_best: u64::MAX, // Do not abort early just because no new global best was found
+            stall_accepted: 1_000, // Terminate only after 1000 consecutive rejected steps
             reannealing_fixed: None,
         }
     }
@@ -124,7 +124,7 @@ impl OptimizationAlgorithm {
             Self::LBFGS {
                 gradient_tolerance, ..
             } => *gradient_tolerance = tol,
-            Self::SimulatedAnnealing { .. } | Self::Dls { ..} => {}
+            Self::SimulatedAnnealing { .. } | Self::Dls { .. } => {}
         }
         self
     }

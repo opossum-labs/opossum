@@ -2,7 +2,7 @@ use crate::components::primitives::button::{Button, ButtonSize, ButtonVariant};
 use dioxus::prelude::*;
 use dioxus_free_icons::{
     Icon,
-    icons::fa_solid_icons::{FaCube, FaFilter, FaFloppyDisk, FaFolderOpen, FaWandMagicSparkles},
+    icons::fa_solid_icons::{FaCube, FaFloppyDisk, FaFolderOpen, FaWandMagicSparkles},
 };
 
 #[component]

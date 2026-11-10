@@ -2,7 +2,8 @@ use argmin::core::{Error, KV, State, observers::Observe};
 use opossum_core::error::OpossumError;
 use serde::{Deserialize, Serialize};
 use std::sync::{
-    Arc, Mutex, atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+    atomic::{AtomicBool, Ordering},
 };
 
 use crate::{

@@ -1,7 +1,7 @@
 use crate::components::primitives::{
     alert_dialog::{
-        AlertDialog, AlertDialogActions, AlertDialogCancel,
-        AlertDialogDescription, AlertDialogTitle,
+        AlertDialog, AlertDialogActions, AlertDialogCancel, AlertDialogDescription,
+        AlertDialogTitle,
     },
     button::{Button, ButtonSize, ButtonVariant},
     scroll_area::ScrollArea,
@@ -16,9 +16,9 @@ use dioxus_free_icons::{
 };
 use dioxus_primitives::alert_dialog::AlertDialogContent;
 use opossum_optimization::{
-    default_scale_for_metric, DiscoveredObservable, MaxTotalLengthOperand,
-    MinEdgeThicknessOperand, ParameterAddress, StandardOperand, TargetValueOperand,
-    ThresholdDirection, ThresholdOperand, TransmissionPenaltyOperand,
+    DiscoveredObservable, MaxTotalLengthOperand, MinEdgeThicknessOperand, ParameterAddress,
+    StandardOperand, TargetValueOperand, ThresholdDirection, ThresholdOperand,
+    TransmissionPenaltyOperand, default_scale_for_metric,
 };
 
 use super::state::OptimizationModel;
