@@ -89,6 +89,8 @@ impl SchemaExtractor {
             }
         }
 
+        schema.saved_config = doc.optimization_config().cloned();
+
         schema
     }
 

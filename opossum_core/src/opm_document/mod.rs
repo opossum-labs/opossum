@@ -9,11 +9,13 @@
 mod analysis;
 mod analyzer_info;
 mod io;
+pub mod optimization;
 
 #[cfg(test)]
 mod tests;
 
 pub use analyzer_info::AnalyzerInfo;
+pub use optimization::OptimizationConfig;
 
 use crate::{
     analyzers::AnalyzerType,
@@ -51,6 +53,8 @@ pub struct OpmDocument {
     pub(crate) amplifier_nodes: HashSet<Uuid>,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     pub(crate) embedded_materials: IndexMap<Uuid, Material>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) optimization_config: Option<OptimizationConfig>,
     #[serde(skip)]
     metric_store: MetricStore,
 }
@@ -64,6 +68,7 @@ impl Default for OpmDocument {
             pump_scenarios: IndexMap::default(),
             amplifier_nodes: HashSet::default(),
             embedded_materials: IndexMap::default(),
+            optimization_config: None,
             metric_store: HashMap::new(),
         }
     }
@@ -259,5 +264,16 @@ impl OpmDocument {
     #[must_use]
     pub const fn metric_store(&self) -> &MetricStore {
         &self.metric_store
+    }
+
+    /// Returns the optimization configuration of this [`OpmDocument`], if configured.
+    #[must_use]
+    pub const fn optimization_config(&self) -> Option<&OptimizationConfig> {
+        self.optimization_config.as_ref()
+    }
+
+    /// Sets or clears the optimization configuration of this [`OpmDocument`].
+    pub fn set_optimization_config(&mut self, config: Option<OptimizationConfig>) {
+        self.optimization_config = config;
     }
 }

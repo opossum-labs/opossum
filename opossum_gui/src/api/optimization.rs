@@ -37,6 +37,13 @@ pub async fn post_start_optimization(config: OptimizationConfig) -> Result<Strin
         .await
 }
 
+/// Saves an optimization configuration to the loaded document in the backend.
+pub async fn post_save_optimization_config(config: OptimizationConfig) -> Result<String, String> {
+    HTTP_API_CLIENT()
+        .post_ron::<OptimizationConfig, String>("/api/optimization/config", config)
+        .await
+}
+
 /// Requests the backend to abort an actively running optimization job.
 ///
 /// When aborted, the optimizer safely restores or retains the best parameter

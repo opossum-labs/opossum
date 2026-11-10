@@ -66,7 +66,8 @@ pub async fn start_optimization(
     data.optimization.cancel_flag.store(false, Ordering::SeqCst);
 
     let (working_doc, original_values) = {
-        let doc = data.document.lock();
+        let mut doc = data.document.lock();
+        doc.set_optimization_config(Some(opt_config.clone()));
         snapshot_blueprint_and_values(&doc, &opt_config)
     };
 
@@ -229,8 +230,41 @@ fn spawn_optimization_worker(
     });
 }
 
+/// Set optimization configuration on current document
+#[utoipa::path(
+    tag = "optimization",
+    request_body(
+        content = String,
+        description = "OptimizationConfig in RON format",
+        content_type = "application/ron"
+    ),
+    responses(
+        (status = OK, description = "Optimization configuration saved to document")
+    )
+)]
+#[post("/config")]
+pub async fn save_config(
+    data: web::Data<AppState>,
+    body: String,
+) -> Result<HttpResponse, BackEndErrorResponse> {
+    let opt_config: OptimizationConfig = ron::from_str(&body)
+        .or_else(|ron_err| serde_json::from_str(&body).map_err(|_| ron_err))
+        .map_err(|e| {
+            BackEndErrorResponse::new(
+                400,
+                "Parse Error",
+                &format!("Invalid optimization payload: {e}"),
+            )
+        })?;
+
+    let mut doc = data.document.lock();
+    doc.set_optimization_config(Some(opt_config));
+    Ok(HttpResponse::Ok().json("Optimization config saved"))
+}
+
 pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_schema);
+    cfg.service(save_config);
     cfg.service(start_optimization);
     cfg.service(abort_optimization);
     cfg.service(optimization_events);
@@ -495,5 +529,50 @@ mod test {
 
         let resp = app.call(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::ACCEPTED);
+    }
+
+    #[actix_web::test]
+    async fn test_save_config_and_schema_saved_config() {
+        let (app_state, _, spot_id, _) = setup_test_app();
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(get_schema)
+                .service(save_config),
+        )
+        .await;
+
+        let dist_addr = ParameterAddress::ConnectionDistance {
+            src_id: spot_id,
+            src_port: "output_1".into(),
+        };
+
+        let config = OptimizationConfig::new()
+            .with_variable(FreeVariable::new(dist_addr, "dist"))
+            .with_target_cost(1e-5);
+
+        let ron_payload = ron::to_string(&config).unwrap();
+
+        // 1. Post to save_config
+        let req = test::TestRequest::post()
+            .uri("/config")
+            .set_payload(ron_payload)
+            .insert_header(("Content-Type", "application/ron"))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // Verify document in app_state has the config
+        {
+            let doc = app_state.document.lock();
+            assert_eq!(doc.optimization_config(), Some(&config));
+        }
+
+        // 2. Get schema and verify saved_config is populated
+        let req = test::TestRequest::get().uri("/schema").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let schema: opossum_optimization::ModelOptimizationSchema = test::read_body_json(resp).await;
+        assert_eq!(schema.saved_config, Some(config));
     }
 }

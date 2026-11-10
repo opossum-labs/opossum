@@ -107,6 +107,37 @@ impl UiVariableRow {
                 .map_err(|e| e.to_string())
         }
     }
+
+    /// Converts solver BoxBounds in SI units back into designer UI bounds.
+    #[must_use]
+    pub fn ui_bounds_from_box_bounds(
+        address: &ParameterAddress,
+        bounds: BoxBounds,
+    ) -> (Option<f64>, Option<f64>) {
+        if matches!(address, ParameterAddress::SurfaceCurvature { .. }) {
+            if bounds.min > 0.0 && bounds.max > 0.0 {
+                (Some(1000.0 / bounds.max), Some(1000.0 / bounds.min))
+            } else if bounds.min < 0.0 && bounds.max < 0.0 {
+                (Some(1000.0 / bounds.max), Some(1000.0 / bounds.min))
+            } else {
+                let b_min = if bounds.min < 0.0 {
+                    1000.0 / bounds.min
+                } else {
+                    -50.0
+                };
+                let b_max = if bounds.max > 0.0 {
+                    1000.0 / bounds.max
+                } else {
+                    50.0
+                };
+                (Some(b_min), Some(b_max))
+            }
+        } else if matches!(address, ParameterAddress::ConnectionDistance { .. }) {
+            (Some(bounds.min * 1000.0), Some(bounds.max * 1000.0))
+        } else {
+            (Some(bounds.min), Some(bounds.max))
+        }
+    }
 }
 
 /// UI-specific representation of a merit function operand.
@@ -165,24 +196,164 @@ impl Default for OptimizationModel {
 }
 
 impl OptimizationModel {
+    /// Loads an optimization configuration into the reactive UI model.
+    pub fn apply_config(&mut self, config: &OptimizationConfig) {
+        self.algorithm = config.algorithm.clone();
+        self.target_cost = config.target_cost;
+        self.variable_rows.clear();
+        self.operands.clear();
+
+        for var in &config.free_variables {
+            let (min_b, max_b) = var.bounds.map_or((None, None), |b| {
+                UiVariableRow::ui_bounds_from_box_bounds(&var.address, b)
+            });
+
+            let mut row = UiVariableRow {
+                address: var.address.clone(),
+                group_id: None,
+                group_name: "Main System".to_string(),
+                node_name: var.name.clone(),
+                property_name: var.name.clone(),
+                current_value: var.initial_value.unwrap_or(0.0),
+                is_enabled: true,
+                min_bound: min_b,
+                max_bound: max_b,
+                coupling: None,
+            };
+
+            if let Some(schema) = &self.schema {
+                if let Some(discovered) = schema
+                    .controllable_variables
+                    .iter()
+                    .find(|v| v.address == var.address)
+                {
+                    row.group_id = discovered.group_id;
+                    row.group_name = discovered.group_name.clone();
+                    row.node_name = discovered.node_name.clone();
+                    row.property_name = discovered.display_name.clone();
+                    row.current_value = discovered.initial_value;
+                }
+            }
+
+            self.variable_rows.push(row);
+        }
+
+        for coupling in &config.couplings {
+            let mut row = UiVariableRow {
+                address: coupling.target.clone(),
+                group_id: None,
+                group_name: "Main System".to_string(),
+                node_name: String::new(),
+                property_name: String::new(),
+                current_value: 0.0,
+                is_enabled: false,
+                min_bound: None,
+                max_bound: None,
+                coupling: Some(coupling.rule.clone()),
+            };
+
+            if let Some(schema) = &self.schema {
+                if let Some(discovered) = schema
+                    .controllable_variables
+                    .iter()
+                    .find(|v| v.address == coupling.target)
+                {
+                    row.group_id = discovered.group_id;
+                    row.group_name = discovered.group_name.clone();
+                    row.node_name = discovered.node_name.clone();
+                    row.property_name = discovered.display_name.clone();
+                    row.current_value = discovered.initial_value;
+                }
+            }
+
+            self.variable_rows.push(row);
+        }
+
+        for operand in &config.operands {
+            let group_id = match operand {
+                StandardOperand::Target(t) => match &t.source {
+                    MetricSource::Observable(addr) => self.schema.as_ref().and_then(|s| {
+                        s.observable_metrics
+                            .iter()
+                            .find(|m| &m.address == addr)
+                            .and_then(|m| m.group_id)
+                    }),
+                    MetricSource::Parameter(addr) => self.schema.as_ref().and_then(|s| {
+                        s.controllable_variables
+                            .iter()
+                            .find(|v| &v.address == addr)
+                            .and_then(|v| v.group_id)
+                    }),
+                },
+                StandardOperand::Threshold(t) => match &t.source {
+                    MetricSource::Observable(addr) => self.schema.as_ref().and_then(|s| {
+                        s.observable_metrics
+                            .iter()
+                            .find(|m| &m.address == addr)
+                            .and_then(|m| m.group_id)
+                    }),
+                    MetricSource::Parameter(addr) => self.schema.as_ref().and_then(|s| {
+                        s.controllable_variables
+                            .iter()
+                            .find(|v| &v.address == addr)
+                            .and_then(|v| v.group_id)
+                    }),
+                },
+                StandardOperand::MinEdgeThickness(m) => self.schema.as_ref().and_then(|s| {
+                    s.controllable_variables
+                        .iter()
+                        .find(|v| match v.address {
+                            ParameterAddress::NodeProperty { node_id, .. }
+                            | ParameterAddress::SurfaceCurvature { node_id, .. } => {
+                                node_id == m.node_id
+                            }
+                            ParameterAddress::ConnectionDistance { .. } => false,
+                        })
+                        .and_then(|v| v.group_id)
+                }),
+                StandardOperand::TransmissionPenalty(p) => self.schema.as_ref().and_then(|s| {
+                    s.observable_metrics
+                        .iter()
+                        .find(|m| &m.address == &p.address)
+                        .and_then(|m| m.group_id)
+                }),
+                StandardOperand::MaxTotalLength(_) => None,
+            };
+
+            self.operands.push(UiOperandRow {
+                operand: operand.clone(),
+                group_id,
+                is_enabled: true,
+            });
+        }
+
+        self.run_preflight_validation();
+    }
+
     /// Initializes or refreshes the model using an extracted schema.
     /// Populates or updates the active rows using newly discovered schema information.
     pub fn populate_from_schema(&mut self, schema: ModelOptimizationSchema) {
-        for row in &mut self.variable_rows {
-            if let Some(discovered) = schema
-                .controllable_variables
-                .iter()
-                .find(|v| v.address == row.address)
-            {
-                row.group_id = discovered.group_id;
-                row.group_name = discovered.group_name.clone();
-                row.current_value = discovered.initial_value;
-                row.node_name = discovered.node_name.clone();
-                row.property_name = discovered.display_name.clone();
-            }
-        }
+        let saved_config = schema.saved_config.clone();
         self.schema = Some(schema);
-        self.run_preflight_validation();
+
+        if let Some(config) = saved_config {
+            self.apply_config(&config);
+        } else {
+            for row in &mut self.variable_rows {
+                if let Some(discovered) = self
+                    .schema
+                    .as_ref()
+                    .and_then(|s| s.controllable_variables.iter().find(|v| v.address == row.address))
+                {
+                    row.group_id = discovered.group_id;
+                    row.group_name = discovered.group_name.clone();
+                    row.current_value = discovered.initial_value;
+                    row.node_name = discovered.node_name.clone();
+                    row.property_name = discovered.display_name.clone();
+                }
+            }
+            self.run_preflight_validation();
+        }
     }
 
     /// Updates parameter current values directly from optimization results.
@@ -368,6 +539,45 @@ impl OptimizationModel {
         }
         self.run_preflight_validation();
     }
+    /// Converts current UI state into an `OptimizationConfig` without strict start validation.
+    pub fn to_optimization_config(&self) -> OptimizationConfig {
+        let mut free_variables = Vec::new();
+        let mut couplings = Vec::new();
+
+        for row in &self.variable_rows {
+            if let Some(rule) = &row.coupling {
+                couplings.push(ParameterCoupling {
+                    target: row.address.clone(),
+                    rule: rule.clone(),
+                });
+            } else if row.is_enabled {
+                let mut var = FreeVariable::new(row.address.clone(), row.property_name.clone())
+                    .with_initial_value(row.current_value);
+
+                if let Ok(Some(bounds)) = row.solver_bounds() {
+                    var = var.with_bounds(bounds);
+                }
+
+                free_variables.push(var);
+            }
+        }
+
+        let active_operands: Vec<StandardOperand> = self
+            .operands
+            .iter()
+            .filter(|op| op.is_enabled)
+            .map(|op| op.operand.clone())
+            .collect();
+
+        OptimizationConfig {
+            free_variables,
+            couplings,
+            operands: active_operands,
+            algorithm: self.algorithm.clone(),
+            target_cost: self.target_cost,
+        }
+    }
+
     /// Assembles the complete serializable payload expected by `POST /api/optimization/start`.
     pub fn build_optimization_config(&self) -> Result<OptimizationConfig, String> {
         let mut free_variables = Vec::new();
@@ -819,5 +1029,76 @@ impl OptimizationModel {
             row.is_enabled = !row.is_enabled;
         }
         self.run_preflight_validation();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use opossum_optimization::{ThresholdDirection, ThresholdOperand};
+
+    #[test]
+    fn test_populate_from_schema_with_saved_config() {
+        let node_id = Uuid::new_v4();
+        let addr = ParameterAddress::NodeProperty {
+            node_id,
+            property_name: "thickness".to_string(),
+        };
+
+        let var = FreeVariable::new(addr.clone(), "thickness")
+            .with_initial_value(0.02)
+            .with_bounds(BoxBounds::new(0.01, 0.05).unwrap());
+
+        let operand = StandardOperand::Threshold(ThresholdOperand::new(
+            "Max Thickness",
+            addr.clone(),
+            0.04,
+            ThresholdDirection::Upper,
+            1.0,
+            1e-3,
+        ));
+
+        let config = OptimizationConfig::new()
+            .with_variable(var)
+            .with_operand(operand)
+            .with_algorithm(OptimizationAlgorithm::dls())
+            .with_target_cost(1e-6);
+
+        let mut schema = ModelOptimizationSchema::default();
+        schema.saved_config = Some(config);
+        schema.controllable_variables.push(DiscoveredVariable {
+            address: addr.clone(),
+            group_id: None,
+            group_name: "Group 1".to_string(),
+            node_name: "Lens 1".to_string(),
+            display_name: "Thickness".to_string(),
+            initial_value: 0.02,
+            is_read_only: false,
+        });
+
+        let mut model = OptimizationModel::default();
+        assert!(model.variable_rows.is_empty());
+        assert!(model.operands.is_empty());
+
+        model.populate_from_schema(schema);
+
+        // Variables restored
+        assert_eq!(model.variable_rows.len(), 1);
+        let row = &model.variable_rows[0];
+        assert_eq!(row.address, addr);
+        assert_eq!(row.node_name, "Lens 1");
+        assert_eq!(row.property_name, "Thickness");
+        assert_eq!(row.min_bound, Some(0.01));
+        assert_eq!(row.max_bound, Some(0.05));
+        assert!(row.is_enabled);
+
+        // Operands restored
+        assert_eq!(model.operands.len(), 1);
+        assert_eq!(model.operands[0].operand.name(), "Max Thickness");
+        assert!(model.operands[0].is_enabled);
+
+        // Algorithm & cost restored
+        assert!(matches!(model.algorithm, OptimizationAlgorithm::Dls { .. }));
+        assert_eq!(model.target_cost, 1e-6);
     }
 }

@@ -1,6 +1,7 @@
 use crate::api::{
-    eval_action_run, get_optimization_schema, post_abort_optimization, post_start_optimization,
-    subscribe_optimization_events, undo_document,
+    eval_action_run, get_optimization_schema, post_abort_optimization,
+    post_save_optimization_config, post_start_optimization, subscribe_optimization_events,
+    undo_document,
 };
 use crate::components::primitives::{
     alert_dialog::{AlertDialog, AlertDialogActions, AlertDialogCancel, AlertDialogDescription},
@@ -197,10 +198,22 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
         });
     };
 
+    let sync_config_to_backend = move || {
+        let config = model.read().to_optimization_config();
+        spawn(async move {
+            let _ = post_save_optimization_config(config).await;
+        });
+    };
+
     rsx! {
       AlertDialog {
         open: open(),
-        on_open_change: move |v: bool| open.set(v),
+        on_open_change: move |v: bool| {
+          if !v {
+            sync_config_to_backend();
+          }
+          open.set(v);
+        },
         max_width: "90rem".to_string(),
         AlertDialogDescription {
           Card {
@@ -389,7 +402,13 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
           }
         }
         AlertDialogActions {
-          AlertDialogCancel { on_click: move |_| open.set(false), "Close Window" }
+          AlertDialogCancel {
+            on_click: move |_| {
+              sync_config_to_backend();
+              open.set(false);
+            },
+            "Close Window"
+          }
         }
       }
 
