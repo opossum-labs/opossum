@@ -196,7 +196,8 @@ impl MeritFunction {
     }
     /// Evaluates the signed residual vector R(x) for all operands and box bounds.
     ///
-    /// The sum of squares ||R(x)||^2 strictly equals the scalar cost Phi(x).
+    /// The sum of squares `||R(x)||^2` strictly equals the scalar cost `Phi(x)`.
+    #[must_use]
     pub fn evaluate_residuals(&self, x: &[f64]) -> DVector<f64> {
         let n_vars = self.free_variables.len();
         let n_ops = self.operands.len();
@@ -205,7 +206,7 @@ impl MeritFunction {
         // 1. Box bounds penalty residuals
         let mut bound_residuals = Vec::with_capacity(n_vars);
         for (var, &val) in self.free_variables.iter().zip(x.iter()) {
-            let res = if let Some(bounds) = &var.bounds {
+            let res = var.bounds.as_ref().map_or(0.0, |bounds| {
                 if val < bounds.min {
                     (bounds.min - val) * self.bounds_penalty_weight.sqrt()
                 } else if val > bounds.max {
@@ -213,21 +214,18 @@ impl MeritFunction {
                 } else {
                     0.0
                 }
-            } else {
-                0.0
-            };
+            });
             bound_residuals.push(res);
         }
 
         // 2. Clone blueprint and apply candidate parameters
         let mut working_doc = self.blueprint.clone();
         let parameter_map =
-            match ParameterResolver::resolve(&self.free_variables, &self.couplings, x) {
-                Ok(map) => map,
-                Err(_) => {
-                    let fallback_val = (self.fatal_penalty / (n_ops + n_vars) as f64).sqrt();
-                    return DVector::from_element(n_ops + n_vars, fallback_val);
-                }
+            if let Ok(map) = ParameterResolver::resolve(&self.free_variables, &self.couplings, x) {
+                map
+            } else {
+                let fallback_val = (self.fatal_penalty / (n_ops + n_vars) as f64).sqrt();
+                return DVector::from_element(n_ops + n_vars, fallback_val);
             };
 
         for (address, value) in parameter_map {
@@ -263,7 +261,8 @@ impl MeritFunction {
         DVector::from_vec(residuals)
     }
 
-    /// Computes the m x n Jacobian matrix J_ij = d(r_i) / d(x_j) using parallel central finite differences.
+    /// Computes the `m x n` Jacobian matrix `J_ij = d(r_i) / d(x_j)` using parallel central finite differences.
+    #[must_use]
     pub fn compute_jacobian(&self, x: &[f64], _base_residuals: &DVector<f64>) -> DMatrix<f64> {
         let n = self.free_variables.len();
         let m = self.operands.len() + n; // Operands plus box-bounds residuals

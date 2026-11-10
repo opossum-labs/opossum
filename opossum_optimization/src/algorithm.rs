@@ -28,7 +28,7 @@ pub enum OptimizationAlgorithm {
         max_iterations: u64,
         /// Initial temperature T0.
         initial_temperature: f64,
-        /// Geometric cooling rate alpha in T_{k+1} = alpha * T_k (e.g. 0.85 .. 0.99).
+        /// Geometric cooling rate alpha in `T_{k+1} = alpha * T_k` (e.g. 0.85 .. 0.99).
         cooling_rate: f64,
         stall_best: u64,
         stall_accepted: u64,

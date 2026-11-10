@@ -69,7 +69,7 @@ impl SchemaExtractor {
                 let (group_id, group_name) = node_groups
                     .get(&node_id)
                     .cloned()
-                    .unwrap_or((None, "Main System".to_string()));
+                    .unwrap_or_else(|| (None, "Main System".to_string()));
 
                 for descriptor in metrics {
                     schema.observable_metrics.push(DiscoveredObservable {

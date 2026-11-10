@@ -76,10 +76,10 @@ where
         let param_vec = state.get_best_param().or_else(|| state.get_param());
 
         // Bisherigen Best-Zustand für einen vorzeitigen Abort sichern
-        if let Some(p) = param_vec {
-            if let Ok(mut lock) = self.best_tracker.lock() {
-                *lock = Some((p.clone(), state.get_best_cost(), state.get_iter()));
-            }
+        if let Some(p) = param_vec
+            && let Ok(mut lock) = self.best_tracker.lock()
+        {
+            *lock = Some((p.clone(), state.get_best_cost(), state.get_iter()));
         }
 
         let current_params = if let Some(p) = param_vec {

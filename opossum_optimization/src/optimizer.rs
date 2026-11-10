@@ -223,8 +223,8 @@ impl<'a> OpticOptimizer<'a> {
         let max_iters = match self.algorithm {
             OptimizationAlgorithm::NelderMead { max_iterations, .. }
             | OptimizationAlgorithm::LBFGS { max_iterations, .. }
-            | OptimizationAlgorithm::SimulatedAnnealing { max_iterations, .. } => max_iterations,
-            OptimizationAlgorithm::Dls { max_iterations, .. } => max_iterations,
+            | OptimizationAlgorithm::SimulatedAnnealing { max_iterations, .. }
+            | OptimizationAlgorithm::Dls { max_iterations, .. } => max_iterations,
         };
 
         progress_callback(OptimizationProgressEvent::Started {
@@ -247,7 +247,7 @@ impl<'a> OpticOptimizer<'a> {
         );
 
         let outcome =
-            self.execute_solver_with_observer(merit, initial_vector, observer, best_tracker)?;
+            self.execute_solver_with_observer(merit, &initial_vector, observer, &best_tracker)?;
 
         // Parameter auflösen und in das Dokument schreiben
         let resolved_map = ParameterResolver::resolve(
@@ -274,9 +274,9 @@ impl<'a> OpticOptimizer<'a> {
     fn execute_solver_with_observer(
         &self,
         merit: MeritFunction,
-        initial_vector: Vec<f64>,
+        initial_vector: &[f64],
         observer: ProgressObserver,
-        best_tracker: Arc<std::sync::Mutex<Option<(Vec<f64>, f64, u64)>>>,
+        best_tracker: &Arc<std::sync::Mutex<Option<(Vec<f64>, f64, u64)>>>,
     ) -> OpmResult<SolverOutcome> {
         let run_result = match self.algorithm {
             OptimizationAlgorithm::NelderMead {
@@ -325,7 +325,7 @@ impl<'a> OpticOptimizer<'a> {
                 Executor::new(merit, solver)
                     .configure(|state| {
                         state
-                            .param(initial_vector.clone())
+                            .param(initial_vector.to_vec())
                             .max_iters(max_iterations)
                             .target_cost(self.target_cost)
                     })
@@ -345,7 +345,7 @@ impl<'a> OpticOptimizer<'a> {
                 Executor::new(merit, solver)
                     .configure(|state| {
                         state
-                            .param(initial_vector.clone())
+                            .param(initial_vector.to_vec())
                             .max_iters(max_iterations)
                             .target_cost(self.target_cost)
                     })
@@ -365,7 +365,7 @@ impl<'a> OpticOptimizer<'a> {
                 Executor::new(merit, solver)
                     .configure(|state: DlsIterState| {
                         state
-                            .param(initial_vector.clone())
+                            .param(initial_vector.to_vec())
                             .max_iters(max_iterations)
                             .target_cost(self.target_cost)
                     })
@@ -379,17 +379,16 @@ impl<'a> OpticOptimizer<'a> {
             Ok(inner_res) => inner_res,
             Err(e) => {
                 // Bei Nutzerabbruch: Bisher besten Zustand aus dem Tracker retten
-                if e.to_string().contains("cancelled by user") {
-                    if let Ok(guard) = best_tracker.lock() {
-                        if let Some((best_params, final_cost, iterations)) = guard.clone() {
-                            return Ok(SolverOutcome {
-                                best_params,
-                                final_cost,
-                                iterations,
-                                converged: false,
-                            });
-                        }
-                    }
+                if e.to_string().contains("cancelled by user")
+                    && let Ok(guard) = best_tracker.lock()
+                    && let Some((best_params, final_cost, iterations)) = guard.clone()
+                {
+                    return Ok(SolverOutcome {
+                        best_params,
+                        final_cost,
+                        iterations,
+                        converged: false,
+                    });
                 }
                 Err(OpossumError::Other(format!("Optimization failed: {e}")))
             }

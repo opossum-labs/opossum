@@ -92,7 +92,7 @@ impl<O> Solver<O, AsaIterState> for AdaptiveSimulatedAnnealing
 where
     O: CostFunction<Param = Vec<f64>, Output = f64>,
 {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Adaptive Simulated Annealing (Corana 1/5 Rule)"
     }
 

@@ -21,7 +21,7 @@ pub struct DampedLeastSquares {
 impl DampedLeastSquares {
     /// Creates a new DLS solver bound to the given merit function.
     #[must_use]
-    pub fn new(merit: MeritFunction) -> Self {
+    pub const fn new(merit: MeritFunction) -> Self {
         Self {
             merit,
             initial_damping: 1e-3,
@@ -57,7 +57,7 @@ impl DampedLeastSquares {
 }
 
 impl<O> Solver<O, DlsIterState> for DampedLeastSquares {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "Damped Least Squares (Levenberg-Marquardt)"
     }
 
@@ -141,8 +141,10 @@ impl<O> Solver<O, DlsIterState> for DampedLeastSquares {
                 let cost_cand = r_cand.norm_squared();
 
                 let actual_reduction = current_cost - cost_cand;
-                let pred_reduction =
-                    -delta_x.dot(&g) - 0.5 * (delta_x.transpose() * &a * &delta_x)[(0, 0)];
+                let pred_reduction = 0.5f64.mul_add(
+                    -(delta_x.transpose() * &a * &delta_x)[(0, 0)],
+                    -delta_x.dot(&g),
+                );
 
                 if actual_reduction > 0.0 {
                     let rho = if pred_reduction.abs() > 1e-12 {
@@ -152,7 +154,7 @@ impl<O> Solver<O, DlsIterState> for DampedLeastSquares {
                     };
 
                     // Adaptive damping update (Marquardt-Nielsen)
-                    let factor = (1.0 - (2.0 * rho - 1.0).powi(3)).clamp(0.1, 0.5);
+                    let factor = (1.0 - (2.0f64.mul_add(rho, -1.0)).powi(3)).clamp(0.1, 0.5);
                     self.damping = (self.damping * factor).max(self.min_damping);
                     self.nu = 2.0;
 
@@ -160,11 +162,10 @@ impl<O> Solver<O, DlsIterState> for DampedLeastSquares {
                     best_cost_new = cost_cand;
                     step_accepted = true;
                     break;
-                } else {
-                    // Step rejected: increase damping and contract search radius
-                    self.damping = (self.damping * self.nu).min(self.max_damping);
-                    self.nu *= 2.0;
                 }
+                // Step rejected: increase damping and contract search radius
+                self.damping = (self.damping * self.nu).min(self.max_damping);
+                self.nu *= 2.0;
             } else {
                 self.damping = (self.damping * self.nu).min(self.max_damping);
                 self.nu *= 2.0;
@@ -178,7 +179,7 @@ impl<O> Solver<O, DlsIterState> for DampedLeastSquares {
             let grad_step: Vec<f64> = x
                 .iter()
                 .zip(g.iter())
-                .map(|(&xi, &gi)| xi - (1e-4 / (self.damping + 1.0)) * gi)
+                .map(|(&xi, &gi)| (1e-4 / (self.damping + 1.0)).mul_add(-gi, xi))
                 .collect();
             let cost_forced = self.merit.evaluate_residuals(&grad_step).norm_squared();
             if cost_forced < current_cost {
