@@ -19,6 +19,8 @@ use opossum_optimization::{CouplingType, DiscoveredVariable, ParameterAddress};
 
 use super::state::OptimizationModel;
 
+type DiscoveredVariableHierarchy = Vec<(String, Vec<(String, Vec<DiscoveredVariable>)>)>;
+
 #[derive(Props, Clone, PartialEq)]
 pub struct VariablesPanelProps {
     pub model: Signal<OptimizationModel>,
@@ -28,27 +30,30 @@ pub struct VariablesPanelProps {
 
 #[component]
 pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
-    let rows = props.model.read().variable_rows.clone();
-
-    // Group rows by group_name while keeping the original row index for mutations
-    let mut grouped_vars: Vec<(String, Vec<(usize, UiVariableRow)>)> = Vec::new();
-    for (idx, row) in rows.iter().enumerate() {
-        if let Some((_, list)) = grouped_vars
-            .iter_mut()
-            .find(|(name, _)| name == &row.group_name)
-        {
-            list.push((idx, row.clone()));
-        } else {
-            grouped_vars.push((row.group_name.clone(), vec![(idx, row.clone())]));
+    let grouped_vars = use_memo(move || {
+        let rows = props.model.read().variable_rows.clone();
+        let mut groups: Vec<(String, Vec<UiVariableRow>)> = Vec::new();
+        for row in rows {
+            if let Some((_, list)) = groups
+                .iter_mut()
+                .find(|(name, _)| name == &row.group_name)
+            {
+                list.push(row);
+            } else {
+                groups.push((row.group_name.clone(), vec![row]));
+            }
         }
-    }
+        groups
+    });
+
+    let total_vars = use_memo(move || props.model.read().variable_rows.len());
 
     rsx! {
       div { class: "border rounded p-2 bg-dark text-light h-100 d-flex flex-column",
         div { class: "d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom border-secondary gap-2",
           div { class: "fw-bold small d-flex align-items-center gap-1",
             Icon { icon: FaSliders }
-            "Tuned Parameters ({rows.len()})"
+            "Tuned Parameters ({total_vars})"
           }
           div { class: "d-flex align-items-center gap-2",
             Button {
@@ -62,7 +67,7 @@ pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
             Button {
               variant: ButtonVariant::Outline,
               size: ButtonSize::Sm,
-              disabled: rows.len() < 2,
+              disabled: total_vars() < 2,
               title: "Create parameter coupling (e.g. R2 = -R1)",
               onclick: move |_| props.show_coupling_dialog.set(true),
               Icon { icon: FaLink }
@@ -90,7 +95,7 @@ pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
                 }
               }
               tbody {
-                for (group_name , group_rows) in grouped_vars.iter() {
+                for (group_name , group_rows) in grouped_vars.read().iter() {
                   // Group Header Banner
                   tr { class: "table-secondary bg-black bg-opacity-75 border-top border-secondary",
                     td {
@@ -112,12 +117,12 @@ pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
                   }
 
                   // Rows belonging to this group
-                  for & (idx , ref row) in group_rows.iter() {
+                  for row in group_rows.iter() {
                     {
                         let (main_val, sub_val) = row.display_current();
                         rsx! {
                           tr {
-                            key: "{row.property_name}_{idx}",
+                            key: "{row.address:?}",
                             class: if !row.is_enabled && row.coupling.is_none() { "opacity-50" } else { "" },
 
                             // Checkbox
@@ -216,7 +221,10 @@ pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
                                 class: "btn btn-outline-danger btn-sm p-0 border-0",
                                 style: "line-height: 1;",
                                 title: "Remove variable",
-                                onclick: move |_| props.model.write().remove_variable(idx),
+                                onclick: {
+                                    let addr = row.address.clone();
+                                    move |_| props.model.write().remove_variable(&addr)
+                                },
                                 Icon { icon: FaTrash }
                               }
                             }
@@ -226,7 +234,7 @@ pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
                   }
                 }
 
-                if rows.is_empty() {
+                if total_vars() == 0 {
                   tr {
                     td {
                       colspan: "7",
@@ -246,37 +254,40 @@ pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
 /// Dialog allowing user to select controllable variables from the model schema grouped by NodeGroup and Node.
 #[component]
 pub fn AddVariableDialog(mut model: Signal<OptimizationModel>, mut open: Signal<bool>) -> Element {
-    let schema_opt = model.read().schema.clone();
     let current_rows = model.read().variable_rows.clone();
 
     // Grouping: group_name -> (node_name -> Vec<DiscoveredVariable>)
-    let mut grouped_hierarchy: Vec<(String, Vec<(String, Vec<DiscoveredVariable>)>)> = Vec::new();
+    let grouped_hierarchy = use_memo(move || {
+        let schema_opt = model.read().schema.clone();
+        let mut hierarchy: DiscoveredVariableHierarchy = Vec::new();
 
-    if let Some(schema) = &schema_opt {
-        for var in schema
-            .controllable_variables
-            .iter()
-            .filter(|v| !v.is_read_only)
-        {
-            // 1. Group level
-            let group_entry = if let Some(pos) = grouped_hierarchy
+        if let Some(schema) = &schema_opt {
+            for var in schema
+                .controllable_variables
                 .iter()
-                .position(|(g, _)| g == &var.group_name)
+                .filter(|v| !v.is_read_only)
             {
-                &mut grouped_hierarchy[pos].1
-            } else {
-                grouped_hierarchy.push((var.group_name.clone(), Vec::new()));
-                &mut grouped_hierarchy.last_mut().unwrap().1
-            };
+                // 1. Group level
+                let group_entry = if let Some(pos) = hierarchy
+                    .iter()
+                    .position(|(g, _)| g == &var.group_name)
+                {
+                    &mut hierarchy[pos].1
+                } else {
+                    hierarchy.push((var.group_name.clone(), Vec::new()));
+                    &mut hierarchy.last_mut().unwrap().1
+                };
 
-            // 2. Node level
-            if let Some(node_pos) = group_entry.iter().position(|(n, _)| n == &var.node_name) {
-                group_entry[node_pos].1.push(var.clone());
-            } else {
-                group_entry.push((var.node_name.clone(), vec![var.clone()]));
+                // 2. Node level
+                if let Some(node_pos) = group_entry.iter().position(|(n, _)| n == &var.node_name) {
+                    group_entry[node_pos].1.push(var.clone());
+                } else {
+                    group_entry.push((var.node_name.clone(), vec![var.clone()]));
+                }
             }
         }
-    }
+        hierarchy
+    });
 
     rsx! {
       AlertDialog {
@@ -295,10 +306,10 @@ pub fn AddVariableDialog(mut model: Signal<OptimizationModel>, mut open: Signal<
                   "Select optical parameters organized by group and component:"
                 }
 
-                if !grouped_hierarchy.is_empty() {
+                if !grouped_hierarchy.read().is_empty() {
                   ScrollArea { height: "22rem",
                     div { class: "d-flex flex-column gap-2",
-                      for (group_name , node_list) in grouped_hierarchy {
+                      for (group_name , node_list) in grouped_hierarchy.read().iter() {
                         div { class: "border border-secondary rounded overflow-hidden bg-black bg-opacity-50",
                           // Level 1: NodeGroup Header
                           div { class: "bg-black py-1 px-2 text-warning fw-bold small d-flex align-items-center gap-2 border-bottom border-secondary text-uppercase",
@@ -389,8 +400,8 @@ pub fn CouplingDialog(mut model: Signal<OptimizationModel>, mut open: Signal<boo
     let mut target_idx = use_signal(|| 0_usize);
     let mut source_idx = use_signal(|| if vars.len() > 1 { 1 } else { 0 });
     let mut rule_kind = use_signal(|| "Opposite");
-    let affine_factor = use_signal(|| -1.0_f64);
-    let affine_offset = use_signal(|| 0.0_f64);
+    let mut affine_factor = use_signal(|| -1.0_f64);
+    let mut affine_offset = use_signal(|| 0.0_f64);
 
     let create_coupling = move |_| {
         let rows = model.read().variable_rows.clone();
@@ -467,6 +478,38 @@ pub fn CouplingDialog(mut model: Signal<OptimizationModel>, mut open: Signal<boo
                     }
                   }
                 }
+                if *rule_kind.read() == "Affine" {
+                  div { class: "row g-2 p-2 rounded bg-black bg-opacity-50 border border-secondary",
+                    div { class: "col-6",
+                      label { class: "form-label small text-info mb-1", "Scale Factor" }
+                      input {
+                        r#type: "number",
+                        step: "any",
+                        class: "form-control form-control-sm bg-black text-light border-secondary font-monospace text-end",
+                        value: "{affine_factor}",
+                        oninput: move |e| {
+                            if let Ok(v) = e.value().parse::<f64>() {
+                                affine_factor.set(v);
+                            }
+                        },
+                      }
+                    }
+                    div { class: "col-6",
+                      label { class: "form-label small text-info mb-1", "Offset" }
+                      input {
+                        r#type: "number",
+                        step: "any",
+                        class: "form-control form-control-sm bg-black text-light border-secondary font-monospace text-end",
+                        value: "{affine_offset}",
+                        oninput: move |e| {
+                            if let Ok(v) = e.value().parse::<f64>() {
+                                affine_offset.set(v);
+                            }
+                        },
+                      }
+                    }
+                  }
+                }
                 div {
                   label { class: "form-label small text-info mb-1",
                     "Driving Source Variable"
@@ -522,28 +565,29 @@ fn BoundInput(value: Option<f64>, on_commit: EventHandler<Option<f64>>) -> Eleme
         })
     };
 
+    let val_memo = use_memo(use_reactive!(|value| value));
     let mut text = use_signal(|| format_val(value));
-    let mut last_external = use_signal(|| value);
 
-    // Synchronize if the bound was updated externally (e.g. from Rule Assistants)
-    if *last_external.read() != value {
-        last_external.set(value);
-        text.set(format_val(value));
-    }
+    // Synchronize cleanly when bound updates from outside (e.g. from Rule Assistants)
+    use_effect(move || {
+        let current = *val_memo.read();
+        let formatted = format_val(current);
+        if formatted != *text.peek() {
+            text.set(formatted);
+        }
+    });
 
     let mut commit = move || {
         let raw = text.read().trim().to_string();
         if raw.is_empty() {
-            last_external.set(None);
             text.set(String::new());
             on_commit.call(None);
         } else if let Ok(parsed) = raw.parse::<f64>() {
-            last_external.set(Some(parsed));
             text.set(format_val(Some(parsed)));
             on_commit.call(Some(parsed));
         } else {
             // Revert invalid strings back to last valid value
-            text.set(format_val(*last_external.read()));
+            text.set(format_val(*val_memo.peek()));
         }
     };
 

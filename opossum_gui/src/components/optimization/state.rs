@@ -1,3 +1,4 @@
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 use opossum_optimization::{
@@ -115,9 +116,7 @@ impl UiVariableRow {
         bounds: BoxBounds,
     ) -> (Option<f64>, Option<f64>) {
         if matches!(address, ParameterAddress::SurfaceCurvature { .. }) {
-            if bounds.min > 0.0 && bounds.max > 0.0 {
-                (Some(1000.0 / bounds.max), Some(1000.0 / bounds.min))
-            } else if bounds.min < 0.0 && bounds.max < 0.0 {
+            if (bounds.min > 0.0 && bounds.max > 0.0) || (bounds.min < 0.0 && bounds.max < 0.0) {
                 (Some(1000.0 / bounds.max), Some(1000.0 / bounds.min))
             } else {
                 let b_min = if bounds.min < 0.0 {
@@ -143,6 +142,7 @@ impl UiVariableRow {
 /// UI-specific representation of a merit function operand.
 #[derive(Clone, PartialEq, Debug)]
 pub struct UiOperandRow {
+    pub id: Uuid,
     pub operand: StandardOperand,
     pub group_id: Option<Uuid>,
     pub is_enabled: bool,
@@ -221,18 +221,17 @@ impl OptimizationModel {
                 coupling: None,
             };
 
-            if let Some(schema) = &self.schema {
-                if let Some(discovered) = schema
+            if let Some(schema) = &self.schema
+                && let Some(discovered) = schema
                     .controllable_variables
                     .iter()
                     .find(|v| v.address == var.address)
-                {
-                    row.group_id = discovered.group_id;
-                    row.group_name = discovered.group_name.clone();
-                    row.node_name = discovered.node_name.clone();
-                    row.property_name = discovered.display_name.clone();
-                    row.current_value = discovered.initial_value;
-                }
+            {
+                row.group_id = discovered.group_id;
+                row.group_name = discovered.group_name.clone();
+                row.node_name = discovered.node_name.clone();
+                row.property_name = discovered.display_name.clone();
+                row.current_value = discovered.initial_value;
             }
 
             self.variable_rows.push(row);
@@ -252,18 +251,17 @@ impl OptimizationModel {
                 coupling: Some(coupling.rule.clone()),
             };
 
-            if let Some(schema) = &self.schema {
-                if let Some(discovered) = schema
+            if let Some(schema) = &self.schema
+                && let Some(discovered) = schema
                     .controllable_variables
                     .iter()
                     .find(|v| v.address == coupling.target)
-                {
-                    row.group_id = discovered.group_id;
-                    row.group_name = discovered.group_name.clone();
-                    row.node_name = discovered.node_name.clone();
-                    row.property_name = discovered.display_name.clone();
-                    row.current_value = discovered.initial_value;
-                }
+            {
+                row.group_id = discovered.group_id;
+                row.group_name = discovered.group_name.clone();
+                row.node_name = discovered.node_name.clone();
+                row.property_name = discovered.display_name.clone();
+                row.current_value = discovered.initial_value;
             }
 
             self.variable_rows.push(row);
@@ -314,13 +312,14 @@ impl OptimizationModel {
                 StandardOperand::TransmissionPenalty(p) => self.schema.as_ref().and_then(|s| {
                     s.observable_metrics
                         .iter()
-                        .find(|m| &m.address == &p.address)
+                        .find(|m| m.address == p.address)
                         .and_then(|m| m.group_id)
                 }),
                 StandardOperand::MaxTotalLength(_) => None,
             };
 
             self.operands.push(UiOperandRow {
+                id: Uuid::new_v4(),
                 operand: operand.clone(),
                 group_id,
                 is_enabled: true,
@@ -424,22 +423,21 @@ impl OptimizationModel {
             .unwrap_or_else(|| "Analyzer".to_string())
     }
 
-    /// Removes a variable by index.
-    pub fn remove_variable(&mut self, index: usize) {
-        if index < self.variable_rows.len() {
-            let removed_addr = self.variable_rows[index].address.clone();
-            self.variable_rows.remove(index);
+    /// Removes a variable by parameter address.
+    pub fn remove_variable(&mut self, address: &ParameterAddress) {
+        if let Some(pos) = self.variable_rows.iter().position(|r| &r.address == address) {
+            self.variable_rows.remove(pos);
 
             // Also clear any couplings that referenced this variable as source
             for row in &mut self.variable_rows {
                 if let Some(rule) = &row.coupling {
                     let has_ref = match rule {
                         CouplingType::Identical { source } | CouplingType::Opposite { source } => {
-                            source == &removed_addr
+                            source == address
                         }
-                        CouplingType::Affine { source, .. } => source == &removed_addr,
+                        CouplingType::Affine { source, .. } => source == address,
                         CouplingType::TotalLengthLock { other_segments, .. } => {
-                            other_segments.contains(&removed_addr)
+                            other_segments.contains(address)
                         }
                     };
                     if has_ref {
@@ -630,19 +628,18 @@ impl OptimizationModel {
         let mut issues = Vec::new();
 
         for row in &self.variable_rows {
-            if row.is_enabled {
-                if let (Some(min), Some(max)) = (row.min_bound, row.max_bound) {
-                    if min >= max {
-                        issues.push(ValidationIssue {
-                            severity: ValidationSeverity::Error,
-                            message: format!(
-                                "{}: Lower bound ({min}) must be less than upper bound ({max}).",
-                                row.node_name
-                            ),
-                            target_address: Some(row.address.clone()),
-                        });
-                    }
-                }
+            if row.is_enabled
+                && let (Some(min), Some(max)) = (row.min_bound, row.max_bound)
+                && min >= max
+            {
+                issues.push(ValidationIssue {
+                    severity: ValidationSeverity::Error,
+                    message: format!(
+                        "{}: Lower bound ({min}) must be less than upper bound ({max}).",
+                        row.node_name
+                    ),
+                    target_address: Some(row.address.clone()),
+                });
             }
         }
 
@@ -666,19 +663,145 @@ impl OptimizationModel {
             }
         }
 
+        // Coupling integrity and cycle detection
+        let mut coupling_deps: HashMap<&ParameterAddress, Vec<&ParameterAddress>> = HashMap::new();
+
+        for row in &self.variable_rows {
+            if let Some(rule) = &row.coupling {
+                let deps: Vec<&ParameterAddress> = match rule {
+                    CouplingType::Identical { source } | CouplingType::Opposite { source } => {
+                        vec![source]
+                    }
+                    CouplingType::Affine { source, .. } => vec![source],
+                    CouplingType::TotalLengthLock { other_segments, .. } => {
+                        other_segments.iter().collect()
+                    }
+                };
+
+                // Check self-reference
+                if deps.contains(&&row.address) {
+                    issues.push(ValidationIssue {
+                        severity: ValidationSeverity::Error,
+                        message: format!(
+                            "Coupling on '{} ({})' cannot reference itself.",
+                            row.node_name, row.property_name
+                        ),
+                        target_address: Some(row.address.clone()),
+                    });
+                }
+
+                // Check unresolvable dependencies
+                for &dep in &deps {
+                    let dep_row = self.variable_rows.iter().find(|r| &r.address == dep);
+                    let is_resolvable = match dep_row {
+                        Some(r) => (r.is_enabled && r.coupling.is_none()) || r.coupling.is_some(),
+                        None => false,
+                    };
+                    if !is_resolvable {
+                        let dep_name = dep_row
+                            .map(|r| format!("{} ({})", r.node_name, r.property_name))
+                            .unwrap_or_else(|| "Unknown variable".to_string());
+                        issues.push(ValidationIssue {
+                            severity: ValidationSeverity::Error,
+                            message: format!(
+                                "Coupling on '{} ({})' depends on '{dep_name}', which is neither an active variable nor a coupled parameter.",
+                                row.node_name, row.property_name
+                            ),
+                            target_address: Some(row.address.clone()),
+                        });
+                    }
+                }
+
+                coupling_deps.insert(&row.address, deps);
+            }
+        }
+
+        // DFS Cycle Detection (White = 0, Gray = 1, Black = 2)
+        let mut visit_state: HashMap<&ParameterAddress, u8> = HashMap::new();
+        let mut reported_cycles: Vec<HashSet<&ParameterAddress>> = Vec::new();
+
+        fn dfs_find_cycle<'a>(
+            node: &'a ParameterAddress,
+            graph: &HashMap<&'a ParameterAddress, Vec<&'a ParameterAddress>>,
+            state: &mut HashMap<&'a ParameterAddress, u8>,
+            path: &mut Vec<&'a ParameterAddress>,
+        ) -> Option<Vec<&'a ParameterAddress>> {
+            state.insert(node, 1);
+            path.push(node);
+
+            if let Some(neighbors) = graph.get(node) {
+                for &next in neighbors {
+                    match state.get(next).copied().unwrap_or(0) {
+                        1 => {
+                            if let Some(pos) = path.iter().position(|&p| p == next) {
+                                let mut cycle = path[pos..].to_vec();
+                                cycle.push(next);
+                                return Some(cycle);
+                            }
+                            return Some(vec![node, next]);
+                        }
+                        0 => {
+                            if let Some(cycle) = dfs_find_cycle(next, graph, state, path) {
+                                return Some(cycle);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
+            path.pop();
+            state.insert(node, 2);
+            None
+        }
+
+        for &target in coupling_deps.keys() {
+            if visit_state.get(target).copied().unwrap_or(0) == 0 {
+                let mut path = Vec::new();
+                if let Some(cycle) =
+                    dfs_find_cycle(target, &coupling_deps, &mut visit_state, &mut path)
+                {
+                    let cycle_set: HashSet<&ParameterAddress> = cycle.iter().copied().collect();
+                    if !reported_cycles.iter().any(|existing| existing == &cycle_set) {
+                        reported_cycles.push(cycle_set);
+
+                        let cycle_display: Vec<String> = cycle
+                            .iter()
+                            .map(|addr| {
+                                self.variable_rows
+                                    .iter()
+                                    .find(|r| &r.address == *addr)
+                                    .map(|r| format!("{}: {}", r.node_name, r.property_name))
+                                    .unwrap_or_else(|| "Unknown".to_string())
+                            })
+                            .collect();
+
+                        issues.push(ValidationIssue {
+                            severity: ValidationSeverity::Error,
+                            message: format!(
+                                "Cyclic parameter coupling detected: {}",
+                                cycle_display.join(" → ")
+                            ),
+                            target_address: Some((*target).clone()),
+                        });
+                    }
+                }
+            }
+        }
+
         self.validation_issues = issues;
     }
-    /// Removes an operand by index.
-    pub fn remove_operand(&mut self, index: usize) {
-        if index < self.operands.len() {
-            self.operands.remove(index);
+    /// Removes an operand by unique id.
+    pub fn remove_operand(&mut self, id: Uuid) {
+        if let Some(pos) = self.operands.iter().position(|op| op.id == id) {
+            self.operands.remove(pos);
         }
         self.run_preflight_validation();
     }
 
     /// Updates the weight of an operand.
-    pub fn update_operand_weight(&mut self, index: usize, weight: f64) {
-        if let Some(row) = self.operands.get_mut(index) {
+    pub fn update_operand_weight(&mut self, id: Uuid, weight: f64) {
+        if let Some(row) = self.operands.iter_mut().find(|op| op.id == id) {
             match &mut row.operand {
                 StandardOperand::Target(t) => t.weight = weight,
                 StandardOperand::Threshold(t) => t.weight = weight,
@@ -697,6 +820,7 @@ impl OptimizationModel {
             None => true,
         };
         self.operands.push(UiOperandRow {
+            id: Uuid::new_v4(),
             operand,
             group_id: gid,
             is_enabled,
@@ -705,8 +829,8 @@ impl OptimizationModel {
     }
 
     /// Updates the target goal of an operand (if applicable).
-    pub fn update_operand_target(&mut self, index: usize, new_target: f64) {
-        if let Some(row) = self.operands.get_mut(index) {
+    pub fn update_operand_target(&mut self, id: Uuid, new_target: f64) {
+        if let Some(row) = self.operands.iter_mut().find(|op| op.id == id) {
             match &mut row.operand {
                 StandardOperand::Target(t) => t.target = new_target,
                 StandardOperand::Threshold(t) => t.limit = new_target,
@@ -794,14 +918,14 @@ impl OptimizationModel {
     }
 
     /// Toggles the inequality direction for a Threshold operand (Upper <-> Lower).
-    pub fn toggle_threshold_direction(&mut self, index: usize) {
-        if let Some(row) = self.operands.get_mut(index) {
-            if let StandardOperand::Threshold(t) = &mut row.operand {
-                t.direction = match t.direction {
-                    ThresholdDirection::Upper => ThresholdDirection::Lower,
-                    ThresholdDirection::Lower => ThresholdDirection::Upper,
-                };
-            }
+    pub fn toggle_threshold_direction(&mut self, id: Uuid) {
+        if let Some(row) = self.operands.iter_mut().find(|op| op.id == id)
+            && let StandardOperand::Threshold(t) = &mut row.operand
+        {
+            t.direction = match t.direction {
+                ThresholdDirection::Upper => ThresholdDirection::Lower,
+                ThresholdDirection::Lower => ThresholdDirection::Upper,
+            };
         }
         self.run_preflight_validation();
     }
@@ -885,9 +1009,9 @@ impl OptimizationModel {
         }
     }
     /// Updates the operand target value from UI input, automatically converting mm to m for geometric constraints.
-    pub fn update_operand_target_ui(&mut self, index: usize, ui_value: f64) {
+    pub fn update_operand_target_ui(&mut self, id: Uuid, ui_value: f64) {
         let is_geometric = matches!(
-            self.operands.get(index).map(|r| &r.operand),
+            self.operands.iter().find(|op| op.id == id).map(|r| &r.operand),
             Some(StandardOperand::MinEdgeThickness(_)) | Some(StandardOperand::MaxTotalLength(_))
         );
         let model_val = if is_geometric {
@@ -895,7 +1019,7 @@ impl OptimizationModel {
         } else {
             ui_value
         };
-        self.update_operand_target(index, model_val);
+        self.update_operand_target(id, model_val);
     }
     pub fn reset_to_initial_baseline(&mut self) {
         if let Some(schema) = &self.schema {
@@ -931,17 +1055,17 @@ impl OptimizationModel {
         let mut groups = Vec::new();
         if let Some(schema) = &self.schema {
             for var in &schema.controllable_variables {
-                if let Some(gid) = var.group_id {
-                    if !groups.iter().any(|(id, _)| id == &gid) {
-                        groups.push((gid, var.group_name.clone()));
-                    }
+                if let Some(gid) = var.group_id
+                    && !groups.iter().any(|(id, _)| id == &gid)
+                {
+                    groups.push((gid, var.group_name.clone()));
                 }
             }
             for obs in &schema.observable_metrics {
-                if let Some(gid) = obs.group_id {
-                    if !groups.iter().any(|(id, _)| id == &gid) {
-                        groups.push((gid, obs.group_name.clone()));
-                    }
+                if let Some(gid) = obs.group_id
+                    && !groups.iter().any(|(id, _)| id == &gid)
+                {
+                    groups.push((gid, obs.group_name.clone()));
                 }
             }
         }
@@ -1024,8 +1148,8 @@ impl OptimizationModel {
         }
     }
     /// Toggles the activation state of an individual operand.
-    pub fn toggle_operand(&mut self, index: usize) {
-        if let Some(row) = self.operands.get_mut(index) {
+    pub fn toggle_operand(&mut self, id: Uuid) {
+        if let Some(row) = self.operands.iter_mut().find(|op| op.id == id) {
             row.is_enabled = !row.is_enabled;
         }
         self.run_preflight_validation();
@@ -1100,5 +1224,160 @@ mod tests {
         // Algorithm & cost restored
         assert!(matches!(model.algorithm, OptimizationAlgorithm::Dls { .. }));
         assert_eq!(model.target_cost, 1e-6);
+    }
+
+    #[test]
+    fn test_coupling_cycle_detection() {
+        let node_id = Uuid::new_v4();
+        let addr_a = ParameterAddress::NodeProperty {
+            node_id,
+            property_name: "radius_1".to_string(),
+        };
+        let addr_b = ParameterAddress::NodeProperty {
+            node_id,
+            property_name: "radius_2".to_string(),
+        };
+
+        let mut model = OptimizationModel::default();
+        model.variable_rows.push(UiVariableRow {
+            address: addr_a.clone(),
+            group_id: None,
+            group_name: "Group".to_string(),
+            node_name: "Lens".to_string(),
+            property_name: "R1".to_string(),
+            current_value: 50.0,
+            is_enabled: false,
+            min_bound: None,
+            max_bound: None,
+            coupling: Some(CouplingType::Opposite {
+                source: addr_b.clone(),
+            }),
+        });
+        model.variable_rows.push(UiVariableRow {
+            address: addr_b.clone(),
+            group_id: None,
+            group_name: "Group".to_string(),
+            node_name: "Lens".to_string(),
+            property_name: "R2".to_string(),
+            current_value: -50.0,
+            is_enabled: false,
+            min_bound: None,
+            max_bound: None,
+            coupling: Some(CouplingType::Opposite {
+                source: addr_a.clone(),
+            }),
+        });
+
+        model.run_preflight_validation();
+
+        let has_cycle_issue = model
+            .validation_issues
+            .iter()
+            .any(|i| i.message.contains("Cyclic parameter coupling detected"));
+        assert!(has_cycle_issue);
+        assert!(!model.can_start_optimization());
+    }
+
+    #[test]
+    fn test_coupling_self_reference() {
+        let node_id = Uuid::new_v4();
+        let addr = ParameterAddress::NodeProperty {
+            node_id,
+            property_name: "radius_1".to_string(),
+        };
+
+        let mut model = OptimizationModel::default();
+        model.variable_rows.push(UiVariableRow {
+            address: addr.clone(),
+            group_id: None,
+            group_name: "Group".to_string(),
+            node_name: "Lens".to_string(),
+            property_name: "R1".to_string(),
+            current_value: 50.0,
+            is_enabled: false,
+            min_bound: None,
+            max_bound: None,
+            coupling: Some(CouplingType::Identical {
+                source: addr.clone(),
+            }),
+        });
+
+        model.run_preflight_validation();
+
+        let has_self_ref = model
+            .validation_issues
+            .iter()
+            .any(|i| i.message.contains("cannot reference itself"));
+        assert!(has_self_ref);
+    }
+
+    #[test]
+    fn test_coupling_valid_cascade_no_cycle() {
+        let node_id = Uuid::new_v4();
+        let addr_a = ParameterAddress::NodeProperty {
+            node_id,
+            property_name: "r1".to_string(),
+        };
+        let addr_b = ParameterAddress::NodeProperty {
+            node_id,
+            property_name: "r2".to_string(),
+        };
+        let addr_c = ParameterAddress::NodeProperty {
+            node_id,
+            property_name: "r3".to_string(),
+        };
+
+        let mut model = OptimizationModel::default();
+        // C is a free variable
+        model.variable_rows.push(UiVariableRow {
+            address: addr_c.clone(),
+            group_id: None,
+            group_name: "Group".to_string(),
+            node_name: "Lens".to_string(),
+            property_name: "R3".to_string(),
+            current_value: 50.0,
+            is_enabled: true,
+            min_bound: Some(10.0),
+            max_bound: Some(100.0),
+            coupling: None,
+        });
+        // B coupled to C
+        model.variable_rows.push(UiVariableRow {
+            address: addr_b.clone(),
+            group_id: None,
+            group_name: "Group".to_string(),
+            node_name: "Lens".to_string(),
+            property_name: "R2".to_string(),
+            current_value: -50.0,
+            is_enabled: false,
+            min_bound: None,
+            max_bound: None,
+            coupling: Some(CouplingType::Opposite {
+                source: addr_c.clone(),
+            }),
+        });
+        // A coupled to B
+        model.variable_rows.push(UiVariableRow {
+            address: addr_a.clone(),
+            group_id: None,
+            group_name: "Group".to_string(),
+            node_name: "Lens".to_string(),
+            property_name: "R1".to_string(),
+            current_value: 50.0,
+            is_enabled: false,
+            min_bound: None,
+            max_bound: None,
+            coupling: Some(CouplingType::Identical {
+                source: addr_b.clone(),
+            }),
+        });
+
+        model.run_preflight_validation();
+
+        let has_cycle_issue = model
+            .validation_issues
+            .iter()
+            .any(|i| i.message.contains("Cyclic") || i.message.contains("cannot reference itself"));
+        assert!(!has_cycle_issue);
     }
 }

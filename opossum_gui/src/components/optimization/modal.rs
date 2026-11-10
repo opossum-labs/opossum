@@ -142,18 +142,28 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
         // 2. Background Task: Ensures SSE receiver is connected BEFORE sending /start
         spawn(async move {
             let sse_tx = tx.clone();
+            let sse_fail_tx = tx.clone();
+            let (ready_tx, ready_rx) = tokio::sync::oneshot::channel::<()>();
 
             spawn(async move {
-                if let Err(err) = subscribe_optimization_events(move |event| {
+                if let Err(err) = subscribe_optimization_events(Some(ready_tx), move |event| {
                     let _ = sse_tx.send(event);
                 })
                 .await
                 {
                     log::error!("SSE stream error: {err}");
+                    let _ = sse_fail_tx.send(OptimizationProgressEvent::Failed {
+                        error: format!("SSE stream failed: {err}"),
+                    });
                 }
             });
 
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            // Await deterministic connection readiness instead of sleeping
+            if ready_rx.await.is_err() {
+                log::error!("Failed to establish SSE connection before start.");
+                is_running.set(false);
+                return;
+            }
 
             let res = post_start_optimization(config).await;
             if let Err(err) = res {

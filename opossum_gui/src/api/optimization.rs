@@ -61,17 +61,21 @@ pub async fn post_abort_optimization() -> Result<String, String> {
 /// Connects to the Server-Sent Events (SSE) stream at `/api/optimization/events`
 /// and invokes the provided callback for each received event.
 ///
-/// The stream remains active until the backend closes it (e.g. on completion/failure)
-/// or the receiving task is cancelled.
+/// An optional `on_connected` oneshot sender can be provided, which is fired as soon
+/// as the HTTP connection to the SSE endpoint is successfully established.
 ///
 /// # Arguments
 ///
+/// * `on_connected` - Optional one-shot notification when the SSE connection is established.
 /// * `on_event` - Closure invoked whenever an `OptimizationProgressEvent` arrives.
 ///
 /// # Errors
 ///
 /// Returns an error if the HTTP connection fails or the SSE stream cannot be established.
-pub async fn subscribe_optimization_events<F>(mut on_event: F) -> Result<(), String>
+pub async fn subscribe_optimization_events<F>(
+    on_connected: Option<tokio::sync::oneshot::Sender<()>>,
+    mut on_event: F,
+) -> Result<(), String>
 where
     F: FnMut(OptimizationProgressEvent) + Send + 'static,
 {
@@ -90,6 +94,11 @@ where
             "SSE subscription failed with HTTP status {}",
             response.status()
         ));
+    }
+
+    // Signal that the SSE stream connection is now live
+    if let Some(tx) = on_connected {
+        let _ = tx.send(());
     }
 
     let mut stream = response.bytes_stream();
@@ -137,6 +146,11 @@ where
             }
         }
     }
+
+    // If stream ended without a terminal event, notify client to prevent hanging state
+    on_event(OptimizationProgressEvent::Failed {
+        error: "SSE event stream closed unexpectedly by server.".to_string(),
+    });
 
     Ok(())
 }

@@ -22,6 +22,9 @@ use opossum_optimization::{
 };
 
 use super::state::OptimizationModel;
+use uuid::Uuid;
+
+type DiscoveredObservableHierarchy = Vec<(String, String, Vec<(String, Vec<DiscoveredObservable>)>)>;
 
 #[derive(Props, Clone, PartialEq)]
 pub struct MeritDesignerProps {
@@ -31,7 +34,8 @@ pub struct MeritDesignerProps {
 
 #[component]
 pub fn MeritDesignerPanel(mut props: MeritDesignerProps) -> Element {
-    let operands_count = props.model.read().operands.len();
+    let operands = props.model.read().operands.clone();
+    let operands_count = operands.len();
 
     rsx! {
       div { class: "border rounded p-2 bg-dark text-light h-100 d-flex flex-column",
@@ -72,10 +76,10 @@ pub fn MeritDesignerPanel(mut props: MeritDesignerProps) -> Element {
                 }
               }
               tbody {
-                for idx in 0..operands_count {
+                for op_row in operands.iter() {
                   OperandRow {
-                    key: "op_{idx}",
-                    index: idx,
+                    key: "{op_row.id}",
+                    operand_id: op_row.id,
                     model: props.model,
                   }
                 }
@@ -114,21 +118,25 @@ fn OperandNumberInput(value: f64, on_commit: EventHandler<f64>) -> Element {
         }
     };
 
+    let val_memo = use_memo(use_reactive!(|value| value));
     let mut text = use_signal(|| format_val(value));
-    let mut last_external = use_signal(|| value);
 
-    if *last_external.read() != value {
-        last_external.set(value);
-        text.set(format_val(value));
-    }
+    // Synchronize cleanly when value updates from outside
+    use_effect(move || {
+        let current = *val_memo.read();
+        let formatted = format_val(current);
+        if formatted != *text.peek() {
+            text.set(formatted);
+        }
+    });
 
     let mut commit = move || {
         let raw = text.read().trim().to_string();
         if let Ok(parsed) = raw.parse::<f64>() {
-            last_external.set(parsed);
+            text.set(format_val(parsed));
             on_commit.call(parsed);
         } else {
-            text.set(format_val(*last_external.read()));
+            text.set(format_val(*val_memo.peek()));
         }
     };
 
@@ -151,15 +159,15 @@ fn OperandNumberInput(value: f64, on_commit: EventHandler<f64>) -> Element {
 
 #[derive(Props, Clone, PartialEq)]
 struct OperandRowProps {
-    index: usize,
+    operand_id: Uuid,
     model: Signal<OptimizationModel>,
 }
 
 #[component]
 fn OperandRow(mut props: OperandRowProps) -> Element {
     let model_read = props.model.read();
-    let idx = props.index;
-    let Some(op_row) = model_read.operands.get(idx) else {
+    let op_id = props.operand_id;
+    let Some(op_row) = model_read.operands.iter().find(|o| o.id == op_id) else {
         return rsx! {};
     };
     let op = &op_row.operand;
@@ -189,7 +197,7 @@ fn OperandRow(mut props: OperandRowProps) -> Element {
             r#type: "checkbox",
             class: "form-check-input mt-0",
             checked: is_enabled,
-            onchange: move |_| props.model.write().toggle_operand(idx),
+            onchange: move |_| props.model.write().toggle_operand(op_id),
           }
         }
         // Operand description & analyzer channel
@@ -216,7 +224,7 @@ fn OperandRow(mut props: OperandRowProps) -> Element {
               style: "width: 28px; height: 22px; line-height: 20px;",
               title: "Click to toggle between upper (≤) and lower (≥) bound",
               disabled: !is_enabled,
-              onclick: move |_| props.model.write().toggle_threshold_direction(idx),
+              onclick: move |_| props.model.write().toggle_threshold_direction(op_id),
               "{op_symbol}"
             }
           } else if is_target {
@@ -235,14 +243,14 @@ fn OperandRow(mut props: OperandRowProps) -> Element {
         td { class: "px-1",
           OperandNumberInput {
             value: target_val,
-            on_commit: move |val| props.model.write().update_operand_target_ui(idx, val),
+            on_commit: move |val| props.model.write().update_operand_target_ui(op_id, val),
           }
         }
         // Weight Input
         td { class: "px-1",
           OperandNumberInput {
             value: weight_val,
-            on_commit: move |val| props.model.write().update_operand_weight(idx, val),
+            on_commit: move |val| props.model.write().update_operand_weight(op_id, val),
           }
         }
         // Delete
@@ -251,7 +259,7 @@ fn OperandRow(mut props: OperandRowProps) -> Element {
             class: "btn btn-outline-danger btn-sm p-0 border-0",
             style: "line-height: 1;",
             title: "Remove operand",
-            onclick: move |_| props.model.write().remove_operand(idx),
+            onclick: move |_| props.model.write().remove_operand(op_id),
             Icon { icon: FaTrash }
           }
         }
@@ -265,31 +273,34 @@ pub fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<b
     let schema_opt = model.read().schema.clone();
     let mut active_tab = use_signal(|| "observables");
 
-    let mut grouped_hierarchy: Vec<(String, String, Vec<(String, Vec<DiscoveredObservable>)>)> =
-        Vec::new();
-    if let Some(schema) = &schema_opt {
-        for obs in &schema.observable_metrics {
-            let channel_entry = if let Some(pos) = grouped_hierarchy
-                .iter()
-                .position(|(a, _, _)| a == &obs.analyzer_name)
-            {
-                &mut grouped_hierarchy[pos].2
-            } else {
-                grouped_hierarchy.push((
-                    obs.analyzer_name.clone(),
-                    obs.analyzer_kind.clone(),
-                    Vec::new(),
-                ));
-                &mut grouped_hierarchy.last_mut().unwrap().2
-            };
+    let grouped_hierarchy = use_memo(move || {
+        let schema_opt = model.read().schema.clone();
+        let mut hierarchy: DiscoveredObservableHierarchy = Vec::new();
+        if let Some(schema) = &schema_opt {
+            for obs in &schema.observable_metrics {
+                let channel_entry = if let Some(pos) = hierarchy
+                    .iter()
+                    .position(|(a, _, _)| a == &obs.analyzer_name)
+                {
+                    &mut hierarchy[pos].2
+                } else {
+                    hierarchy.push((
+                        obs.analyzer_name.clone(),
+                        obs.analyzer_kind.clone(),
+                        Vec::new(),
+                    ));
+                    &mut hierarchy.last_mut().unwrap().2
+                };
 
-            if let Some(node_pos) = channel_entry.iter().position(|(n, _)| n == &obs.node_name) {
-                channel_entry[node_pos].1.push(obs.clone());
-            } else {
-                channel_entry.push((obs.node_name.clone(), vec![obs.clone()]));
+                if let Some(node_pos) = channel_entry.iter().position(|(n, _)| n == &obs.node_name) {
+                    channel_entry[node_pos].1.push(obs.clone());
+                } else {
+                    channel_entry.push((obs.node_name.clone(), vec![obs.clone()]));
+                }
             }
         }
-    }
+        hierarchy
+    });
 
     rsx! {
       AlertDialog {
@@ -354,7 +365,7 @@ pub fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<b
                 if active_tab() == "observables" {
                   ScrollArea { height: "20rem",
                     div { class: "d-flex flex-column gap-2",
-                      for (analyzer_name , analyzer_kind , detector_nodes) in grouped_hierarchy {
+                      for (analyzer_name , analyzer_kind , detector_nodes) in grouped_hierarchy.read().iter() {
                         div { class: "border border-secondary rounded overflow-hidden bg-black bg-opacity-75",
                           div { class: "bg-black py-1 px-2 text-info fw-bold small d-flex align-items-center justify-content-between border-bottom border-secondary",
                             div { class: "d-flex align-items-center gap-2",

@@ -276,7 +276,7 @@ impl<'a> OpticOptimizer<'a> {
         merit: MeritFunction,
         initial_vector: &[f64],
         observer: ProgressObserver,
-        best_tracker: &Arc<std::sync::Mutex<Option<(Vec<f64>, f64, u64)>>>,
+        best_tracker: &crate::progress::BestStateTracker,
     ) -> OpmResult<SolverOutcome> {
         let run_result = match self.algorithm {
             OptimizationAlgorithm::NelderMead {
