@@ -112,7 +112,6 @@ impl UiVariableRow {
 /// Pre-flight validation severity.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ValidationSeverity {
-    Warning,
     Error,
 }
 

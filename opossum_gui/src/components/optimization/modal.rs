@@ -11,11 +11,10 @@ use dioxus::prelude::*;
 use dioxus_free_icons::{
     Icon,
     icons::fa_solid_icons::{
-        FaBullseye, FaCube, FaFileExport, FaPlay, FaRotateLeft, FaStop, FaTriangleExclamation,
+        FaBullseye, FaCube, FaPlay, FaRotateLeft, FaStop, FaTriangleExclamation,
         FaWandMagicSparkles,
     },
 };
-use futures_util::StreamExt;
 use opossum_optimization::{ModelOptimizationSchema, OptimizationProgressEvent};
 
 use super::{
@@ -35,53 +34,13 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
     let mut initial_cost = use_signal(|| 0.0_f64);
     let mut show_issue_drawer = use_signal(|| false);
     let mut show_assistants = use_signal(|| false);
+    let mut steps_without_improvement = use_signal(|| 0_u64);
+    let mut best_cost = use_signal(|| f64::INFINITY);
 
     // Dialog state signals managed at the root level to prevent table stacking context clipping
     let show_add_var_dialog = use_signal(|| false);
     let show_coupling_dialog = use_signal(|| false);
     let show_add_operand_dialog = use_signal(|| false);
-
-    // Coroutine receives progress events from background thread and updates UI signals safely
-    let _ = use_coroutine(
-        move |mut rx: UnboundedReceiver<OptimizationProgressEvent>| async move {
-            while let Some(event) = rx.next().await {
-                match event {
-                    OptimizationProgressEvent::Started {
-                        initial_cost: cost,
-                        total_max_iterations,
-                    } => {
-                        initial_cost.set(cost);
-                        current_cost.set(cost);
-                        max_iterations.set(total_max_iterations);
-                    }
-                    OptimizationProgressEvent::Iteration {
-                        iteration,
-                        best_cost,
-                        ..
-                    } => {
-                        current_iteration.set(iteration);
-                        current_cost.set(best_cost);
-                    }
-                    OptimizationProgressEvent::Finished { final_cost, .. } => {
-                        current_cost.set(final_cost);
-                        is_running.set(false);
-                        *crate::NODE_DETAILS_REFRESH.write() += 1;
-                    }
-                    OptimizationProgressEvent::Aborted { last_cost, .. } => {
-                        if !last_cost.is_nan() {
-                            current_cost.set(last_cost);
-                        }
-                        is_running.set(false);
-                        *crate::NODE_DETAILS_REFRESH.write() += 1;
-                    }
-                    OptimizationProgressEvent::Failed { error } => {
-                        log::error!("Optimization failed: {error}");
-                        is_running.set(false);
-                    }
-                }
-            }
-        },
-    );
 
     // Initial schema retrieval when the modal dialog is opened
     use_effect(move || {
@@ -91,12 +50,6 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                 eval_action_run(
                     res,
                     Some(move |schema: ModelOptimizationSchema| {
-                        log::info!(
-                            "Loaded schema: {} vars, {} metrics, {} thickness nodes",
-                            schema.controllable_variables.len(),
-                            schema.observable_metrics.len(),
-                            schema.edge_thickness_nodes.len()
-                        );
                         model.write().populate_from_schema(schema);
                     }),
                 );
@@ -115,6 +68,8 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
         };
 
         max_iterations.set(model.read().max_iterations());
+        steps_without_improvement.set(0);
+        best_cost.set(f64::INFINITY);
         is_running.set(true);
 
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<OptimizationProgressEvent>();
@@ -129,15 +84,27 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                     } => {
                         initial_cost.set(cost);
                         current_cost.set(cost);
+                        best_cost.set(cost);
+                        steps_without_improvement.set(0);
                         max_iterations.set(total_max_iterations);
                     }
                     OptimizationProgressEvent::Iteration {
                         iteration,
-                        best_cost,
+                        best_cost: new_best,
                         ..
                     } => {
                         current_iteration.set(iteration);
-                        current_cost.set(best_cost);
+                        current_cost.set(new_best);
+
+                        let prev = *best_cost.read();
+                        // Relative improvement threshold with lower floor for small costs
+                        let min_improvement = prev.abs().max(1e-12) * 1e-6;
+                        if (prev - new_best) > min_improvement {
+                            best_cost.set(new_best);
+                            steps_without_improvement.set(0);
+                        } else {
+                            *steps_without_improvement.write() += 1;
+                        }
                     }
                     OptimizationProgressEvent::Finished {
                         final_cost,
@@ -400,6 +367,7 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                     iteration: current_iteration(),
                     current_cost: current_cost(),
                     initial_cost: initial_cost(),
+                    steps_without_improvement: steps_without_improvement(),
                   }
                 }
               }
@@ -407,16 +375,7 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
           }
         }
         AlertDialogActions {
-          div { class: "d-flex justify-content-between align-items-center w-100",
-            Button {
-              variant: ButtonVariant::Outline,
-              size: ButtonSize::Sm,
-              title: "Export configuration profile to JSON",
-              Icon { icon: FaFileExport }
-              "Export Config"
-            }
-            AlertDialogCancel { on_click: move |_| open.set(false), "Close Window" }
-          }
+          AlertDialogCancel { on_click: move |_| open.set(false), "Close Window" }
         }
       }
 

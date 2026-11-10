@@ -32,11 +32,6 @@ pub async fn get_optimization_schema() -> Result<ModelOptimizationSchema, String
 /// Returns an error if another optimization job is already running (HTTP 409)
 /// or if serialization/parsing fails (HTTP 400).
 pub async fn post_start_optimization(config: OptimizationConfig) -> Result<String, String> {
-    // In opossum_backend: src/optimization.rs direkt nach dem Deserialisieren von opt_config:
-    println!(
-        "=== OPTIMIZATION CONFIG ===\n{:#?}\n===========================",
-        config
-    );
     HTTP_API_CLIENT()
         .post::<OptimizationConfig, String>("/api/optimization/start", config)
         .await

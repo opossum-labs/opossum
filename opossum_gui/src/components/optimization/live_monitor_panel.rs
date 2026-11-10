@@ -1,8 +1,5 @@
 use dioxus::prelude::*;
-use dioxus_free_icons::{
-    Icon,
-    icons::fa_solid_icons::{FaChartLine, FaGears},
-};
+use dioxus_free_icons::{Icon, icons::fa_solid_icons::FaGears};
 
 use super::state::OptimizationModel;
 
@@ -13,6 +10,7 @@ pub struct LiveMonitorProps {
     pub iteration: u64,
     pub current_cost: f64,
     pub initial_cost: f64,
+    pub steps_without_improvement: u64,
 }
 
 #[component]
@@ -20,9 +18,6 @@ pub fn LiveMonitorPanel(mut props: LiveMonitorProps) -> Element {
     let current_algo_kind = props.model.read().algorithm_kind();
     let configured_max_iters = props.model.read().max_iterations();
     let configured_target_cost = props.model.read().target_cost;
-
-    // Smooth sample points for logarithmic convergence curve placeholder
-    let points = "5,15 25,32 50,68 85,92 130,105 180,114 235,119 270,121";
 
     rsx! {
       div { class: "border rounded p-2 bg-dark text-light h-100 d-flex flex-column",
@@ -158,53 +153,35 @@ pub fn LiveMonitorPanel(mut props: LiveMonitorProps) -> Element {
           }
         }
 
-        // Logarithmic Convergence Plot (SVG Placeholder)
-        div { class: "fw-bold small d-flex align-items-center gap-1 mb-1",
-          Icon { icon: FaChartLine }
-          "Log Φ Convergence"
-        }
-        div {
-          class: "border border-secondary rounded p-1 bg-black mb-2 position-relative flex-grow-1",
-          style: "min-height: 120px;",
-          svg { view_box: "0 0 280 130", class: "w-100 h-100",
-            // Horizontal Reference Lines
-            line {
-              x1: "0",
-              y1: "25",
-              x2: "280",
-              y2: "25",
-              stroke: "#2a2a2a",
-              stroke_dasharray: "2",
+        // Convergence & Stagnation Health Box
+        div { class: "p-2 rounded bg-black border border-secondary mb-2",
+          div { class: "d-flex justify-content-between align-items-center small mb-1",
+            span { class: "text-muted", "Stagnant Steps:" }
+            span { class: if props.steps_without_improvement > 20 { "text-warning fw-bold font-monospace" } else if props.steps_without_improvement > 50 { "text-danger fw-bold font-monospace" } else { "text-light font-monospace" },
+              "{props.steps_without_improvement}"
             }
-            line {
-              x1: "0",
-              y1: "65",
-              x2: "280",
-              y2: "65",
-              stroke: "#2a2a2a",
-              stroke_dasharray: "2",
-            }
-            line {
-              x1: "0",
-              y1: "105",
-              x2: "280",
-              y2: "105",
-              stroke: "#2a2a2a",
-              stroke_dasharray: "2",
-            }
-            // Path
-            polyline {
-              fill: "none",
-              stroke: "#00d26a",
-              stroke_width: "2.0",
-              points: "{points}",
-            }
-            circle {
-              cx: "270",
-              cy: "121",
-              r: "3.5",
-              fill: "#00d26a",
-            }
+          }
+          // Relative improvement since start
+          {
+              let initial = props.initial_cost;
+              let current = props.current_cost;
+              let ratio = if initial > 0.0 {
+                  ((initial - current) / initial * 100.0).clamp(-100.0, 100.0)
+              } else {
+                  0.0
+              };
+              rsx! {
+                div { class: "d-flex justify-content-between align-items-center small mb-1",
+                  span { class: "text-muted", "Improvement:" }
+                  span { class: "text-success fw-bold font-monospace", "{ratio:.1}%" }
+                }
+                div { class: "progress bg-secondary", style: "height: 4px;",
+                  div {
+                    class: "progress-bar bg-success",
+                    style: "width: {ratio.max(0.0):.1}%;",
+                  }
+                }
+              }
           }
         }
 
