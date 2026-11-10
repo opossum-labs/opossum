@@ -76,11 +76,11 @@ impl OptimizationAlgorithm {
     #[must_use]
     pub const fn simulated_annealing() -> Self {
         Self::SimulatedAnnealing {
-            max_iterations: 1000,
-            initial_temperature: 1.0, // Reduced default for optical merit functions
-            cooling_rate: 0.92,
-            stall_best: 60,
-            stall_accepted: 120,
+            max_iterations: 10_000,
+            initial_temperature: 100.0, // Should be roughly comparable to initial merit cost
+            cooling_rate: 0.995,        // Slow geometric cooling
+            stall_best: u64::MAX,       // Do not abort early just because no new global best was found
+            stall_accepted: 1_000,      // Terminate only after 1000 consecutive rejected steps
             reannealing_fixed: None,
         }
     }

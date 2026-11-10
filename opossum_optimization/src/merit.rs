@@ -321,34 +321,45 @@ impl Anneal for MeritFunction {
     fn anneal(&self, param: &Self::Param, temp: Self::Float) -> Result<Self::Output, Error> {
         let mut rng = rand::rng();
         let mut next_param = param.clone();
-
-        // Scale perturbation by temperature
-        let temp_factor = temp.clamp(1e-4, 1.0);
-
-        for (i, var) in self.free_variables.iter().enumerate() {
-            let range = var.bounds.as_ref().map_or_else(
-                || {
-                    if param[i].abs() > 1e-7 {
-                        param[i].abs() * 0.5
-                    } else {
-                        1e-2
-                    }
-                },
-                |bounds| bounds.max - bounds.min,
-            );
-
-            // Uniform displacement in interval [-1.0, 1.0]
-            let offset = rng.random_range(-1.0..=1.0);
-            let step = offset * range * temp_factor;
-            let mut candidate = param[i] + step;
-
-            // Strictly enforce box bounds
-            if let Some(bounds) = &var.bounds {
-                candidate = bounds.clamp(candidate);
-            }
-            next_param[i] = candidate;
+        let n = self.free_variables.len();
+        if n == 0 {
+            return Ok(next_param);
         }
 
+        // 1. Pick exactly one parameter to perturb
+        let idx = rng.random_range(0..n);
+        let var = &self.free_variables[idx];
+
+        // 2. Base range of the selected parameter
+        let total_span = var.bounds.as_ref().map_or_else(
+            || {
+                if param[idx].abs() > 1e-7 {
+                    param[idx].abs() * 0.5
+                } else {
+                    1e-2
+                }
+            },
+            |bounds| bounds.max - bounds.min,
+        );
+
+        // 3. Temperature-dependent step contraction
+        // We assume an initial temperature reference or normalize temp.
+        // Clamping ensures that steps never vanish completely.
+        let temp_norm = (temp / 100.0).clamp(1e-4, 1.0);
+        let temp_scale = temp_norm.sqrt().max(0.01); // Never drop below 1% of total span
+
+        // 4. Generate step (e.g. uniform or Gaussian)
+        let max_step = total_span * 0.2 * temp_scale;
+        let offset = rng.random_range(-1.0..=1.0) * max_step;
+
+        let mut candidate = param[idx] + offset;
+
+        // 5. Strictly enforce box bounds
+        if let Some(bounds) = &var.bounds {
+            candidate = bounds.clamp(candidate);
+        }
+
+        next_param[idx] = candidate;
         Ok(next_param)
     }
 }
