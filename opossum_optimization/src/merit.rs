@@ -200,8 +200,7 @@ impl MeritFunction {
     #[must_use]
     pub fn evaluate_residuals(&self, x: &[f64]) -> DVector<f64> {
         let n_vars = self.free_variables.len();
-        let n_ops = self.operands.len();
-        let mut residuals = Vec::with_capacity(n_ops + n_vars);
+        let mut residuals = Vec::new();
 
         // 1. Box bounds penalty residuals
         let mut bound_residuals = Vec::with_capacity(n_vars);
@@ -224,30 +223,27 @@ impl MeritFunction {
             if let Ok(map) = ParameterResolver::resolve(&self.free_variables, &self.couplings, x) {
                 map
             } else {
-                let fallback_val = (self.fatal_penalty / (n_ops + n_vars) as f64).sqrt();
-                return DVector::from_element(n_ops + n_vars, fallback_val);
+                return DVector::from_element(n_vars + 1, self.fatal_penalty.sqrt());
             };
 
         for (address, value) in parameter_map {
             if ParameterApplier::set_value(&mut working_doc, &address, value).is_err() {
-                let fallback_val = (self.fatal_penalty / (n_ops + n_vars) as f64).sqrt();
-                return DVector::from_element(n_ops + n_vars, fallback_val);
+                return DVector::from_element(n_vars + 1, self.fatal_penalty.sqrt());
             }
         }
 
         if ParameterApplier::finalize_update(&mut working_doc).is_err()
             || working_doc.analyze_headless().is_err()
         {
-            let fallback_val = (self.fatal_penalty / (n_ops + n_vars) as f64).sqrt();
-            return DVector::from_element(n_ops + n_vars, fallback_val);
+            return DVector::from_element(n_vars + 1, self.fatal_penalty.sqrt());
         }
 
-        // 3. Evaluate individual operand residuals
+        // 3. Evaluate individual operand residuals (flattened)
         let context = EvaluationContext::new(&working_doc);
         for operand in &self.operands {
-            match operand.residual(&context) {
-                Ok(r) => {
-                    residuals.push(r);
+            match operand.residuals(&context) {
+                Ok(r_vec) => {
+                    residuals.extend(r_vec);
                 }
                 Err(_) => {
                     residuals.push((self.fatal_penalty * 0.1).sqrt());
@@ -257,15 +253,14 @@ impl MeritFunction {
 
         // 4. Append bound violation residuals
         residuals.extend(bound_residuals);
-
         DVector::from_vec(residuals)
     }
 
     /// Computes the `m x n` Jacobian matrix `J_ij = d(r_i) / d(x_j)` using parallel central finite differences.
     #[must_use]
-    pub fn compute_jacobian(&self, x: &[f64], _base_residuals: &DVector<f64>) -> DMatrix<f64> {
+    pub fn compute_jacobian(&self, x: &[f64], base_residuals: &DVector<f64>) -> DMatrix<f64> {
         let n = self.free_variables.len();
-        let m = self.operands.len() + n;
+        let m = base_residuals.len();
 
         let columns: Vec<DVector<f64>> = (0..n)
             .into_par_iter()
@@ -288,7 +283,11 @@ impl MeritFunction {
                 let r_plus = self.evaluate_residuals(&x_plus);
                 let r_minus = self.evaluate_residuals(&x_minus);
 
-                (r_plus - r_minus) / (2.0 * h)
+                if r_plus.len() == m && r_minus.len() == m {
+                    (r_plus - r_minus) / (2.0 * h)
+                } else {
+                    DVector::zeros(m)
+                }
             })
             .collect();
 

@@ -1,6 +1,5 @@
 /target
 /coverage
-/.vscode
 /.claude
 /doc/book/book/
 /opossum_core/playground/*

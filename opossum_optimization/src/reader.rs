@@ -42,6 +42,34 @@ impl MetricReader {
             })
     }
 
+    /// Reads a vector of related metrics (e.g., individual ray OPDs or spot deviations).
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if
+    /// - the detector node in the given [`ObservableAddress`] was not found.
+    /// - the metric produces no vector data.
+    pub fn read_metric_vector(
+        doc: &OpmDocument,
+        address: &ObservableAddress,
+    ) -> OpmResult<Vec<f64>> {
+        let (node_ref, _) = doc.scenery().node_recursive(address.node_id).map_err(|e| {
+            OpossumError::Other(format!(
+                "Failed to find detector node {}: {}",
+                address.node_id, e
+            ))
+        })?;
+
+        node_ref
+            .read_observable_vector(&address.metric_name)
+            .ok_or_else(|| {
+                OpossumError::Other(format!(
+                    "Metric '{}' produced no vector data on node {}",
+                    address.metric_name, address.node_id
+                ))
+            })
+    }
+
     /// Reads the current scalar value of any parameter address from the document.
     ///
     /// # Errors

@@ -407,6 +407,56 @@ impl OpticNode for WaveFront {
             _ => None,
         }
     }
+
+    fn read_observable_vector(&self, metric_name: &str) -> Option<Vec<f64>> {
+        let LightData::Geometric(rays) = self.light_data.as_ref()? else {
+            return None;
+        };
+
+        let iso = self
+            .effective_surface_iso("input_1")
+            .unwrap_or_else(|_| Isometry::identity());
+
+        let remove_tilt = self
+            .node_attr
+            .get_property("remove tilt")
+            .ok()
+            .and_then(|p| match p {
+                Proptype::Bool(b) => Some(*b),
+                _ => None,
+            })
+            .unwrap_or(false);
+
+        let wf_data =
+            wavefront_data::WaveFrontData::from_rays(rays, true, false, &iso, remove_tilt).ok()?;
+        let map = wf_data.wavefront_error_maps.first()?;
+
+        let lower = metric_name.to_lowercase();
+        match lower.as_str() {
+            "wavefront rms" | "rms" | "wavefront rms opd" | "rms opd" => {
+                let opds = map.opd();
+                let n = opds.len();
+                if n == 0 {
+                    return None;
+                }
+
+                // Subtract mean OPD so sum(r_i^2) strictly matches RMS^2
+                let mean = opds.iter().sum::<f64>() / (n as f64);
+                let wvl_factor = if lower.contains("opd") {
+                    map.wavelength().get::<uom::si::length::meter>()
+                } else {
+                    1.0 // Dimensionless in waves
+                };
+
+                let centered_opds = opds
+                    .iter()
+                    .map(|&val| (val - mean) * wvl_factor)
+                    .collect();
+                Some(centered_opds)
+            }
+            _ => self.read_observable(metric_name).map(|v| vec![v]),
+        }
+    }
 }
 impl From<WaveFrontMap> for Proptype {
     fn from(value: WaveFrontMap) -> Self {
@@ -433,6 +483,7 @@ impl AnalysisRayTrace for WaveFront {}
 #[cfg(test)]
 mod test {
     use super::*;
+    use approx::assert_relative_eq;
     use crate::{
         analyzers::RayTraceConfig,
         core_optics::{PortType, node_attr::NodePositioning},
@@ -588,6 +639,29 @@ mod test {
         assert!(props.contains("Wavefront PtV"));
         assert!(props.contains("Zernike Decomposition at 1053.000 nm"));
         assert_eq!(props.nr_of_props(), 4);
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_observable_vector() -> OpmResult<()> {
+        let mut node = WaveFront::default();
+        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
+        let mut input = LightResult::default();
+        let input_light = LightData::Geometric(Rays::new_uniform_collimated(
+            nanometer!(1053.0),
+            joule!(1.0),
+            &Hexapolar::new(millimeter!(1.0), 2)?,
+        )?);
+        input.insert("input_1".into(), input_light);
+        let _ = AnalysisRayTrace::analyze(&mut node, input, &RayTraceConfig::default())?;
+
+        let rms = node.read_observable("wavefront rms").unwrap();
+        let vec_data = node.read_observable_vector("wavefront rms").unwrap();
+        assert_eq!(vec_data.len(), 19); // Hexapolar with 2 rings = 1 + 6 + 12 = 19 rays
+        let n = vec_data.len() as f64;
+        let sum_sq: f64 = vec_data.iter().map(|&r| r * r).sum();
+        let rms_from_vec = (sum_sq / n).sqrt();
+        assert_relative_eq!(rms, rms_from_vec, epsilon = 1e-12);
         Ok(())
     }
 }
