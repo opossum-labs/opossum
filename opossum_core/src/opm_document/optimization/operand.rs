@@ -13,7 +13,9 @@ use uuid::Uuid;
 
 /// Default scale constants for optical observables in SI base units (meters).
 pub const DEFAULT_SPOT_SCALE: f64 = 1.0e-6; // 1.0 micrometer
+/// default scale constant for wavefront constraints
 pub const DEFAULT_WAVEFRONT_SCALE: f64 = 1.0e-7; // 100.0 nanometers (~ lambda / 10)
+/// defualt scale constant for geometric constraints
 pub const DEFAULT_GEOMETRIC_SCALE: f64 = 1.0e-3; // 1.0 millimeter
 
 /// Resolves a default normalization scale based on dimension and metric naming convention.
@@ -80,10 +82,11 @@ pub struct MetricOperand {
     pub target: f64,
     pub mode: OperandMode,
     pub weight: f64,
-    pub scale: f64,
+    scale: f64,
 }
 
 impl MetricOperand {
+    /// Creates a new [`MetricOperand`].
     pub fn new(
         source: impl Into<MetricSource>,
         target: f64,
@@ -105,10 +108,12 @@ impl MetricOperand {
         }
     }
 
+    /// Helper builder for setting target value operand
     pub fn target(source: impl Into<MetricSource>, target: f64, weight: f64, scale: f64) -> Self {
         Self::new(source, target, OperandMode::Equal, weight, scale)
     }
 
+    /// Helper builder for setting an upper limit value operand
     pub fn upper_limit(
         source: impl Into<MetricSource>,
         limit: f64,
@@ -118,6 +123,7 @@ impl MetricOperand {
         Self::new(source, limit, OperandMode::UpperLimit, weight, scale)
     }
 
+    /// Helper builder for setting an upper limit value operand
     pub fn lower_limit(
         source: impl Into<MetricSource>,
         limit: f64,
@@ -127,16 +133,19 @@ impl MetricOperand {
         Self::new(source, limit, OperandMode::LowerLimit, weight, scale)
     }
 
+    /// Returns the name of this [`MetricOperand`].
     #[must_use]
     pub fn name(&self) -> String {
         format!("{} {} {}", self.source, self.mode.symbol(), self.target)
     }
 
+    /// Returns the weight of this [`MetricOperand`].
     #[must_use]
     pub fn weight(&self) -> f64 {
         self.weight
     }
 
+    /// Helper builder for spot radius operands
     pub fn for_spot_radius(
         source: impl Into<MetricSource>,
         target: Length,
@@ -152,6 +161,7 @@ impl MetricOperand {
         )
     }
 
+    /// Helper builder for wavefront (in length units) operands
     pub fn for_wavefront(source: impl Into<MetricSource>, target: Length, weight: f64) -> Self {
         Self::new(
             source,
@@ -162,6 +172,7 @@ impl MetricOperand {
         )
     }
 
+    /// Helper builder for wavefront (in lambda) operands
     pub fn for_wavefront_waves(
         source: impl Into<MetricSource>,
         target_waves: f64,
@@ -170,6 +181,7 @@ impl MetricOperand {
         Self::new(source, target_waves, OperandMode::Equal, weight, 0.02)
     }
 
+    /// Helper builder for length operands
     pub fn for_length(
         source: impl Into<MetricSource>,
         target: Length,
@@ -185,6 +197,7 @@ impl MetricOperand {
         )
     }
 
+    /// Helper builder for energy operands
     pub fn for_energy(
         source: impl Into<MetricSource>,
         target: Energy,
@@ -194,6 +207,7 @@ impl MetricOperand {
         Self::new(source, target.get::<joule>(), mode, weight, 1.0e-3)
     }
 
+    /// Helper builder for fluence operands
     pub fn for_fluence(
         source: impl Into<MetricSource>,
         target: RadiantExposure,
@@ -208,6 +222,15 @@ impl MetricOperand {
             1.0e4,
         )
     }
+    /// Returns the scale of this [`MetricOperand`].
+    pub fn scale(&self) -> f64 {
+        self.scale
+    }
+
+    /// Returns the mode of this [`MetricOperand`].
+    pub fn mode(&self) -> OperandMode {
+        self.mode
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -215,7 +238,7 @@ pub struct MaxTotalLengthOperand {
     pub segments: Vec<super::address::ParameterAddress>,
     pub max_length: f64,
     pub weight: f64,
-    pub scale: f64,
+    scale: f64,
 }
 
 impl MaxTotalLengthOperand {
@@ -242,12 +265,20 @@ impl MaxTotalLengthOperand {
     pub fn weight(&self) -> f64 {
         self.weight
     }
+
+    /// Helper builder for easy usage of uom values
     pub fn for_length(
         segments: Vec<super::address::ParameterAddress>,
         max_length: Length,
         weight: f64,
     ) -> Self {
         Self::new(segments, max_length.get::<meter>(), weight)
+    }
+
+    /// Returns the scale of this [`MaxTotalLengthOperand`].
+    #[must_use]
+    pub fn scale(&self) -> f64 {
+        self.scale
     }
 }
 
@@ -256,10 +287,11 @@ pub struct MinEdgeThicknessOperand {
     pub node_id: Uuid,
     pub min_thickness: f64,
     pub weight: f64,
-    pub scale: f64,
+    scale: f64,
 }
 
 impl MinEdgeThicknessOperand {
+    /// Creates a new [`MinEdgeThicknessOperand`].
     #[must_use]
     pub fn new(node_id: Uuid, min_thickness: f64, weight: f64) -> Self {
         Self {
@@ -269,10 +301,12 @@ impl MinEdgeThicknessOperand {
             scale: DEFAULT_GEOMETRIC_SCALE,
         }
     }
+    /// Returns the name of this [`MinEdgeThicknessOperand`].
     #[must_use]
     pub fn name(&self) -> String {
         format!("MinEdgeThickness({})", self.node_id)
     }
+    /// Returns the weight of this [`MinEdgeThicknessOperand`].
     #[must_use]
     pub fn weight(&self) -> f64 {
         self.weight
@@ -280,6 +314,12 @@ impl MinEdgeThicknessOperand {
     #[must_use]
     pub fn for_thickness(node_id: Uuid, min_thickness: Length, weight: f64) -> Self {
         Self::new(node_id, min_thickness.get::<meter>(), weight)
+    }
+
+    /// Returns the scale of this [`MinEdgeThicknessOperand`].
+    #[must_use]
+    pub fn scale(&self) -> f64 {
+        self.scale
     }
 }
 
@@ -291,6 +331,7 @@ pub struct TransmissionPenaltyOperand {
 }
 
 impl TransmissionPenaltyOperand {
+    /// Creates a new [`TransmissionPenaltyOperand`].
     pub fn new(
         address: super::address::ObservableAddress,
         expected_rays: usize,
@@ -302,10 +343,12 @@ impl TransmissionPenaltyOperand {
             weight,
         }
     }
+    /// Returns the name of this [`TransmissionPenaltyOperand`].
     #[must_use]
     pub fn name(&self) -> String {
         format!("TransmissionPenalty({})", self.address)
     }
+    /// Returns the weight of this [`TransmissionPenaltyOperand`].
     #[must_use]
     pub fn weight(&self) -> f64 {
         self.weight
@@ -321,6 +364,7 @@ pub enum StandardOperand {
 }
 
 impl StandardOperand {
+    /// Returns the name of this [`StandardOperand`].
     #[must_use]
     pub fn name(&self) -> String {
         match self {
@@ -331,6 +375,7 @@ impl StandardOperand {
         }
     }
 
+    /// Returns the weight of this [`StandardOperand`].
     #[must_use]
     pub fn weight(&self) -> f64 {
         match self {

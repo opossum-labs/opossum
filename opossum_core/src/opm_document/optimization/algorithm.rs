@@ -7,17 +7,20 @@ use serde::{Deserialize, Serialize};
 pub enum OptimizationAlgorithm {
     /// Damped Least Squares (Levenberg-Marquardt) optimization.
     Dls {
+        /// maximum #of iteration steps
         max_iterations: u64,
         initial_damping: f64,
         gradient_tolerance: f64,
     },
     /// Nelder-Mead simplex direct search method (derivative-free).
     NelderMead {
+        /// maximum #of iteration steps
         max_iterations: u64,
         sd_tolerance: f64,
     },
     /// Limited-memory Broyden-Fletcher-Goldfarb-Shanno (quasi-Newton method).
     LBFGS {
+        /// maximum #of iteration steps
         max_iterations: u64,
         gradient_tolerance: f64,
         history_size: usize,
@@ -25,6 +28,7 @@ pub enum OptimizationAlgorithm {
     },
     /// Simulated Annealing global stochastic optimization.
     SimulatedAnnealing {
+        /// maximum #of iteration steps
         max_iterations: u64,
         /// Initial temperature T0.
         initial_temperature: f64,

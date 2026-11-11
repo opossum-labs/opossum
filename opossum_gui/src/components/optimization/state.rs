@@ -822,7 +822,7 @@ impl OptimizationModel {
     ) -> (String, String, &'static str) {
         match operand {
             StandardOperand::Metric(m) => {
-                let symbol = m.mode.symbol();
+                let symbol = m.mode().symbol();
                 match &m.source {
                     MetricSource::Observable(obs) => {
                         let aname = self.analyzer_name(obs.analyzer_id);
@@ -1103,7 +1103,7 @@ impl OptimizationModel {
         if let Some(row) = self.operands.iter_mut().find(|op| op.id == id)
             && let StandardOperand::Metric(m) = &mut row.operand
         {
-            m.mode = m.mode.cycle();
+            m.mode = m.mode().cycle();
         }
         self.run_preflight_validation();
     }

@@ -694,7 +694,7 @@ fn opm_document_optimization_config_roundtrip() -> OpmResult<()> {
             source: addr.clone(),
         },
     };
-    let operand = MetricOperand::new("Target 1", addr, 0.05, OperandMode::Equal, 1.0, 1e-3);
+    let operand = MetricOperand::new(addr, 0.05, OperandMode::Equal, 1.0, 1e-3);
 
     let config = OptimizationConfig::new()
         .with_variable(var)

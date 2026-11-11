@@ -48,22 +48,22 @@ impl Operand for MetricOperand {
     }
     fn evaluate(&self, ctx: &EvaluationContext<'_>) -> OpmResult<f64> {
         let value = ctx.read_source(&self.source)?;
-        let violation = match self.mode {
+        let violation = match self.mode() {
             OperandMode::Equal => value - self.target,
             OperandMode::UpperLimit => (value - self.target).max(0.0),
             OperandMode::LowerLimit => (self.target - value).max(0.0),
         };
-        let normalized = violation / self.scale;
-        Ok(self.weight * normalized * normalized)
+        let normalized = violation / self.scale();
+        Ok(self.weight() * normalized * normalized)
     }
     fn residual(&self, ctx: &EvaluationContext<'_>) -> OpmResult<f64> {
         let value = ctx.read_source(&self.source)?;
-        let diff = match self.mode {
+        let diff = match self.mode() {
             OperandMode::Equal => value - self.target,
             OperandMode::UpperLimit => (value - self.target).max(0.0),
             OperandMode::LowerLimit => (self.target - value).max(0.0),
         };
-        Ok(self.weight.sqrt() * (diff / self.scale))
+        Ok(self.weight().sqrt() * (diff / self.scale()))
     }
 }
 
@@ -80,7 +80,7 @@ impl Operand for MaxTotalLengthOperand {
             total += MetricReader::read_parameter_value(ctx.doc, seg)?;
         }
         let violation = (total - self.max_length).max(0.0);
-        let normalized = violation / self.scale;
+        let normalized = violation / self.scale();
         Ok(self.weight * normalized * normalized)
     }
 }
@@ -116,7 +116,7 @@ impl Operand for MinEdgeThicknessOperand {
             .min_edge_thickness()?
             .value;
         let violation = (self.min_thickness - edge_thickness).max(0.0);
-        let normalized = violation / self.scale;
+        let normalized = violation / self.scale();
         Ok(self.weight * normalized * normalized)
     }
 }

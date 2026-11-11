@@ -265,14 +265,20 @@ impl MeritFunction {
     #[must_use]
     pub fn compute_jacobian(&self, x: &[f64], _base_residuals: &DVector<f64>) -> DMatrix<f64> {
         let n = self.free_variables.len();
-        let m = self.operands.len() + n; // Operands plus box-bounds residuals
+        let m = self.operands.len() + n;
 
         let columns: Vec<DVector<f64>> = (0..n)
             .into_par_iter()
             .map(|j| {
-                let val = x[j];
-                // Adaptive step size: 1e-4 relative with a floor of 1e-5
-                let h = (1e-4 * val.abs()).max(1e-5);
+                let var = &self.free_variables[j];
+                // Determine step size based on parameter bounds or fallback scale
+                let span = var
+                    .bounds
+                    .as_ref()
+                    .map_or_else(|| (x[j].abs() * 0.1).max(1e-3), |b| b.max - b.min);
+
+                // 0.01% of total range is optimal for raytracing stability
+                let h = (span * 1e-4).clamp(1e-7, 1e-3);
 
                 let mut x_plus = x.to_vec();
                 let mut x_minus = x.to_vec();
@@ -282,7 +288,6 @@ impl MeritFunction {
                 let r_plus = self.evaluate_residuals(&x_plus);
                 let r_minus = self.evaluate_residuals(&x_minus);
 
-                // Central difference: (r(x+h) - r(x-h)) / (2*h)
                 (r_plus - r_minus) / (2.0 * h)
             })
             .collect();

@@ -7,20 +7,31 @@ use crate::error::{OpmResult, OpossumError};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CouplingType {
     /// Target = Source (e.g., identical air spacings in symmetric setups)
-    Identical { source: ParameterAddress },
+    Identical {
+        /// the source paramter controlling the coupling
+        source: ParameterAddress,
+    },
     /// Target = -Source (e.g., symmetric biconvex lenses with R2 = -R1)
-    Opposite { source: ParameterAddress },
+    Opposite {
+        /// the source paramter controlling the coupling
+        source: ParameterAddress,
+    },
     /// Target = Source * factor + offset
     Affine {
+        /// the source paramter controlling the coupling
         source: ParameterAddress,
+        /// scaling factor
         factor: f64,
+        /// offset
         offset: f64,
     },
     /// Enforces a fixed total system length
     ///
     /// `Target = total_length - sum(other_segments)`
     TotalLengthLock {
+        /// the targeted total path length
         total_length: f64,
+        /// a vector of all distances to be considered in the above calculation
         other_segments: Vec<ParameterAddress>,
     },
 }
