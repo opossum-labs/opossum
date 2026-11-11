@@ -149,7 +149,7 @@ impl OptimizationAlgorithm {
                 v.initial_value.ok_or_else(|| {
                     OpossumError::Other(format!(
                         "FreeVariable '{}' has uninitialized start value",
-                        v.name
+                        v.address
                     ))
                 })
             })

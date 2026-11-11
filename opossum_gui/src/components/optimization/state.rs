@@ -208,12 +208,26 @@ impl OptimizationModel {
                 UiVariableRow::ui_bounds_from_box_bounds(&var.address, b)
             });
 
+            // Fallback names derived directly from the parameter address
+            let (default_node_name, default_prop_name) = match &var.address {
+                ParameterAddress::NodeProperty { property_name, .. } => {
+                    ("Node".to_string(), property_name.clone())
+                }
+                ParameterAddress::SurfaceCurvature { property_name, .. } => (
+                    "Surface".to_string(),
+                    format!("{property_name} (curvature)"),
+                ),
+                ParameterAddress::ConnectionDistance { .. } => {
+                    ("Distance".to_string(), "Distance".to_string())
+                }
+            };
+
             let mut row = UiVariableRow {
                 address: var.address.clone(),
                 group_id: None,
                 group_name: "Main System".to_string(),
-                node_name: var.name.clone(),
-                property_name: var.name.clone(),
+                node_name: default_node_name,
+                property_name: default_prop_name,
                 current_value: var.initial_value.unwrap_or(0.0),
                 is_enabled: true,
                 min_bound: min_b,
@@ -221,6 +235,7 @@ impl OptimizationModel {
                 coupling: None,
             };
 
+            // Enrich with human-readable node and property names from active schema if present
             if let Some(schema) = &self.schema
                 && let Some(discovered) = schema
                     .controllable_variables
@@ -268,41 +283,7 @@ impl OptimizationModel {
         }
 
         for operand in &config.operands {
-            let group_id = match operand {
-                StandardOperand::Metric(t) => match &t.source {
-                    MetricSource::Observable(addr) => self.schema.as_ref().and_then(|s| {
-                        s.observable_metrics
-                            .iter()
-                            .find(|m| &m.address == addr)
-                            .and_then(|m| m.group_id)
-                    }),
-                    MetricSource::Parameter(addr) => self.schema.as_ref().and_then(|s| {
-                        s.controllable_variables
-                            .iter()
-                            .find(|v| &v.address == addr)
-                            .and_then(|v| v.group_id)
-                    }),
-                },
-                StandardOperand::MinEdgeThickness(m) => self.schema.as_ref().and_then(|s| {
-                    s.controllable_variables
-                        .iter()
-                        .find(|v| match v.address {
-                            ParameterAddress::NodeProperty { node_id, .. }
-                            | ParameterAddress::SurfaceCurvature { node_id, .. } => {
-                                node_id == m.node_id
-                            }
-                            ParameterAddress::ConnectionDistance { .. } => false,
-                        })
-                        .and_then(|v| v.group_id)
-                }),
-                StandardOperand::TransmissionPenalty(p) => self.schema.as_ref().and_then(|s| {
-                    s.observable_metrics
-                        .iter()
-                        .find(|m| m.address == p.address)
-                        .and_then(|m| m.group_id)
-                }),
-                StandardOperand::MaxTotalLength(_) => None,
-            };
+            let group_id = self.resolve_operand_group_id(operand);
 
             self.operands.push(UiOperandRow {
                 id: Uuid::new_v4(),
@@ -539,8 +520,8 @@ impl OptimizationModel {
                     rule: rule.clone(),
                 });
             } else if row.is_enabled {
-                let mut var = FreeVariable::new(row.address.clone(), row.property_name.clone())
-                    .with_initial_value(row.current_value);
+                let mut var =
+                    FreeVariable::new(row.address.clone()).with_initial_value(row.current_value);
 
                 if let Ok(Some(bounds)) = row.solver_bounds() {
                     var = var.with_bounds(bounds);
@@ -578,8 +559,8 @@ impl OptimizationModel {
                     rule: rule.clone(),
                 });
             } else if row.is_enabled {
-                let mut var = FreeVariable::new(row.address.clone(), row.property_name.clone())
-                    .with_initial_value(row.current_value);
+                let mut var =
+                    FreeVariable::new(row.address.clone()).with_initial_value(row.current_value);
 
                 if let Some(bounds) = row.solver_bounds()? {
                     var = var.with_bounds(bounds);
@@ -857,7 +838,7 @@ impl OptimizationModel {
                             .unwrap_or_else(|| "Detector".to_string());
                         (aname, format!("{nname} → {}", obs.metric_name), symbol)
                     }
-                    MetricSource::Parameter(_) => ("Parameter".to_string(), m.name.clone(), symbol),
+                    MetricSource::Parameter(p) => ("Parameter".to_string(), p.to_string(), symbol),
                 }
             }
             StandardOperand::MinEdgeThickness(t) => {
@@ -1142,12 +1123,11 @@ mod tests {
             property_name: "thickness".to_string(),
         };
 
-        let var = FreeVariable::new(addr.clone(), "thickness")
+        let var = FreeVariable::new(addr.clone())
             .with_initial_value(0.02)
             .with_bounds(BoxBounds::new(0.01, 0.05).unwrap());
 
         let operand = StandardOperand::Metric(MetricOperand::new(
-            "Max Thickness",
             addr.clone(),
             0.04,
             OperandMode::UpperLimit,

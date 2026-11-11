@@ -400,11 +400,6 @@ pub fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<b
                                                       .add_operand(
                                                           StandardOperand::Metric(
                                                               MetricOperand::new(
-                                                                  format!(
-                                                                      "{}: {}",
-                                                                      obs_clone.node_name,
-                                                                      obs_clone.descriptor.name,
-                                                                  ),
                                                                   obs_clone.address.clone(),
                                                                   0.0,
                                                                   OperandMode::Equal,
@@ -464,12 +459,7 @@ pub fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<b
                                                   .write()
                                                   .add_operand(
                                                       StandardOperand::MinEdgeThickness(
-                                                          MinEdgeThicknessOperand::new(
-                                                              format!("{node_name} Min Edge"),
-                                                              node_id,
-                                                              1.0e-3,
-                                                              5.0,
-                                                          ),
+                                                          MinEdgeThicknessOperand::new(node_id, 1.0e-3, 5.0),
                                                       ),
                                                   );
                                               open.set(false);
@@ -520,12 +510,7 @@ pub fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<b
                                           .write()
                                           .add_operand(
                                               StandardOperand::MaxTotalLength(
-                                                  MaxTotalLengthOperand::new(
-                                                      "Max Total Length",
-                                                      distance_segments,
-                                                      0.5,
-                                                      1.0,
-                                                  ),
+                                                  MaxTotalLengthOperand::new(distance_segments, 0.5, 1.0),
                                               ),
                                           );
                                       open.set(false);
@@ -572,12 +557,7 @@ pub fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<b
                                               .write()
                                               .add_operand(
                                                   StandardOperand::TransmissionPenalty(
-                                                      TransmissionPenaltyOperand::new(
-                                                          format!("{}: Transmission", obs_pen.node_name),
-                                                          obs_pen.address.clone(),
-                                                          100,
-                                                          2.0,
-                                                      ),
+                                                      TransmissionPenaltyOperand::new(obs_pen.address.clone(), 100, 2.0),
                                                   ),
                                               );
                                           open.set(false);

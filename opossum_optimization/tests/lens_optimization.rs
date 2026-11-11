@@ -3,8 +3,8 @@ mod common;
 use common::build_kepler_setup;
 use opossum_core::{error::OpmResult, micrometer, millimeter};
 use opossum_optimization::{
-    BoxBounds, FreeVariable, MetricReader, ObservableAddress, OpticOptimizer,
-    OptimizationAlgorithm, ParameterAddress, ParameterCoupling, TargetValueOperand,
+    BoxBounds, FreeVariable, MetricOperand, MetricReader, ObservableAddress, OperandMode,
+    OpticOptimizer, OptimizationAlgorithm, ParameterAddress, ParameterCoupling,
 };
 
 #[test]
@@ -28,7 +28,7 @@ fn test_optimize_kepler_lens_curvature_coupled() -> OpmResult<()> {
 
     let summary = OpticOptimizer::new(&mut doc)
         .add_variable(
-            FreeVariable::new(front_curvature_addr.clone(), "lens2_front_curvature")
+            FreeVariable::new(front_curvature_addr.clone())
                 .with_length_bounds(millimeter!(30.0), millimeter!(150.0))?,
         )?
         // R2 = -R1
@@ -36,10 +36,10 @@ fn test_optimize_kepler_lens_curvature_coupled() -> OpmResult<()> {
             rear_curvature_addr.clone(),
             front_curvature_addr.clone(),
         ))
-        .add_operand(TargetValueOperand::for_spot_radius(
-            "minimize_rms_spot",
+        .add_operand(MetricOperand::for_spot_radius(
             spot_observable_addr.clone(),
             micrometer!(0.0),
+            OperandMode::Equal,
             1.0,
         ))
         .optimize()?;
@@ -80,17 +80,15 @@ fn test_optimize_kepler_best_form_lens_curvature() -> OpmResult<()> {
     // R in [25 mm, 250 mm] corresponds to c in [4.0 m^-1, 40.0 m^-1]
     let summary = OpticOptimizer::new(&mut doc)
         .add_variable(
-            FreeVariable::new(front_c_addr.clone(), "lens2_c1")
-                .with_bounds(BoxBounds::new(4.0, 40.0)?),
+            FreeVariable::new(front_c_addr.clone()).with_bounds(BoxBounds::new(4.0, 40.0)?),
         )?
         .add_variable(
-            FreeVariable::new(rear_c_addr.clone(), "lens2_c2")
-                .with_bounds(BoxBounds::new(-40.0, -4.0)?),
+            FreeVariable::new(rear_c_addr.clone()).with_bounds(BoxBounds::new(-40.0, -4.0)?),
         )?
-        .add_operand(TargetValueOperand::for_spot_radius(
-            "minimize_rms_spot",
+        .add_operand(MetricOperand::for_spot_radius(
             spot_observable_addr.clone(),
             micrometer!(0.0),
+            OperandMode::Equal,
             1.0,
         ))
         .with_algorithm(OptimizationAlgorithm::lbfgs().with_max_iterations(30))

@@ -20,6 +20,7 @@ use crate::{
         BeamSplitter, Dummy, Lens, NodeReference, ReflectiveGrating, SourcePort, ThinMirror,
         round_collimated_ray_builder,
     },
+    opm_document::optimization::{MetricOperand, OperandMode},
 };
 use approx::assert_relative_eq;
 use uom::si::f64::Length;
@@ -675,7 +676,7 @@ fn a_strand_the_axis_does_not_reach_leaves_the_rest_placed() -> OpmResult<()> {
 fn opm_document_optimization_config_roundtrip() -> OpmResult<()> {
     use super::optimization::{
         CouplingType, FreeVariable, OptimizationAlgorithm, OptimizationConfig, ParameterAddress,
-        ParameterCoupling, TargetValueOperand,
+        ParameterCoupling,
     };
 
     let mut doc = OpmDocument::default();
@@ -686,14 +687,14 @@ fn opm_document_optimization_config_roundtrip() -> OpmResult<()> {
         node_id,
         property_name: "thickness".to_string(),
     };
-    let var = FreeVariable::new(addr.clone(), "thickness").with_initial_value(0.01);
+    let var = FreeVariable::new(addr.clone()).with_initial_value(0.01);
     let coupling = ParameterCoupling {
         target: addr.clone(),
         rule: CouplingType::Identical {
             source: addr.clone(),
         },
     };
-    let operand = TargetValueOperand::new("Target 1", addr, 0.05, 1.0, 1e-3);
+    let operand = MetricOperand::new("Target 1", addr, 0.05, OperandMode::Equal, 1.0, 1e-3);
 
     let config = OptimizationConfig::new()
         .with_variable(var)

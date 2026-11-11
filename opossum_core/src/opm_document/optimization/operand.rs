@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use super::address::MetricSource;
 use crate::{core_optics::observable::MetricDimension, utils::to_f64};
 use serde::{Deserialize, Serialize};
@@ -74,7 +76,6 @@ impl OperandMode {
 /// Unified scalar merit operand targeting either an exact value or an inequality limit.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MetricOperand {
-    pub name: String,
     pub source: MetricSource,
     pub target: f64,
     pub mode: OperandMode,
@@ -83,9 +84,7 @@ pub struct MetricOperand {
 }
 
 impl MetricOperand {
-    /// Creates a raw metric operand in SI base units.
     pub fn new(
-        name: impl Into<String>,
         source: impl Into<MetricSource>,
         target: f64,
         mode: OperandMode,
@@ -98,7 +97,6 @@ impl MetricOperand {
             scale
         };
         Self {
-            name: name.into(),
             source: source.into(),
             target,
             mode,
@@ -107,42 +105,31 @@ impl MetricOperand {
         }
     }
 
-    /// Helper to create a two-sided target operand (=).
-    pub fn target(
-        name: impl Into<String>,
-        source: impl Into<MetricSource>,
-        target: f64,
-        weight: f64,
-        scale: f64,
-    ) -> Self {
-        Self::new(name, source, target, OperandMode::Equal, weight, scale)
+    pub fn target(source: impl Into<MetricSource>, target: f64, weight: f64, scale: f64) -> Self {
+        Self::new(source, target, OperandMode::Equal, weight, scale)
     }
 
-    /// Helper to create an upper limit constraint operand (<=).
     pub fn upper_limit(
-        name: impl Into<String>,
         source: impl Into<MetricSource>,
         limit: f64,
         weight: f64,
         scale: f64,
     ) -> Self {
-        Self::new(name, source, limit, OperandMode::UpperLimit, weight, scale)
+        Self::new(source, limit, OperandMode::UpperLimit, weight, scale)
     }
 
-    /// Helper to create a lower limit constraint operand (>=).
     pub fn lower_limit(
-        name: impl Into<String>,
         source: impl Into<MetricSource>,
         limit: f64,
         weight: f64,
         scale: f64,
     ) -> Self {
-        Self::new(name, source, limit, OperandMode::LowerLimit, weight, scale)
+        Self::new(source, limit, OperandMode::LowerLimit, weight, scale)
     }
 
     #[must_use]
-    pub fn name(&self) -> &str {
-        &self.name
+    pub fn name(&self) -> String {
+        format!("{} {} {}", self.source, self.mode.symbol(), self.target)
     }
 
     #[must_use]
@@ -150,16 +137,13 @@ impl MetricOperand {
         self.weight
     }
 
-    /// Creates an operand targeting spot size with micrometer default scaling.
     pub fn for_spot_radius(
-        name: impl Into<String>,
         source: impl Into<MetricSource>,
         target: Length,
         mode: OperandMode,
         weight: f64,
     ) -> Self {
         Self::new(
-            name,
             source,
             target.get::<meter>(),
             mode,
@@ -168,15 +152,8 @@ impl MetricOperand {
         )
     }
 
-    /// Creates an operand targeting wavefront aberrations with nanometer default scaling.
-    pub fn for_wavefront(
-        name: impl Into<String>,
-        source: impl Into<MetricSource>,
-        target: Length,
-        weight: f64,
-    ) -> Self {
+    pub fn for_wavefront(source: impl Into<MetricSource>, target: Length, weight: f64) -> Self {
         Self::new(
-            name,
             source,
             target.get::<meter>(),
             OperandMode::Equal,
@@ -185,26 +162,21 @@ impl MetricOperand {
         )
     }
 
-    /// Creates an operand targeting wavefront error in waves (lambda).
     pub fn for_wavefront_waves(
-        name: impl Into<String>,
         source: impl Into<MetricSource>,
         target_waves: f64,
         weight: f64,
     ) -> Self {
-        Self::new(name, source, target_waves, OperandMode::Equal, weight, 0.02)
+        Self::new(source, target_waves, OperandMode::Equal, weight, 0.02)
     }
 
-    /// Creates a general length operand with millimeter default scaling.
     pub fn for_length(
-        name: impl Into<String>,
         source: impl Into<MetricSource>,
         target: Length,
         mode: OperandMode,
         weight: f64,
     ) -> Self {
         Self::new(
-            name,
             source,
             target.get::<meter>(),
             mode,
@@ -213,27 +185,22 @@ impl MetricOperand {
         )
     }
 
-    /// Creates an operand targeting optical energy with 1.0 mJ default scaling.
     pub fn for_energy(
-        name: impl Into<String>,
         source: impl Into<MetricSource>,
         target: Energy,
         mode: OperandMode,
         weight: f64,
     ) -> Self {
-        Self::new(name, source, target.get::<joule>(), mode, weight, 1.0e-3)
+        Self::new(source, target.get::<joule>(), mode, weight, 1.0e-3)
     }
 
-    /// Creates an operand targeting optical fluence with 1.0 J/cm² default scaling.
     pub fn for_fluence(
-        name: impl Into<String>,
         source: impl Into<MetricSource>,
         target: RadiantExposure,
         mode: OperandMode,
         weight: f64,
     ) -> Self {
         Self::new(
-            name,
             source,
             target.get::<joule_per_square_meter>(),
             mode,
@@ -243,10 +210,8 @@ impl MetricOperand {
     }
 }
 
-// Geometric and penalty operands remain specialized:
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MaxTotalLengthOperand {
-    pub name: String,
     pub segments: Vec<super::address::ParameterAddress>,
     pub max_length: f64,
     pub weight: f64,
@@ -254,41 +219,40 @@ pub struct MaxTotalLengthOperand {
 }
 
 impl MaxTotalLengthOperand {
+    /// Creates a new [`MaxTotalLengthOperand`].
     pub fn new(
-        name: impl Into<String>,
         segments: Vec<super::address::ParameterAddress>,
         max_length: f64,
         weight: f64,
     ) -> Self {
         Self {
-            name: name.into(),
             segments,
             max_length,
             weight,
             scale: DEFAULT_GEOMETRIC_SCALE,
         }
     }
+    /// Returns the name of this [`MaxTotalLengthOperand`].
     #[must_use]
-    pub fn name(&self) -> &str {
-        &self.name
+    pub fn name(&self) -> Cow<'static, str> {
+        Cow::Borrowed("MaxTotalLength")
     }
+    /// Returns the weight of this [`MaxTotalLengthOperand`].
     #[must_use]
     pub fn weight(&self) -> f64 {
         self.weight
     }
     pub fn for_length(
-        name: impl Into<String>,
         segments: Vec<super::address::ParameterAddress>,
         max_length: Length,
         weight: f64,
     ) -> Self {
-        Self::new(name, segments, max_length.get::<meter>(), weight)
+        Self::new(segments, max_length.get::<meter>(), weight)
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MinEdgeThicknessOperand {
-    pub name: String,
     pub node_id: Uuid,
     pub min_thickness: f64,
     pub weight: f64,
@@ -297,9 +261,8 @@ pub struct MinEdgeThicknessOperand {
 
 impl MinEdgeThicknessOperand {
     #[must_use]
-    pub fn new(name: impl Into<String>, node_id: Uuid, min_thickness: f64, weight: f64) -> Self {
+    pub fn new(node_id: Uuid, min_thickness: f64, weight: f64) -> Self {
         Self {
-            name: name.into(),
             node_id,
             min_thickness,
             weight,
@@ -307,27 +270,21 @@ impl MinEdgeThicknessOperand {
         }
     }
     #[must_use]
-    pub fn name(&self) -> &str {
-        &self.name
+    pub fn name(&self) -> String {
+        format!("MinEdgeThickness({})", self.node_id)
     }
     #[must_use]
     pub fn weight(&self) -> f64 {
         self.weight
     }
     #[must_use]
-    pub fn for_thickness(
-        name: impl Into<String>,
-        node_id: Uuid,
-        min_thickness: Length,
-        weight: f64,
-    ) -> Self {
-        Self::new(name, node_id, min_thickness.get::<meter>(), weight)
+    pub fn for_thickness(node_id: Uuid, min_thickness: Length, weight: f64) -> Self {
+        Self::new(node_id, min_thickness.get::<meter>(), weight)
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TransmissionPenaltyOperand {
-    pub name: String,
     pub address: super::address::ObservableAddress,
     pub expected_rays: f64,
     pub weight: f64,
@@ -335,21 +292,19 @@ pub struct TransmissionPenaltyOperand {
 
 impl TransmissionPenaltyOperand {
     pub fn new(
-        name: impl Into<String>,
         address: super::address::ObservableAddress,
         expected_rays: usize,
         weight: f64,
     ) -> Self {
         Self {
-            name: name.into(),
             address,
             expected_rays: to_f64(expected_rays),
             weight,
         }
     }
     #[must_use]
-    pub fn name(&self) -> &str {
-        &self.name
+    pub fn name(&self) -> String {
+        format!("TransmissionPenalty({})", self.address)
     }
     #[must_use]
     pub fn weight(&self) -> f64 {
@@ -357,7 +312,6 @@ impl TransmissionPenaltyOperand {
     }
 }
 
-/// Standard serializable operand wrapper.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum StandardOperand {
     Metric(MetricOperand),
@@ -368,10 +322,10 @@ pub enum StandardOperand {
 
 impl StandardOperand {
     #[must_use]
-    pub fn name(&self) -> &str {
+    pub fn name(&self) -> String {
         match self {
             Self::Metric(op) => op.name(),
-            Self::MaxTotalLength(op) => op.name(),
+            Self::MaxTotalLength(op) => op.name().into_owned(),
             Self::MinEdgeThickness(op) => op.name(),
             Self::TransmissionPenalty(op) => op.name(),
         }

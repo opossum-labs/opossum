@@ -1,3 +1,5 @@
+use std::fmt::{self, Display, Formatter};
+
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -6,7 +8,9 @@ use uuid::Uuid;
 pub enum ParameterAddress {
     /// A scalar property located on a node (e.g. radius of curvature, thickness, tilt).
     NodeProperty {
+        /// id of the node
         node_id: Uuid,
+        /// name of the property
         property_name: String,
     },
     /// A spherical optical surface curvature.
@@ -15,11 +19,40 @@ pub enum ParameterAddress {
     /// Underlying model property: Radius of curvature $R$ in [$m$].
     /// A curvature of $c = 0.0$ corresponds to a flat surface ($R = \pm\infty$).
     SurfaceCurvature {
+        /// id of the node
         node_id: Uuid,
+        /// name of the curvature property
         property_name: String,
     },
     /// A distance starting from an output port of a node.
-    ConnectionDistance { src_id: Uuid, src_port: String },
+    ConnectionDistance {
+        /// if of the source node this connection belongs to
+        src_id: Uuid,
+        /// port name of the source node this connection bleongs to
+        src_port: String,
+    },
+}
+
+impl Display for ParameterAddress {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NodeProperty {
+                node_id,
+                property_name,
+            } => {
+                write!(f, "{node_id}.{property_name}")
+            }
+            Self::SurfaceCurvature {
+                node_id,
+                property_name,
+            } => {
+                write!(f, "{node_id}.{property_name}(curvature)")
+            }
+            Self::ConnectionDistance { src_id, src_port } => {
+                write!(f, "Distance({src_id}:{src_port})")
+            }
+        }
+    }
 }
 
 /// Unique address identifying an observable output metric (operand source).
@@ -33,6 +66,16 @@ pub struct ObservableAddress {
     pub metric_name: String,
 }
 
+impl Display for ObservableAddress {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}.{}[analyzer: {}]",
+            self.node_id, self.metric_name, self.analyzer_id
+        )
+    }
+}
+
 /// Unified source for quantities evaluated by optimization operands.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum MetricSource {
@@ -40,6 +83,15 @@ pub enum MetricSource {
     Observable(ObservableAddress),
     /// A geometric or model property (e.g. thickness, radius, spacing).
     Parameter(ParameterAddress),
+}
+
+impl Display for MetricSource {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Observable(addr) => write!(f, "Observable({addr})"),
+            Self::Parameter(addr) => write!(f, "Param({addr})"),
+        }
+    }
 }
 
 impl From<ObservableAddress> for MetricSource {

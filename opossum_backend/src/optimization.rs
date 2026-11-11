@@ -397,12 +397,11 @@ mod test {
 
         let config = OptimizationConfig::new()
             .with_variable(
-                FreeVariable::new(dist_addr.clone(), "image_dist")
+                FreeVariable::new(dist_addr.clone())
                     .with_length_bounds(millimeter!(30.0), millimeter!(90.0))
                     .unwrap(),
             )
             .with_operand(MetricOperand::for_spot_radius(
-                "min_spot",
                 ObservableAddress {
                     analyzer_id,
                     node_id: spot_id,
@@ -492,12 +491,11 @@ mod test {
         // Configuration with Infinity and NaN values
         let config = OptimizationConfig::new()
             .with_variable(
-                FreeVariable::new(dist_addr, "image_dist")
+                FreeVariable::new(dist_addr)
                     .with_length_bounds(millimeter!(30.0), millimeter!(90.0))
                     .unwrap(),
             )
             .with_operand(MetricOperand::for_spot_radius(
-                "min_spot",
                 ObservableAddress {
                     analyzer_id,
                     node_id: spot_id,
@@ -550,7 +548,7 @@ mod test {
         };
 
         let config = OptimizationConfig::new()
-            .with_variable(FreeVariable::new(dist_addr, "dist"))
+            .with_variable(FreeVariable::new(dist_addr))
             .with_target_cost(1e-5);
 
         let ron_payload = ron::to_string(&config).unwrap();

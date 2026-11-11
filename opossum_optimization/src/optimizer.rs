@@ -423,8 +423,8 @@ impl<'a> OpticOptimizer<'a> {
             .map(|v| {
                 v.initial_value.ok_or_else(|| {
                     OpossumError::Other(format!(
-                        "FreeVariable '{}' has uninitialized start value",
-                        v.name
+                        "FreeVariable '{:?}' has uninitialized start value",
+                        v
                     ))
                 })
             })

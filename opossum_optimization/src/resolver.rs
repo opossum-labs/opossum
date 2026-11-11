@@ -173,8 +173,8 @@ mod tests {
         };
 
         let free_vars = vec![
-            FreeVariable::new(addr_r1.clone(), "r1"),
-            FreeVariable::new(addr_d1.clone(), "d1"),
+            FreeVariable::new(addr_r1.clone()),
+            FreeVariable::new(addr_d1.clone()),
         ];
 
         let couplings = vec![
@@ -209,7 +209,7 @@ mod tests {
             property_name: "p2".into(),
         };
 
-        let free_vars = vec![FreeVariable::new(addr1.clone(), "p1")];
+        let free_vars = vec![FreeVariable::new(addr1.clone())];
 
         // Conflict: addr1 cannot be both free and coupling target
         let invalid_couplings = vec![ParameterCoupling::identical(addr1.clone(), addr2.clone())];

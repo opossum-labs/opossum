@@ -65,8 +65,6 @@ impl BoxBounds {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FreeVariable {
     pub address: ParameterAddress,
-    pub name: String,
-    /// Initial value in SI base units (meters/radians/dimensionless).
     pub initial_value: Option<f64>,
     pub bounds: Option<BoxBounds>,
     pub delta_rel: f64,
@@ -74,11 +72,10 @@ pub struct FreeVariable {
 }
 
 impl FreeVariable {
-    /// Creates a new `FreeVariable` where the initial value is automatically read from the model.
-    pub fn new(address: ParameterAddress, name: impl Into<String>) -> Self {
+    /// Creates a new `FreeVariable` targeting a specific parameter address.
+    pub fn new(address: ParameterAddress) -> Self {
         Self {
             address,
-            name: name.into(),
             initial_value: None,
             bounds: None,
             delta_rel: DEFAULT_DELTA_REL,
@@ -86,14 +83,12 @@ impl FreeVariable {
         }
     }
 
-    /// Explicitly overrides the initial parameter value using raw SI base units.
     #[must_use]
     pub const fn with_initial_value(mut self, value: f64) -> Self {
         self.initial_value = Some(value);
         self
     }
 
-    /// Explicitly overrides the initial parameter value using a typed Length.
     #[must_use]
     pub fn with_initial_length(mut self, length: Length) -> Self {
         self.initial_value = Some(length.get::<meter>());
@@ -106,10 +101,6 @@ impl FreeVariable {
         self
     }
 
-    /// Configures variable bounds directly using typed Length quantities.
-    ///
-    /// # Errors
-    /// This function returns an error if the underlying [`BoxBounds`] could not be created.
     pub fn with_length_bounds(self, min: Length, max: Length) -> OpmResult<Self> {
         let bounds = BoxBounds::from_lengths(min, max)?;
         Ok(self.with_bounds(bounds))
@@ -167,7 +158,7 @@ mod tests {
             node_id: Uuid::new_v4(),
             property_name: "radius".into(),
         };
-        let var = FreeVariable::new(addr, "radius");
+        let var = FreeVariable::new(addr);
 
         // Near zero: delta_abs_min dominates
         let step_at_zero = var.finite_difference_step(0.0);
