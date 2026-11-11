@@ -24,7 +24,8 @@ use opossum_optimization::{
 use super::state::OptimizationModel;
 use uuid::Uuid;
 
-type DiscoveredObservableHierarchy = Vec<(String, String, Vec<(String, Vec<DiscoveredObservable>)>)>;
+type DiscoveredObservableHierarchy =
+    Vec<(String, String, Vec<(String, Vec<DiscoveredObservable>)>)>;
 
 #[derive(Props, Clone, PartialEq)]
 pub struct MeritDesignerProps {
@@ -216,24 +217,40 @@ fn OperandRow(mut props: OperandRowProps) -> Element {
             "{detail_text}"
           }
         }
-        // Operator Symbol / Toggle button
+        // Operator Mode Toggle button (= -> ≤ -> ≥ -> =)
         td { class: "text-center px-1",
-          if is_threshold {
-            button {
-              class: "btn btn-outline-warning btn-sm p-0 fw-bold border-secondary font-monospace",
-              style: "width: 28px; height: 22px; line-height: 20px;",
-              title: "Click to toggle between upper (≤) and lower (≥) bound",
-              disabled: !is_enabled,
-              onclick: move |_| props.model.write().toggle_threshold_direction(op_id),
-              "{op_symbol}"
-            }
-          } else if is_target {
-            button {
-              class: "btn btn-outline-info btn-sm p-0 fw-bold border-secondary font-monospace",
-              style: "width: 28px; height: 22px; line-height: 20px;",
-              title: "Exact target value (=)",
-              disabled: "disabled",
-              "="
+          if is_threshold || is_target {
+            {
+                let (btn_class, title_text) = match op_symbol {
+                    "=" => {
+                        (
+                            "btn-outline-info text-info",
+                            "Mode: Target (=). Click to switch to Upper Bound (≤)",
+                        )
+                    }
+                    "≤" => {
+                        (
+                            "btn-outline-warning text-warning",
+                            "Mode: Upper Bound (≤). Click to switch to Lower Bound (≥)",
+                        )
+                    }
+                    _ => {
+                        (
+                            "btn-outline-warning text-warning",
+                            "Mode: Lower Bound (≥). Click to switch to Target (=)",
+                        )
+                    }
+                };
+                rsx! {
+                  button {
+                    class: "btn {btn_class} btn-sm p-0 fw-bold border-secondary font-monospace",
+                    style: "width: 28px; height: 22px; line-height: 20px;",
+                    title: "{title_text}",
+                    disabled: !is_enabled,
+                    onclick: move |_| props.model.write().cycle_operand_mode(op_id),
+                    "{op_symbol}"
+                  }
+                }
             }
           } else {
             span { class: "badge bg-secondary font-monospace", "{op_symbol}" }
@@ -292,7 +309,8 @@ pub fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<b
                     &mut hierarchy.last_mut().unwrap().2
                 };
 
-                if let Some(node_pos) = channel_entry.iter().position(|(n, _)| n == &obs.node_name) {
+                if let Some(node_pos) = channel_entry.iter().position(|(n, _)| n == &obs.node_name)
+                {
                     channel_entry[node_pos].1.push(obs.clone());
                 } else {
                     channel_entry.push((obs.node_name.clone(), vec![obs.clone()]));
@@ -388,8 +406,7 @@ pub fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<b
                                 div { class: "list-group list-group-flush",
                                   for obs in metrics {
                                     {
-                                        let obs_target = obs.clone();
-                                        let obs_thresh = obs.clone();
+                                        let obs_clone = obs.clone();
                                         let scale = default_scale_for_metric(
                                             obs.descriptor.dimension,
                                             &obs.descriptor.name,
@@ -397,60 +414,31 @@ pub fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<b
                                         rsx! {
                                           div { class: "list-group-item bg-transparent text-light py-1 px-2 d-flex justify-content-between align-items-center border-0",
                                             div { class: "font-monospace text-light", "{obs.descriptor.name}" }
-                                            div { class: "d-flex align-items-center gap-1",
-                                              button {
-                                                r#type: "button",
-                                                class: "btn btn-outline-primary btn-sm py-0 px-2 font-monospace",
-                                                style: "font-size: 10px;",
-                                                title: "Penalizes deviation in both directions: weight * ((val - target) / scale)^2",
-                                                onclick: move |e: MouseEvent| {
-                                                    e.stop_propagation();
-                                                    model
-                                                        .write()
-                                                        .add_operand(
-                                                            StandardOperand::Target(TargetValueOperand {
-                                                                name: format!(
-                                                                    "{}: {}",
-                                                                    obs_target.node_name,
-                                                                    obs_target.descriptor.name,
-                                                                ),
-                                                                source: obs_target.address.clone().into(),
-                                                                target: 0.0,
-                                                                weight: 1.0,
-                                                                scale,
-                                                            }),
-                                                        );
-                                                    open.set(false);
-                                                },
-                                                "+ Target (=)"
-                                              }
-                                              button {
-                                                r#type: "button",
-                                                class: "btn btn-outline-warning btn-sm py-0 px-2 font-monospace",
-                                                style: "font-size: 10px;",
-                                                title: "Penalizes only if exceeding upper limit: weight * (max(0, val - limit) / scale)^2",
-                                                onclick: move |e: MouseEvent| {
-                                                    e.stop_propagation();
-                                                    model
-                                                        .write()
-                                                        .add_operand(
-                                                            StandardOperand::Threshold(ThresholdOperand {
-                                                                name: format!(
-                                                                    "{}: {}",
-                                                                    obs_thresh.node_name,
-                                                                    obs_thresh.descriptor.name,
-                                                                ),
-                                                                source: obs_thresh.address.clone().into(),
-                                                                limit: scale * 10.0,
-                                                                direction: ThresholdDirection::Upper,
-                                                                weight: 1.0,
-                                                                scale,
-                                                            }),
-                                                        );
-                                                    open.set(false);
-                                                },
-                                                "+ Limit (≤)"
-                                              }
+                                            button {
+                                              r#type: "button",
+                                              class: "btn btn-outline-primary btn-sm py-0 px-2 font-monospace",
+                                              style: "font-size: 10px;",
+                                              title: "Add metric operand (defaults to target = 0.0, mode can be toggled in table)",
+                                              onclick: move |e: MouseEvent| {
+                                                  e.stop_propagation();
+                                                  model
+                                                      .write()
+                                                      .add_operand(
+                                                          StandardOperand::Target(TargetValueOperand {
+                                                              name: format!(
+                                                                  "{}: {}",
+                                                                  obs_clone.node_name,
+                                                                  obs_clone.descriptor.name,
+                                                              ),
+                                                              source: obs_clone.address.clone().into(),
+                                                              target: 0.0,
+                                                              weight: 1.0,
+                                                              scale,
+                                                          }),
+                                                      );
+                                                  open.set(false);
+                                              },
+                                              "+ Add"
                                             }
                                           }
                                         }

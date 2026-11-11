@@ -2,9 +2,7 @@ use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 use opossum_optimization::{
-    BoxBounds, CouplingType, DiscoveredVariable, FreeVariable, MetricSource,
-    ModelOptimizationSchema, OptimizationAlgorithm, OptimizationConfig, ParameterAddress,
-    ParameterCoupling, StandardOperand, ThresholdDirection,
+    BoxBounds, CouplingType, DiscoveredVariable, FreeVariable, MetricSource, ModelOptimizationSchema, OptimizationAlgorithm, OptimizationConfig, ParameterAddress, ParameterCoupling, StandardOperand, TargetValueOperand, ThresholdDirection, ThresholdOperand,
 };
 
 /// UI-specific representation of a tunable variable row in the dense table.
@@ -1157,6 +1155,45 @@ impl OptimizationModel {
     pub fn toggle_operand(&mut self, id: Uuid) {
         if let Some(row) = self.operands.iter_mut().find(|op| op.id == id) {
             row.is_enabled = !row.is_enabled;
+        }
+        self.run_preflight_validation();
+    }
+    /// Cycles operand mode between Target (=), Upper limit (≤), and Lower limit (≥).
+    pub fn cycle_operand_mode(&mut self, id: Uuid) {
+        if let Some(row) = self.operands.iter_mut().find(|op| op.id == id) {
+            match &row.operand {
+                StandardOperand::Target(t) => {
+                    // Transition: Target (=) -> Threshold Upper (<=)
+                    row.operand = StandardOperand::Threshold(ThresholdOperand {
+                        name: t.name.clone(),
+                        source: t.source.clone(),
+                        limit: t.target,
+                        direction: ThresholdDirection::Upper,
+                        weight: t.weight,
+                        scale: t.scale,
+                    });
+                }
+                StandardOperand::Threshold(t) => match t.direction {
+                    // Transition: Threshold Upper (<=) -> Threshold Lower (>=)
+                    ThresholdDirection::Upper => {
+                        let mut new_thresh = t.clone();
+                        new_thresh.direction = ThresholdDirection::Lower;
+                        row.operand = StandardOperand::Threshold(new_thresh);
+                    }
+                    // Transition: Threshold Lower (>=) -> Target (=)
+                    ThresholdDirection::Lower => {
+                        row.operand = StandardOperand::Target(TargetValueOperand {
+                            name: t.name.clone(),
+                            source: t.source.clone(),
+                            target: t.limit,
+                            weight: t.weight,
+                            scale: t.scale,
+                        });
+                    }
+                },
+                // Geometric constraints (MinEdgeThickness, MaxTotalLength) remain specialized
+                _ => {}
+            }
         }
         self.run_preflight_validation();
     }
