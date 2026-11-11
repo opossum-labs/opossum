@@ -1,6 +1,5 @@
 use dioxus::prelude::*;
 use dioxus_free_icons::{Icon, icons::fa_solid_icons::FaGears};
-
 use super::state::OptimizationModel;
 
 #[derive(Props, Clone, PartialEq)]
@@ -17,7 +16,6 @@ pub struct LiveMonitorProps {
 pub fn LiveMonitorPanel(mut props: LiveMonitorProps) -> Element {
     let current_algo_kind = props.model.read().algorithm_kind();
     let configured_max_iters = props.model.read().max_iterations();
-    let configured_target_cost = props.model.read().target_cost;
 
     rsx! {
       div { class: "border rounded p-2 bg-dark text-light h-100 d-flex flex-column",
@@ -48,96 +46,78 @@ pub fn LiveMonitorPanel(mut props: LiveMonitorProps) -> Element {
           }
         }
 
-        // Max Iterations & Target Cost Inputs
-        div { class: "row g-2 mb-2",
-          div { class: "col-6",
-            label {
-              class: "form-label text-muted mb-0",
-              style: "font-size: 10px;",
-              "Max Iters"
-            }
-            input {
-              r#type: "number",
-              class: "form-control form-control-sm bg-black text-light border-secondary font-monospace text-end",
-              style: "font-size: 11px;",
-              disabled: props.is_running,
-              value: "{configured_max_iters}",
-              oninput: move |e| {
-                  if let Ok(val) = e.value().parse::<u64>() {
-                      props.model.write().set_max_iterations(val);
-                  }
-              },
-            }
-          }
-          div { class: "col-6",
-            label {
-              class: "form-label text-muted mb-0",
-              style: "font-size: 10px;",
-              "Target Cost"
-            }
-            input {
-              r#type: "number",
-              step: "any",
-              class: "form-control form-control-sm bg-black text-light border-secondary font-monospace text-end",
-              style: "font-size: 11px;",
-              disabled: props.is_running,
-              value: "{configured_target_cost}",
-              oninput: move |e| {
-                  if let Ok(val) = e.value().parse::<f64>() {
-                      props.model.write().set_target_cost(val);
-                  }
-              },
-            }
-          }
-        }
-        // Algorithm-Specific Controls for Simulated Annealing
-        if current_algo_kind == "SimulatedAnnealing" {
-          div { class: "row g-2 mb-2 p-2 rounded bg-black bg-opacity-50 border border-secondary",
-            div { class: "col-6",
+        // Combined Solver Hyperparameters Box (Iterations & optional SA Parameters)
+        div { class: "p-2 rounded bg-black bg-opacity-50 border border-secondary mb-2",
+          div { class: "row g-2 align-items-center",
+            div { class: "col-12",
               label {
-                class: "form-label text-warning mb-0",
+                class: "form-label text-muted mb-0",
                 style: "font-size: 10px;",
-                "Initial Temp (T₀)"
+                "Max Iterations"
               }
               input {
                 r#type: "number",
-                step: "0.1",
                 class: "form-control form-control-sm bg-black text-light border-secondary font-monospace text-end",
                 style: "font-size: 11px;",
                 disabled: props.is_running,
-                value: "{props.model.read().sa_initial_temperature()}",
+                value: "{configured_max_iters}",
                 oninput: move |e| {
-                    if let Ok(val) = e.value().parse::<f64>() {
-                        props.model.write().set_sa_initial_temperature(val);
+                    if let Ok(val) = e.value().parse::<u64>() {
+                        props.model.write().set_max_iterations(val);
                     }
                 },
               }
             }
-            div { class: "col-6",
-              label {
-                class: "form-label text-warning mb-0",
-                style: "font-size: 10px;",
-                "Cooling Rate (α)"
+
+            // Optional Annealing Parameters embedded within the same container
+            if current_algo_kind == "SimulatedAnnealing" {
+              div { class: "col-6 mt-2 pt-2 border-top border-secondary border-opacity-50",
+                label {
+                  class: "form-label text-warning mb-0",
+                  style: "font-size: 10px;",
+                  "Initial Temp (T₀)"
+                }
+                input {
+                  r#type: "number",
+                  step: "0.1",
+                  class: "form-control form-control-sm bg-black text-light border-secondary font-monospace text-end",
+                  style: "font-size: 11px;",
+                  disabled: props.is_running,
+                  value: "{props.model.read().sa_initial_temperature()}",
+                  oninput: move |e| {
+                      if let Ok(val) = e.value().parse::<f64>() {
+                          props.model.write().set_sa_initial_temperature(val);
+                      }
+                  },
+                }
               }
-              input {
-                r#type: "number",
-                step: "0.01",
-                min: "0.50",
-                max: "0.999",
-                class: "form-control form-control-sm bg-black text-light border-secondary font-monospace text-end",
-                style: "font-size: 11px;",
-                disabled: props.is_running,
-                value: "{props.model.read().sa_cooling_rate()}",
-                oninput: move |e| {
-                    if let Ok(val) = e.value().parse::<f64>() {
-                        props.model.write().set_sa_cooling_rate(val);
-                    }
-                },
+              div { class: "col-6 mt-2 pt-2 border-top border-secondary border-opacity-50",
+                label {
+                  class: "form-label text-warning mb-0",
+                  style: "font-size: 10px;",
+                  "Cooling Rate (α)"
+                }
+                input {
+                  r#type: "number",
+                  step: "0.01",
+                  min: "0.50",
+                  max: "0.999",
+                  class: "form-control form-control-sm bg-black text-light border-secondary font-monospace text-end",
+                  style: "font-size: 11px;",
+                  disabled: props.is_running,
+                  value: "{props.model.read().sa_cooling_rate()}",
+                  oninput: move |e| {
+                      if let Ok(val) = e.value().parse::<f64>() {
+                          props.model.write().set_sa_cooling_rate(val);
+                      }
+                  },
+                }
               }
             }
           }
         }
-        // Real-Time Iteration & Cost Display
+
+        // Real-Time Iteration & Cost Display (Target Phi removed)
         div { class: "p-2 rounded bg-black border border-secondary mb-2 font-monospace",
           div { class: "d-flex justify-content-between align-items-center small",
             span { class: "text-muted", "Step:" }
@@ -146,10 +126,6 @@ pub fn LiveMonitorPanel(mut props: LiveMonitorProps) -> Element {
           div { class: "d-flex justify-content-between align-items-center small mt-1",
             span { class: "text-muted", "Merit Φ:" }
             span { class: "text-warning fw-bold", "{props.current_cost:.6}" }
-          }
-          div { class: "d-flex justify-content-between align-items-center small mt-1",
-            span { class: "text-muted", "Target Φ:" }
-            span { class: "text-success", "{configured_target_cost:.1e}" }
           }
         }
 

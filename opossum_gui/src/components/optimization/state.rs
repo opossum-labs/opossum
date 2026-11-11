@@ -188,7 +188,7 @@ impl Default for OptimizationModel {
             variable_rows: Vec::new(),
             operands: Vec::new(),
             algorithm: OptimizationAlgorithm::lbfgs(),
-            target_cost: 1e-8,
+            target_cost: 1e-12, // Fixed target cost close to zero
             scope_group_id: None,
             validation_issues: Vec::new(),
         }
@@ -912,7 +912,17 @@ impl OptimizationModel {
             ),
             StandardOperand::TransmissionPenalty(t) => {
                 let aname = self.analyzer_name(t.address.analyzer_id);
-                (aname, "Transmission / Vignetting".to_string(), "≥")
+                let nname = self
+                    .schema
+                    .as_ref()
+                    .and_then(|s| {
+                        s.observable_metrics
+                            .iter()
+                            .find(|m| m.address == t.address || m.address.node_id == t.address.node_id)
+                            .map(|m| m.node_name.clone())
+                    })
+                    .unwrap_or_else(|| "Detector".to_string());
+                (aname, format!("{nname} → Transmission"), "≥")
             }
         }
     }
@@ -967,10 +977,6 @@ impl OptimizationModel {
         self.algorithm = self.algorithm.clone().with_max_iterations(iters);
     }
 
-    /// Updates the target cost threshold for early stopping.
-    pub fn set_target_cost(&mut self, cost: f64) {
-        self.target_cost = cost;
-    }
     /// Returns initial temperature if Simulated Annealing is active.
     pub fn sa_initial_temperature(&self) -> f64 {
         match self.algorithm {
