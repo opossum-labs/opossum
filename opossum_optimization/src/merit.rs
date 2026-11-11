@@ -245,9 +245,9 @@ impl MeritFunction {
         // 3. Evaluate individual operand residuals
         let context = EvaluationContext::new(&working_doc);
         for operand in &self.operands {
-            match operand.evaluate(&context) {
-                Ok(cost) => {
-                    residuals.push(cost.max(0.0).sqrt());
+            match operand.residual(&context) {
+                Ok(r) => {
+                    residuals.push(r);
                 }
                 Err(_) => {
                     residuals.push((self.fatal_penalty * 0.1).sqrt());

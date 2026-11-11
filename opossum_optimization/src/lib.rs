@@ -40,9 +40,8 @@ pub use discovery::{
 pub use dls::DampedLeastSquares;
 pub use merit::{DEFAULT_BOUNDS_PENALTY_WEIGHT, DEFAULT_FATAL_PENALTY, MeritFunction};
 pub use operand::{
-    EvaluationContext, MaxTotalLengthOperand, MinEdgeThicknessOperand, Operand, StandardOperand,
-    TargetValueOperand, ThresholdDirection, ThresholdOperand, TransmissionPenaltyOperand,
-    default_scale_for_metric,
+    EvaluationContext, MaxTotalLengthOperand, MetricOperand, MinEdgeThicknessOperand, Operand,
+    OperandMode, StandardOperand, TransmissionPenaltyOperand, default_scale_for_metric,
 };
 pub use optimizer::OpticOptimizer;
 pub use progress::OptimizationProgressEvent;

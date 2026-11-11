@@ -16,9 +16,9 @@ use dioxus_free_icons::{
 };
 use dioxus_primitives::alert_dialog::AlertDialogContent;
 use opossum_optimization::{
-    DiscoveredObservable, MaxTotalLengthOperand, MinEdgeThicknessOperand, ParameterAddress,
-    StandardOperand, TargetValueOperand, ThresholdDirection, ThresholdOperand,
-    TransmissionPenaltyOperand, default_scale_for_metric,
+    DiscoveredObservable, MaxTotalLengthOperand, MetricOperand, MinEdgeThicknessOperand,
+    OperandMode, ParameterAddress, StandardOperand, TransmissionPenaltyOperand,
+    default_scale_for_metric,
 };
 
 use super::state::OptimizationModel;
@@ -175,14 +175,12 @@ fn OperandRow(mut props: OperandRowProps) -> Element {
     let is_enabled = op_row.is_enabled;
     let (badge_text, detail_text, op_symbol) = model_read.describe_operand_full(op);
     let (target_val, weight_val) = match op {
-        StandardOperand::Target(t) => (t.target, t.weight),
-        StandardOperand::Threshold(t) => (t.limit, t.weight),
+        StandardOperand::Metric(m) => (m.target, m.weight),
         StandardOperand::MinEdgeThickness(t) => (t.min_thickness * 1000.0, t.weight),
         StandardOperand::MaxTotalLength(t) => (t.max_length * 1000.0, t.weight),
         StandardOperand::TransmissionPenalty(t) => (t.expected_rays, t.weight),
     };
-    let is_threshold = matches!(op, StandardOperand::Threshold(_));
-    let is_target = matches!(op, StandardOperand::Target(_));
+    let is_metric = matches!(op, StandardOperand::Metric(_));
     let badge_class = if badge_text == "Geometry" {
         "badge bg-warning text-dark font-sans"
     } else {
@@ -219,38 +217,14 @@ fn OperandRow(mut props: OperandRowProps) -> Element {
         }
         // Operator Mode Toggle button (= -> ≤ -> ≥ -> =)
         td { class: "text-center px-1",
-          if is_threshold || is_target {
-            {
-                let (btn_class, title_text) = match op_symbol {
-                    "=" => {
-                        (
-                            "btn-outline-info text-info",
-                            "Mode: Target (=). Click to switch to Upper Bound (≤)",
-                        )
-                    }
-                    "≤" => {
-                        (
-                            "btn-outline-warning text-warning",
-                            "Mode: Upper Bound (≤). Click to switch to Lower Bound (≥)",
-                        )
-                    }
-                    _ => {
-                        (
-                            "btn-outline-warning text-warning",
-                            "Mode: Lower Bound (≥). Click to switch to Target (=)",
-                        )
-                    }
-                };
-                rsx! {
-                  button {
-                    class: "btn {btn_class} btn-sm p-0 fw-bold border-secondary font-monospace",
-                    style: "width: 28px; height: 22px; line-height: 20px;",
-                    title: "{title_text}",
-                    disabled: !is_enabled,
-                    onclick: move |_| props.model.write().cycle_operand_mode(op_id),
-                    "{op_symbol}"
-                  }
-                }
+          if is_metric {
+            button {
+              class: "btn btn-outline-info btn-sm p-0 fw-bold border-secondary font-monospace",
+              style: "width: 28px; height: 22px; line-height: 20px;",
+              title: "Click to cycle mode (= -> ≤ -> ≥)",
+              disabled: !is_enabled,
+              onclick: move |_| props.model.write().cycle_operand_mode(op_id),
+              "{op_symbol}"
             }
           } else {
             span { class: "badge bg-secondary font-monospace", "{op_symbol}" }
@@ -418,23 +392,26 @@ pub fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<b
                                               r#type: "button",
                                               class: "btn btn-outline-primary btn-sm py-0 px-2 font-monospace",
                                               style: "font-size: 10px;",
-                                              title: "Add metric operand (defaults to target = 0.0, mode can be toggled in table)",
+                                              title: "Add metric operand (mode and target can be changed in the table)",
                                               onclick: move |e: MouseEvent| {
                                                   e.stop_propagation();
                                                   model
                                                       .write()
                                                       .add_operand(
-                                                          StandardOperand::Target(TargetValueOperand {
-                                                              name: format!(
-                                                                  "{}: {}",
-                                                                  obs_clone.node_name,
-                                                                  obs_clone.descriptor.name,
+                                                          StandardOperand::Metric(
+                                                              MetricOperand::new(
+                                                                  format!(
+                                                                      "{}: {}",
+                                                                      obs_clone.node_name,
+                                                                      obs_clone.descriptor.name,
+                                                                  ),
+                                                                  obs_clone.address.clone(),
+                                                                  0.0,
+                                                                  OperandMode::Equal,
+                                                                  1.0,
+                                                                  scale,
                                                               ),
-                                                              source: obs_clone.address.clone().into(),
-                                                              target: 0.0,
-                                                              weight: 1.0,
-                                                              scale,
-                                                          }),
+                                                          ),
                                                       );
                                                   open.set(false);
                                               },

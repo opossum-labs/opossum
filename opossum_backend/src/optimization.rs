@@ -41,9 +41,7 @@ pub async fn start_optimization(
     body: String,
 ) -> Result<HttpResponse, BackEndErrorResponse> {
     let opt_config: OptimizationConfig = ron::from_str(&body)
-        .or_else(|ron_err| {
-            serde_json::from_str(&body).map_err(|_| ron_err)
-        })
+        .or_else(|ron_err| serde_json::from_str(&body).map_err(|_| ron_err))
         .map_err(|e| {
             BackEndErrorResponse::new(
                 400,
@@ -284,8 +282,8 @@ mod test {
         prelude::{AnalyzerType, RayTraceConfig, RefrIndexSchott},
     };
     use opossum_optimization::{
-        FreeVariable, ObservableAddress, OptimizationAlgorithm, OptimizationConfig,
-        ParameterAddress, TargetValueOperand,
+        FreeVariable, MetricOperand, ObservableAddress, OperandMode, OptimizationAlgorithm,
+        OptimizationConfig, ParameterAddress,
     };
 
     /// Build minimal optical test setup in AppState
@@ -403,7 +401,7 @@ mod test {
                     .with_length_bounds(millimeter!(30.0), millimeter!(90.0))
                     .unwrap(),
             )
-            .with_operand(TargetValueOperand::for_spot_radius(
+            .with_operand(MetricOperand::for_spot_radius(
                 "min_spot",
                 ObservableAddress {
                     analyzer_id,
@@ -411,6 +409,7 @@ mod test {
                     metric_name: "rms beam radius".into(),
                 },
                 opossum_core::micrometer!(0.0),
+                OperandMode::Equal,
                 1.0,
             ))
             .with_algorithm(OptimizationAlgorithm::nelder_mead().with_max_iterations(15));
@@ -497,7 +496,7 @@ mod test {
                     .with_length_bounds(millimeter!(30.0), millimeter!(90.0))
                     .unwrap(),
             )
-            .with_operand(TargetValueOperand::for_spot_radius(
+            .with_operand(MetricOperand::for_spot_radius(
                 "min_spot",
                 ObservableAddress {
                     analyzer_id,
@@ -505,6 +504,7 @@ mod test {
                     metric_name: "rms beam radius".into(),
                 },
                 opossum_core::micrometer!(0.0),
+                OperandMode::Equal,
                 f64::INFINITY,
             ))
             .with_target_cost(f64::INFINITY)
@@ -516,9 +516,11 @@ mod test {
         assert!(serde_json::from_str::<OptimizationConfig>(&json_payload).is_err());
 
         // RON handles Infinity and NaN properly without data loss or parse failure
-        let ron_payload = ron::to_string(&config).expect("RON serialization must support Infinity/NaN");
+        let ron_payload =
+            ron::to_string(&config).expect("RON serialization must support Infinity/NaN");
         assert!(ron_payload.contains("inf"));
-        let deserialized_ron: OptimizationConfig = ron::from_str(&ron_payload).expect("RON deserialization must succeed");
+        let deserialized_ron: OptimizationConfig =
+            ron::from_str(&ron_payload).expect("RON deserialization must succeed");
         assert_eq!(deserialized_ron.target_cost, f64::INFINITY);
 
         let req = test::TestRequest::post()
@@ -572,7 +574,8 @@ mod test {
         let req = test::TestRequest::get().uri("/schema").to_request();
         let resp = app.call(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let schema: opossum_optimization::ModelOptimizationSchema = test::read_body_json(resp).await;
+        let schema: opossum_optimization::ModelOptimizationSchema =
+            test::read_body_json(resp).await;
         assert_eq!(schema.saved_config, Some(config));
     }
 }

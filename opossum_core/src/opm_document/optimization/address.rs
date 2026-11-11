@@ -53,4 +53,3 @@ impl From<ParameterAddress> for MetricSource {
         Self::Parameter(address)
     }
 }
-

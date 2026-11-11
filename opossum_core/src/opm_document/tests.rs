@@ -689,7 +689,9 @@ fn opm_document_optimization_config_roundtrip() -> OpmResult<()> {
     let var = FreeVariable::new(addr.clone(), "thickness").with_initial_value(0.01);
     let coupling = ParameterCoupling {
         target: addr.clone(),
-        rule: CouplingType::Identical { source: addr.clone() },
+        rule: CouplingType::Identical {
+            source: addr.clone(),
+        },
     };
     let operand = TargetValueOperand::new("Target 1", addr, 0.05, 1.0, 1e-3);
 

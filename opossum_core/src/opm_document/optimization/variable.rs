@@ -178,4 +178,3 @@ mod tests {
         assert!((step_large - 100.0 * DEFAULT_DELTA_REL).abs() < 1e-12);
     }
 }
-

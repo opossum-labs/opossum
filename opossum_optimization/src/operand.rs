@@ -1,4 +1,5 @@
 use crate::{address::MetricSource, reader::MetricReader};
+pub use opossum_core::opm_document::optimization::operand::*;
 use opossum_core::{
     core_optics::NodeAttrExt,
     error::{OpmResult, OpossumError},
@@ -6,26 +7,17 @@ use opossum_core::{
 };
 use std::fmt::Debug;
 
-pub use opossum_core::opm_document::optimization::operand::*;
-
 /// Context provided to operands during merit function evaluation.
 pub struct EvaluationContext<'a> {
-    /// Evaluated document containing post-analysis detector and model states.
     pub doc: &'a OpmDocument,
 }
 
 impl<'a> EvaluationContext<'a> {
-    /// Creates a new evaluation context wrapping an optical document.
     #[must_use]
     pub const fn new(doc: &'a OpmDocument) -> Self {
         Self { doc }
     }
 
-    /// Evaluates any quantity source (either detector observable or model parameter).
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the given [`MetricSource`] contains invalid data
     pub fn read_source(&self, source: &MetricSource) -> OpmResult<f64> {
         match source {
             MetricSource::Observable(addr) => MetricReader::read_metric(self.doc, addr),
@@ -36,55 +28,50 @@ impl<'a> EvaluationContext<'a> {
 
 /// Extensible trait for individual optimization criteria (operands).
 pub trait Operand: Send + Sync + Debug {
-    /// Human-readable name or description of the operand.
     fn name(&self) -> &str;
-    /// Relative weight `w_i` of this operand in the merit function.
     fn weight(&self) -> f64;
-    /// Evaluates the operand contribution to the overall cost Phi(x).
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the underlying implementation fails.
+    /// Evaluates the scalar penalty contribution to the overall merit cost Phi(x).
     fn evaluate(&self, ctx: &EvaluationContext<'_>) -> OpmResult<f64>;
-    /// Optional pre-flight validation against the pristine document model.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the validation fails.
+
+    /// Evaluates the signed residual for least-squares solvers.
+    /// By default computes sqrt(cost.max(0.0)).
+    fn residual(&self, ctx: &EvaluationContext<'_>) -> OpmResult<f64> {
+        self.evaluate(ctx).map(|c| c.max(0.0).sqrt())
+    }
+
     fn validate(&self, _doc: &OpmDocument) -> OpmResult<()> {
         Ok(())
     }
 }
 
-impl Operand for TargetValueOperand {
+impl Operand for MetricOperand {
     fn name(&self) -> &str {
-        TargetValueOperand::name(self)
+        MetricOperand::name(self)
     }
-    fn weight(&self) -> f64 {
-        TargetValueOperand::weight(self)
-    }
-    fn evaluate(&self, ctx: &EvaluationContext<'_>) -> OpmResult<f64> {
-        let value = ctx.read_source(&self.source)?;
-        let normalized_diff = (value - self.target) / self.scale;
-        Ok(self.weight * normalized_diff * normalized_diff)
-    }
-}
 
-impl Operand for ThresholdOperand {
-    fn name(&self) -> &str {
-        ThresholdOperand::name(self)
-    }
     fn weight(&self) -> f64 {
-        ThresholdOperand::weight(self)
+        MetricOperand::weight(self)
     }
+
     fn evaluate(&self, ctx: &EvaluationContext<'_>) -> OpmResult<f64> {
         let value = ctx.read_source(&self.source)?;
-        let violation = match self.direction {
-            ThresholdDirection::Upper => (value - self.limit).max(0.0),
-            ThresholdDirection::Lower => (self.limit - value).max(0.0),
+        let violation = match self.mode {
+            OperandMode::Equal => value - self.target,
+            OperandMode::UpperLimit => (value - self.target).max(0.0),
+            OperandMode::LowerLimit => (self.target - value).max(0.0),
         };
         let normalized = violation / self.scale;
         Ok(self.weight * normalized * normalized)
+    }
+
+    fn residual(&self, ctx: &EvaluationContext<'_>) -> OpmResult<f64> {
+        let value = ctx.read_source(&self.source)?;
+        let diff = match self.mode {
+            OperandMode::Equal => value - self.target,
+            OperandMode::UpperLimit => (value - self.target).max(0.0),
+            OperandMode::LowerLimit => (self.target - value).max(0.0),
+        };
+        Ok(self.weight.sqrt() * (diff / self.scale))
     }
 }
 
@@ -175,15 +162,24 @@ impl Operand for TransmissionPenaltyOperand {
 
 impl Operand for StandardOperand {
     fn name(&self) -> &str {
-        StandardOperand::name(self)
+        match self {
+            Self::Metric(op) => op.name(),
+            Self::MaxTotalLength(op) => op.name(),
+            Self::MinEdgeThickness(op) => op.name(),
+            Self::TransmissionPenalty(op) => op.name(),
+        }
     }
     fn weight(&self) -> f64 {
-        StandardOperand::weight(self)
+        match self {
+            Self::Metric(op) => op.weight(),
+            Self::MaxTotalLength(op) => op.weight(),
+            Self::MinEdgeThickness(op) => op.weight(),
+            Self::TransmissionPenalty(op) => op.weight(),
+        }
     }
     fn validate(&self, doc: &OpmDocument) -> OpmResult<()> {
         match self {
-            Self::Target(op) => op.validate(doc),
-            Self::Threshold(op) => op.validate(doc),
+            Self::Metric(op) => op.validate(doc),
             Self::MaxTotalLength(op) => op.validate(doc),
             Self::MinEdgeThickness(op) => op.validate(doc),
             Self::TransmissionPenalty(op) => op.validate(doc),
@@ -191,11 +187,18 @@ impl Operand for StandardOperand {
     }
     fn evaluate(&self, ctx: &EvaluationContext<'_>) -> OpmResult<f64> {
         match self {
-            Self::Target(op) => op.evaluate(ctx),
-            Self::Threshold(op) => op.evaluate(ctx),
+            Self::Metric(op) => op.evaluate(ctx),
             Self::MaxTotalLength(op) => op.evaluate(ctx),
             Self::MinEdgeThickness(op) => op.evaluate(ctx),
             Self::TransmissionPenalty(op) => op.evaluate(ctx),
+        }
+    }
+    fn residual(&self, ctx: &EvaluationContext<'_>) -> OpmResult<f64> {
+        match self {
+            Self::Metric(op) => op.residual(ctx),
+            Self::MaxTotalLength(op) => op.residual(ctx),
+            Self::MinEdgeThickness(op) => op.residual(ctx),
+            Self::TransmissionPenalty(op) => op.residual(ctx),
         }
     }
 }

@@ -34,10 +34,7 @@ pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
         let rows = props.model.read().variable_rows.clone();
         let mut groups: Vec<(String, Vec<UiVariableRow>)> = Vec::new();
         for row in rows {
-            if let Some((_, list)) = groups
-                .iter_mut()
-                .find(|(name, _)| name == &row.group_name)
-            {
+            if let Some((_, list)) = groups.iter_mut().find(|(name, _)| name == &row.group_name) {
                 list.push(row);
             } else {
                 groups.push((row.group_name.clone(), vec![row]));
@@ -268,15 +265,13 @@ pub fn AddVariableDialog(mut model: Signal<OptimizationModel>, mut open: Signal<
                 .filter(|v| !v.is_read_only)
             {
                 // 1. Group level
-                let group_entry = if let Some(pos) = hierarchy
-                    .iter()
-                    .position(|(g, _)| g == &var.group_name)
-                {
-                    &mut hierarchy[pos].1
-                } else {
-                    hierarchy.push((var.group_name.clone(), Vec::new()));
-                    &mut hierarchy.last_mut().unwrap().1
-                };
+                let group_entry =
+                    if let Some(pos) = hierarchy.iter().position(|(g, _)| g == &var.group_name) {
+                        &mut hierarchy[pos].1
+                    } else {
+                        hierarchy.push((var.group_name.clone(), Vec::new()));
+                        &mut hierarchy.last_mut().unwrap().1
+                    };
 
                 // 2. Node level
                 if let Some(node_pos) = group_entry.iter().position(|(n, _)| n == &var.node_name) {

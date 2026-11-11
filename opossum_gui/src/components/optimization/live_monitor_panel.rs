@@ -1,6 +1,6 @@
+use super::state::OptimizationModel;
 use dioxus::prelude::*;
 use dioxus_free_icons::{Icon, icons::fa_solid_icons::FaGears};
-use super::state::OptimizationModel;
 
 #[derive(Props, Clone, PartialEq)]
 pub struct LiveMonitorProps {

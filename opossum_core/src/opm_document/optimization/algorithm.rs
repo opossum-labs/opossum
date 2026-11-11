@@ -184,4 +184,3 @@ impl OptimizationAlgorithm {
         Ok(simplex)
     }
 }
-

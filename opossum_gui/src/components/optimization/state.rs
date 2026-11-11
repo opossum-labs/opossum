@@ -2,7 +2,9 @@ use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 use opossum_optimization::{
-    BoxBounds, CouplingType, DiscoveredVariable, FreeVariable, MetricSource, ModelOptimizationSchema, OptimizationAlgorithm, OptimizationConfig, ParameterAddress, ParameterCoupling, StandardOperand, TargetValueOperand, ThresholdDirection, ThresholdOperand,
+    BoxBounds, CouplingType, DiscoveredVariable, FreeVariable, MetricSource,
+    ModelOptimizationSchema, OptimizationAlgorithm, OptimizationConfig, ParameterAddress,
+    ParameterCoupling, StandardOperand,
 };
 
 /// UI-specific representation of a tunable variable row in the dense table.
@@ -267,21 +269,7 @@ impl OptimizationModel {
 
         for operand in &config.operands {
             let group_id = match operand {
-                StandardOperand::Target(t) => match &t.source {
-                    MetricSource::Observable(addr) => self.schema.as_ref().and_then(|s| {
-                        s.observable_metrics
-                            .iter()
-                            .find(|m| &m.address == addr)
-                            .and_then(|m| m.group_id)
-                    }),
-                    MetricSource::Parameter(addr) => self.schema.as_ref().and_then(|s| {
-                        s.controllable_variables
-                            .iter()
-                            .find(|v| &v.address == addr)
-                            .and_then(|v| v.group_id)
-                    }),
-                },
-                StandardOperand::Threshold(t) => match &t.source {
+                StandardOperand::Metric(t) => match &t.source {
                     MetricSource::Observable(addr) => self.schema.as_ref().and_then(|s| {
                         s.observable_metrics
                             .iter()
@@ -337,11 +325,11 @@ impl OptimizationModel {
             self.apply_config(&config);
         } else {
             for row in &mut self.variable_rows {
-                if let Some(discovered) = self
-                    .schema
-                    .as_ref()
-                    .and_then(|s| s.controllable_variables.iter().find(|v| v.address == row.address))
-                {
+                if let Some(discovered) = self.schema.as_ref().and_then(|s| {
+                    s.controllable_variables
+                        .iter()
+                        .find(|v| v.address == row.address)
+                }) {
                     row.group_id = discovered.group_id;
                     row.group_name = discovered.group_name.clone();
                     row.current_value = discovered.initial_value;
@@ -423,7 +411,11 @@ impl OptimizationModel {
 
     /// Removes a variable by parameter address.
     pub fn remove_variable(&mut self, address: &ParameterAddress) {
-        if let Some(pos) = self.variable_rows.iter().position(|r| &r.address == address) {
+        if let Some(pos) = self
+            .variable_rows
+            .iter()
+            .position(|r| &r.address == address)
+        {
             self.variable_rows.remove(pos);
 
             // Also clear any couplings that referenced this variable as source
@@ -760,7 +752,10 @@ impl OptimizationModel {
                     dfs_find_cycle(target, &coupling_deps, &mut visit_state, &mut path)
                 {
                     let cycle_set: HashSet<&ParameterAddress> = cycle.iter().copied().collect();
-                    if !reported_cycles.iter().any(|existing| existing == &cycle_set) {
+                    if !reported_cycles
+                        .iter()
+                        .any(|existing| existing == &cycle_set)
+                    {
                         reported_cycles.push(cycle_set);
 
                         let cycle_display: Vec<String> = cycle
@@ -801,8 +796,7 @@ impl OptimizationModel {
     pub fn update_operand_weight(&mut self, id: Uuid, weight: f64) {
         if let Some(row) = self.operands.iter_mut().find(|op| op.id == id) {
             match &mut row.operand {
-                StandardOperand::Target(t) => t.weight = weight,
-                StandardOperand::Threshold(t) => t.weight = weight,
+                StandardOperand::Metric(m) => m.weight = weight,
                 StandardOperand::MaxTotalLength(t) => t.weight = weight,
                 StandardOperand::MinEdgeThickness(t) => t.weight = weight,
                 StandardOperand::TransmissionPenalty(t) => t.weight = weight,
@@ -830,9 +824,9 @@ impl OptimizationModel {
     pub fn update_operand_target(&mut self, id: Uuid, new_target: f64) {
         if let Some(row) = self.operands.iter_mut().find(|op| op.id == id) {
             match &mut row.operand {
-                StandardOperand::Target(t) => t.target = new_target,
-                StandardOperand::Threshold(t) => t.limit = new_target,
+                StandardOperand::Metric(m) => m.target = new_target,
                 StandardOperand::MinEdgeThickness(t) => t.min_thickness = new_target,
+                StandardOperand::MaxTotalLength(t) => t.max_length = new_target,
                 _ => {}
             }
         }
@@ -846,29 +840,9 @@ impl OptimizationModel {
         operand: &StandardOperand,
     ) -> (String, String, &'static str) {
         match operand {
-            StandardOperand::Target(t) => match &t.source {
-                MetricSource::Observable(obs) => {
-                    let aname = self.analyzer_name(obs.analyzer_id);
-                    let nname = self
-                        .schema
-                        .as_ref()
-                        .and_then(|s| {
-                            s.observable_metrics
-                                .iter()
-                                .find(|m| m.address.node_id == obs.node_id)
-                                .map(|m| m.node_name.clone())
-                        })
-                        .unwrap_or_else(|| "Detector".to_string());
-                    (aname, format!("{nname} → {}", obs.metric_name), "=")
-                }
-                MetricSource::Parameter(_) => ("Parameter".to_string(), t.name.clone(), "="),
-            },
-            StandardOperand::Threshold(t) => {
-                let symbol = match t.direction {
-                    ThresholdDirection::Upper => "≤",
-                    ThresholdDirection::Lower => "≥",
-                };
-                match &t.source {
+            StandardOperand::Metric(m) => {
+                let symbol = m.mode.symbol();
+                match &m.source {
                     MetricSource::Observable(obs) => {
                         let aname = self.analyzer_name(obs.analyzer_id);
                         let nname = self
@@ -877,13 +851,13 @@ impl OptimizationModel {
                             .and_then(|s| {
                                 s.observable_metrics
                                     .iter()
-                                    .find(|m| m.address.node_id == obs.node_id)
-                                    .map(|m| m.node_name.clone())
+                                    .find(|entry| entry.address.node_id == obs.node_id)
+                                    .map(|entry| entry.node_name.clone())
                             })
                             .unwrap_or_else(|| "Detector".to_string());
                         (aname, format!("{nname} → {}", obs.metric_name), symbol)
                     }
-                    MetricSource::Parameter(_) => ("Limit".to_string(), t.name.clone(), symbol),
+                    MetricSource::Parameter(_) => ("Parameter".to_string(), m.name.clone(), symbol),
                 }
             }
             StandardOperand::MinEdgeThickness(t) => {
@@ -916,26 +890,16 @@ impl OptimizationModel {
                     .and_then(|s| {
                         s.observable_metrics
                             .iter()
-                            .find(|m| m.address == t.address || m.address.node_id == t.address.node_id)
-                            .map(|m| m.node_name.clone())
+                            .find(|entry| {
+                                entry.address == t.address
+                                    || entry.address.node_id == t.address.node_id
+                            })
+                            .map(|entry| entry.node_name.clone())
                     })
                     .unwrap_or_else(|| "Detector".to_string());
                 (aname, format!("{nname} → Transmission"), "≥")
             }
         }
-    }
-
-    /// Toggles the inequality direction for a Threshold operand (Upper <-> Lower).
-    pub fn toggle_threshold_direction(&mut self, id: Uuid) {
-        if let Some(row) = self.operands.iter_mut().find(|op| op.id == id)
-            && let StandardOperand::Threshold(t) = &mut row.operand
-        {
-            t.direction = match t.direction {
-                ThresholdDirection::Upper => ThresholdDirection::Lower,
-                ThresholdDirection::Lower => ThresholdDirection::Upper,
-            };
-        }
-        self.run_preflight_validation();
     }
 
     /// Returns the active algorithm identifier as a string key.
@@ -1015,7 +979,10 @@ impl OptimizationModel {
     /// Updates the operand target value from UI input, automatically converting mm to m for geometric constraints.
     pub fn update_operand_target_ui(&mut self, id: Uuid, ui_value: f64) {
         let is_geometric = matches!(
-            self.operands.iter().find(|op| op.id == id).map(|r| &r.operand),
+            self.operands
+                .iter()
+                .find(|op| op.id == id)
+                .map(|r| &r.operand),
             Some(StandardOperand::MinEdgeThickness(_)) | Some(StandardOperand::MaxTotalLength(_))
         );
         let model_val = if is_geometric {
@@ -1119,20 +1086,12 @@ impl OptimizationModel {
     pub fn resolve_operand_group_id(&self, operand: &StandardOperand) -> Option<Uuid> {
         let schema = self.schema.as_ref()?;
         match operand {
-            StandardOperand::Target(t) => match &t.source {
+            StandardOperand::Metric(m) => match &m.source {
                 MetricSource::Observable(obs) => schema
                     .observable_metrics
                     .iter()
-                    .find(|m| m.address.node_id == obs.node_id)
-                    .and_then(|m| m.group_id),
-                MetricSource::Parameter(_) => None,
-            },
-            StandardOperand::Threshold(t) => match &t.source {
-                MetricSource::Observable(obs) => schema
-                    .observable_metrics
-                    .iter()
-                    .find(|m| m.address.node_id == obs.node_id)
-                    .and_then(|m| m.group_id),
+                    .find(|o| o.address.node_id == obs.node_id)
+                    .and_then(|o| o.group_id),
                 MetricSource::Parameter(_) => None,
             },
             StandardOperand::MinEdgeThickness(t) => schema
@@ -1158,42 +1117,12 @@ impl OptimizationModel {
         }
         self.run_preflight_validation();
     }
-    /// Cycles operand mode between Target (=), Upper limit (≤), and Lower limit (≥).
+    /// Cycles the evaluation mode for a Metric operand (= -> <= -> >= -> =).
     pub fn cycle_operand_mode(&mut self, id: Uuid) {
-        if let Some(row) = self.operands.iter_mut().find(|op| op.id == id) {
-            match &row.operand {
-                StandardOperand::Target(t) => {
-                    // Transition: Target (=) -> Threshold Upper (<=)
-                    row.operand = StandardOperand::Threshold(ThresholdOperand {
-                        name: t.name.clone(),
-                        source: t.source.clone(),
-                        limit: t.target,
-                        direction: ThresholdDirection::Upper,
-                        weight: t.weight,
-                        scale: t.scale,
-                    });
-                }
-                StandardOperand::Threshold(t) => match t.direction {
-                    // Transition: Threshold Upper (<=) -> Threshold Lower (>=)
-                    ThresholdDirection::Upper => {
-                        let mut new_thresh = t.clone();
-                        new_thresh.direction = ThresholdDirection::Lower;
-                        row.operand = StandardOperand::Threshold(new_thresh);
-                    }
-                    // Transition: Threshold Lower (>=) -> Target (=)
-                    ThresholdDirection::Lower => {
-                        row.operand = StandardOperand::Target(TargetValueOperand {
-                            name: t.name.clone(),
-                            source: t.source.clone(),
-                            target: t.limit,
-                            weight: t.weight,
-                            scale: t.scale,
-                        });
-                    }
-                },
-                // Geometric constraints (MinEdgeThickness, MaxTotalLength) remain specialized
-                _ => {}
-            }
+        if let Some(row) = self.operands.iter_mut().find(|op| op.id == id)
+            && let StandardOperand::Metric(m) = &mut row.operand
+        {
+            m.mode = m.mode.cycle();
         }
         self.run_preflight_validation();
     }
@@ -1201,8 +1130,9 @@ impl OptimizationModel {
 
 #[cfg(test)]
 mod tests {
+    use opossum_optimization::{MetricOperand, OperandMode};
+
     use super::*;
-    use opossum_optimization::{ThresholdDirection, ThresholdOperand};
 
     #[test]
     fn test_populate_from_schema_with_saved_config() {
@@ -1216,11 +1146,11 @@ mod tests {
             .with_initial_value(0.02)
             .with_bounds(BoxBounds::new(0.01, 0.05).unwrap());
 
-        let operand = StandardOperand::Threshold(ThresholdOperand::new(
+        let operand = StandardOperand::Metric(MetricOperand::new(
             "Max Thickness",
             addr.clone(),
             0.04,
-            ThresholdDirection::Upper,
+            OperandMode::UpperLimit,
             1.0,
             1e-3,
         ));
