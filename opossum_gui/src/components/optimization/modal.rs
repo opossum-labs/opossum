@@ -195,13 +195,12 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                     *crate::NODE_DETAILS_REFRESH.write() += 1;
                 }),
             );
-
             let schema_res = get_optimization_schema().await;
             eval_action_run(
                 schema_res,
                 Some(move |schema| {
                     let mut m = model.write();
-                    m.populate_from_schema(schema);
+                    m.schema = Some(schema);
                     m.reset_to_initial_baseline();
                 }),
             );
@@ -219,10 +218,10 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
       AlertDialog {
         open: open(),
         on_open_change: move |v: bool| {
-          if !v {
-            sync_config_to_backend();
-          }
-          open.set(v);
+            if !v {
+                sync_config_to_backend();
+            }
+            open.set(v);
         },
         max_width: "90rem".to_string(),
         AlertDialogDescription {
@@ -343,7 +342,7 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                     disabled: is_running(),
                     onclick: move |_| revert_to_baseline(),
                     Icon { icon: FaRotateLeft }
-                    "Undo to Baseline"
+                    "Undo Optimization"
                   }
                 }
               }
@@ -414,8 +413,8 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
         AlertDialogActions {
           AlertDialogCancel {
             on_click: move |_| {
-              sync_config_to_backend();
-              open.set(false);
+                sync_config_to_backend();
+                open.set(false);
             },
             "Close Window"
           }

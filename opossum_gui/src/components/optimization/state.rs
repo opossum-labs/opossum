@@ -973,6 +973,8 @@ impl OptimizationModel {
         };
         self.update_operand_target(id, model_val);
     }
+    /// Resets current parameter values to the baseline values from the latest schema
+    /// while preserving user-defined bounds and couplings.
     pub fn reset_to_initial_baseline(&mut self) {
         if let Some(schema) = &self.schema {
             for row in &mut self.variable_rows {
@@ -982,21 +984,6 @@ impl OptimizationModel {
                     .find(|v| v.address == row.address)
                 {
                     row.current_value = discovered.initial_value;
-                    // Bounds passend zum ursprünglichen Wert neu initialisieren
-                    let is_curv = matches!(row.address, ParameterAddress::SurfaceCurvature { .. });
-                    let is_dist =
-                        matches!(row.address, ParameterAddress::ConnectionDistance { .. });
-                    if is_curv {
-                        if discovered.initial_value.abs() > 1e-6 {
-                            let r_mm = 1000.0 / discovered.initial_value;
-                            row.min_bound = Some(if r_mm > 0.0 { r_mm * 0.5 } else { r_mm * 2.0 });
-                            row.max_bound = Some(if r_mm > 0.0 { r_mm * 2.0 } else { r_mm * 0.5 });
-                        }
-                    } else if is_dist {
-                        let d_mm = discovered.initial_value * 1000.0;
-                        row.min_bound = Some((d_mm * 0.7).max(1.0));
-                        row.max_bound = Some(d_mm * 1.5);
-                    }
                 }
             }
         }
