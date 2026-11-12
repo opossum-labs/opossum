@@ -8,6 +8,8 @@ xtask = "run --package xtask --"
 
 [build]
 jobs=8
+# Automatically inject KaTeX header when running `cargo doc`
+rustdocflags = ["--html-in-header", "doc/katex-header.html"]
 
 [rust]
 debug--assertions = true

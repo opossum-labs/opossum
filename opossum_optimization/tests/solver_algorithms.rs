@@ -1,11 +1,16 @@
 mod common;
 
 use common::build_kepler_setup;
-use opossum_core::{core_optics::NodeAttrExt, error::OpmResult, micrometer, millimeter};
-use opossum_optimization::{
-    FreeVariable, MeritFunction, MetricOperand, MetricReader, ObservableAddress, OperandMode,
-    OpticOptimizer, OptimizationAlgorithm, ParameterAddress,
+use opossum_core::{
+    core_optics::NodeAttrExt,
+    error::OpmResult,
+    micrometer, millimeter,
+    opm_document::optimization::{
+        FreeVariable, MetricOperand, ObservableAddress, OperandMode, OptimizationAlgorithm,
+        ParameterAddress,
+    },
 };
+use opossum_optimization::{MeritFunction, MetricReader, OpticOptimizer};
 use std::sync::Arc;
 
 #[test]
@@ -108,7 +113,7 @@ fn test_optimize_kepler_focal_position_simulated_annealing() -> OpmResult<()> {
             OperandMode::Equal,
             1.0,
         ))
-        .with_algorithm(OptimizationAlgorithm::simulated_annealing().with_temperature(20.0))
+        .with_algorithm(OptimizationAlgorithm::simulated_annealing().with_temperature(1.0))
         .optimize()?;
 
     let best_distance = summary.value(&dist_address).unwrap();

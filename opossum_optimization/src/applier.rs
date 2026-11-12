@@ -1,5 +1,7 @@
-use super::address::ParameterAddress;
-use opossum_core::{error::OpmResult, opm_document::OpmDocument};
+use opossum_core::{
+    error::OpmResult,
+    opm_document::{OpmDocument, optimization::ParameterAddress},
+};
 use uom::si::{f64::Length, length::meter};
 
 pub struct ParameterApplier;

@@ -1,7 +1,9 @@
-use crate::address::{ObservableAddress, ParameterAddress};
 use opossum_core::{
     error::{OpmResult, OpossumError},
-    opm_document::OpmDocument,
+    opm_document::{
+        OpmDocument,
+        optimization::{ObservableAddress, ParameterAddress},
+    },
 };
 
 pub struct MetricReader;

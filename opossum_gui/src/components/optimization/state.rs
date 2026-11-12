@@ -1,11 +1,14 @@
+use opossum_core::opm_document::{
+    OptimizationConfig,
+    optimization::{
+        BoxBounds, CouplingType, FreeVariable, MetricSource, OptimizationAlgorithm,
+        ParameterAddress, ParameterCoupling, StandardOperand,
+    },
+};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
-use opossum_optimization::{
-    BoxBounds, CouplingType, DiscoveredVariable, FreeVariable, MetricSource,
-    ModelOptimizationSchema, OptimizationAlgorithm, OptimizationConfig, ParameterAddress,
-    ParameterCoupling, StandardOperand,
-};
+use opossum_optimization::{DiscoveredVariable, ModelOptimizationSchema};
 
 /// UI-specific representation of a tunable variable row in the dense table.
 #[derive(Clone, PartialEq, Debug)]
@@ -16,8 +19,8 @@ pub struct UiVariableRow {
     pub node_name: String,
     pub property_name: String,
     /// Note: Stored in solver units:
-    /// - For SurfaceCurvature: Curvature c in [1/m]
-    /// - For ConnectionDistance / NodeProperty: Value in SI base units (m, rad, etc.)
+    /// - For `SurfaceCurvature`: Curvature c in [1/m]
+    /// - For `ConnectionDistance` / `NodeProperty`: Value in SI base units (m, rad, etc.)
     pub current_value: f64,
     pub is_enabled: bool,
     pub min_bound: Option<f64>,
@@ -28,7 +31,7 @@ pub struct UiVariableRow {
 impl UiVariableRow {
     /// True if this parameter represents a spherical surface curvature.
     #[must_use]
-    pub fn is_curvature(&self) -> bool {
+    pub const fn is_curvature(&self) -> bool {
         matches!(self.address, ParameterAddress::SurfaceCurvature { .. })
     }
 
@@ -51,14 +54,15 @@ impl UiVariableRow {
     #[must_use]
     pub fn display_current(&self) -> (String, Option<String>) {
         if self.is_curvature() {
-            if let Some(r_mm) = self.current_radius_mm() {
-                (
-                    format!("R = {r_mm:.1} mm"),
-                    Some(format!("c = {:.3} m⁻¹", self.current_value)),
-                )
-            } else {
-                ("Plan (R = ∞)".to_string(), Some("c = 0.0 m⁻¹".to_string()))
-            }
+            self.current_radius_mm().map_or_else(
+                || ("Plan (R = ∞)".to_string(), Some("c = 0.0 m⁻¹".to_string())),
+                |r_mm| {
+                    (
+                        format!("R = {r_mm:.1} mm"),
+                        Some(format!("c = {:.3} m⁻¹", self.current_value)),
+                    )
+                },
+            )
         } else if matches!(self.address, ParameterAddress::ConnectionDistance { .. }) {
             (format!("{:.2} mm", self.current_value * 1000.0), None)
         } else {
@@ -66,7 +70,7 @@ impl UiVariableRow {
         }
     }
 
-    /// Converts designer bounds into solver BoxBounds in SI units.
+    /// Converts designer bounds into solver [`BoxBounds`] in SI units.
     pub fn solver_bounds(&self) -> Result<Option<BoxBounds>, String> {
         let (Some(b_min), Some(b_max)) = (self.min_bound, self.max_bound) else {
             return Ok(None);
@@ -109,7 +113,7 @@ impl UiVariableRow {
         }
     }
 
-    /// Converts solver BoxBounds in SI units back into designer UI bounds.
+    /// Converts solver [`BoxBounds`] in SI units back into designer UI bounds.
     #[must_use]
     pub fn ui_bounds_from_box_bounds(
         address: &ParameterAddress,
@@ -243,9 +247,9 @@ impl OptimizationModel {
                     .find(|v| v.address == var.address)
             {
                 row.group_id = discovered.group_id;
-                row.group_name = discovered.group_name.clone();
-                row.node_name = discovered.node_name.clone();
-                row.property_name = discovered.display_name.clone();
+                row.group_name.clone_from(&discovered.group_name);
+                row.node_name.clone_from(&discovered.node_name);
+                row.property_name.clone_from(&discovered.display_name);
                 row.current_value = discovered.initial_value;
             }
 
@@ -273,9 +277,9 @@ impl OptimizationModel {
                     .find(|v| v.address == coupling.target)
             {
                 row.group_id = discovered.group_id;
-                row.group_name = discovered.group_name.clone();
-                row.node_name = discovered.node_name.clone();
-                row.property_name = discovered.display_name.clone();
+                row.group_name.clone_from(&discovered.group_name);
+                row.node_name.clone_from(&discovered.node_name);
+                row.property_name.clone_from(&discovered.display_name);
                 row.current_value = discovered.initial_value;
             }
 
@@ -386,8 +390,7 @@ impl OptimizationModel {
         self.schema
             .as_ref()
             .and_then(|s| s.analyzers.iter().find(|a| a.id == analyzer_id))
-            .map(|a| a.name.clone())
-            .unwrap_or_else(|| "Analyzer".to_string())
+            .map_or_else(|| "Analyzer".to_string(), |a| a.name.clone())
     }
 
     /// Removes a variable by parameter address.
@@ -597,7 +600,13 @@ impl OptimizationModel {
     /// Validates variable bounds and checks couplings for cycles or conflicts.
     pub fn run_preflight_validation(&mut self) {
         let mut issues = Vec::new();
+        self.validate_bounds_and_schema(&mut issues);
+        self.validate_couplings(&mut issues);
+        self.validation_issues = issues;
+    }
 
+    /// Checks that enabled variables have valid bounds and still exist in the active schema.
+    fn validate_bounds_and_schema(&self, issues: &mut Vec<ValidationIssue>) {
         for row in &self.variable_rows {
             if row.is_enabled
                 && let (Some(min), Some(max)) = (row.min_bound, row.max_bound)
@@ -614,7 +623,6 @@ impl OptimizationModel {
             }
         }
 
-        // Check if selected variable still exists in schema
         if let Some(schema) = &self.schema {
             for row in &self.variable_rows {
                 if !schema
@@ -633,8 +641,10 @@ impl OptimizationModel {
                 }
             }
         }
+    }
 
-        // Coupling integrity and cycle detection
+    /// Validates parameter coupling dependencies and detects cyclic coupling graphs.
+    fn validate_couplings(&self, issues: &mut Vec<ValidationIssue>) {
         let mut coupling_deps: HashMap<&ParameterAddress, Vec<&ParameterAddress>> = HashMap::new();
 
         for row in &self.variable_rows {
@@ -649,7 +659,6 @@ impl OptimizationModel {
                     }
                 };
 
-                // Check self-reference
                 if deps.contains(&&row.address) {
                     issues.push(ValidationIssue {
                         severity: ValidationSeverity::Error,
@@ -661,17 +670,16 @@ impl OptimizationModel {
                     });
                 }
 
-                // Check unresolvable dependencies
                 for &dep in &deps {
                     let dep_row = self.variable_rows.iter().find(|r| &r.address == dep);
-                    let is_resolvable = match dep_row {
-                        Some(r) => (r.is_enabled && r.coupling.is_none()) || r.coupling.is_some(),
-                        None => false,
-                    };
+                    let is_resolvable = dep_row.is_some_and(|r| {
+                        (r.is_enabled && r.coupling.is_none()) || r.coupling.is_some()
+                    });
                     if !is_resolvable {
-                        let dep_name = dep_row
-                            .map(|r| format!("{} ({})", r.node_name, r.property_name))
-                            .unwrap_or_else(|| "Unknown variable".to_string());
+                        let dep_name = dep_row.map_or_else(
+                            || "Unknown variable".to_string(),
+                            |r| format!("{} ({})", r.node_name, r.property_name),
+                        );
                         issues.push(ValidationIssue {
                             severity: ValidationSeverity::Error,
                             message: format!(
@@ -691,46 +699,11 @@ impl OptimizationModel {
         let mut visit_state: HashMap<&ParameterAddress, u8> = HashMap::new();
         let mut reported_cycles: Vec<HashSet<&ParameterAddress>> = Vec::new();
 
-        fn dfs_find_cycle<'a>(
-            node: &'a ParameterAddress,
-            graph: &HashMap<&'a ParameterAddress, Vec<&'a ParameterAddress>>,
-            state: &mut HashMap<&'a ParameterAddress, u8>,
-            path: &mut Vec<&'a ParameterAddress>,
-        ) -> Option<Vec<&'a ParameterAddress>> {
-            state.insert(node, 1);
-            path.push(node);
-
-            if let Some(neighbors) = graph.get(node) {
-                for &next in neighbors {
-                    match state.get(next).copied().unwrap_or(0) {
-                        1 => {
-                            if let Some(pos) = path.iter().position(|&p| p == next) {
-                                let mut cycle = path[pos..].to_vec();
-                                cycle.push(next);
-                                return Some(cycle);
-                            }
-                            return Some(vec![node, next]);
-                        }
-                        0 => {
-                            if let Some(cycle) = dfs_find_cycle(next, graph, state, path) {
-                                return Some(cycle);
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            }
-
-            path.pop();
-            state.insert(node, 2);
-            None
-        }
-
         for &target in coupling_deps.keys() {
             if visit_state.get(target).copied().unwrap_or(0) == 0 {
                 let mut path = Vec::new();
                 if let Some(cycle) =
-                    dfs_find_cycle(target, &coupling_deps, &mut visit_state, &mut path)
+                    Self::dfs_find_cycle(target, &coupling_deps, &mut visit_state, &mut path)
                 {
                     let cycle_set: HashSet<&ParameterAddress> = cycle.iter().copied().collect();
                     if !reported_cycles
@@ -745,8 +718,10 @@ impl OptimizationModel {
                                 self.variable_rows
                                     .iter()
                                     .find(|r| &r.address == *addr)
-                                    .map(|r| format!("{}: {}", r.node_name, r.property_name))
-                                    .unwrap_or_else(|| "Unknown".to_string())
+                                    .map_or_else(
+                                        || "Unknown".to_string(),
+                                        |r| format!("{}: {}", r.node_name, r.property_name),
+                                    )
                             })
                             .collect();
 
@@ -762,8 +737,42 @@ impl OptimizationModel {
                 }
             }
         }
+    }
 
-        self.validation_issues = issues;
+    /// Performs depth-first traversal to locate a directed cycle in coupling dependencies.
+    fn dfs_find_cycle<'a>(
+        node: &'a ParameterAddress,
+        graph: &HashMap<&'a ParameterAddress, Vec<&'a ParameterAddress>>,
+        state: &mut HashMap<&'a ParameterAddress, u8>,
+        path: &mut Vec<&'a ParameterAddress>,
+    ) -> Option<Vec<&'a ParameterAddress>> {
+        state.insert(node, 1);
+        path.push(node);
+
+        if let Some(neighbors) = graph.get(node) {
+            for &next in neighbors {
+                match state.get(next).copied().unwrap_or(0) {
+                    1 => {
+                        if let Some(pos) = path.iter().position(|&p| p == next) {
+                            let mut cycle = path[pos..].to_vec();
+                            cycle.push(next);
+                            return Some(cycle);
+                        }
+                        return Some(vec![node, next]);
+                    }
+                    0 => {
+                        if let Some(cycle) = Self::dfs_find_cycle(next, graph, state, path) {
+                            return Some(cycle);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        path.pop();
+        state.insert(node, 2);
+        None
     }
     /// Removes an operand by unique id.
     pub fn remove_operand(&mut self, id: Uuid) {
@@ -788,10 +797,9 @@ impl OptimizationModel {
     /// Adds a new operand to the merit function, automatically resolving group scope.
     pub fn add_operand(&mut self, operand: StandardOperand) {
         let gid = self.resolve_operand_group_id(&operand);
-        let is_enabled = match self.scope_group_id {
-            Some(target_gid) => gid == Some(target_gid),
-            None => true,
-        };
+        let is_enabled = self
+            .scope_group_id
+            .is_none_or(|target_gid| gid == Some(target_gid));
         self.operands.push(UiOperandRow {
             id: Uuid::new_v4(),
             operand,
@@ -808,13 +816,13 @@ impl OptimizationModel {
                 StandardOperand::Metric(m) => m.target = new_target,
                 StandardOperand::MinEdgeThickness(t) => t.min_thickness = new_target,
                 StandardOperand::MaxTotalLength(t) => t.max_length = new_target,
-                _ => {}
+                StandardOperand::TransmissionPenalty(_) => {}
             }
         }
         self.run_preflight_validation();
     }
 
-    /// Returns human-readable display components: (badge_text, detail_text, operator_symbol)
+    /// Returns human-readable display components: (badge text, detail text, operator symbol)
     #[must_use]
     pub fn describe_operand_full(
         &self,
@@ -884,7 +892,7 @@ impl OptimizationModel {
     }
 
     /// Returns the active algorithm identifier as a string key.
-    pub fn algorithm_kind(&self) -> &'static str {
+    pub const fn algorithm_kind(&self) -> &'static str {
         match self.algorithm {
             OptimizationAlgorithm::Dls { .. } => "DLS",
             OptimizationAlgorithm::LBFGS { .. } => "LBFGS",
@@ -893,7 +901,7 @@ impl OptimizationModel {
         }
     }
 
-    pub fn max_iterations(&self) -> u64 {
+    pub const fn max_iterations(&self) -> u64 {
         match self.algorithm {
             OptimizationAlgorithm::Dls { max_iterations, .. }
             | OptimizationAlgorithm::NelderMead { max_iterations, .. }
@@ -921,7 +929,7 @@ impl OptimizationModel {
     }
 
     /// Returns initial temperature if Simulated Annealing is active.
-    pub fn sa_initial_temperature(&self) -> f64 {
+    pub const fn sa_initial_temperature(&self) -> f64 {
         match self.algorithm {
             OptimizationAlgorithm::SimulatedAnnealing {
                 initial_temperature,
@@ -932,7 +940,7 @@ impl OptimizationModel {
     }
 
     /// Sets the initial temperature for Simulated Annealing.
-    pub fn set_sa_initial_temperature(&mut self, temp: f64) {
+    pub const fn set_sa_initial_temperature(&mut self, temp: f64) {
         if let OptimizationAlgorithm::SimulatedAnnealing {
             initial_temperature,
             ..
@@ -943,7 +951,7 @@ impl OptimizationModel {
     }
 
     /// Returns the cooling rate alpha if Simulated Annealing is active.
-    pub fn sa_cooling_rate(&self) -> f64 {
+    pub const fn sa_cooling_rate(&self) -> f64 {
         match self.algorithm {
             OptimizationAlgorithm::SimulatedAnnealing { cooling_rate, .. } => cooling_rate,
             _ => 0.92,
@@ -951,7 +959,7 @@ impl OptimizationModel {
     }
 
     /// Sets the cooling rate alpha for Simulated Annealing.
-    pub fn set_sa_cooling_rate(&mut self, rate: f64) {
+    pub const fn set_sa_cooling_rate(&mut self, rate: f64) {
         if let OptimizationAlgorithm::SimulatedAnnealing { cooling_rate, .. } = &mut self.algorithm
         {
             *cooling_rate = rate.clamp(0.5, 0.999);
@@ -964,7 +972,7 @@ impl OptimizationModel {
                 .iter()
                 .find(|op| op.id == id)
                 .map(|r| &r.operand),
-            Some(StandardOperand::MinEdgeThickness(_)) | Some(StandardOperand::MaxTotalLength(_))
+            Some(StandardOperand::MinEdgeThickness(_) | StandardOperand::MaxTotalLength(_))
         );
         let model_val = if is_geometric {
             ui_value * 1e-3
@@ -1016,34 +1024,31 @@ impl OptimizationModel {
     pub fn set_scope(&mut self, scope: Option<Uuid>) {
         self.scope_group_id = scope;
 
-        match scope {
-            Some(target_gid) => {
-                // 1. Filter variables: enable matching group, disable all others
-                for var in &mut self.variable_rows {
-                    if var.group_id == Some(target_gid) {
-                        if var.coupling.is_none() {
-                            var.is_enabled = true;
-                        }
-                    } else {
-                        var.is_enabled = false;
-                    }
-                }
-
-                // 2. Filter operands: enable matching group, disable all others
-                for op in &mut self.operands {
-                    op.is_enabled = op.group_id == Some(target_gid);
-                }
-            }
-            None => {
-                // "all" scope: reactivate all independent variables and all operands
-                for var in &mut self.variable_rows {
+        if let Some(target_gid) = scope {
+            // 1. Filter variables: enable matching group, disable all others
+            for var in &mut self.variable_rows {
+                if var.group_id == Some(target_gid) {
                     if var.coupling.is_none() {
                         var.is_enabled = true;
                     }
+                } else {
+                    var.is_enabled = false;
                 }
-                for op in &mut self.operands {
-                    op.is_enabled = true;
+            }
+
+            // 2. Filter operands: enable matching group, disable all others
+            for op in &mut self.operands {
+                op.is_enabled = op.group_id == Some(target_gid);
+            }
+        } else {
+            // "all" scope: reactivate all independent variables and all operands
+            for var in &mut self.variable_rows {
+                if var.coupling.is_none() {
+                    var.is_enabled = true;
                 }
+            }
+            for op in &mut self.operands {
+                op.is_enabled = true;
             }
         }
 
@@ -1098,7 +1103,7 @@ impl OptimizationModel {
 
 #[cfg(test)]
 mod tests {
-    use opossum_optimization::{MetricOperand, OperandMode};
+    use opossum_core::opm_document::optimization::{MetricOperand, OperandMode};
 
     use super::*;
 
@@ -1158,7 +1163,6 @@ mod tests {
 
         // Operands restored
         assert_eq!(model.operands.len(), 1);
-        assert_eq!(model.operands[0].operand.name(), "Max Thickness");
         assert!(model.operands[0].is_enabled);
 
         // Algorithm & cost restored

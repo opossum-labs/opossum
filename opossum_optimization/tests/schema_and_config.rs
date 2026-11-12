@@ -4,12 +4,15 @@ use common::build_kepler_setup;
 use opossum_core::{
     error::{OpmResult, OpossumError},
     micrometer, millimeter,
+    opm_document::{
+        OptimizationConfig,
+        optimization::{
+            FreeVariable, MetricOperand, MinEdgeThicknessOperand, ObservableAddress, OperandMode,
+            OptimizationAlgorithm, ParameterAddress, TransmissionPenaltyOperand,
+        },
+    },
 };
-use opossum_optimization::{
-    FreeVariable, MetricOperand, MinEdgeThicknessOperand, ObservableAddress, OperandMode,
-    OptimizationAlgorithm, OptimizationConfig, ParameterAddress, SchemaExtractor,
-    TransmissionPenaltyOperand,
-};
+use opossum_optimization::SchemaExtractor;
 use uuid::Uuid;
 
 #[test]

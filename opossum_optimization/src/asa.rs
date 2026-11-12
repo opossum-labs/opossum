@@ -1,5 +1,6 @@
-use crate::{merit::MeritFunction, variable::FreeVariable};
+use crate::merit::MeritFunction;
 use argmin::core::{CostFunction, Error, IterState, KV, Problem, Solver, State};
+use opossum_core::{opm_document::optimization::FreeVariable, utils::to_f64};
 use rand::RngExt;
 
 pub type AsaIterState = IterState<Vec<f64>, (), (), (), (), f64>;
@@ -60,7 +61,7 @@ impl AdaptiveSimulatedAnnealing {
                 continue;
             }
 
-            let ratio = self.accepted_counts[i] as f64 / self.proposed_counts[i] as f64;
+            let ratio = to_f64(self.accepted_counts[i]) / to_f64(self.proposed_counts[i]);
             let bounds_span = self.free_vars[i]
                 .bounds
                 .as_ref()

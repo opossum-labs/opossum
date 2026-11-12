@@ -1,14 +1,11 @@
-use serde::{Deserialize, Serialize};
-
 use super::{
     algorithm::OptimizationAlgorithm, coupling::ParameterCoupling, operand::StandardOperand,
     variable::FreeVariable,
 };
-
+use serde::{Deserialize, Serialize};
 const fn default_target_cost() -> f64 {
     1e-8
 }
-
 /// Fully serializable configuration defining a complete optical optimization setup.
 ///
 /// Can be persisted to `.opt.json` template files or embedded directly
@@ -18,24 +15,19 @@ pub struct OptimizationConfig {
     /// List of independent free parameters tuned by the numerical solver.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub free_variables: Vec<FreeVariable>,
-
     /// Coupling rules defining deterministic dependencies between parameters.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub couplings: Vec<ParameterCoupling>,
-
     /// Evaluated merit criteria (targets, inequality bounds, geometry penalties).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub operands: Vec<StandardOperand>,
-
     /// Mathematical optimization algorithm and its specific hyperparameters.
     #[serde(default)]
     pub algorithm: OptimizationAlgorithm,
-
-    /// Cost threshold triggering early termination once achieved.
+    /// Cost threshold triggering early termination once achieved (defaults to `1e-8`).
     #[serde(default = "default_target_cost")]
     pub target_cost: f64,
 }
-
 impl Default for OptimizationConfig {
     fn default() -> Self {
         Self {
@@ -47,43 +39,37 @@ impl Default for OptimizationConfig {
         }
     }
 }
-
 impl OptimizationConfig {
-    /// Creates a new, empty optimization configuration.
+    /// Creates a new, empty [`OptimizationConfig`] with default algorithm and target cost.
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
-
-    /// Adds a free variable to the configuration
+    /// Appends a [`FreeVariable`] to the configuration.
     #[must_use]
     pub fn with_variable(mut self, variable: FreeVariable) -> Self {
         self.free_variables.push(variable);
         self
     }
-
-    /// Adds a parameter coupling to the configuration
+    /// Appends a [`ParameterCoupling`] rule to the configuration.
     #[must_use]
     pub fn with_coupling(mut self, coupling: ParameterCoupling) -> Self {
         self.couplings.push(coupling);
         self
     }
-
-    /// Adds an operand to the configuration
+    /// Appends a merit operand (convertible into [`StandardOperand`]) to the configuration.
     #[must_use]
     pub fn with_operand(mut self, operand: impl Into<StandardOperand>) -> Self {
         self.operands.push(operand.into());
         self
     }
-
-    /// Sets the numerical optimization algorithm
+    /// Sets the numerical [`OptimizationAlgorithm`] and its hyperparameters.
     #[must_use]
     pub const fn with_algorithm(mut self, algorithm: OptimizationAlgorithm) -> Self {
         self.algorithm = algorithm;
         self
     }
-
-    /// Sets the target cost threshold
+    /// Sets the merit cost threshold for early solver termination.
     #[must_use]
     pub const fn with_target_cost(mut self, target_cost: f64) -> Self {
         self.target_cost = target_cost;

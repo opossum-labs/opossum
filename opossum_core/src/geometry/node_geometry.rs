@@ -419,7 +419,7 @@ impl Geometry {
         Ok(reflected_rays)
     }
     /// Let the surface of one face of this component act on the bundles of an analysis (see
-    /// [`Geometry::interact`]).
+    /// [`Geometry::interact`](crate::geometry::Geometry)).
     ///
     /// After each bundle, the analysis does what it does at a surface (see
     /// [`PropagationStrategy::on_surface_interaction`]). Then the ghost reflections cached at the

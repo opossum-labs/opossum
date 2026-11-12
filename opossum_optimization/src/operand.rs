@@ -1,9 +1,15 @@
-use crate::{address::MetricSource, reader::MetricReader};
-pub use opossum_core::opm_document::optimization::operand::*;
+use crate::reader::MetricReader;
 use opossum_core::{
     core_optics::NodeAttrExt,
     error::{OpmResult, OpossumError},
-    opm_document::OpmDocument,
+    opm_document::{
+        OpmDocument,
+        optimization::{
+            MaxTotalLengthOperand, MetricOperand, MetricSource, MinEdgeThicknessOperand,
+            OperandMode, StandardOperand, TransmissionPenaltyOperand,
+        },
+    },
+    utils::to_f64,
 };
 use std::fmt::Debug;
 
@@ -13,11 +19,17 @@ pub struct EvaluationContext<'a> {
 }
 
 impl<'a> EvaluationContext<'a> {
+    /// Creates a new `EvaluationContext` referencing the given optical document.
     #[must_use]
     pub const fn new(doc: &'a OpmDocument) -> Self {
         Self { doc }
     }
 
+    /// Reads the current numerical value of a metric observable or model parameter.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the target node, analyzer, metric, or parameter cannot be found or read.
     pub fn read_source(&self, source: &MetricSource) -> OpmResult<f64> {
         match source {
             MetricSource::Observable(addr) => MetricReader::read_metric(self.doc, addr),
@@ -26,23 +38,48 @@ impl<'a> EvaluationContext<'a> {
     }
 }
 
+/// Defines an optimization criterion (operand) that contributes a weighted cost or residual vector
+/// to the overall merit function.
 pub trait Operand: Send + Sync + Debug {
     /// Human-readable descriptor of the operand for logging and diagnostics.
     fn name(&self) -> String;
+
+    /// Returns the non-negative weighting factor applied to this operand's cost contribution.
     fn weight(&self) -> f64;
+
+    /// Evaluates the weighted scalar cost contribution of this operand for the given document state.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if required metrics or model parameters cannot be evaluated.
     fn evaluate(&self, ctx: &EvaluationContext<'_>) -> OpmResult<f64>;
 
-    /// Returns the constituent residual values r_i such that sum(r_i^2) == evaluate().
-    /// Defaults to returning a single scalar residual sqrt(cost).
+    /// Returns the constituent residual values $r_i$ such that $\sum r_i^2 = \text{evaluate()}$.
+    ///
+    /// Defaults to returning a single scalar residual $\sqrt{\text{cost}}$.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the underlying evaluation fails.
+    #[allow(clippy::doc_markdown)]
     fn residuals(&self, ctx: &EvaluationContext<'_>) -> OpmResult<Vec<f64>> {
         self.evaluate(ctx).map(|c| vec![c.max(0.0).sqrt()])
     }
 
-    /// Returns a single scalar residual sqrt(cost).
+    /// Returns a single scalar residual $\sqrt{\text{cost}}$.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the underlying evaluation fails.
     fn residual(&self, ctx: &EvaluationContext<'_>) -> OpmResult<f64> {
         self.evaluate(ctx).map(|c| c.max(0.0).sqrt())
     }
 
+    /// Validates that the operand configuration is compatible with the given optical document.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the validation fails. The result contains the exact error message.
     fn validate(&self, _doc: &OpmDocument) -> OpmResult<()> {
         Ok(())
     }
@@ -50,10 +87,10 @@ pub trait Operand: Send + Sync + Debug {
 
 impl Operand for MetricOperand {
     fn name(&self) -> String {
-        MetricOperand::name(self)
+        Self::name(self)
     }
     fn weight(&self) -> f64 {
-        MetricOperand::weight(self)
+        Self::weight(self)
     }
     fn evaluate(&self, ctx: &EvaluationContext<'_>) -> OpmResult<f64> {
         let value = ctx.read_source(&self.source)?;
@@ -76,17 +113,16 @@ impl Operand for MetricOperand {
     }
     fn residuals(&self, ctx: &EvaluationContext<'_>) -> OpmResult<Vec<f64>> {
         // Try reading multi-ray residuals if available and mode is Equal with target 0.0
-        if self.mode == OperandMode::Equal && self.target.abs() < 1e-12 {
-            if let MetricSource::Observable(addr) = &self.source {
-                if let Ok(vec_data) = MetricReader::read_metric_vector(ctx.doc, addr) {
-                    if vec_data.len() > 1 {
-                        let n_rays = vec_data.len() as f64;
-                        // Each residual scaled by sqrt(weight / N)
-                        let factor = (self.weight / n_rays).sqrt() / self.scale();
-                        return Ok(vec_data.into_iter().map(|d| d * factor).collect());
-                    }
-                }
-            }
+        if self.mode == OperandMode::Equal
+            && self.target.abs() < 1e-12
+            && let MetricSource::Observable(addr) = &self.source
+            && let Ok(vec_data) = MetricReader::read_metric_vector(ctx.doc, addr)
+            && vec_data.len() > 1
+        {
+            let n_rays = to_f64(vec_data.len());
+            // Each residual scaled by sqrt(weight / N)
+            let factor = (self.weight / n_rays).sqrt() / self.scale();
+            return Ok(vec_data.into_iter().map(|d| d * factor).collect());
         }
 
         // Fallback for scalar parameters or unequal targets
@@ -102,10 +138,10 @@ impl Operand for MetricOperand {
 
 impl Operand for MaxTotalLengthOperand {
     fn name(&self) -> String {
-        MaxTotalLengthOperand::name(self).into_owned()
+        Self::name(self).into_owned()
     }
     fn weight(&self) -> f64 {
-        MaxTotalLengthOperand::weight(self)
+        Self::weight(self)
     }
     fn evaluate(&self, ctx: &EvaluationContext<'_>) -> OpmResult<f64> {
         let mut total = 0.0;
@@ -120,10 +156,10 @@ impl Operand for MaxTotalLengthOperand {
 
 impl Operand for MinEdgeThicknessOperand {
     fn name(&self) -> String {
-        MinEdgeThicknessOperand::name(self)
+        Self::name(self)
     }
     fn weight(&self) -> f64 {
-        MinEdgeThicknessOperand::weight(self)
+        Self::weight(self)
     }
     fn validate(&self, doc: &OpmDocument) -> OpmResult<()> {
         let (node_ref, _) = doc.scenery().node_recursive(self.node_id)?;
@@ -156,10 +192,10 @@ impl Operand for MinEdgeThicknessOperand {
 
 impl Operand for TransmissionPenaltyOperand {
     fn name(&self) -> String {
-        TransmissionPenaltyOperand::name(self)
+        Self::name(self)
     }
     fn weight(&self) -> f64 {
-        TransmissionPenaltyOperand::weight(self)
+        Self::weight(self)
     }
     fn validate(&self, doc: &OpmDocument) -> OpmResult<()> {
         let _ = doc.scenery().node_recursive(self.address.node_id)?;
@@ -186,10 +222,10 @@ impl Operand for TransmissionPenaltyOperand {
 
 impl Operand for StandardOperand {
     fn name(&self) -> String {
-        StandardOperand::name(self)
+        Self::name(self)
     }
     fn weight(&self) -> f64 {
-        StandardOperand::weight(self)
+        Self::weight(self)
     }
     fn validate(&self, doc: &OpmDocument) -> OpmResult<()> {
         match self {
@@ -234,10 +270,12 @@ mod tests {
         distributions::{energy::UniformDist, position::Hexapolar, spectral::LaserLines},
         joule, millimeter, nanometer,
         nodes::{NodeGroup, SourcePort, WaveFront},
-        opm_document::OpmDocument,
+        opm_document::{
+            OpmDocument,
+            optimization::{FreeVariable, ObservableAddress, ParameterAddress},
+        },
         prelude::{PointSrc, RayDataSource},
     };
-    use crate::{address::ObservableAddress, variable::FreeVariable};
     use std::sync::Arc;
 
     #[test]
@@ -284,7 +322,11 @@ mod tests {
         let residuals_nonzero = operand_nonzero.residuals(&ctx)?;
         assert_eq!(residuals_nonzero.len(), 1);
         let single_sq = residuals_nonzero[0] * residuals_nonzero[0];
-        assert_relative_eq!(operand_nonzero.evaluate(&ctx)?, single_sq, max_relative = 1e-12);
+        assert_relative_eq!(
+            operand_nonzero.evaluate(&ctx)?,
+            single_sq,
+            max_relative = 1e-12
+        );
 
         Ok(())
     }
@@ -317,7 +359,7 @@ mod tests {
         };
 
         let operand = Arc::new(MetricOperand::new(addr, 0.0, OperandMode::Equal, 1.0, 1.0));
-        let var = FreeVariable::new(crate::address::ParameterAddress::ConnectionDistance {
+        let var = FreeVariable::new(ParameterAddress::ConnectionDistance {
             src_id: i_src,
             src_port: "output_1".into(),
         });

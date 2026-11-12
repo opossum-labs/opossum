@@ -243,11 +243,7 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                     select {
                       class: "form-select form-select-sm bg-black text-light border-secondary font-monospace py-0 px-2",
                       style: "width: 15.5rem; height: 30px; font-size: 11px;",
-                      value: model
-                          .read()
-                          .scope_group_id
-                          .map(|id| id.to_string())
-                          .unwrap_or_else(|| "all".to_string()),
+                      value: model.read().scope_group_id.map_or_else(|| "all".to_string(), |id| id.to_string()),
                       onchange: move |e| {
                           let val = e.value();
                           if val == "all" {

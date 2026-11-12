@@ -1,11 +1,18 @@
 mod common;
 
 use common::build_kepler_setup;
-use opossum_core::{core_optics::NodeAttrExt, error::OpmResult, micrometer, millimeter};
+use opossum_core::{
+    core_optics::NodeAttrExt,
+    error::OpmResult,
+    micrometer, millimeter,
+    opm_document::optimization::{
+        FreeVariable, MaxTotalLengthOperand, MetricOperand, MinEdgeThicknessOperand,
+        ObservableAddress, OperandMode, OptimizationAlgorithm, ParameterAddress,
+        TransmissionPenaltyOperand,
+    },
+};
 use opossum_optimization::{
-    EvaluationContext, FreeVariable, MaxTotalLengthOperand, MeritFunction, MetricOperand,
-    MetricReader, MinEdgeThicknessOperand, ObservableAddress, Operand, OperandMode, OpticOptimizer,
-    OptimizationAlgorithm, ParameterAddress, TransmissionPenaltyOperand,
+    EvaluationContext, MeritFunction, MetricReader, Operand, OpticOptimizer,
 };
 use std::sync::Arc;
 use uom::si::length::millimeter;

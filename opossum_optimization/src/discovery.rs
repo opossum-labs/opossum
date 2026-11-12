@@ -1,11 +1,12 @@
-use opossum_core::core_optics::observable::ObservableDescriptor;
+use opossum_core::{
+    core_optics::observable::ObservableDescriptor,
+    opm_document::{
+        OptimizationConfig,
+        optimization::{ObservableAddress, ParameterAddress},
+    },
+};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-
-use super::{
-    address::{ObservableAddress, ParameterAddress},
-    config::OptimizationConfig,
-};
 
 /// Metadata for an analyzer registered in the optical document.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -9,12 +9,12 @@ use opossum_core::{
     core_optics::node_attr::HasNodeAttr,
     error::OpmResult,
     nodes::GraphDelta,
-    opm_document::OpmDocument,
+    opm_document::{OpmDocument, optimization::ParameterAddress},
     types::api_types::{
         AnalyzerItemDto, DocumentChange, JumpTarget, NodeEditorPanel, PumpScenarioItemDto,
     },
 };
-use opossum_optimization::{ParameterAddress, ParameterApplier};
+use opossum_optimization::ParameterApplier;
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 

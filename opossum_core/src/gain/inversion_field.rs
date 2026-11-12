@@ -28,7 +28,7 @@
 //!
 //! *Entirely* in the optic's frame means the field stores **nothing about where that optic is**.
 //! Where a node stands is the node's own business, kept in its
-//! [`isometry`](crate::core_optics::NodeAttr::isometry) and its alignment, and a copy of it in a
+//! [`Isometry`](crate::utils::geom_transformation::Isometry) and its alignment, and a copy of it in a
 //! field that outlives a single pass would silently go stale the moment the node is moved. Instead
 //! everything here — the mask, the bounds, the populations — stays valid under any placement, and
 //! [`InversionField::cell_at`] takes its point already expressed in the optic's frame.

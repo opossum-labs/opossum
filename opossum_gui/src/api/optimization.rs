@@ -1,8 +1,7 @@
 use crate::HTTP_API_CLIENT;
 use futures_util::StreamExt;
-use opossum_optimization::{
-    ModelOptimizationSchema, OptimizationConfig, OptimizationProgressEvent,
-};
+use opossum_core::opm_document::OptimizationConfig;
+use opossum_optimization::{ModelOptimizationSchema, OptimizationProgressEvent};
 
 /// Fetches the optimization schema from the currently loaded model.
 ///

@@ -1,11 +1,15 @@
 mod common;
 
 use common::build_kepler_setup;
-use opossum_core::{error::OpmResult, micrometer, millimeter};
-use opossum_optimization::{
-    BoxBounds, FreeVariable, MetricOperand, MetricReader, ObservableAddress, OperandMode,
-    OpticOptimizer, OptimizationAlgorithm, ParameterAddress, ParameterCoupling,
+use opossum_core::{
+    error::OpmResult,
+    micrometer, millimeter,
+    opm_document::optimization::{
+        BoxBounds, FreeVariable, MetricOperand, ObservableAddress, OperandMode,
+        OptimizationAlgorithm, ParameterAddress, ParameterCoupling,
+    },
 };
+use opossum_optimization::{MetricReader, OpticOptimizer};
 
 #[test]
 fn test_optimize_kepler_lens_curvature_coupled() -> OpmResult<()> {

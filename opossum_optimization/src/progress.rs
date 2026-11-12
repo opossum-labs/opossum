@@ -1,15 +1,15 @@
 use argmin::core::{Error, KV, State, observers::Observe};
-use opossum_core::error::OpossumError;
+use opossum_core::{
+    error::OpossumError,
+    opm_document::optimization::{FreeVariable, ParameterAddress, ParameterCoupling},
+};
 use serde::{Deserialize, Serialize};
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, Ordering},
 };
 
-use crate::{
-    address::ParameterAddress, coupling::ParameterCoupling, resolver::ParameterResolver,
-    variable::FreeVariable,
-};
+use crate::resolver::ParameterResolver;
 
 pub type BestStateTracker = Arc<Mutex<Option<(Vec<f64>, f64, u64)>>>;
 

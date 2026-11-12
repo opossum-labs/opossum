@@ -15,11 +15,11 @@ use dioxus_free_icons::{
     },
 };
 use dioxus_primitives::alert_dialog::AlertDialogContent;
-use opossum_optimization::{
-    DiscoveredObservable, MaxTotalLengthOperand, MetricOperand, MinEdgeThicknessOperand,
-    OperandMode, ParameterAddress, StandardOperand, TransmissionPenaltyOperand,
-    default_scale_for_metric,
+use opossum_core::opm_document::optimization::{
+    MaxTotalLengthOperand, MetricOperand, MinEdgeThicknessOperand, OperandMode, ParameterAddress,
+    StandardOperand, TransmissionPenaltyOperand, default_scale_for_metric,
 };
+use opossum_optimization::DiscoveredObservable;
 
 use super::state::OptimizationModel;
 use uuid::Uuid;
@@ -27,7 +27,7 @@ use uuid::Uuid;
 type DiscoveredObservableHierarchy =
     Vec<(String, String, Vec<(String, Vec<DiscoveredObservable>)>)>;
 
-#[derive(Props, Clone, PartialEq)]
+#[derive(Props, Clone, PartialEq, Eq)]
 pub struct MeritDesignerProps {
     pub model: Signal<OptimizationModel>,
     pub show_add_dialog: Signal<bool>,
@@ -189,7 +189,7 @@ fn OperandRow(mut props: OperandRowProps) -> Element {
     drop(model_read);
 
     rsx! {
-      tr { class: if !is_enabled { "opacity-50" } else { "" },
+      tr { class: if is_enabled { "" } else { "opacity-50" },
         // Checkbox column
         td { class: "text-center px-1",
           input {

@@ -42,7 +42,7 @@ use uom::si::f64::Length;
 ///
 /// The optic shape is the size the component is actually available in — the figure a supplier
 /// quotes next to the curvatures and the thickness. It bounds the surfaces light is traced at and,
-/// for a volume node, the medium between them (see [`Rim`]).
+/// for a volume node, the medium between them (see [`Rim`](crate::geometry::rim::Rim)).
 ///
 /// Every volume node has a bounded one: a component of unstated size has no volume to speak of,
 /// and two curved surfaces only happen to close on their own if they are curved strongly enough.

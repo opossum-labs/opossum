@@ -60,11 +60,9 @@ impl DampedLeastSquares {
             .free_variables()
             .iter()
             .map(|var| {
-                if let Some(bounds) = &var.bounds {
-                    (bounds.max - bounds.min).abs().max(1e-4)
-                } else {
-                    1.0
-                }
+                var.bounds
+                    .as_ref()
+                    .map_or(1.0, |bounds| (bounds.max - bounds.min).abs().max(1e-4))
             })
             .collect()
     }
@@ -95,55 +93,55 @@ impl<O> Solver<O, DlsIterState> for DampedLeastSquares {
         _problem: &mut Problem<O>,
         state: DlsIterState,
     ) -> Result<(DlsIterState, Option<KV>), Error> {
-        let x = state.get_param().cloned().ok_or_else(|| {
+        let params = state.get_param().cloned().ok_or_else(|| {
             OpossumError::Other("Missing current parameter vector in DLS state".into())
         })?;
         let current_cost = state.get_cost();
         let scales = self.parameter_scales();
-        let n = x.len();
+        let num_params = params.len();
 
         // 1. Evaluate residuals and Jacobian
-        let r = self.merit.evaluate_residuals(&x);
-        let mut j = self.merit.compute_jacobian(&x, &r);
+        let residuals = self.merit.evaluate_residuals(&params);
+        let mut jacobian = self.merit.compute_jacobian(&params, &residuals);
 
         // 2. Scale Jacobian columns by parameter natural spans: J_scaled = J * diag(scales)
-        for col in 0..n {
+        for col in 0..num_params {
             let scale = scales[col];
-            for row in 0..j.nrows() {
-                j[(row, col)] *= scale;
+            for row in 0..jacobian.nrows() {
+                jacobian[(row, col)] *= scale;
             }
         }
 
         // Gradient in scaled coordinates: g_scaled = J_scaled^T * r
-        let g = j.transpose() * &r;
-        if g.amax() < self.gradient_tolerance {
+        let gradient = jacobian.transpose() * &residuals;
+        if gradient.amax() < self.gradient_tolerance {
             return Ok((state, None));
         }
 
         // Approximate Hessian in scaled coordinates: A = J_scaled^T * J_scaled
-        let a = j.transpose() * &j;
+        let hessian_approx = jacobian.transpose() * &jacobian;
 
         // Diagonal Marquardt damping matrix with strict lower conditioning bound
-        let mut d_diag = DVector::zeros(n);
-        for i in 0..n {
-            d_diag[i] = a[(i, i)].max(1e-3);
+        let mut diag_entries = DVector::zeros(num_params);
+        for i in 0..num_params {
+            diag_entries[i] = hessian_approx[(i, i)].max(1e-3);
         }
-        let d = DMatrix::from_diagonal(&d_diag);
+        let damping_matrix = DMatrix::from_diagonal(&diag_entries);
 
         // 3. Search for acceptable trust-region step
         let mut step_accepted = false;
-        let mut best_x_new = x.clone();
+        let mut best_params_new = params.clone();
         let mut best_cost_new = current_cost;
 
         for _ in 0..10 {
-            let a_damped = &a + self.damping * &d;
+            let damped_hessian = &hessian_approx + self.damping * &damping_matrix;
 
             // Solve (A + lambda * D) * delta_scaled = -g
-            let delta_scaled_opt = a_damped
+            let delta_scaled_opt = damped_hessian
                 .clone()
                 .cholesky()
-                .map(|chol| chol.solve(&(-&g)))
-                .or_else(|| a_damped.lu().solve(&(-&g)));
+                .map(|chol| chol.solve(&(-&gradient)))
+                .or_else(|| damped_hessian.lu().solve(&(-&gradient)));
 
             if let Some(mut delta_scaled) = delta_scaled_opt {
                 // Restrict maximum step in scaled space
@@ -153,19 +151,19 @@ impl<O> Solver<O, DlsIterState> for DampedLeastSquares {
                 }
 
                 // Transform back to physical units: delta_phys = delta_scaled * scale
-                let x_cand: Vec<f64> = x
+                let candidate_params: Vec<f64> = params
                     .iter()
                     .enumerate()
-                    .map(|(i, &xi)| xi + delta_scaled[i] * scales[i])
+                    .map(|(i, &val)| f64::mul_add(delta_scaled[i], scales[i], val))
                     .collect();
 
-                let r_cand = self.merit.evaluate_residuals(&x_cand);
-                let cost_cand = r_cand.norm_squared();
-                let actual_reduction = current_cost - cost_cand;
+                let candidate_residuals = self.merit.evaluate_residuals(&candidate_params);
+                let candidate_cost = candidate_residuals.norm_squared();
+                let actual_reduction = current_cost - candidate_cost;
 
                 let pred_reduction = 0.5f64.mul_add(
-                    -(delta_scaled.transpose() * &a * &delta_scaled)[(0, 0)],
-                    -delta_scaled.dot(&g),
+                    -(delta_scaled.transpose() * &hessian_approx * &delta_scaled)[(0, 0)],
+                    -delta_scaled.dot(&gradient),
                 );
 
                 if actual_reduction > 0.0 {
@@ -179,35 +177,32 @@ impl<O> Solver<O, DlsIterState> for DampedLeastSquares {
                     let factor = (1.0 - (2.0f64.mul_add(rho, -1.0)).powi(3)).clamp(0.1, 0.5);
                     self.damping = (self.damping * factor).max(self.min_damping);
                     self.nu = 2.0;
-                    best_x_new = x_cand;
-                    best_cost_new = cost_cand;
+                    best_params_new = candidate_params;
+                    best_cost_new = candidate_cost;
                     step_accepted = true;
                     break;
                 }
-
-                // Reject step: Increase damping
-                self.damping = (self.damping * self.nu).min(self.max_damping);
-                self.nu *= 2.0;
-            } else {
-                self.damping = (self.damping * self.nu).min(self.max_damping);
-                self.nu *= 2.0;
             }
+
+            // Reject step or handle singular matrix: increase damping
+            self.damping = (self.damping * self.nu).min(self.max_damping);
+            self.nu *= 2.0;
         }
 
         if step_accepted {
-            Ok((state.param(best_x_new).cost(best_cost_new), None))
+            Ok((state.param(best_params_new).cost(best_cost_new), None))
         } else {
             // Recovery: Reset damping to a moderate value to prevent stall in subsequent iterations
             self.damping = (self.initial_damping * 10.0).min(self.max_damping);
             self.nu = 2.0;
 
             // Fall back to a tiny gradient step in scaled space
-            let grad_step: Vec<f64> = x
+            let grad_step: Vec<f64> = params
                 .iter()
                 .enumerate()
-                .map(|(i, &xi)| {
-                    let dxi_scaled = -1e-3 * g[i] / (g.norm() + 1e-12);
-                    xi + dxi_scaled * scales[i]
+                .map(|(i, &val)| {
+                    let delta_scaled = -1e-3 * gradient[i] / (gradient.norm() + 1e-12);
+                    delta_scaled.mul_add(scales[i], val)
                 })
                 .collect();
 

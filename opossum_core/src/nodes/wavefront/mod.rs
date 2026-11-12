@@ -28,7 +28,7 @@ use crate::{
     },
     properties::{Properties, Proptype, validator::Validator},
     reporting::node_report::{NodeReport, NodeReportResult},
-    utils::geom_transformation::Isometry,
+    utils::{geom_transformation::Isometry, to_f64},
 };
 use log::warn;
 use opm_macros_lib::OpmNode;
@@ -441,17 +441,14 @@ impl OpticNode for WaveFront {
                 }
 
                 // Subtract mean OPD so sum(r_i^2) strictly matches RMS^2
-                let mean = opds.iter().sum::<f64>() / (n as f64);
+                let mean = opds.iter().sum::<f64>() / to_f64(n);
                 let wvl_factor = if lower.contains("opd") {
                     map.wavelength().get::<uom::si::length::meter>()
                 } else {
                     1.0 // Dimensionless in waves
                 };
 
-                let centered_opds = opds
-                    .iter()
-                    .map(|&val| (val - mean) * wvl_factor)
-                    .collect();
+                let centered_opds = opds.iter().map(|&val| (val - mean) * wvl_factor).collect();
                 Some(centered_opds)
             }
             _ => self.read_observable(metric_name).map(|v| vec![v]),
@@ -483,7 +480,6 @@ impl AnalysisRayTrace for WaveFront {}
 #[cfg(test)]
 mod test {
     use super::*;
-    use approx::assert_relative_eq;
     use crate::{
         analyzers::RayTraceConfig,
         core_optics::{PortType, node_attr::NodePositioning},
@@ -494,6 +490,7 @@ mod test {
         nodes::test_helper::helper::*,
         utils::geom_transformation::Isometry,
     };
+    use approx::assert_relative_eq;
     #[test]
     fn default() {
         let node = WaveFront::default();

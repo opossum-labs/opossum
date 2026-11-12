@@ -27,7 +27,7 @@ pub trait OpticNodeExt {
     /// modified by the local alignment isometry (if present). Returns `None` if the node has not yet been placed.
     fn effective_node_iso(&self) -> Option<Isometry>;
 
-    /// Return the effective input isometry of an [`OpticSurface`](crate::core_optics::optic_surface::OpticSurface).
+    /// Return the effective input isometry of an [`OpticSurface`].
     ///
     /// It is the frame of the vertex of the face the surface is, placed with the node.
     ///
@@ -130,7 +130,7 @@ pub trait OpticNodeExt {
     /// NaN, or the surfaces cannot be rebuilt.
     fn set_lidt(&mut self, face: FaceIndex, lidt: Fluence) -> OpmResult<()>;
 
-    /// Create this node's [`Geometry`](crate::geometry::Geometry) from its current properties (see
+    /// Create this node's [`Geometry`] from its current properties (see
     /// [`OpticNode::create_geometry`]) and move it to where the node sits: its position followed by
     /// its alignment, or the identity for a node that has not been placed.
     ///
@@ -143,7 +143,7 @@ pub trait OpticNodeExt {
     /// This function returns an error if the geometry cannot be derived from the properties.
     fn placed_geometry(&self) -> OpmResult<Option<Geometry>>;
 
-    /// Move this node's [`Geometry`](crate::geometry::Geometry) to where the node sits, keep it as
+    /// Move this node's [`Geometry`] to where the node sits, keep it as
     /// the node's runtime geometry and install a surface on one of its faces under each of the given
     /// ports, with the coating and the LIDT of that face (see [`OpticNodeExt::surface_config`]).
     /// A port the node does not have yet is added.

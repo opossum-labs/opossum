@@ -15,13 +15,14 @@ use dioxus_free_icons::{
     icons::fa_solid_icons::{FaLayerGroup, FaLink, FaPlus, FaSliders, FaTrash, FaXmark},
 };
 use dioxus_primitives::alert_dialog::AlertDialogContent;
-use opossum_optimization::{CouplingType, DiscoveredVariable, ParameterAddress};
+use opossum_core::opm_document::optimization::{CouplingType, ParameterAddress};
+use opossum_optimization::DiscoveredVariable;
 
 use super::state::OptimizationModel;
 
 type DiscoveredVariableHierarchy = Vec<(String, Vec<(String, Vec<DiscoveredVariable>)>)>;
 
-#[derive(Props, Clone, PartialEq)]
+#[derive(Props, Clone, PartialEq, Eq)]
 pub struct VariablesPanelProps {
     pub model: Signal<OptimizationModel>,
     pub show_add_dialog: Signal<bool>,
@@ -248,7 +249,7 @@ pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
     }
 }
 
-/// Dialog allowing user to select controllable variables from the model schema grouped by NodeGroup and Node.
+/// Dialog allowing user to select controllable variables from the model schema grouped by `NodeGroup` and Node.
 #[component]
 pub fn AddVariableDialog(mut model: Signal<OptimizationModel>, mut open: Signal<bool>) -> Element {
     let current_rows = model.read().variable_rows.clone();
@@ -393,7 +394,7 @@ pub fn AddVariableDialog(mut model: Signal<OptimizationModel>, mut open: Signal<
 pub fn CouplingDialog(mut model: Signal<OptimizationModel>, mut open: Signal<bool>) -> Element {
     let vars = model.read().variable_rows.clone();
     let mut target_idx = use_signal(|| 0_usize);
-    let mut source_idx = use_signal(|| if vars.len() > 1 { 1 } else { 0 });
+    let mut source_idx = use_signal(|| usize::from(vars.len() > 1));
     let mut rule_kind = use_signal(|| "Opposite");
     let mut affine_factor = use_signal(|| -1.0_f64);
     let mut affine_offset = use_signal(|| 0.0_f64);
@@ -460,7 +461,7 @@ pub fn CouplingDialog(mut model: Signal<OptimizationModel>, mut open: Signal<boo
                                     "Affine" => "Affine",
                                     _ => "Opposite",
                                 },
-                            )
+                            );
                     },
                     option { value: "Opposite",
                       "Opposite: Target = -1.0 × Source (e.g. Symmetrical Lens R2 = -R1)"
@@ -476,7 +477,9 @@ pub fn CouplingDialog(mut model: Signal<OptimizationModel>, mut open: Signal<boo
                 if *rule_kind.read() == "Affine" {
                   div { class: "row g-2 p-2 rounded bg-black bg-opacity-50 border border-secondary",
                     div { class: "col-6",
-                      label { class: "form-label small text-info mb-1", "Scale Factor" }
+                      label { class: "form-label small text-info mb-1",
+                        "Scale Factor"
+                      }
                       input {
                         r#type: "number",
                         step: "any",
@@ -490,7 +493,9 @@ pub fn CouplingDialog(mut model: Signal<OptimizationModel>, mut open: Signal<boo
                       }
                     }
                     div { class: "col-6",
-                      label { class: "form-label small text-info mb-1", "Offset" }
+                      label { class: "form-label small text-info mb-1",
+                        "Offset"
+                      }
                       input {
                         r#type: "number",
                         step: "any",

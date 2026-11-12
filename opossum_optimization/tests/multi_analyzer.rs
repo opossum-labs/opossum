@@ -1,9 +1,13 @@
 mod common;
-use opossum_core::{error::OpmResult, millimeter};
-use opossum_optimization::{
-    FreeVariable, MetricOperand, MetricReader, ObservableAddress, OperandMode, OpticOptimizer,
-    OptimizationAlgorithm, ParameterAddress,
+use opossum_core::{
+    error::OpmResult,
+    millimeter,
+    opm_document::optimization::{
+        FreeVariable, MetricOperand, ObservableAddress, OperandMode, OptimizationAlgorithm,
+        ParameterAddress,
+    },
 };
+use opossum_optimization::{MetricReader, OpticOptimizer};
 
 use crate::common::build_kepler_setup;
 

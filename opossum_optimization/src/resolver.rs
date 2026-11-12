@@ -1,11 +1,8 @@
-use std::collections::{HashMap, HashSet};
-
-use crate::{
-    address::ParameterAddress,
-    coupling::{CouplingType, ParameterCoupling},
-    variable::FreeVariable,
+use opossum_core::{
+    error::{OpmResult, OpossumError},
+    opm_document::optimization::{CouplingType, FreeVariable, ParameterAddress, ParameterCoupling},
 };
-use opossum_core::error::{OpmResult, OpossumError};
+use std::collections::{HashMap, HashSet};
 
 /// Resolves solver variable vectors and parameter couplings into concrete system values[cite: 1].
 pub struct ParameterResolver;

@@ -8,12 +8,16 @@ use std::sync::Arc;
 
 use crate::{
     applier::ParameterApplier,
-    coupling::ParameterCoupling,
     operand::{EvaluationContext, Operand},
     resolver::ParameterResolver,
-    variable::{FiniteDifferenceMethod, FreeVariable},
 };
-use opossum_core::{error::OpmResult, opm_document::OpmDocument};
+use opossum_core::{
+    error::OpmResult,
+    opm_document::{
+        OpmDocument,
+        optimization::{FiniteDifferenceMethod, FreeVariable, ParameterCoupling},
+    },
+};
 use rayon::prelude::*;
 /// Default penalty applied for fatal simulation failures (e.g., ray tracing errors)
 pub const DEFAULT_FATAL_PENALTY: f64 = 1.0e12;
@@ -219,12 +223,11 @@ impl MeritFunction {
 
         // 2. Clone blueprint and apply candidate parameters
         let mut working_doc = self.blueprint.clone();
-        let parameter_map =
-            if let Ok(map) = ParameterResolver::resolve(&self.free_variables, &self.couplings, x) {
-                map
-            } else {
-                return DVector::from_element(n_vars + 1, self.fatal_penalty.sqrt());
-            };
+        let Ok(parameter_map) =
+            ParameterResolver::resolve(&self.free_variables, &self.couplings, x)
+        else {
+            return DVector::from_element(n_vars + 1, self.fatal_penalty.sqrt());
+        };
 
         for (address, value) in parameter_map {
             if ParameterApplier::set_value(&mut working_doc, &address, value).is_err() {

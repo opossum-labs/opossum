@@ -104,7 +104,7 @@ pub trait OpticNode: VisualNode + HasNodeAttr + OpticNodeAny {
     ///
     /// Installs the node's surfaces anew from its **current** properties and placement, which also
     /// builds the body between them as the node's medium (see
-    /// [`OpticNodeExt::install_geometry`](crate::core_optics::OpticNodeExt::install_geometry)), so
+    /// [`OpticNodeExt::install_geometry`], so
     /// [`OpticNodeExt::pass_through_volume_generic`] (Phase B) reads the very surfaces rays are
     /// traced at. If the operating point provides a gain model that reads the inversion, the
     /// [`InversionField`](crate::gain::InversionField) is built from the pump configuration and stored

@@ -4,10 +4,9 @@ use crate::{
     undo::{Command, OptimizationUndo},
 };
 use actix_web::{HttpResponse, Responder, get, http::header, post, web};
-use opossum_core::opm_document::OpmDocument;
+use opossum_core::opm_document::{OpmDocument, OptimizationConfig, optimization::ParameterAddress};
 use opossum_optimization::{
-    OpticOptimizer, OptimizationConfig, OptimizationProgressEvent, ParameterAddress,
-    ParameterApplier, SchemaExtractor,
+    OpticOptimizer, OptimizationProgressEvent, ParameterApplier, SchemaExtractor,
 };
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
@@ -66,7 +65,9 @@ pub async fn start_optimization(
     let (working_doc, original_values) = {
         let mut doc = data.document.lock();
         doc.set_optimization_config(Some(opt_config.clone()));
-        snapshot_blueprint_and_values(&doc, &opt_config)
+        let snapshot = snapshot_blueprint_and_values(&doc, &opt_config);
+        drop(doc);
+        snapshot
     };
 
     spawn_optimization_worker(data, working_doc, opt_config, original_values);
@@ -255,8 +256,9 @@ pub async fn save_config(
             )
         })?;
 
-    let mut doc = data.document.lock();
-    doc.set_optimization_config(Some(opt_config));
+    data.document
+        .lock()
+        .set_optimization_config(Some(opt_config));
     Ok(HttpResponse::Ok().json("Optimization config saved"))
 }
 
@@ -279,11 +281,10 @@ mod test {
         light::lightdata::ray_data_source::{PointSrc, RayDataSource},
         millimeter, nanometer,
         nodes::{Lens, SourcePort, SpotDiagram},
+        opm_document::optimization::{
+            FreeVariable, MetricOperand, ObservableAddress, OperandMode, OptimizationAlgorithm,
+        },
         prelude::{AnalyzerType, RayTraceConfig, RefrIndexSchott},
-    };
-    use opossum_optimization::{
-        FreeVariable, MetricOperand, ObservableAddress, OperandMode, OptimizationAlgorithm,
-        OptimizationConfig, ParameterAddress,
     };
 
     /// Build minimal optical test setup in AppState
