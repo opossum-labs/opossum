@@ -197,6 +197,38 @@ impl OpticNode for SpotDiagram {
         }
     }
 
+    fn read_observable_vector(&self, metric_name: &str) -> Option<Vec<f64>> {
+        match metric_name {
+            "rms beam radius" => {
+                let rays = self.transformed_rays()?;
+                let valid_rays: Vec<_> = rays.iter().filter(|r| r.valid()).collect();
+                let n = valid_rays.len();
+                if n == 0 {
+                    return None;
+                }
+
+                let total_energy = rays.total_energy().get::<uom::si::energy::joule>();
+                if total_energy <= 0.0 || !total_energy.is_finite() {
+                    return None;
+                }
+
+                let centroid = rays.energy_weighted_centroid()?;
+                let scale_count = to_f64(2 * n);
+
+                let mut residuals = Vec::with_capacity(2 * n);
+                for ray in valid_rays {
+                    let ray_energy = ray.energy().get::<uom::si::energy::joule>().max(0.0);
+                    let weight_factor = (scale_count * (ray_energy / total_energy)).sqrt();
+                    let pos = ray.position();
+                    residuals.push(weight_factor * (pos.x.value - centroid.x.value));
+                    residuals.push(weight_factor * (pos.y.value - centroid.y.value));
+                }
+                Some(residuals)
+            }
+            _ => self.read_observable(metric_name).map(|v| vec![v]),
+        }
+    }
+
     fn node_report(&self, uuid: &str, analyzer: AnalyzerKind) -> OpmResult<NodeReportResult> {
         if analyzer == AnalyzerKind::Energy {
             return Ok(NodeReportResult::incompatible_warning(format!(
@@ -546,6 +578,55 @@ mod test {
         assert!(sd.read_observable("centroid x").is_some());
         assert!(sd.read_observable("centroid y").is_some());
         assert_eq!(sd.read_observable("unknown_metric"), None);
+        Ok(())
+    }
+    #[test]
+    fn read_observable_vector_spot_diagram() -> OpmResult<()> {
+        use crate::{
+            distributions::{energy::General2DGaussian, position::Hexapolar},
+            millimeter, radian,
+        };
+        use approx::assert_relative_eq;
+
+        let mut sd = SpotDiagram::default();
+        assert_eq!(sd.read_observable_vector("rms beam radius"), None);
+
+        // Use non-uniform Gaussian energy distribution to verify energy weighting
+        let pos_strategy = Hexapolar::new(millimeter!(5.0), 2)?;
+        let energy_strategy = General2DGaussian::new(
+            joule!(2.0),
+            millimeter!(0.5, -0.3),
+            millimeter!(2.0, 2.0),
+            1.0,
+            radian!(0.0),
+            true,
+        )?;
+        sd.light_data = Some(LightData::Geometric(Rays::new_collimated(
+            nanometer!(1053.0),
+            &energy_strategy,
+            &pos_strategy,
+        )?));
+
+        let rms_scalar = sd
+            .read_observable("rms beam radius")
+            .expect("scalar rms beam radius must exist");
+        let residuals = sd
+            .read_observable_vector("rms beam radius")
+            .expect("vector rms beam radius must exist");
+
+        // Hexapolar with 2 rings has 19 rays -> 38 Cartesian residual components
+        assert_eq!(residuals.len(), 38);
+
+        let mean_sq: f64 = residuals.iter().map(|r| r * r).sum::<f64>() / (residuals.len() as f64);
+        assert_relative_eq!(mean_sq.sqrt(), rms_scalar, max_relative = 1e-12);
+
+        // Non-vectorized metrics fall back to a 1-element vector
+        let cx_vec = sd
+            .read_observable_vector("centroid x")
+            .expect("centroid x vector must exist");
+        assert_eq!(cx_vec.len(), 1);
+        assert_eq!(cx_vec[0], sd.read_observable("centroid x").unwrap());
+
         Ok(())
     }
 }

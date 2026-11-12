@@ -42,17 +42,37 @@ impl MetricReader {
             })
     }
 
-    /// Reads a vector of related metrics (e.g., individual ray OPDs or spot deviations).
+    /// Reads a vector of residual metrics produced by a specific analyzer on a detector node.
     ///
     /// # Errors
     ///
     /// This function returns an error if
     /// - the detector node in the given [`ObservableAddress`] was not found.
-    /// - the metric produces no vector data.
+    /// - the given detector observable name produced no vector data.
     pub fn read_metric_vector(
         doc: &OpmDocument,
         address: &ObservableAddress,
     ) -> OpmResult<Vec<f64>> {
+        // 1. Primary: Fast lookup in VectorMetricStore by (analyzer_id, node_id, metric_name)
+        let key = (
+            address.analyzer_id,
+            address.node_id,
+            address.metric_name.clone(),
+        );
+        if let Some(vec_val) = doc.vector_metric_store().get(&key) {
+            return Ok(vec_val.clone());
+        }
+
+        // Prevent reading stale/overwritten light_data from another analyzer when multiple
+        // analyzers were executed during headless analysis.
+        if doc.analyzers().len() > 1 && !doc.metric_store().is_empty() {
+            return Err(OpossumError::Other(format!(
+                "Vector metric '{}' not available on node {} for analyzer {}",
+                address.metric_name, address.node_id, address.analyzer_id
+            )));
+        }
+
+        // 2. Fallback: Direct inspection on the detector node in the scenery graph
         let (node_ref, _) = doc.scenery().node_recursive(address.node_id).map_err(|e| {
             OpossumError::Other(format!(
                 "Failed to find detector node {}: {}",
@@ -64,8 +84,8 @@ impl MetricReader {
             .read_observable_vector(&address.metric_name)
             .ok_or_else(|| {
                 OpossumError::Other(format!(
-                    "Metric '{}' produced no vector data on node {}",
-                    address.metric_name, address.node_id
+                    "Metric '{}' produced no vector data on node {} for analyzer {}",
+                    address.metric_name, address.node_id, address.analyzer_id
                 ))
             })
     }

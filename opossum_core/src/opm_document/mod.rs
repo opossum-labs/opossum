@@ -36,6 +36,8 @@ pub const CURRENT_OPM_FILE_VERSION: u32 = 0;
 pub type MetricStoreKey = (Uuid, Uuid, String);
 /// Map for storing analyzer-sepecifc detector metric
 pub type MetricStore = HashMap<MetricStoreKey, f64>;
+/// Map for storing analyzer-specific vector detector metrics (e.g., per-ray OPDs)
+pub type VectorMetricStore = HashMap<MetricStoreKey, Vec<f64>>;
 
 /// The main structure of an OPOSSUM model.
 /// It contains the [`NodeGroup`] representing the optical model, a list of analyzers, and a global configuration.
@@ -57,6 +59,8 @@ pub struct OpmDocument {
     pub(crate) optimization_config: Option<OptimizationConfig>,
     #[serde(skip)]
     metric_store: MetricStore,
+    #[serde(skip)]
+    vector_metric_store: VectorMetricStore,
 }
 
 impl Default for OpmDocument {
@@ -70,6 +74,7 @@ impl Default for OpmDocument {
             embedded_materials: IndexMap::default(),
             optimization_config: None,
             metric_store: HashMap::new(),
+            vector_metric_store: HashMap::new(),
         }
     }
 }
@@ -265,7 +270,11 @@ impl OpmDocument {
     pub const fn metric_store(&self) -> &MetricStore {
         &self.metric_store
     }
-
+    /// Returns the cached vector metrics (e.g., per-ray OPDs) from the last headless analysis run.
+    #[must_use]
+    pub const fn vector_metric_store(&self) -> &VectorMetricStore {
+        &self.vector_metric_store
+    }
     /// Returns the optimization configuration of this [`OpmDocument`], if configured.
     #[must_use]
     pub const fn optimization_config(&self) -> Option<&OptimizationConfig> {
