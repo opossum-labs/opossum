@@ -1,11 +1,18 @@
 mod common;
 
 use common::build_kepler_setup;
-use opossum_core::{core_optics::NodeAttrExt, error::OpmResult, micrometer, millimeter};
+use opossum_core::{
+    core_optics::NodeAttrExt,
+    error::OpmResult,
+    micrometer, millimeter,
+    opm_document::optimization::{
+        FreeVariable, MaxTotalLengthOperand, MetricOperand, MinEdgeThicknessOperand,
+        ObservableAddress, OperandMode, OptimizationAlgorithm, ParameterAddress,
+        TransmissionPenaltyOperand,
+    },
+};
 use opossum_optimization::{
-    EvaluationContext, FreeVariable, MaxTotalLengthOperand, MeritFunction, MetricReader,
-    MinEdgeThicknessOperand, ObservableAddress, Operand, OpticOptimizer, OptimizationAlgorithm,
-    ParameterAddress, TargetValueOperand, TransmissionPenaltyOperand,
+    EvaluationContext, MeritFunction, MetricReader, Operand, OpticOptimizer,
 };
 use std::sync::Arc;
 use uom::si::length::millimeter;
@@ -34,23 +41,22 @@ fn test_optimize_kepler_with_geometric_length_penalty() -> OpmResult<()> {
 
     let summary = OpticOptimizer::new(&mut doc)
         .add_variable(
-            FreeVariable::new(dist_lens1_to_lens2.clone(), "distance_lens1_lens2")
+            FreeVariable::new(dist_lens1_to_lens2.clone())
                 .with_length_bounds(millimeter!(100.0), millimeter!(150.0))?,
         )?
         .add_variable(
-            FreeVariable::new(dist_lens2_to_spot.clone(), "distance_lens2_spot")
+            FreeVariable::new(dist_lens2_to_spot.clone())
                 .with_length_bounds(millimeter!(30.0), millimeter!(80.0))?,
         )?
         // Automatic 1.0 µm scaling for spot metrics
-        .add_operand(TargetValueOperand::for_spot_radius(
-            "minimize_rms_spot",
+        .add_operand(MetricOperand::for_spot_radius(
             spot_observable_addr.clone(),
             micrometer!(0.0),
+            OperandMode::Equal,
             1.0,
         ))
         // Enforce total system length limit <= 185 mm
         .add_operand(MaxTotalLengthOperand::for_length(
-            "compact_length_limit",
             vec![dist_lens1_to_lens2.clone(), dist_lens2_to_spot.clone()],
             millimeter!(185.0),
             50.0,
@@ -92,22 +98,21 @@ fn test_optimize_kepler_with_min_edge_thickness() -> OpmResult<()> {
 
     let _summary = OpticOptimizer::new(&mut doc)
         .add_variable(
-            FreeVariable::new(front_curvature_addr.clone(), "lens2_front_roc")
+            FreeVariable::new(front_curvature_addr.clone())
                 .with_length_bounds(millimeter!(40.0), millimeter!(200.0))?,
         )?
         .add_variable(
-            FreeVariable::new(rear_curvature_addr.clone(), "lens2_rear_roc")
+            FreeVariable::new(rear_curvature_addr.clone())
                 .with_length_bounds(millimeter!(-200.0), millimeter!(-40.0))?,
         )?
-        .add_operand(TargetValueOperand::for_spot_radius(
-            "minimize_rms_spot",
+        .add_operand(MetricOperand::for_spot_radius(
             spot_observable_addr.clone(),
             micrometer!(0.0),
+            OperandMode::Equal,
             1.0,
         ))
         // Enforce physical lens edge thickness >= 1.5 mm
         .add_operand(MinEdgeThicknessOperand::for_thickness(
-            "lens2_min_edge_thickness",
             lens2_id,
             millimeter!(1.5),
             500.0,
@@ -140,8 +145,7 @@ fn test_optimize_kepler_with_min_edge_thickness() -> OpmResult<()> {
 fn test_min_edge_thickness_rejects_incompatible_node() -> OpmResult<()> {
     let (doc, _analyzer_id, _lens2_id, spot_id) = build_kepler_setup(millimeter!(45.0))?;
 
-    let invalid_operand =
-        MinEdgeThicknessOperand::for_thickness("invalid_op", spot_id, millimeter!(5.0), 1.0);
+    let invalid_operand = MinEdgeThicknessOperand::for_thickness(spot_id, millimeter!(5.0), 1.0);
     let res = MeritFunction::new(doc, vec![], vec![], vec![Arc::new(invalid_operand)]);
 
     assert!(
@@ -166,12 +170,8 @@ fn test_transmission_penalty_operand() -> OpmResult<()> {
     let expected_rays = 91;
 
     let context = EvaluationContext::new(&doc);
-    let penalty_operand = TransmissionPenaltyOperand::new(
-        "penalty_normal",
-        valid_rays_addr.clone(),
-        expected_rays,
-        50.0,
-    );
+    let penalty_operand =
+        TransmissionPenaltyOperand::new(valid_rays_addr.clone(), expected_rays, 50.0);
 
     penalty_operand.validate(&doc)?;
     let initial_cost = penalty_operand.evaluate(&context)?;
@@ -180,8 +180,7 @@ fn test_transmission_penalty_operand() -> OpmResult<()> {
         "No penalty when all rays are transmitted"
     );
 
-    let strict_operand =
-        TransmissionPenaltyOperand::new("penalty_strict", valid_rays_addr, 100, 50.0);
+    let strict_operand = TransmissionPenaltyOperand::new(valid_rays_addr, 100, 50.0);
     let penalty_cost = strict_operand.evaluate(&context)?;
     assert!(penalty_cost > 0.0);
 

@@ -2,17 +2,22 @@ use argmin::{
     core::{CostFunction, Error, Gradient},
     solver::simulatedannealing::Anneal,
 };
+use nalgebra::{DMatrix, DVector};
 use rand::RngExt;
 use std::sync::Arc;
 
 use crate::{
     applier::ParameterApplier,
-    coupling::ParameterCoupling,
     operand::{EvaluationContext, Operand},
     resolver::ParameterResolver,
-    variable::{FiniteDifferenceMethod, FreeVariable},
 };
-use opossum_core::{error::OpmResult, opm_document::OpmDocument};
+use opossum_core::{
+    error::OpmResult,
+    opm_document::{
+        OpmDocument,
+        optimization::{FiniteDifferenceMethod, FreeVariable, ParameterCoupling},
+    },
+};
 use rayon::prelude::*;
 /// Default penalty applied for fatal simulation failures (e.g., ray tracing errors)
 pub const DEFAULT_FATAL_PENALTY: f64 = 1.0e12;
@@ -25,6 +30,7 @@ pub const DEFAULT_BOUNDS_PENALTY_WEIGHT: f64 = 1.0e8;
 
 /// Central cost function evaluator $\Phi(x)$ managing blueprint cloning, parameter mapping,
 /// simulation execution, and operand evaluation.
+#[derive(Clone)]
 pub struct MeritFunction {
     blueprint: OpmDocument,
     free_variables: Vec<FreeVariable>,
@@ -192,6 +198,108 @@ impl MeritFunction {
             }
         }
     }
+    /// Evaluates the signed residual vector R(x) for all operands and box bounds.
+    ///
+    /// The sum of squares `||R(x)||^2` strictly equals the scalar cost `Phi(x)`.
+    #[must_use]
+    pub fn evaluate_residuals(&self, x: &[f64]) -> DVector<f64> {
+        let n_vars = self.free_variables.len();
+        let mut residuals = Vec::new();
+
+        // 1. Box bounds penalty residuals
+        let mut bound_residuals = Vec::with_capacity(n_vars);
+        for (var, &val) in self.free_variables.iter().zip(x.iter()) {
+            let res = var.bounds.as_ref().map_or(0.0, |bounds| {
+                if val < bounds.min {
+                    (bounds.min - val) * self.bounds_penalty_weight.sqrt()
+                } else if val > bounds.max {
+                    (val - bounds.max) * self.bounds_penalty_weight.sqrt()
+                } else {
+                    0.0
+                }
+            });
+            bound_residuals.push(res);
+        }
+
+        // 2. Clone blueprint and apply candidate parameters
+        let mut working_doc = self.blueprint.clone();
+        let Ok(parameter_map) =
+            ParameterResolver::resolve(&self.free_variables, &self.couplings, x)
+        else {
+            return DVector::from_element(n_vars + 1, self.fatal_penalty.sqrt());
+        };
+
+        for (address, value) in parameter_map {
+            if ParameterApplier::set_value(&mut working_doc, &address, value).is_err() {
+                return DVector::from_element(n_vars + 1, self.fatal_penalty.sqrt());
+            }
+        }
+
+        if ParameterApplier::finalize_update(&mut working_doc).is_err()
+            || working_doc.analyze_headless().is_err()
+        {
+            return DVector::from_element(n_vars + 1, self.fatal_penalty.sqrt());
+        }
+
+        // 3. Evaluate individual operand residuals (flattened)
+        let context = EvaluationContext::new(&working_doc);
+        for operand in &self.operands {
+            match operand.residuals(&context) {
+                Ok(r_vec) => {
+                    residuals.extend(r_vec);
+                }
+                Err(_) => {
+                    residuals.push((self.fatal_penalty * 0.1).sqrt());
+                }
+            }
+        }
+
+        // 4. Append bound violation residuals
+        residuals.extend(bound_residuals);
+        DVector::from_vec(residuals)
+    }
+
+    /// Computes the `m x n` Jacobian matrix `J_ij = d(r_i) / d(x_j)` using parallel central finite differences.
+    #[must_use]
+    pub fn compute_jacobian(&self, x: &[f64], base_residuals: &DVector<f64>) -> DMatrix<f64> {
+        let n = self.free_variables.len();
+        let m = base_residuals.len();
+
+        let columns: Vec<DVector<f64>> = (0..n)
+            .into_par_iter()
+            .map(|j| {
+                let var = &self.free_variables[j];
+                // Determine step size based on parameter bounds or fallback scale
+                let span = var
+                    .bounds
+                    .as_ref()
+                    .map_or_else(|| (x[j].abs() * 0.1).max(1e-3), |b| b.max - b.min);
+
+                // 0.01% of total range is optimal for raytracing stability
+                let h = (span * 1e-4).clamp(1e-7, 1e-3);
+
+                let mut x_plus = x.to_vec();
+                let mut x_minus = x.to_vec();
+                x_plus[j] += h;
+                x_minus[j] -= h;
+
+                let r_plus = self.evaluate_residuals(&x_plus);
+                let r_minus = self.evaluate_residuals(&x_minus);
+
+                if r_plus.len() == m && r_minus.len() == m {
+                    (r_plus - r_minus) / (2.0 * h)
+                } else {
+                    DVector::zeros(m)
+                }
+            })
+            .collect();
+
+        let mut jacobian = DMatrix::zeros(m, n);
+        for (j, col) in columns.into_iter().enumerate() {
+            jacobian.set_column(j, &col);
+        }
+        jacobian
+    }
 }
 
 impl CostFunction for MeritFunction {
@@ -220,34 +328,45 @@ impl Anneal for MeritFunction {
     fn anneal(&self, param: &Self::Param, temp: Self::Float) -> Result<Self::Output, Error> {
         let mut rng = rand::rng();
         let mut next_param = param.clone();
-
-        // Scale perturbation by temperature
-        let temp_factor = temp.clamp(1e-4, 1.0);
-
-        for (i, var) in self.free_variables.iter().enumerate() {
-            let range = var.bounds.as_ref().map_or_else(
-                || {
-                    if param[i].abs() > 1e-7 {
-                        param[i].abs() * 0.5
-                    } else {
-                        1e-2
-                    }
-                },
-                |bounds| bounds.max - bounds.min,
-            );
-
-            // Uniform displacement in interval [-1.0, 1.0]
-            let offset = rng.random_range(-1.0..=1.0);
-            let step = offset * range * temp_factor;
-            let mut candidate = param[i] + step;
-
-            // Strictly enforce box bounds
-            if let Some(bounds) = &var.bounds {
-                candidate = bounds.clamp(candidate);
-            }
-            next_param[i] = candidate;
+        let n = self.free_variables.len();
+        if n == 0 {
+            return Ok(next_param);
         }
 
+        // 1. Pick exactly one parameter to perturb
+        let idx = rng.random_range(0..n);
+        let var = &self.free_variables[idx];
+
+        // 2. Base range of the selected parameter
+        let total_span = var.bounds.as_ref().map_or_else(
+            || {
+                if param[idx].abs() > 1e-7 {
+                    param[idx].abs() * 0.5
+                } else {
+                    1e-2
+                }
+            },
+            |bounds| bounds.max - bounds.min,
+        );
+
+        // 3. Temperature-dependent step contraction
+        // We assume an initial temperature reference or normalize temp.
+        // Clamping ensures that steps never vanish completely.
+        let temp_norm = (temp / 100.0).clamp(1e-4, 1.0);
+        let temp_scale = temp_norm.sqrt().max(0.01); // Never drop below 1% of total span
+
+        // 4. Generate step (e.g. uniform or Gaussian)
+        let max_step = total_span * 0.2 * temp_scale;
+        let offset = rng.random_range(-1.0..=1.0) * max_step;
+
+        let mut candidate = param[idx] + offset;
+
+        // 5. Strictly enforce box bounds
+        if let Some(bounds) = &var.bounds {
+            candidate = bounds.clamp(candidate);
+        }
+
+        next_param[idx] = candidate;
         Ok(next_param)
     }
 }

@@ -949,7 +949,7 @@ impl Rays {
     ///
     /// This is the bundle-wide counterpart of [`Ray::scale_energy`] and the way an active medium
     /// amplifies a beam. Invalid rays are left alone, exactly as in
-    /// [`filter_energy`](Rays::filter_energy): they no longer take part in the propagation.
+    /// [`filter_energy`](crate::light::ray::Ray::filter_energy): they no longer take part in the propagation.
     ///
     /// # Arguments
     ///

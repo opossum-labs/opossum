@@ -9,12 +9,12 @@ use opossum_core::{
     core_optics::node_attr::HasNodeAttr,
     error::OpmResult,
     nodes::GraphDelta,
-    opm_document::OpmDocument,
+    opm_document::{OpmDocument, optimization::ParameterAddress},
     types::api_types::{
         AnalyzerItemDto, DocumentChange, JumpTarget, NodeEditorPanel, PumpScenarioItemDto,
     },
 };
-use opossum_optimization::{ParameterAddress, ParameterApplier};
+use opossum_optimization::ParameterApplier;
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
@@ -42,18 +42,12 @@ pub struct OptimizationUndo {
 }
 
 impl OptimizationUndo {
-    // pub fn apply_old(&self, doc: &mut OpmDocument) -> OpmResult<()> {
-    //     for (addr, (old_val, _)) in &self.parameter_diff {
-    //         ParameterApplier::set_value(doc, addr, *old_val)?;
-    //     }
-    //     ParameterApplier::finalize_update(doc)
-    // }
-
     pub fn apply_new(&self, doc: &mut OpmDocument) -> OpmResult<()> {
         for (addr, (_, new_val)) in &self.parameter_diff {
             ParameterApplier::set_value(doc, addr, *new_val)?;
         }
-        ParameterApplier::finalize_update(doc)
+        ParameterApplier::finalize_update(doc)?;
+        doc.analyze_headless()
     }
 }
 
@@ -340,7 +334,8 @@ impl Command {
                 let mut graph_ids = HashSet::new();
                 for addr in undo.parameter_diff.keys() {
                     match addr {
-                        ParameterAddress::NodeProperty { node_id, .. } => {
+                        ParameterAddress::NodeProperty { node_id, .. }
+                        | ParameterAddress::SurfaceCurvature { node_id, .. } => {
                             if let Ok((_, parent_id)) = document.scenery().node_recursive(*node_id)
                             {
                                 graph_ids.insert(parent_id);

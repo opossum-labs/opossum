@@ -11,6 +11,6 @@ pub mod settings_dialog;
 pub mod short_cuts;
 pub mod simulation;
 // pub mod plot;
-// pub mod render_3d;
 pub mod catalog_editor;
+pub mod optimization;
 pub mod primitives;

@@ -20,6 +20,7 @@ use crate::{
         BeamSplitter, Dummy, Lens, NodeReference, ReflectiveGrating, SourcePort, ThinMirror,
         round_collimated_ray_builder,
     },
+    opm_document::optimization::{MetricOperand, OperandMode},
 };
 use approx::assert_relative_eq;
 use uom::si::f64::Length;
@@ -668,5 +669,57 @@ fn a_strand_the_axis_does_not_reach_leaves_the_rest_placed() -> OpmResult<()> {
     for unreached in [loose_lens, splitter, after] {
         assert!(!is_placed(&placed, unreached)?);
     }
+    Ok(())
+}
+
+#[test]
+fn opm_document_optimization_config_roundtrip() -> OpmResult<()> {
+    use super::optimization::{
+        CouplingType, FreeVariable, OptimizationAlgorithm, OptimizationConfig, ParameterAddress,
+        ParameterCoupling,
+    };
+
+    let mut doc = OpmDocument::default();
+    assert!(doc.optimization_config().is_none());
+
+    let node_id = Uuid::new_v4();
+    let addr = ParameterAddress::NodeProperty {
+        node_id,
+        property_name: "thickness".to_string(),
+    };
+    let var = FreeVariable::new(addr.clone()).with_initial_value(0.01);
+    let coupling = ParameterCoupling {
+        target: addr.clone(),
+        rule: CouplingType::Identical {
+            source: addr.clone(),
+        },
+    };
+    let operand = MetricOperand::new(addr, 0.05, OperandMode::Equal, 1.0, 1e-3);
+
+    let config = OptimizationConfig::new()
+        .with_variable(var)
+        .with_coupling(coupling)
+        .with_operand(operand)
+        .with_algorithm(OptimizationAlgorithm::dls())
+        .with_target_cost(1e-6);
+
+    doc.set_optimization_config(Some(config.clone()));
+
+    // Serialize to RON string
+    let opm_string = doc.to_opm_file_string()?;
+    assert!(opm_string.contains("optimization_config"));
+
+    // Deserialize back
+    let restored = OpmDocument::from_string(&opm_string)?;
+    assert_eq!(restored.optimization_config(), Some(&config));
+
+    // Clearing config
+    let mut doc_cleared = doc.clone();
+    doc_cleared.set_optimization_config(None);
+    let cleared_opm_string = doc_cleared.to_opm_file_string()?;
+    assert!(!cleared_opm_string.contains("optimization_config"));
+    let restored_cleared = OpmDocument::from_string(&cleared_opm_string)?;
+    assert!(restored_cleared.optimization_config().is_none());
+
     Ok(())
 }

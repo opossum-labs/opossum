@@ -39,11 +39,9 @@ impl OpmDocument {
         if self.analyzers.is_empty() {
             return Ok(());
         }
-
         self.metric_store.clear();
-
+        self.vector_metric_store.clear();
         let runs = self.analysis_runs()?;
-
         for AnalysisRun {
             analyzer_id,
             analyzer_type,
@@ -59,14 +57,11 @@ impl OpmDocument {
                         "No analyzer implementation found for type: {analyzer_type:?}"
                     ))
                 })?;
-
-            // 1. Vorherige Strahlengänge aus dem Graphen entfernen
+            // 1. Remove previous ray paths from graph
             self.scenery.clear_edges();
-
-            // 2. Raw physics/raytracing direkt auf der Scenery ausführen
+            // 2. Execute raw physics/raytracing directly on scenery
             analyzer_box.analyze(&mut self.scenery)?;
-
-            // 3. Observablen aller Detektorknoten für diesen Run einsammeln
+            // 3. Collect scalar and vector observables of all detector nodes for this run
             let nodes = self.scenery.collect_all_nodes_recursive();
             for node in nodes {
                 let node_id = node.uuid();
@@ -75,10 +70,15 @@ impl OpmDocument {
                         self.metric_store
                             .insert((analyzer_id, node_id, desc.name.clone()), val);
                     }
+                    if let Some(vec_val) = node.read_observable_vector(&desc.name)
+                        && vec_val.len() > 1
+                    {
+                        self.vector_metric_store
+                            .insert((analyzer_id, node_id, desc.name.clone()), vec_val);
+                    }
                 }
             }
         }
-
         Ok(())
     }
     /// Performs an analysis run of this [`OpmDocument`].

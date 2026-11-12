@@ -104,7 +104,7 @@ pub trait OpticNode: VisualNode + HasNodeAttr + OpticNodeAny {
     ///
     /// Installs the node's surfaces anew from its **current** properties and placement, which also
     /// builds the body between them as the node's medium (see
-    /// [`OpticNodeExt::install_geometry`](crate::core_optics::OpticNodeExt::install_geometry)), so
+    /// [`OpticNodeExt::install_geometry`], so
     /// [`OpticNodeExt::pass_through_volume_generic`] (Phase B) reads the very surfaces rays are
     /// traced at. If the operating point provides a gain model that reads the inversion, the
     /// [`InversionField`](crate::gain::InversionField) is built from the pump configuration and stored
@@ -241,6 +241,12 @@ pub trait OpticNode: VisualNode + HasNodeAttr + OpticNodeAny {
     /// Returns `None` if no simulation data is available or the key is not recognized.
     fn read_observable(&self, _metric_name: &str) -> Option<f64> {
         None
+    }
+
+    /// Reads a vector of related raw residuals (e.g., individual ray OPDs or spot deviations).
+    /// Defaults to wrapping a single scalar metric if not overridden.
+    fn read_observable_vector(&self, metric_name: &str) -> Option<Vec<f64>> {
+        self.read_observable(metric_name).map(|val| vec![val])
     }
     /// Returns an [`OpticNode`] dowcasted to an [`EdgeThickness`] trait object
     /// if possible.

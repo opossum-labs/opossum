@@ -1,30 +1,25 @@
 use argmin::{
     core::{Executor, State, TerminationReason},
     solver::{
-        linesearch::MoreThuenteLineSearch,
+        linesearch::{BacktrackingLineSearch, condition::ArmijoCondition},
         neldermead::NelderMead,
         quasinewton::LBFGS,
-        simulatedannealing::{SATempFunc, SimulatedAnnealing},
     },
 };
 use std::sync::{Arc, atomic::AtomicBool};
 
 use crate::{
-    OptimizationConfig, OptimizationProgressEvent,
-    algorithm::OptimizationAlgorithm,
-    applier::ParameterApplier,
-    coupling::ParameterCoupling,
-    merit::MeritFunction,
-    operand::Operand,
-    progress::ProgressObserver,
-    reader::MetricReader,
-    resolver::ParameterResolver,
+    DampedLeastSquares, OptimizationProgressEvent, applier::ParameterApplier,
+    asa::AdaptiveSimulatedAnnealing, dls::DlsIterState, merit::MeritFunction, operand::Operand,
+    progress::ProgressObserver, reader::MetricReader, resolver::ParameterResolver,
     summary::OptimizationSummary,
-    variable::{FiniteDifferenceMethod, FreeVariable},
 };
 use opossum_core::{
     error::{OpmResult, OpossumError},
-    opm_document::OpmDocument,
+    opm_document::{
+        OpmDocument, OptimizationConfig,
+        optimization::{FreeVariable, OptimizationAlgorithm, ParameterCoupling},
+    },
 };
 
 /// Internal container holding the raw numerical output of an executed solver.
@@ -214,6 +209,7 @@ impl<'a> OpticOptimizer<'a> {
                 "No operands specified for merit function".to_string(),
             ));
         }
+
         ParameterResolver::validate_configuration(&self.free_variables, &self.couplings)?;
 
         let merit = MeritFunction::new(
@@ -229,7 +225,8 @@ impl<'a> OpticOptimizer<'a> {
         let max_iters = match self.algorithm {
             OptimizationAlgorithm::NelderMead { max_iterations, .. }
             | OptimizationAlgorithm::LBFGS { max_iterations, .. }
-            | OptimizationAlgorithm::SimulatedAnnealing { max_iterations, .. } => max_iterations,
+            | OptimizationAlgorithm::SimulatedAnnealing { max_iterations, .. }
+            | OptimizationAlgorithm::Dls { max_iterations, .. } => max_iterations,
         };
 
         progress_callback(OptimizationProgressEvent::Started {
@@ -237,15 +234,24 @@ impl<'a> OpticOptimizer<'a> {
             total_max_iterations: max_iters,
         });
 
+        let best_tracker = Arc::new(std::sync::Mutex::new(Some((
+            initial_vector.clone(),
+            initial_cost,
+            0,
+        ))));
+
         let observer = ProgressObserver::new(
             progress_callback,
             cancel_flag,
             self.free_variables.clone(),
             self.couplings.clone(),
+            best_tracker.clone(),
         );
 
-        let outcome = self.execute_solver_with_observer(merit, initial_vector, observer)?;
+        let outcome =
+            self.execute_solver_with_observer(merit, &initial_vector, observer, &best_tracker)?;
 
+        // Parameter auflösen und in das Dokument schreiben
         let resolved_map = ParameterResolver::resolve(
             &self.free_variables,
             &self.couplings,
@@ -267,41 +273,19 @@ impl<'a> OpticOptimizer<'a> {
         })
     }
 
+    /// Dispatches execution with a progress observer to the configured numerical solver.
     fn execute_solver_with_observer(
         &self,
         merit: MeritFunction,
-        initial_vector: Vec<f64>,
+        initial_vector: &[f64],
         observer: ProgressObserver,
+        best_tracker: &crate::progress::BestStateTracker,
     ) -> OpmResult<SolverOutcome> {
-        match self.algorithm {
+        let run_result = match self.algorithm {
             OptimizationAlgorithm::NelderMead {
                 max_iterations,
                 sd_tolerance,
-            } => {
-                let initial_simplex =
-                    OptimizationAlgorithm::build_initial_simplex(&self.free_variables)?;
-                let solver = NelderMead::new(initial_simplex)
-                    .with_sd_tolerance(sd_tolerance)
-                    .map_err(|e| OpossumError::Other(format!("Failed to set tolerance: {e}")))?;
-
-                let res = Executor::new(merit, solver)
-                    .configure(|state| {
-                        state
-                            .max_iters(max_iterations)
-                            .target_cost(self.target_cost)
-                    })
-                    .add_observer(observer, argmin::core::observers::ObserverMode::Always)
-                    .run()
-                    .map_err(|e| {
-                        if e.to_string().contains("cancelled by user") {
-                            OpossumError::Other("Optimization cancelled by user".to_string())
-                        } else {
-                            OpossumError::Other(format!("Nelder-Mead failed: {e}"))
-                        }
-                    })?;
-
-                self.handle_solver_state(res.state())
-            }
+            } => self.run_nelder_mead_observed(merit, max_iterations, sd_tolerance, observer),
             OptimizationAlgorithm::LBFGS {
                 max_iterations,
                 gradient_tolerance,
@@ -309,69 +293,166 @@ impl<'a> OpticOptimizer<'a> {
                 gradient_method,
             } => {
                 let merit = merit.with_gradient_method(gradient_method);
-                let linesearch = MoreThuenteLineSearch::new()
-                    .with_c(1e-4, 0.9)
-                    .map_err(|e| OpossumError::Other(format!("Failed to set line search: {e}")))?;
-                let solver = LBFGS::new(linesearch, history_size)
-                    .with_tolerance_grad(gradient_tolerance)
-                    .map_err(|e| OpossumError::Other(format!("Failed to set tolerance: {e}")))?;
-
-                let res = Executor::new(merit, solver)
-                    .configure(|state| {
-                        state
-                            .param(initial_vector)
-                            .max_iters(max_iterations)
-                            .target_cost(self.target_cost)
-                    })
-                    .add_observer(observer, argmin::core::observers::ObserverMode::Always)
-                    .run()
-                    .map_err(|e| {
-                        if e.to_string().contains("cancelled by user") {
-                            OpossumError::Other("Optimization cancelled by user".to_string())
-                        } else {
-                            OpossumError::Other(format!("L-BFGS failed: {e}"))
-                        }
-                    })?;
-
-                self.handle_solver_state(res.state())
+                self.run_lbfgs_observed(
+                    merit,
+                    initial_vector,
+                    max_iterations,
+                    gradient_tolerance,
+                    history_size,
+                    observer,
+                )
             }
             OptimizationAlgorithm::SimulatedAnnealing {
                 max_iterations,
                 initial_temperature,
-                stall_best,
-                stall_accepted,
-                reannealing_fixed,
-            } => {
-                let mut solver = SimulatedAnnealing::new(initial_temperature)
-                    .map_err(|e| OpossumError::Other(format!("Failed to init SA: {e}")))?
-                    .with_temp_func(SATempFunc::Exponential(0.95))
-                    .with_stall_best(stall_best)
-                    .with_stall_accepted(stall_accepted);
+                cooling_rate,
+                ..
+            } => self.run_sa_observed(
+                merit,
+                initial_vector,
+                max_iterations,
+                initial_temperature,
+                cooling_rate,
+                observer,
+            ),
+            OptimizationAlgorithm::Dls {
+                max_iterations,
+                initial_damping,
+                gradient_tolerance,
+            } => self.run_dls_observed(
+                merit,
+                initial_vector,
+                max_iterations,
+                initial_damping,
+                gradient_tolerance,
+                observer,
+            ),
+        };
 
-                if let Some(reanneal_steps) = reannealing_fixed {
-                    solver = solver.with_reannealing_fixed(reanneal_steps);
+        match run_result {
+            Ok(inner_res) => inner_res,
+            Err(e) => {
+                // Recover the best state so far from the tracker if cancelled by the user
+                if e.to_string().contains("cancelled by user")
+                    && let Ok(guard) = best_tracker.lock()
+                    && let Some((best_params, final_cost, iterations)) = guard.clone()
+                {
+                    return Ok(SolverOutcome {
+                        best_params,
+                        final_cost,
+                        iterations,
+                        converged: false,
+                    });
                 }
-
-                let res = Executor::new(merit, solver)
-                    .configure(|state| {
-                        state
-                            .param(initial_vector)
-                            .max_iters(max_iterations)
-                            .target_cost(self.target_cost)
-                    })
-                    .add_observer(observer, argmin::core::observers::ObserverMode::Always)
-                    .run()
-                    .map_err(|e| {
-                        if e.to_string().contains("cancelled by user") {
-                            OpossumError::Other("Optimization cancelled by user".to_string())
-                        } else {
-                            OpossumError::Other(format!("Simulated Annealing failed: {e}"))
-                        }
-                    })?;
-
-                self.handle_solver_state(res.state())
+                Err(OpossumError::Other(format!("Optimization failed: {e}")))
             }
         }
+    }
+
+    /// Configures and executes Nelder-Mead with a progress observer.
+    fn run_nelder_mead_observed(
+        &self,
+        merit: MeritFunction,
+        max_iterations: u64,
+        sd_tolerance: f64,
+        observer: ProgressObserver,
+    ) -> Result<OpmResult<SolverOutcome>, argmin::core::Error> {
+        let initial_simplex = OptimizationAlgorithm::build_initial_simplex(&self.free_variables)
+            .map_err(|e| argmin::core::Error::msg(e.to_string()))?;
+        let solver = NelderMead::new(initial_simplex).with_sd_tolerance(sd_tolerance)?;
+
+        Executor::new(merit, solver)
+            .configure(|state| {
+                state
+                    .max_iters(max_iterations)
+                    .target_cost(self.target_cost)
+            })
+            .add_observer(observer, argmin::core::observers::ObserverMode::Always)
+            .run()
+            .map(|res| self.handle_solver_state(res.state()))
+    }
+
+    /// Configures and executes L-BFGS with Armijo backtracking line search and a progress observer.
+    #[allow(clippy::too_many_arguments)]
+    fn run_lbfgs_observed(
+        &self,
+        merit: MeritFunction,
+        initial_vector: &[f64],
+        max_iterations: u64,
+        gradient_tolerance: f64,
+        history_size: usize,
+        observer: ProgressObserver,
+    ) -> Result<OpmResult<SolverOutcome>, argmin::core::Error> {
+        // Armijo condition with relaxed slope c1 = 1e-4
+        let condition = ArmijoCondition::new(1e-4)?;
+        // Robust geometric backtracking line search (contraction rho = 0.8)
+        let linesearch = BacktrackingLineSearch::new(condition).rho(0.8)?;
+        let solver =
+            LBFGS::new(linesearch, history_size).with_tolerance_grad(gradient_tolerance)?;
+
+        Executor::new(merit, solver)
+            .configure(|state| {
+                state
+                    .param(initial_vector.to_vec())
+                    .max_iters(max_iterations)
+                    .target_cost(self.target_cost)
+            })
+            .add_observer(observer, argmin::core::observers::ObserverMode::Always)
+            .run()
+            .map(|res| self.handle_solver_state(res.state()))
+    }
+
+    /// Configures and executes Adaptive Simulated Annealing with a progress observer.
+    #[allow(clippy::too_many_arguments)]
+    fn run_sa_observed(
+        &self,
+        merit: MeritFunction,
+        initial_vector: &[f64],
+        max_iterations: u64,
+        initial_temperature: f64,
+        cooling_rate: f64,
+        observer: ProgressObserver,
+    ) -> Result<OpmResult<SolverOutcome>, argmin::core::Error> {
+        let solver = AdaptiveSimulatedAnnealing::new(&merit, initial_temperature, cooling_rate)
+            .with_adaptation_cycle(20);
+
+        Executor::new(merit, solver)
+            .configure(|state| {
+                state
+                    .param(initial_vector.to_vec())
+                    .max_iters(max_iterations)
+                    .target_cost(self.target_cost)
+            })
+            .add_observer(observer, argmin::core::observers::ObserverMode::Always)
+            .run()
+            .map(|res| self.handle_solver_state(res.state()))
+    }
+
+    /// Configures and executes Damped Least Squares (DLS) with a progress observer.
+    #[allow(clippy::too_many_arguments)]
+    fn run_dls_observed(
+        &self,
+        merit: MeritFunction,
+        initial_vector: &[f64],
+        max_iterations: u64,
+        initial_damping: f64,
+        gradient_tolerance: f64,
+        observer: ProgressObserver,
+    ) -> Result<OpmResult<SolverOutcome>, argmin::core::Error> {
+        let solver = DampedLeastSquares::new(merit.clone())
+            .with_initial_damping(initial_damping)
+            .with_gradient_tolerance(gradient_tolerance);
+
+        Executor::new(merit, solver)
+            .configure(|state: DlsIterState| {
+                state
+                    .param(initial_vector.to_vec())
+                    .max_iters(max_iterations)
+                    .target_cost(self.target_cost)
+            })
+            .add_observer(observer, argmin::core::observers::ObserverMode::Always)
+            .run()
+            .map(|res| self.handle_solver_state(res.state()))
     }
     fn handle_solver_state<I>(&self, state: &I) -> OpmResult<SolverOutcome>
     where
@@ -402,8 +483,7 @@ impl<'a> OpticOptimizer<'a> {
             .map(|v| {
                 v.initial_value.ok_or_else(|| {
                     OpossumError::Other(format!(
-                        "FreeVariable '{}' has uninitialized start value",
-                        v.name
+                        "FreeVariable '{v:?}' has uninitialized start value"
                     ))
                 })
             })
@@ -426,29 +506,68 @@ impl<'a> OpticOptimizer<'a> {
                 gradient_tolerance,
                 history_size,
                 gradient_method,
-            } => self.execute_lbfgs(
-                merit,
-                initial_vector,
-                max_iterations,
-                gradient_tolerance,
-                history_size,
-                gradient_method,
-            ),
+            } => {
+                let merit = merit.with_gradient_method(gradient_method);
+
+                let condition = ArmijoCondition::new(1e-4).map_err(|e| {
+                    OpossumError::Other(format!("Failed to create Armijo condition: {e}"))
+                })?;
+
+                let linesearch = BacktrackingLineSearch::new(condition)
+                    .rho(0.8)
+                    .map_err(|e| {
+                        OpossumError::Other(format!("Failed to set backtracking line search: {e}"))
+                    })?;
+
+                let solver = LBFGS::new(linesearch, history_size)
+                    .with_tolerance_grad(gradient_tolerance)
+                    .map_err(|e| OpossumError::Other(format!("Failed to set tolerance: {e}")))?;
+
+                let res = Executor::new(merit, solver)
+                    .configure(|state| {
+                        state
+                            .param(initial_vector.clone())
+                            .max_iters(max_iterations)
+                            .target_cost(self.target_cost)
+                    })
+                    .run()
+                    .map_err(|e| OpossumError::Other(format!("Optimization failed: {e}")))?;
+
+                self.handle_solver_state(res.state())
+            }
             OptimizationAlgorithm::SimulatedAnnealing {
                 max_iterations,
                 initial_temperature,
-                stall_best,
-                stall_accepted,
-                reannealing_fixed,
+                cooling_rate,
+                ..
             } => self.execute_simulated_annealing(
                 merit,
                 initial_vector,
                 max_iterations,
                 initial_temperature,
-                stall_best,
-                stall_accepted,
-                reannealing_fixed,
+                cooling_rate,
             ),
+            OptimizationAlgorithm::Dls {
+                max_iterations,
+                initial_damping,
+                gradient_tolerance,
+            } => {
+                let solver = DampedLeastSquares::new(merit.clone())
+                    .with_initial_damping(initial_damping)
+                    .with_gradient_tolerance(gradient_tolerance);
+
+                let res = Executor::new(merit, solver)
+                    .configure(|state: DlsIterState| {
+                        state
+                            .param(initial_vector.clone())
+                            .max_iters(max_iterations)
+                            .target_cost(self.target_cost)
+                    })
+                    .run()
+                    .map_err(|e| OpossumError::Other(format!("Optimization failed: {e}")))?;
+
+                self.handle_solver_state(res.state())
+            }
         }
     }
 
@@ -491,52 +610,6 @@ impl<'a> OpticOptimizer<'a> {
         })
     }
 
-    fn execute_lbfgs(
-        &self,
-        merit: MeritFunction,
-        initial_vector: Vec<f64>,
-        max_iterations: u64,
-        gradient_tolerance: f64,
-        history_size: usize,
-        gradient_method: FiniteDifferenceMethod,
-    ) -> OpmResult<SolverOutcome> {
-        let merit = merit.with_gradient_method(gradient_method);
-        let linesearch = MoreThuenteLineSearch::new()
-            .with_c(1e-4, 0.9)
-            .map_err(|e| OpossumError::Other(format!("Failed to set line search: {e}")))?;
-        let solver = LBFGS::new(linesearch, history_size)
-            .with_tolerance_grad(gradient_tolerance)
-            .map_err(|e| OpossumError::Other(format!("Failed to set tolerance: {e}")))?;
-
-        let res = Executor::new(merit, solver)
-            .configure(|state| {
-                state
-                    .param(initial_vector)
-                    .max_iters(max_iterations)
-                    .target_cost(self.target_cost)
-            })
-            .run()
-            .map_err(|e| OpossumError::Other(format!("L-BFGS failed: {e}")))?;
-
-        let state = res.state();
-        let best_params = state
-            .best_param
-            .clone()
-            .ok_or_else(|| OpossumError::Other("L-BFGS produced no solution".to_string()))?;
-
-        let converged = match state.get_termination_reason() {
-            Some(TerminationReason::TargetCostReached | TerminationReason::SolverConverged) => true,
-            _ => state.best_cost <= self.target_cost,
-        };
-
-        Ok(SolverOutcome {
-            best_params,
-            final_cost: state.best_cost,
-            iterations: state.iter,
-            converged,
-        })
-    }
-
     #[allow(clippy::too_many_arguments)]
     fn execute_simulated_annealing(
         &self,
@@ -544,19 +617,10 @@ impl<'a> OpticOptimizer<'a> {
         initial_vector: Vec<f64>,
         max_iterations: u64,
         initial_temperature: f64,
-        stall_best: u64,
-        stall_accepted: u64,
-        reannealing_fixed: Option<u64>,
+        cooling_rate: f64,
     ) -> OpmResult<SolverOutcome> {
-        let mut solver = SimulatedAnnealing::new(initial_temperature)
-            .map_err(|e| OpossumError::Other(format!("Failed to init Simulated Annealing: {e}")))?
-            .with_temp_func(SATempFunc::Exponential(0.95))
-            .with_stall_best(stall_best)
-            .with_stall_accepted(stall_accepted);
-
-        if let Some(reanneal_steps) = reannealing_fixed {
-            solver = solver.with_reannealing_fixed(reanneal_steps);
-        }
+        let solver = AdaptiveSimulatedAnnealing::new(&merit, initial_temperature, cooling_rate)
+            .with_adaptation_cycle(20);
 
         let res = Executor::new(merit, solver)
             .configure(|state| {

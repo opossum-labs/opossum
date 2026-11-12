@@ -1,4 +1,4 @@
-use crate::address::ParameterAddress;
+use opossum_core::opm_document::optimization::ParameterAddress;
 use std::collections::HashMap;
 
 /// Comprehensive result of an executed optimization process[cite: 1].

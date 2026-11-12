@@ -48,6 +48,7 @@ pub enum AppCommand {
     ToggleSceneView,
     OpenMaterialCatalog,
     OpenCatalogSynchronizer,
+    OpenOptimization,
 }
 
 #[component]
@@ -259,6 +260,27 @@ pub fn MenuBar(
                     }
                     // --- 3D View Menu ---
                     SceneViewMenu { on_menu_action, is_connected }
+                    // --- Optimization Menu ---
+                    li { class: "nav-item dropdown",
+                        a {
+                            "data-mdb-dropdown-init": "",
+                            "data-mdb-toggle": "dropdown",
+                            class: "nav-link dropdown-toggle link-secondary hidden-arrow",
+                            id: "navbarDropdownOptimizationMenuLink",
+                            role: "button",
+                            "Optimize"
+                        }
+                        ul { class: "dropdown-menu",
+                            li {
+                                a {
+                                    class: if is_connected { "dropdown-item" } else { "dropdown-item disabled pe-none text-muted" },
+                                    role: "button",
+                                    onclick: move |_| on_menu_action.call(AppCommand::OpenOptimization),
+                                    "System Optimization..."
+                                }
+                            }
+                        }
+                    }
                     // --- Catalogs Menu ---
                     li { class: "nav-item dropdown",
                         a {
@@ -351,8 +373,11 @@ pub fn MenuBar(
                 let simulate_shortcut = SHORTCUTS
                     .get(&ShortCutAction::Simulate)
                     .map_or(String::new(), |s| format!(" ({s})"));
-                let title_str = if is_connected { format!("Simulate{simulate_shortcut}") } else { "Simulation disabled (no backend connection)".to_string() };
-
+                let title_str = if is_connected {
+                    format!("Simulate{simulate_shortcut}")
+                } else {
+                    "Simulation disabled (no backend connection)".to_string()
+                };
                 #[cfg(feature = "desktop")]
                 rsx! {
                     div { class: "d-flex align-items-center",

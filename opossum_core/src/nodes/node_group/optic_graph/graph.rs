@@ -1,5 +1,5 @@
 use super::{super::port_map::PortMap, serialization::SerializableGraph};
-use crate::{core_optics::OpticRef, light::LightFlow, prelude::PortType};
+use crate::{core_optics::OpticRef, light::LightFlow, nodes::NodeGroup, prelude::PortType};
 use petgraph::graph::{DiGraph, NodeIndex};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
@@ -84,6 +84,19 @@ impl OpticGraph {
     #[must_use]
     pub fn external_distances(&self) -> &BTreeMap<String, Length> {
         &self.external_distances
+    }
+    /// Clears the cached 3D runtime isometry of all automatically positioned nodes
+    /// in this graph and recurses into nested node groups.
+    pub fn clear_cached_positions(&mut self) {
+        for node in self.g.node_weights_mut() {
+            // Reset Automatic(Some(iso)) to Automatic(None)
+            node.node_attr_mut().clear_cached_position();
+
+            // Recurse into nested sub-groups if this node is a NodeGroup
+            if let Some(subgroup) = node.as_any_mut().downcast_mut::<NodeGroup>() {
+                subgroup.clear_cached_positions();
+            }
+        }
     }
 }
 #[cfg(test)]

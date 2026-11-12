@@ -150,8 +150,6 @@ impl AnalysisReport {
     }
 
     /// Sets the analysis type of this [`AnalysisReport`].
-    ///
-    /// This information is used i.e. in the [`HtmlReport`].
     pub fn set_analysis_type(&mut self, analysis_type: &str) {
         analysis_type.clone_into(&mut self.analysis_type);
     }
