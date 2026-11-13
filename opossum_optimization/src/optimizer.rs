@@ -9,16 +9,17 @@ use argmin::{
 use std::sync::{Arc, atomic::AtomicBool};
 
 use crate::{
-    DampedLeastSquares, OptimizationProgressEvent, applier::ParameterApplier,
-    asa::AdaptiveSimulatedAnnealing, dls::DlsIterState, merit::MeritFunction, operand::Operand,
-    progress::ProgressObserver, reader::MetricReader, resolver::ParameterResolver,
-    summary::OptimizationSummary,
+    DampedLeastSquares, applier::ParameterApplier, asa::AdaptiveSimulatedAnnealing,
+    dls::DlsIterState, merit::MeritFunction, operand::Operand, progress::ProgressObserver,
+    reader::MetricReader, resolver::ParameterResolver, summary::OptimizationSummary,
 };
 use opossum_core::{
     error::{OpmResult, OpossumError},
     opm_document::{
         OpmDocument, OptimizationConfig,
-        optimization::{FreeVariable, OptimizationAlgorithm, ParameterCoupling},
+        optimization::{
+            FreeVariable, OptimizationAlgorithm, OptimizationProgressEvent, ParameterCoupling,
+        },
     },
 };
 
@@ -222,17 +223,7 @@ impl<'a> OpticOptimizer<'a> {
         let initial_vector = self.collect_initial_vector()?;
         let initial_cost = merit.evaluate(&initial_vector);
 
-        let max_iters = match self.algorithm {
-            OptimizationAlgorithm::NelderMead { max_iterations, .. }
-            | OptimizationAlgorithm::LBFGS { max_iterations, .. }
-            | OptimizationAlgorithm::SimulatedAnnealing { max_iterations, .. }
-            | OptimizationAlgorithm::Dls { max_iterations, .. } => max_iterations,
-        };
-
-        progress_callback(OptimizationProgressEvent::Started {
-            initial_cost,
-            total_max_iterations: max_iters,
-        });
+        progress_callback(OptimizationProgressEvent::Started { initial_cost });
 
         let best_tracker = Arc::new(std::sync::Mutex::new(Some((
             initial_vector.clone(),
@@ -240,18 +231,12 @@ impl<'a> OpticOptimizer<'a> {
             0,
         ))));
 
-        let observer = ProgressObserver::new(
-            progress_callback,
-            cancel_flag,
-            self.free_variables.clone(),
-            self.couplings.clone(),
-            best_tracker.clone(),
-        );
+        let observer = ProgressObserver::new(progress_callback, cancel_flag, best_tracker.clone());
 
         let outcome =
             self.execute_solver_with_observer(merit, &initial_vector, observer, &best_tracker)?;
 
-        // Parameter auflösen und in das Dokument schreiben
+        // Resolve parameters and write them into the document
         let resolved_map = ParameterResolver::resolve(
             &self.free_variables,
             &self.couplings,
@@ -454,6 +439,7 @@ impl<'a> OpticOptimizer<'a> {
             .run()
             .map(|res| self.handle_solver_state(res.state()))
     }
+
     fn handle_solver_state<I>(&self, state: &I) -> OpmResult<SolverOutcome>
     where
         I: State<Param = Vec<f64>, Float = f64>,
@@ -476,6 +462,7 @@ impl<'a> OpticOptimizer<'a> {
             converged,
         })
     }
+
     /// Safely collects the initial parameter vector from all free variables.
     fn collect_initial_vector(&self) -> OpmResult<Vec<f64>> {
         self.free_variables

@@ -4,10 +4,11 @@ use crate::{
     undo::{Command, OptimizationUndo},
 };
 use actix_web::{HttpResponse, Responder, get, http::header, post, web};
-use opossum_core::opm_document::{OpmDocument, OptimizationConfig, optimization::ParameterAddress};
-use opossum_optimization::{
-    OpticOptimizer, OptimizationProgressEvent, ParameterApplier, SchemaExtractor,
+use opossum_core::opm_document::{
+    OpmDocument, OptimizationConfig,
+    optimization::{OptimizationProgressEvent, ParameterAddress},
 };
+use opossum_optimization::{OpticOptimizer, ParameterApplier, SchemaExtractor};
 use std::collections::HashMap;
 use std::sync::{
     Arc,
@@ -277,7 +278,6 @@ fn spawn_optimization_worker(
                     *app_state.optimization.status.write() = OptimizationStatus::Aborted;
                     let _ = tx.send(OptimizationProgressEvent::Aborted {
                         last_cost: summary.final_cost,
-                        iterations: summary.iterations,
                         best_parameters: summary.optimized_parameters.into_iter().collect(),
                     });
                 } else {
@@ -289,8 +289,6 @@ fn spawn_optimization_worker(
                     *app_state.optimization.status.write() = OptimizationStatus::Finished;
                     let _ = tx.send(OptimizationProgressEvent::Finished {
                         final_cost: summary.final_cost,
-                        iterations: summary.iterations,
-                        converged: summary.converged,
                         optimized_parameters: summary.optimized_parameters.into_iter().collect(),
                     });
                 }
@@ -301,7 +299,6 @@ fn spawn_optimization_worker(
                     *app_state.optimization.status.write() = OptimizationStatus::Aborted;
                     let _ = tx.send(OptimizationProgressEvent::Aborted {
                         last_cost: f64::NAN,
-                        iterations: 0,
                         best_parameters: Vec::new(),
                     });
                 } else {

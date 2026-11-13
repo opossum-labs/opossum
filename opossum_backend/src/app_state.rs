@@ -5,9 +5,10 @@ use std::{
 
 use actix_web::dev::ServerHandle;
 use opossum_core::{
-    core_optics::OpticRef, opm_document::OpmDocument, types::api_types::AnalyzerItemDto,
+    core_optics::OpticRef,
+    opm_document::{OpmDocument, optimization::OptimizationProgressEvent},
+    types::api_types::AnalyzerItemDto,
 };
-use opossum_optimization::progress::OptimizationProgressEvent;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;

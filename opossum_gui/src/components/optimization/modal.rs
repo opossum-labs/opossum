@@ -85,9 +85,7 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
         spawn(async move {
             while let Some(event) = rx.recv().await {
                 match event {
-                    OptimizationProgressEvent::Started {
-                        initial_cost: cost, ..
-                    } => {
+                    OptimizationProgressEvent::Started { initial_cost: cost } => {
                         initial_cost.set(cost);
                         current_cost.set(cost);
                         best_cost.set(cost);
@@ -96,7 +94,6 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                     OptimizationProgressEvent::Iteration {
                         iteration,
                         best_cost: new_best,
-                        ..
                     } => {
                         current_iteration.set(iteration);
                         current_cost.set(new_best);
@@ -112,7 +109,6 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                     OptimizationProgressEvent::Finished {
                         final_cost,
                         optimized_parameters,
-                        ..
                     } => {
                         current_cost.set(final_cost);
                         is_running.set(false);
@@ -122,7 +118,6 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                     OptimizationProgressEvent::Aborted {
                         last_cost,
                         best_parameters,
-                        ..
                     } => {
                         if !last_cost.is_nan() {
                             current_cost.set(last_cost);

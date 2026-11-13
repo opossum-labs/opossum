@@ -28,7 +28,6 @@ pub use dls::DampedLeastSquares;
 pub use merit::{DEFAULT_BOUNDS_PENALTY_WEIGHT, DEFAULT_FATAL_PENALTY, MeritFunction};
 pub use operand::{EvaluationContext, Operand};
 pub use optimizer::OpticOptimizer;
-pub use progress::OptimizationProgressEvent;
 pub use reader::MetricReader;
 pub use resolver::ParameterResolver;
 pub use schema_extractor::SchemaExtractor;
