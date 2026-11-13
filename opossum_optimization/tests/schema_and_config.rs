@@ -4,12 +4,15 @@ use common::build_kepler_setup;
 use opossum_core::{
     error::{OpmResult, OpossumError},
     micrometer, millimeter,
+    opm_document::{
+        OptimizationConfig,
+        optimization::{
+            FreeVariable, MetricOperand, MinEdgeThicknessOperand, ObservableAddress, OperandMode,
+            OptimizationAlgorithm, ParameterAddress, TransmissionPenaltyOperand,
+        },
+    },
 };
-use opossum_optimization::{
-    FreeVariable, MinEdgeThicknessOperand, ObservableAddress, OptimizationAlgorithm,
-    OptimizationConfig, ParameterAddress, SchemaExtractor, TargetValueOperand,
-    TransmissionPenaltyOperand,
-};
+use opossum_optimization::SchemaExtractor;
 use uuid::Uuid;
 
 #[test]
@@ -65,33 +68,28 @@ fn test_optimization_config_serde_roundtrip() -> OpmResult<()> {
 
     let config = OptimizationConfig::new()
         .with_variable(
-            FreeVariable::new(
-                ParameterAddress::NodeProperty {
-                    node_id,
-                    property_name: "front curvature".into(),
-                },
-                "front_roc",
-            )
+            FreeVariable::new(ParameterAddress::NodeProperty {
+                node_id,
+                property_name: "front curvature".into(),
+            })
             .with_length_bounds(millimeter!(50.0), millimeter!(200.0))?,
         )
-        .with_operand(TargetValueOperand::for_spot_radius(
-            "target_spot",
+        .with_operand(MetricOperand::for_spot_radius(
             ObservableAddress {
                 analyzer_id,
                 node_id,
                 metric_name: "rms beam radius".into(),
             },
             micrometer!(0.0),
+            OperandMode::Equal,
             1.0,
         ))
         .with_operand(MinEdgeThicknessOperand::for_thickness(
-            "edge_limit",
             node_id,
             millimeter!(2.0),
             100.0,
         ))
         .with_operand(TransmissionPenaltyOperand::new(
-            "ray_loss",
             ObservableAddress {
                 analyzer_id,
                 node_id,

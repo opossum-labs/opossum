@@ -6,7 +6,7 @@ use uuid::Uuid;
 /// Generic registry that assigns and caches stable sequential test indices for elements
 /// identified by a unique key of type `K`. Indices are preserved across deletions and
 /// subsequent undo/redo actions.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct IndexRegistry<K: Hash + Eq> {
     indices: HashMap<K, usize>,
     next_index: usize,
@@ -33,12 +33,6 @@ impl<K: Hash + Eq + Clone> IndexRegistry<K> {
             self.indices.insert(key, index);
             index
         }
-    }
-
-    /// Resets all allocated indices and resets the counter to zero (e.g., when opening a new graph).
-    pub fn clear(&mut self) {
-        self.indices.clear();
-        self.next_index = 0;
     }
 }
 

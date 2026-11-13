@@ -57,6 +57,33 @@ impl HTTPClient {
         }
     }
 
+    /// Send a POST request to the given route with a RON body.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if serialization to RON fails,
+    /// the request fails, or the response processing fails.
+    pub async fn post_ron<B: Serialize, R: Serialize + DeserializeOwned>(
+        &self,
+        route: &str,
+        body: B,
+    ) -> Result<R, String> {
+        let serialized = ron::to_string(&body)
+            .map_err(|e| format!("Failed to serialize body using RON: {e}"))?;
+        let res = self
+            .client()
+            .post(self.url(route))
+            .header(reqwest::header::CONTENT_TYPE, "application/ron")
+            .body(serialized)
+            .send()
+            .await;
+        if let Ok(response) = res {
+            self.process_response::<R>(response).await
+        } else {
+            Err(format!("Error on post request on route: \"{route}\""))
+        }
+    }
+
     /// Send a POST request to the given route with no body.
     ///
     /// # Errors
@@ -343,7 +370,15 @@ impl HTTPClient {
         res: Response,
     ) -> Result<R, String> {
         if res.status().is_success() {
-            if res.content_length().unwrap_or(0) > 0 {
+            let is_ron = res
+                .headers()
+                .get(reqwest::header::CONTENT_TYPE)
+                .and_then(|h| h.to_str().ok())
+                .is_some_and(|s| s.contains("application/ron"));
+            if is_ron {
+                let text = res.text().await.map_err(|e| e.to_string())?;
+                ron::from_str::<R>(&text).map_err(|e| format!("Failed to parse RON response: {e}"))
+            } else if res.content_length().unwrap_or(0) > 0 {
                 res.json::<R>().await.map_err(|e| {
                     format!("Failed to deserialize response body into requested struct: {e}")
                 })

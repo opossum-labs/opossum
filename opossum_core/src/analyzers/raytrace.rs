@@ -286,7 +286,12 @@ impl Analyzer for RayTracingAnalyzer {
         } else {
             format!(" '{}'", scenery.node_attr().name())
         };
+
+        // Invalidate cached automatic positions so that modified connection
+        // distances and properties are recalculated from scratch along the optical axis.
+        scenery.clear_cached_positions();
         scenery.rebuild_surfaces()?;
+
         info!("Calculate node positions of scenery{scenery_name}.");
         AnalysisRayTrace::calc_node_positions(
             scenery,
@@ -295,6 +300,7 @@ impl Analyzer for RayTracingAnalyzer {
         )?;
         scenery.reset_data();
         scenery.prepare_volume(&self.config)?;
+
         info!("Performing ray tracing analysis of scenery{scenery_name}.");
         AnalysisRayTrace::analyze(scenery, LightResult::default(), &self.config)?;
         Ok(())
@@ -641,6 +647,54 @@ mod test {
                 "'dummy2' (dummy) cannot be placed: no optical axis reaches it, and it stands in front of nothing it feeds. Skipping.",
             ],
         );
+        Ok(())
+    }
+    #[test]
+    fn consecutive_raytrace_analyses_update_positions_on_distance_change() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let dummy = scenery.add_node(Dummy::default())?;
+
+        // Initial connection: 50 mm
+        scenery.connect_nodes(source, "output_1", dummy, "input_1", millimeter!(50.0))?;
+
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(5.0), joule!(1.0), 1)?,
+        );
+        let analyzer = RayTracingAnalyzer::new(config);
+
+        // 1. First run: node must be placed at z = 50 mm
+        analyzer.analyze(&mut scenery)?;
+        let z_first = scenery
+            .node(dummy)?
+            .effective_position()
+            .expect("dummy must be placed")
+            .translation()
+            .z
+            .value;
+        approx::assert_relative_eq!(z_first, 0.050, epsilon = 1e-9);
+
+        // 2. Change distance to 120 mm
+        let connection_updated =
+            scenery.update_connection_distance(source, "output_1", millimeter!(120.0));
+        assert!(
+            connection_updated.is_ok(),
+            "connection distance should be updated"
+        );
+
+        // 3. Second run on the same live scenery: position must update to z = 120 mm
+        analyzer.analyze(&mut scenery)?;
+        let z_second = scenery
+            .node(dummy)?
+            .effective_position()
+            .expect("dummy must be placed")
+            .translation()
+            .z
+            .value;
+        approx::assert_relative_eq!(z_second, 0.120, epsilon = 1e-9);
+
         Ok(())
     }
 }

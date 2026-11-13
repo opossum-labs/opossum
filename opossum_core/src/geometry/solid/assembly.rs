@@ -127,7 +127,7 @@ impl Assembly {
     /// - an interface refers to a part or face that does not exist or joins two faces of the same
     ///   part,
     /// - the two faces of an interface are not the same surface at the same place (see
-    ///   [`Face::coincides_with`]), or the two parts lie on the same side of it.
+    ///   [`Face::coincides_with`](crate::geometry::face::Face::coincides_with)), or the two parts lie on the same side of it.
     pub fn new(parts: Vec<Part>, interfaces: Vec<Interface>) -> OpmResult<Self> {
         for interface in &interfaces {
             if interface.a.part == interface.b.part {

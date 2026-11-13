@@ -4,14 +4,25 @@ use crate::{
     undo::{Command, OptimizationUndo},
 };
 use actix_web::{HttpResponse, Responder, get, http::header, post, web};
-use opossum_core::opm_document::OpmDocument;
+use opossum_core::opm_document::{OpmDocument, OptimizationConfig, optimization::ParameterAddress};
 use opossum_optimization::{
-    OpticOptimizer, OptimizationConfig, OptimizationProgressEvent, ParameterAddress,
-    ParameterApplier, SchemaExtractor,
+    OpticOptimizer, OptimizationProgressEvent, ParameterApplier, SchemaExtractor,
 };
 use std::collections::HashMap;
-use std::sync::atomic::Ordering;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
+use std::time::{Duration, Instant};
+use tokio::sync::broadcast;
+use tokio::time::timeout;
 use utoipa_actix_web::service_config::ServiceConfig;
+
+/// Grace period before an active optimization is aborted when no client listens to `/events`.
+const DISCONNECT_GRACE_PERIOD: Duration = Duration::from_secs(5);
+
+/// Interval for sending SSE keep-alive comments to promptly detect dropped connections.
+const SSE_KEEP_ALIVE_INTERVAL: Duration = Duration::from_secs(2);
 
 /// Get schema from the current model (`variables`, `observables`, `edge_thickness_nodes`)
 #[utoipa::path(responses((status = OK, description = "get optimization operands")), tag="optimization")]
@@ -28,8 +39,8 @@ pub async fn get_schema(data: web::Data<AppState>) -> impl Responder {
     tag = "optimization",
     request_body(
         content = String,
-        description = "OptimizationConfig JSON or RON", 
-        content_type = "application/json"
+        description = "OptimizationConfig in RON format", 
+        content_type = "application/ron"
     ),
     responses(
         (status = ACCEPTED, description = "Optimization job started")
@@ -40,8 +51,8 @@ pub async fn start_optimization(
     data: web::Data<AppState>,
     body: String,
 ) -> Result<HttpResponse, BackEndErrorResponse> {
-    let opt_config: OptimizationConfig = serde_json::from_str(&body)
-        .or_else(|_| ron::from_str(&body))
+    let opt_config: OptimizationConfig = ron::from_str(&body)
+        .or_else(|ron_err| serde_json::from_str(&body).map_err(|_| ron_err))
         .map_err(|e| {
             BackEndErrorResponse::new(
                 400,
@@ -64,8 +75,11 @@ pub async fn start_optimization(
     data.optimization.cancel_flag.store(false, Ordering::SeqCst);
 
     let (working_doc, original_values) = {
-        let doc = data.document.lock();
-        snapshot_blueprint_and_values(&doc, &opt_config)
+        let mut doc = data.document.lock();
+        doc.set_optimization_config(Some(opt_config.clone()));
+        let snapshot = snapshot_blueprint_and_values(&doc, &opt_config);
+        drop(doc);
+        snapshot
     };
 
     spawn_optimization_worker(data, working_doc, opt_config, original_values);
@@ -88,14 +102,24 @@ pub async fn optimization_events(data: web::Data<AppState>) -> impl Responder {
     let rx = data.optimization.event_sender.subscribe();
     let stream = futures_util::stream::unfold(rx, |mut rx| async move {
         loop {
-            match rx.recv().await {
-                Ok(event) => {
-                    let json = serde_json::to_string(&event).unwrap_or_default();
-                    let bytes = web::Bytes::from(format!("data: {json}\n\n"));
+            // Send a periodic SSE comment if no optimization event arrives so Actix-Web
+            // detects closed TCP sockets promptly and drops the broadcast receiver.
+            match timeout(SSE_KEEP_ALIVE_INTERVAL, rx.recv()).await {
+                Ok(Ok(event)) => match serde_json::to_string(&event) {
+                    Ok(json) => {
+                        let bytes = web::Bytes::from(format!("data: {json}\n\n"));
+                        return Some((Ok::<_, actix_web::Error>(bytes), rx));
+                    }
+                    Err(e) => {
+                        log::error!("Failed to serialize OptimizationProgressEvent: {e}");
+                    }
+                },
+                Ok(Err(tokio::sync::broadcast::error::RecvError::Lagged(_))) => {}
+                Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => return None,
+                Err(_) => {
+                    let bytes = web::Bytes::from_static(b": keep-alive\n\n");
                     return Some((Ok::<_, actix_web::Error>(bytes), rx));
                 }
-                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
-                Err(tokio::sync::broadcast::error::RecvError::Closed) => return None,
             }
         }
     });
@@ -152,6 +176,43 @@ fn apply_results_and_record_undo(
     }));
 }
 
+/// Monitor active SSE subscribers and abort the optimization if no client listens
+/// continuously for `grace_period`.
+fn spawn_subscriber_watchdog(
+    tx: broadcast::Sender<OptimizationProgressEvent>,
+    cancel_flag: Arc<AtomicBool>,
+    disconnect_aborted: Arc<AtomicBool>,
+    done_flag: Arc<AtomicBool>,
+    grace_period: Duration,
+) {
+    tokio::spawn(async move {
+        let mut no_listener_since: Option<Instant> = Some(Instant::now());
+        let mut interval = tokio::time::interval(Duration::from_millis(500));
+
+        loop {
+            interval.tick().await;
+
+            if done_flag.load(Ordering::SeqCst) || cancel_flag.load(Ordering::SeqCst) {
+                break;
+            }
+
+            if tx.receiver_count() == 0 {
+                let start = no_listener_since.get_or_insert_with(Instant::now);
+                if start.elapsed() >= grace_period {
+                    log::warn!(
+                        "No active optimization event listeners for {grace_period:?}. Aborting optimization."
+                    );
+                    disconnect_aborted.store(true, Ordering::SeqCst);
+                    cancel_flag.store(true, Ordering::SeqCst);
+                    break;
+                }
+            } else {
+                no_listener_since = None;
+            }
+        }
+    });
+}
+
 fn spawn_optimization_worker(
     app_state: web::Data<AppState>,
     mut working_doc: OpmDocument,
@@ -160,8 +221,27 @@ fn spawn_optimization_worker(
 ) {
     let cancel_flag = app_state.optimization.cancel_flag.clone();
     let tx = app_state.optimization.event_sender.clone();
+    let disconnect_aborted = Arc::new(AtomicBool::new(false));
+    let done_flag = Arc::new(AtomicBool::new(false));
+
+    spawn_subscriber_watchdog(
+        tx.clone(),
+        cancel_flag.clone(),
+        disconnect_aborted.clone(),
+        done_flag.clone(),
+        DISCONNECT_GRACE_PERIOD,
+    );
 
     tokio::task::spawn_blocking(move || {
+        // Ensure `done_flag` is always set when the blocking worker exits so the watchdog stops.
+        struct DoneGuard(Arc<AtomicBool>);
+        impl Drop for DoneGuard {
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::SeqCst);
+            }
+        }
+        let _done_guard = DoneGuard(done_flag);
+
         let optimizer = match OpticOptimizer::from_config(&mut working_doc, opt_config) {
             Ok(opt) => opt,
             Err(e) => {
@@ -179,40 +259,50 @@ fn spawn_optimization_worker(
             true
         });
 
+        let was_disconnected = disconnect_aborted.load(Ordering::SeqCst);
+
         match opt_result {
             Ok(summary) => {
-                apply_results_and_record_undo(
-                    &app_state,
-                    &summary.optimized_parameters,
-                    &original_values,
-                );
-
                 let is_aborted = cancel_flag.load(Ordering::SeqCst);
                 if is_aborted {
+                    // Only apply intermediate best parameters if aborted manually by the user.
+                    // If aborted due to client disconnect, leave the document untouched.
+                    if !was_disconnected {
+                        apply_results_and_record_undo(
+                            &app_state,
+                            &summary.optimized_parameters,
+                            &original_values,
+                        );
+                    }
                     *app_state.optimization.status.write() = OptimizationStatus::Aborted;
                     let _ = tx.send(OptimizationProgressEvent::Aborted {
                         last_cost: summary.final_cost,
                         iterations: summary.iterations,
-                        best_parameters: summary.optimized_parameters,
+                        best_parameters: summary.optimized_parameters.into_iter().collect(),
                     });
                 } else {
+                    apply_results_and_record_undo(
+                        &app_state,
+                        &summary.optimized_parameters,
+                        &original_values,
+                    );
                     *app_state.optimization.status.write() = OptimizationStatus::Finished;
                     let _ = tx.send(OptimizationProgressEvent::Finished {
                         final_cost: summary.final_cost,
                         iterations: summary.iterations,
                         converged: summary.converged,
-                        optimized_parameters: summary.optimized_parameters,
+                        optimized_parameters: summary.optimized_parameters.into_iter().collect(),
                     });
                 }
             }
             Err(err) => {
                 let err_str = err.to_string();
-                if err_str.contains("cancelled by user") {
+                if err_str.contains("cancelled by user") || was_disconnected {
                     *app_state.optimization.status.write() = OptimizationStatus::Aborted;
                     let _ = tx.send(OptimizationProgressEvent::Aborted {
                         last_cost: f64::NAN,
                         iterations: 0,
-                        best_parameters: HashMap::new(),
+                        best_parameters: Vec::new(),
                     });
                 } else {
                     *app_state.optimization.status.write() = OptimizationStatus::Failed;
@@ -223,8 +313,42 @@ fn spawn_optimization_worker(
     });
 }
 
+/// Set optimization configuration on current document
+#[utoipa::path(
+    tag = "optimization",
+    request_body(
+        content = String,
+        description = "OptimizationConfig in RON format",
+        content_type = "application/ron"
+    ),
+    responses(
+        (status = OK, description = "Optimization configuration saved to document")
+    )
+)]
+#[post("/config")]
+pub async fn save_config(
+    data: web::Data<AppState>,
+    body: String,
+) -> Result<HttpResponse, BackEndErrorResponse> {
+    let opt_config: OptimizationConfig = ron::from_str(&body)
+        .or_else(|ron_err| serde_json::from_str(&body).map_err(|_| ron_err))
+        .map_err(|e| {
+            BackEndErrorResponse::new(
+                400,
+                "Parse Error",
+                &format!("Invalid optimization payload: {e}"),
+            )
+        })?;
+
+    data.document
+        .lock()
+        .set_optimization_config(Some(opt_config));
+    Ok(HttpResponse::Ok().json("Optimization config saved"))
+}
+
 pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_schema);
+    cfg.service(save_config);
     cfg.service(start_optimization);
     cfg.service(abort_optimization);
     cfg.service(optimization_events);
@@ -241,11 +365,10 @@ mod test {
         light::lightdata::ray_data_source::{PointSrc, RayDataSource},
         millimeter, nanometer,
         nodes::{Lens, SourcePort, SpotDiagram},
+        opm_document::optimization::{
+            FreeVariable, MetricOperand, ObservableAddress, OperandMode, OptimizationAlgorithm,
+        },
         prelude::{AnalyzerType, RayTraceConfig, RefrIndexSchott},
-    };
-    use opossum_optimization::{
-        FreeVariable, ObservableAddress, OptimizationAlgorithm, OptimizationConfig,
-        ParameterAddress, TargetValueOperand,
     };
 
     /// Build minimal optical test setup in AppState
@@ -359,18 +482,18 @@ mod test {
 
         let config = OptimizationConfig::new()
             .with_variable(
-                FreeVariable::new(dist_addr.clone(), "image_dist")
+                FreeVariable::new(dist_addr.clone())
                     .with_length_bounds(millimeter!(30.0), millimeter!(90.0))
                     .unwrap(),
             )
-            .with_operand(TargetValueOperand::for_spot_radius(
-                "min_spot",
+            .with_operand(MetricOperand::for_spot_radius(
                 ObservableAddress {
                     analyzer_id,
                     node_id: spot_id,
                     metric_name: "rms beam radius".into(),
                 },
                 opossum_core::micrometer!(0.0),
+                OperandMode::Equal,
                 1.0,
             ))
             .with_algorithm(OptimizationAlgorithm::nelder_mead().with_max_iterations(15));
@@ -379,8 +502,8 @@ mod test {
 
         let req = test::TestRequest::post()
             .uri("/start")
-            .set_payload(serde_json::to_string(&config).unwrap())
-            .insert_header(("Content-Type", "application/json"))
+            .set_payload(ron::to_string(&config).unwrap())
+            .insert_header(("Content-Type", "application/ron"))
             .to_request();
 
         let resp = app.call(req).await.unwrap();
@@ -400,7 +523,7 @@ mod test {
                         break;
                     }
                     OptimizationProgressEvent::Failed { error } => {
-                        panic!("Optimierung fehlgeschlagen: {error}");
+                        panic!("Optimization failed: {error}");
                     }
                     _ => {}
                 }
@@ -432,5 +555,110 @@ mod test {
             (restored_dist - initial_dist).abs() < 1e-12,
             "undo should restore the initial setup"
         );
+    }
+
+    #[actix_web::test]
+    async fn test_start_optimization_with_ron_special_floats() {
+        let (app_state, lens_id, spot_id, analyzer_id) = setup_test_app();
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(start_optimization)
+                .service(abort_optimization),
+        )
+        .await;
+
+        let dist_addr = ParameterAddress::ConnectionDistance {
+            src_id: lens_id,
+            src_port: "output_1".into(),
+        };
+
+        // Configuration with Infinity and NaN values
+        let config = OptimizationConfig::new()
+            .with_variable(
+                FreeVariable::new(dist_addr)
+                    .with_length_bounds(millimeter!(30.0), millimeter!(90.0))
+                    .unwrap(),
+            )
+            .with_operand(MetricOperand::for_spot_radius(
+                ObservableAddress {
+                    analyzer_id,
+                    node_id: spot_id,
+                    metric_name: "rms beam radius".into(),
+                },
+                opossum_core::micrometer!(0.0),
+                OperandMode::Equal,
+                f64::INFINITY,
+            ))
+            .with_target_cost(f64::INFINITY)
+            .with_algorithm(OptimizationAlgorithm::nelder_mead().with_max_iterations(1));
+
+        // In JSON, Infinity or NaN is serialized to `null`, which causes deserialization
+        // into f64 to fail with: invalid type: null, expected f64.
+        let json_payload = serde_json::to_string(&config).unwrap();
+        assert!(serde_json::from_str::<OptimizationConfig>(&json_payload).is_err());
+
+        // RON handles Infinity and NaN properly without data loss or parse failure
+        let ron_payload =
+            ron::to_string(&config).expect("RON serialization must support Infinity/NaN");
+        assert!(ron_payload.contains("inf"));
+        let deserialized_ron: OptimizationConfig =
+            ron::from_str(&ron_payload).expect("RON deserialization must succeed");
+        assert_eq!(deserialized_ron.target_cost, f64::INFINITY);
+
+        let req = test::TestRequest::post()
+            .uri("/start")
+            .set_payload(ron_payload)
+            .insert_header(("Content-Type", "application/ron"))
+            .to_request();
+
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::ACCEPTED);
+    }
+
+    #[actix_web::test]
+    async fn test_save_config_and_schema_saved_config() {
+        let (app_state, _, spot_id, _) = setup_test_app();
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(get_schema)
+                .service(save_config),
+        )
+        .await;
+
+        let dist_addr = ParameterAddress::ConnectionDistance {
+            src_id: spot_id,
+            src_port: "output_1".into(),
+        };
+
+        let config = OptimizationConfig::new()
+            .with_variable(FreeVariable::new(dist_addr))
+            .with_target_cost(1e-5);
+
+        let ron_payload = ron::to_string(&config).unwrap();
+
+        // 1. Post to save_config
+        let req = test::TestRequest::post()
+            .uri("/config")
+            .set_payload(ron_payload)
+            .insert_header(("Content-Type", "application/ron"))
+            .to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // Verify document in app_state has the config
+        {
+            let doc = app_state.document.lock();
+            assert_eq!(doc.optimization_config(), Some(&config));
+        }
+
+        // 2. Get schema and verify saved_config is populated
+        let req = test::TestRequest::get().uri("/schema").to_request();
+        let resp = app.call(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let schema: opossum_optimization::ModelOptimizationSchema =
+            test::read_body_json(resp).await;
+        assert_eq!(schema.saved_config, Some(config));
     }
 }

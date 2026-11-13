@@ -766,6 +766,12 @@ impl NodeGroup {
     pub fn find_source_ports(&self) -> OpmResult<Vec<Uuid>> {
         self.graph.find_source_ports()
     }
+    /// Clears the cached runtime isometry on all automatically positioned nodes
+    /// across this group and any nested sub-groups.
+    pub fn clear_cached_positions(&mut self) {
+        self.node_attr_mut().clear_cached_position();
+        self.graph.clear_cached_positions();
+    }
 }
 
 impl OpticNode for NodeGroup {

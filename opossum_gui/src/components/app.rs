@@ -11,6 +11,7 @@ use crate::{
             menu_bar_component::{AppCommand, MenuBar},
             project_helper::{select_open_path, select_save_path},
         },
+        optimization::OptimizationModal,
         primitives::alert_dialog::{
             AlertDialog, AlertDialogAction, AlertDialogActions, AlertDialogCancel,
             AlertDialogDescription, AlertDialogTitle,
@@ -210,6 +211,7 @@ pub fn App() -> Element {
     let mut show_settings = use_signal(|| false);
     let mut show_material_catalog = use_signal(|| false);
     let mut show_catalog_synchronizer = use_signal(|| false);
+    let mut show_optimization = use_signal(|| false);
 
     let mut execute_immediate = move |cmd: AppCommand| match cmd {
         AppCommand::NewProject => {
@@ -321,6 +323,9 @@ pub fn App() -> Element {
         AppCommand::OpenCatalogSynchronizer => {
             show_catalog_synchronizer.set(true);
         }
+        AppCommand::OpenOptimization => {
+            show_optimization.set(true);
+        }
     };
 
     let mut execute_immediate_for_alert = execute_immediate.clone();
@@ -339,6 +344,7 @@ pub fn App() -> Element {
             | AppCommand::SaveAs
             | AppCommand::AddNode(_)
             | AppCommand::AddAnalyzer(_)
+            | AppCommand::OpenOptimization
                 if !is_connected =>
             {
                 log::warn!("Command {cmd:?} ignored: Backend is not connected.");
@@ -569,6 +575,7 @@ pub fn App() -> Element {
         SettingsDialog { open: show_settings }
         MaterialCatalog { open: show_material_catalog }
         CatalogSynchronizer { open: show_catalog_synchronizer }
+        OptimizationModal { open: show_optimization }
         // Invisible master sprite containing all icon definitions
         div {
             style: "position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none;",
@@ -601,6 +608,7 @@ pub fn App() -> Element {
         }
         SettingsDialog { open: show_settings }
         CatalogSynchronizer { open: show_catalog_synchronizer }
+        OptimizationModal { open: show_optimization }
     }
 }
 
