@@ -13,7 +13,6 @@
 //! - Introspection and schema discovery for interactive GUI bindings.
 pub mod applier;
 pub mod asa;
-pub mod discovery;
 pub mod dls;
 pub mod merit;
 pub mod operand;
@@ -25,9 +24,6 @@ pub mod schema_extractor;
 pub mod summary;
 
 pub use applier::ParameterApplier;
-pub use discovery::{
-    DiscoveredEdgeThicknessNode, DiscoveredObservable, DiscoveredVariable, ModelOptimizationSchema,
-};
 pub use dls::DampedLeastSquares;
 pub use merit::{DEFAULT_BOUNDS_PENALTY_WEIGHT, DEFAULT_FATAL_PENALTY, MeritFunction};
 pub use operand::{EvaluationContext, Operand};

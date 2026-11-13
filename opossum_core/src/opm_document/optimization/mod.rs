@@ -15,17 +15,24 @@ mod address;
 mod algorithm;
 mod config;
 mod coupling;
+mod discovery;
 mod operand;
+mod progress_event;
 mod variable;
 pub use address::{MetricSource, ObservableAddress, ParameterAddress};
 pub use algorithm::OptimizationAlgorithm;
 pub use config::OptimizationConfig;
 pub use coupling::{CouplingType, ParameterCoupling};
+pub use discovery::{
+    DiscoveredAnalyzer, DiscoveredEdgeThicknessNode, DiscoveredObservable, DiscoveredVariable,
+    ModelOptimizationSchema,
+};
 pub use operand::{
     DEFAULT_GEOMETRIC_SCALE, DEFAULT_SPOT_SCALE, DEFAULT_WAVEFRONT_SCALE, MaxTotalLengthOperand,
     MetricOperand, MinEdgeThicknessOperand, OperandMode, StandardOperand,
     TransmissionPenaltyOperand, default_scale_for_metric,
 };
+pub use progress_event::OptimizationProgressEvent;
 pub use variable::{
     BoxBounds, DEFAULT_DELTA_ABS_MIN, DEFAULT_DELTA_REL, FiniteDifferenceMethod, FreeVariable,
 };

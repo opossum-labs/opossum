@@ -10,11 +10,10 @@ use operand_row::{describe_operand, resolve_operand_group_id};
 use opossum_core::opm_document::{
     OptimizationConfig,
     optimization::{
-        CouplingType, FreeVariable, OptimizationAlgorithm, ParameterAddress, ParameterCoupling,
-        StandardOperand,
+        CouplingType, DiscoveredVariable, FreeVariable, ModelOptimizationSchema,
+        OptimizationAlgorithm, ParameterAddress, ParameterCoupling, StandardOperand,
     },
 };
-use opossum_optimization::{DiscoveredVariable, ModelOptimizationSchema};
 use uuid::Uuid;
 use validation::run_validation;
 
@@ -378,9 +377,8 @@ impl OptimizationModel {
                     FreeVariable::new(row.address.clone()).with_initial_value(row.current_value);
                 match row.solver_bounds() {
                     Ok(Some(bounds)) => var = var.with_bounds(bounds),
-                    Ok(None) => {}
                     Err(err) if strict => return Err(err),
-                    Err(_) => {}
+                    Ok(None) | Err(_) => {}
                 }
                 free_variables.push(var);
             }

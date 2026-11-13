@@ -22,7 +22,9 @@ use dioxus_free_icons::{
         FaWandMagicSparkles,
     },
 };
-use opossum_optimization::{ModelOptimizationSchema, OptimizationProgressEvent};
+use opossum_core::opm_document::optimization::{
+    ModelOptimizationSchema, OptimizationProgressEvent,
+};
 
 #[component]
 pub fn OptimizationModal(open: Signal<bool>) -> Element {

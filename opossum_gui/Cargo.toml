@@ -16,7 +16,6 @@ readme = "README.md"
 opossum_core = { workspace = true }
 opm_macros_lib = { workspace = true }
 opossum_registry = { workspace = true }
-opossum_optimization = { workspace = true }
 
 # Common workspace dependencies
 approx.workspace = true
@@ -43,11 +42,14 @@ dioxus_glb_viewer = { path = "../dioxus_glb_viewer" }
 futures-util = "0.3"
 heck = "0.5"
 regex = "1"
-reqwest = { version = "0.13", default-features = false, features = ["json", "stream"] }
+reqwest = { version = "0.13", default-features = false, features = [
+    "json",
+    "stream",
+] }
 rust-sugiyama = "0.4"
 webbrowser = "1.2.3"
-web-time = "1.1"                                                              # Cross-platform Instant and SystemTime replacement
-rfd = { version = "0.17" }
+web-time = "1.1" # Cross-platform Instant and SystemTime replacement
+rfd = { version = "0.18.0" }
 
 # Desktop-specific dependencies (optional, enabled via "desktop" feature)
 directories = { version = "6", optional = true }
@@ -64,7 +66,7 @@ web-sys = { version = "0.3", optional = true }
 tokio = { version = "1", features = ["process", "time"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-tokio = { version = "1", default-features = false }
+tokio = { version = "1", default-features = false, features = ["sync"] }
 
 # [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # plotly = { version = "0.13.5", features = ["kaleido"] }
