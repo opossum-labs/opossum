@@ -1,3 +1,4 @@
+use super::{numeric_input::NumericCommitInput, state::OptimizationModel};
 use crate::components::primitives::{
     alert_dialog::{
         AlertDialog, AlertDialogActions, AlertDialogCancel, AlertDialogDescription,
@@ -20,8 +21,6 @@ use opossum_core::opm_document::optimization::{
     StandardOperand, TransmissionPenaltyOperand, default_scale_for_metric,
 };
 use opossum_optimization::DiscoveredObservable;
-
-use super::state::OptimizationModel;
 use uuid::Uuid;
 
 type DiscoveredObservableHierarchy =
@@ -30,13 +29,14 @@ type DiscoveredObservableHierarchy =
 #[derive(Props, Clone, PartialEq, Eq)]
 pub struct MeritDesignerProps {
     pub model: Signal<OptimizationModel>,
+    pub is_running: bool,
     pub show_add_dialog: Signal<bool>,
 }
 
 #[component]
 pub fn MeritDesignerPanel(mut props: MeritDesignerProps) -> Element {
-    let operands = props.model.read().operands.clone();
-    let operands_count = operands.len();
+    let operand_ids: Vec<Uuid> = props.model.read().operands.iter().map(|op| op.id).collect();
+    let operands_count = operand_ids.len();
 
     rsx! {
       div { class: "border rounded p-2 bg-dark text-light h-100 d-flex flex-column",
@@ -48,13 +48,13 @@ pub fn MeritDesignerPanel(mut props: MeritDesignerProps) -> Element {
           Button {
             variant: ButtonVariant::Primary,
             size: ButtonSize::Sm,
+            disabled: props.is_running,
             title: "Add optimization target or constraint",
             onclick: move |_| props.show_add_dialog.set(true),
             Icon { icon: FaPlus }
             "Operand"
           }
         }
-
         ScrollArea { height: "31rem",
           div { class: "table-responsive",
             table {
@@ -64,7 +64,7 @@ pub fn MeritDesignerPanel(mut props: MeritDesignerProps) -> Element {
                 class: "table-active sticky-top",
                 style: "z-index: 1;",
                 tr {
-                  th { style: "width: 25px;", "" } // Checkbox Spalte
+                  th { style: "width: 25px;", "" }
                   th { "Channel / Metric" }
                   th {
                     style: "width: 45px;",
@@ -77,18 +77,18 @@ pub fn MeritDesignerPanel(mut props: MeritDesignerProps) -> Element {
                 }
               }
               tbody {
-                for op_row in operands.iter() {
+                for op_id in operand_ids {
                   OperandRow {
-                    key: "{op_row.id}",
-                    operand_id: op_row.id,
+                    key: "{op_id}",
+                    operand_id: op_id,
                     model: props.model,
+                    is_running: props.is_running,
                   }
                 }
-
                 if operands_count == 0 {
                   tr {
                     td {
-                      colspan: "5",
+                      colspan: "6",
                       class: "text-center text-muted py-4",
                       "No operands specified. Click '+ Operand' to define optimization goals."
                     }
@@ -102,66 +102,11 @@ pub fn MeritDesignerPanel(mut props: MeritDesignerProps) -> Element {
     }
 }
 
-/// Local controlled numeric input that commits on blur or Enter.
-#[component]
-fn OperandNumberInput(value: f64, on_commit: EventHandler<f64>) -> Element {
-    let format_val = |v: f64| {
-        let s = format!("{v:.4}");
-        if s.contains('.') {
-            let trimmed = s.trim_end_matches('0').trim_end_matches('.');
-            if trimmed.is_empty() || trimmed == "-" {
-                "0".to_string()
-            } else {
-                trimmed.to_string()
-            }
-        } else {
-            s
-        }
-    };
-
-    let val_memo = use_memo(use_reactive!(|value| value));
-    let mut text = use_signal(|| format_val(value));
-
-    // Synchronize cleanly when value updates from outside
-    use_effect(move || {
-        let current = *val_memo.read();
-        let formatted = format_val(current);
-        if formatted != *text.peek() {
-            text.set(formatted);
-        }
-    });
-
-    let mut commit = move || {
-        let raw = text.read().trim().to_string();
-        if let Ok(parsed) = raw.parse::<f64>() {
-            text.set(format_val(parsed));
-            on_commit.call(parsed);
-        } else {
-            text.set(format_val(*val_memo.peek()));
-        }
-    };
-
-    rsx! {
-      input {
-        r#type: "text",
-        class: "form-control form-control-sm bg-black text-light border-secondary p-0 px-1 font-monospace text-end",
-        style: "height: 22px; font-size: 11px;",
-        value: "{text}",
-        oninput: move |e: FormEvent| text.set(e.value()),
-        onblur: move |_| commit(),
-        onkeydown: move |e: KeyboardEvent| {
-            if e.key() == Key::Enter {
-                commit();
-            }
-        },
-      }
-    }
-}
-
 #[derive(Props, Clone, PartialEq)]
 struct OperandRowProps {
     operand_id: Uuid,
     model: Signal<OptimizationModel>,
+    is_running: bool,
 }
 
 #[component]
@@ -178,7 +123,8 @@ fn OperandRow(mut props: OperandRowProps) -> Element {
         StandardOperand::Metric(m) => (m.target, m.weight),
         StandardOperand::MinEdgeThickness(t) => (t.min_thickness * 1000.0, t.weight),
         StandardOperand::MaxTotalLength(t) => (t.max_length * 1000.0, t.weight),
-        StandardOperand::TransmissionPenalty(t) => (t.expected_rays, t.weight),
+        #[allow(clippy::cast_precision_loss)]
+        StandardOperand::TransmissionPenalty(t) => (t.expected_rays as f64, t.weight),
     };
     let is_metric = matches!(op, StandardOperand::Metric(_));
     let badge_class = if badge_text == "Geometry" {
@@ -196,6 +142,7 @@ fn OperandRow(mut props: OperandRowProps) -> Element {
             r#type: "checkbox",
             class: "form-check-input mt-0",
             checked: is_enabled,
+            disabled: props.is_running,
             onchange: move |_| props.model.write().toggle_operand(op_id),
           }
         }
@@ -222,7 +169,7 @@ fn OperandRow(mut props: OperandRowProps) -> Element {
               class: "btn btn-outline-info btn-sm p-0 fw-bold border-secondary font-monospace",
               style: "width: 28px; height: 22px; line-height: 20px;",
               title: "Click to cycle mode (= -> ≤ -> ≥)",
-              disabled: !is_enabled,
+              disabled: props.is_running || !is_enabled,
               onclick: move |_| props.model.write().cycle_operand_mode(op_id),
               "{op_symbol}"
             }
@@ -232,16 +179,30 @@ fn OperandRow(mut props: OperandRowProps) -> Element {
         }
         // Target/Limit Value Input
         td { class: "px-1",
-          OperandNumberInput {
-            value: target_val,
-            on_commit: move |val| props.model.write().update_operand_target_ui(op_id, val),
+          NumericCommitInput {
+            value: Some(target_val),
+            disabled: props.is_running,
+            precision: 4,
+            allow_empty: false,
+            on_commit: move |opt: Option<f64>| {
+                if let Some(val) = opt {
+                    props.model.write().update_operand_target_ui(op_id, val);
+                }
+            },
           }
         }
         // Weight Input
         td { class: "px-1",
-          OperandNumberInput {
-            value: weight_val,
-            on_commit: move |val| props.model.write().update_operand_weight(op_id, val),
+          NumericCommitInput {
+            value: Some(weight_val),
+            disabled: props.is_running,
+            precision: 4,
+            allow_empty: false,
+            on_commit: move |opt: Option<f64>| {
+                if let Some(val) = opt {
+                    props.model.write().update_operand_weight(op_id, val);
+                }
+            },
           }
         }
         // Delete
@@ -249,6 +210,7 @@ fn OperandRow(mut props: OperandRowProps) -> Element {
           button {
             class: "btn btn-outline-danger btn-sm p-0 border-0",
             style: "line-height: 1;",
+            disabled: props.is_running,
             title: "Remove operand",
             onclick: move |_| props.model.write().remove_operand(op_id),
             Icon { icon: FaTrash }
@@ -265,9 +227,9 @@ pub fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<b
     let mut active_tab = use_signal(|| "observables");
 
     let grouped_hierarchy = use_memo(move || {
-        let schema_opt = model.read().schema.clone();
+        let schema_read = model.read();
         let mut hierarchy: DiscoveredObservableHierarchy = Vec::new();
-        if let Some(schema) = &schema_opt {
+        if let Some(schema) = &schema_read.schema {
             for obs in &schema.observable_metrics {
                 let channel_entry = if let Some(pos) = hierarchy
                     .iter()
@@ -282,7 +244,6 @@ pub fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<b
                     ));
                     &mut hierarchy.last_mut().unwrap().2
                 };
-
                 if let Some(node_pos) = channel_entry.iter().position(|(n, _)| n == &obs.node_name)
                 {
                     channel_entry[node_pos].1.push(obs.clone());
@@ -303,7 +264,6 @@ pub fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<b
           div {
             class: "bg-dark text-light p-3 rounded border border-secondary shadow-lg",
             style: "position: relative; z-index: 1060;",
-
             AlertDialogTitle { "Add Merit Function Operand" }
             AlertDialogDescription {
               div { class: "d-flex flex-column gap-3 text-light mt-2",
@@ -352,8 +312,7 @@ pub fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<b
                     }
                   }
                 }
-
-                // TAB 1: Observable Metrics (Target vs Threshold)
+                // TAB 1: Observable Metrics
                 if active_tab() == "observables" {
                   ScrollArea { height: "20rem",
                     div { class: "d-flex flex-column gap-2",
@@ -370,7 +329,6 @@ pub fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<b
                               "{analyzer_kind}"
                             }
                           }
-
                           div { class: "p-2 d-flex flex-column gap-2",
                             for (node_name , metrics) in detector_nodes {
                               div { class: "rounded border border-secondary border-opacity-50 bg-dark p-2",
@@ -425,8 +383,7 @@ pub fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<b
                     }
                   }
                 }
-
-                // TAB 2: Geometric Constraints (Min Edge Thickness & Total Track Length)
+                // TAB 2: Geometric Constraints
                 if active_tab() == "geometry" {
                   ScrollArea { height: "20rem",
                     div { class: "d-flex flex-column gap-3",
@@ -478,7 +435,6 @@ pub fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<b
                           }
                         }
                       }
-
                       div { class: "border border-secondary rounded p-2 bg-dark d-flex justify-content-between align-items-center",
                         div {
                           div { class: "fw-bold text-warning small",
@@ -494,27 +450,31 @@ pub fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<b
                           style: "font-size: 11px;",
                           onclick: move |e: MouseEvent| {
                               e.stop_propagation();
-                              let schema_clone = model.read().schema.clone();
-                              if let Some(schema) = schema_clone {
-                                  let distance_segments: Vec<ParameterAddress> = schema
-                                      .controllable_variables
-                                      .into_iter()
-                                      .filter_map(|v| match v.address {
-                                          ParameterAddress::ConnectionDistance { .. } => Some(v.address),
-                                          _ => None,
-                                      })
-                                      .collect();
-
-                                  if !distance_segments.is_empty() {
-                                      model
-                                          .write()
-                                          .add_operand(
-                                              StandardOperand::MaxTotalLength(
-                                                  MaxTotalLengthOperand::new(distance_segments, 0.5, 1.0),
-                                              ),
-                                          );
-                                      open.set(false);
-                                  }
+                              let distance_segments: Vec<ParameterAddress> = model
+                                  .read()
+                                  .schema
+                                  .as_ref()
+                                  .map(|s| {
+                                      s.controllable_variables
+                                          .iter()
+                                          .filter_map(|v| match &v.address {
+                                              ParameterAddress::ConnectionDistance { .. } => {
+                                                  Some(v.address.clone())
+                                              }
+                                              _ => None,
+                                          })
+                                          .collect()
+                                  })
+                                  .unwrap_or_default();
+                              if !distance_segments.is_empty() {
+                                  model
+                                      .write()
+                                      .add_operand(
+                                          StandardOperand::MaxTotalLength(
+                                              MaxTotalLengthOperand::new(distance_segments, 0.5, 1.0),
+                                          ),
+                                      );
+                                  open.set(false);
                               }
                           },
                           "+ Add Track Length Limit"
@@ -523,7 +483,6 @@ pub fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<b
                     }
                   }
                 }
-
                 // TAB 3: Transmission & Vignetting Penalties
                 if active_tab() == "penalties" {
                   ScrollArea { height: "20rem",

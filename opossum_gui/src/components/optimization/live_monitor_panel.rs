@@ -17,13 +17,20 @@ pub fn LiveMonitorPanel(mut props: LiveMonitorProps) -> Element {
     let current_algo_kind = props.model.read().algorithm_kind();
     let configured_max_iters = props.model.read().max_iterations();
 
+    let stagnation_class = if props.steps_without_improvement > 50 {
+        "text-danger fw-bold font-monospace"
+    } else if props.steps_without_improvement > 20 {
+        "text-warning fw-bold font-monospace"
+    } else {
+        "text-light font-monospace"
+    };
+
     rsx! {
       div { class: "border rounded p-2 bg-dark text-light h-100 d-flex flex-column",
         div { class: "fw-bold small d-flex align-items-center gap-1 mb-2 pb-2 border-bottom border-secondary",
           Icon { icon: FaGears }
           "Solver & Progress"
         }
-
         // Algorithm Selector
         div { class: "mb-2",
           label {
@@ -45,7 +52,6 @@ pub fn LiveMonitorPanel(mut props: LiveMonitorProps) -> Element {
             option { value: "SimulatedAnnealing", "Simulated Annealing" }
           }
         }
-
         // Combined Solver Hyperparameters Box (Iterations & optional SA Parameters)
         div { class: "p-2 rounded bg-black bg-opacity-50 border border-secondary mb-2",
           div { class: "row g-2 align-items-center",
@@ -68,7 +74,6 @@ pub fn LiveMonitorPanel(mut props: LiveMonitorProps) -> Element {
                 },
               }
             }
-
             // Optional Annealing Parameters embedded within the same container
             if current_algo_kind == "SimulatedAnnealing" {
               div { class: "col-6 mt-2 pt-2 border-top border-secondary border-opacity-50",
@@ -116,8 +121,7 @@ pub fn LiveMonitorPanel(mut props: LiveMonitorProps) -> Element {
             }
           }
         }
-
-        // Real-Time Iteration & Cost Display (Target Phi removed)
+        // Real-Time Iteration & Cost Display
         div { class: "p-2 rounded bg-black border border-secondary mb-2 font-monospace",
           div { class: "d-flex justify-content-between align-items-center small",
             span { class: "text-muted", "Step:" }
@@ -128,16 +132,12 @@ pub fn LiveMonitorPanel(mut props: LiveMonitorProps) -> Element {
             span { class: "text-warning fw-bold", "{props.current_cost:.6}" }
           }
         }
-
         // Convergence & Stagnation Health Box
         div { class: "p-2 rounded bg-black border border-secondary mb-2",
           div { class: "d-flex justify-content-between align-items-center small mb-1",
             span { class: "text-muted", "Stagnant Steps:" }
-            span { class: if props.steps_without_improvement > 20 { "text-warning fw-bold font-monospace" } else if props.steps_without_improvement > 50 { "text-danger fw-bold font-monospace" } else { "text-light font-monospace" },
-              "{props.steps_without_improvement}"
-            }
+            span { class: "{stagnation_class}", "{props.steps_without_improvement}" }
           }
-          // Relative improvement since start
           {
               let initial = props.initial_cost;
               let current = props.current_cost;
@@ -160,7 +160,6 @@ pub fn LiveMonitorPanel(mut props: LiveMonitorProps) -> Element {
               }
           }
         }
-
         // Progress Banner
         div { class: "mt-auto",
           if props.is_running {

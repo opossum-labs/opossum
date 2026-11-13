@@ -1,3 +1,9 @@
+use super::{
+    live_monitor_panel::LiveMonitorPanel,
+    merit_designer_panel::{AddOperandDialog, MeritDesignerPanel},
+    state::{OptimizationModel, ValidationSeverity},
+    variables_panel::{AddVariableDialog, CouplingDialog, VariablesPanel},
+};
 use crate::api::{
     eval_action_run, get_optimization_schema, post_abort_optimization,
     post_save_optimization_config, post_start_optimization, subscribe_optimization_events,
@@ -18,19 +24,11 @@ use dioxus_free_icons::{
 };
 use opossum_optimization::{ModelOptimizationSchema, OptimizationProgressEvent};
 
-use super::{
-    live_monitor_panel::LiveMonitorPanel,
-    merit_designer_panel::{AddOperandDialog, MeritDesignerPanel},
-    state::{OptimizationModel, ValidationSeverity},
-    variables_panel::{AddVariableDialog, CouplingDialog, VariablesPanel},
-};
-
 #[component]
 pub fn OptimizationModal(open: Signal<bool>) -> Element {
     let mut model = use_signal(OptimizationModel::default);
     let mut is_running = use_signal(|| false);
     let mut current_iteration = use_signal(|| 0_u64);
-    let mut max_iterations = use_signal(|| 100_u64);
     let mut current_cost = use_signal(|| 0.0_f64);
     let mut initial_cost = use_signal(|| 0.0_f64);
     let mut show_issue_drawer = use_signal(|| false);
@@ -39,9 +37,9 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
     let mut best_cost = use_signal(|| f64::INFINITY);
 
     // Dialog state signals managed at the root level to prevent table stacking context clipping
-    let show_add_var_dialog = use_signal(|| false);
-    let show_coupling_dialog = use_signal(|| false);
-    let show_add_operand_dialog = use_signal(|| false);
+    let mut show_add_var_dialog = use_signal(|| false);
+    let mut show_coupling_dialog = use_signal(|| false);
+    let mut show_add_operand_dialog = use_signal(|| false);
 
     // Initial schema retrieval when the modal dialog is opened
     use_effect(move || {
@@ -68,7 +66,12 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
             }
         };
 
-        max_iterations.set(model.read().max_iterations());
+        // Close any open sub-dialogs or dropdown menus before locking the UI
+        show_assistants.set(false);
+        show_add_var_dialog.set(false);
+        show_coupling_dialog.set(false);
+        show_add_operand_dialog.set(false);
+
         steps_without_improvement.set(0);
         best_cost.set(f64::INFINITY);
         is_running.set(true);
@@ -80,14 +83,12 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
             while let Some(event) = rx.recv().await {
                 match event {
                     OptimizationProgressEvent::Started {
-                        initial_cost: cost,
-                        total_max_iterations,
+                        initial_cost: cost, ..
                     } => {
                         initial_cost.set(cost);
                         current_cost.set(cost);
                         best_cost.set(cost);
                         steps_without_improvement.set(0);
-                        max_iterations.set(total_max_iterations);
                     }
                     OptimizationProgressEvent::Iteration {
                         iteration,
@@ -96,9 +97,7 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                     } => {
                         current_iteration.set(iteration);
                         current_cost.set(new_best);
-
                         let prev = *best_cost.read();
-                        // Relative improvement threshold with lower floor for small costs
                         let min_improvement = prev.abs().max(1e-12) * 1e-6;
                         if (prev - new_best) > min_improvement {
                             best_cost.set(new_best);
@@ -158,7 +157,6 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                 }
             });
 
-            // Await deterministic connection readiness instead of sleeping
             if ready_rx.await.is_err() {
                 log::error!("Failed to establish SSE connection before start.");
                 is_running.set(false);
@@ -182,7 +180,6 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
         });
     };
 
-    // Valid start condition: Enabled variables > 0, Operands > 0, No fatal configuration errors
     let can_start = model.read().can_start_optimization();
 
     // Revert to initial baseline via backend undo stack
@@ -214,14 +211,24 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
         });
     };
 
+    let mut request_close = move || {
+        if is_running() {
+            log::warn!("Cannot close optimization window while a run is active. Abort first.");
+            return;
+        }
+        sync_config_to_backend();
+        open.set(false);
+    };
+
     rsx! {
       AlertDialog {
         open: open(),
         on_open_change: move |v: bool| {
-            if !v {
-                sync_config_to_backend();
+            if v {
+                open.set(true);
+            } else {
+                request_close();
             }
-            open.set(v);
         },
         max_width: "90rem".to_string(),
         AlertDialogDescription {
@@ -243,6 +250,7 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                     select {
                       class: "form-select form-select-sm bg-black text-light border-secondary font-monospace py-0 px-2",
                       style: "width: 15.5rem; height: 30px; font-size: 11px;",
+                      disabled: is_running(),
                       value: model.read().scope_group_id.map_or_else(|| "all".to_string(), |id| id.to_string()),
                       onchange: move |e| {
                           let val = e.value();
@@ -258,27 +266,27 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                       }
                     }
                   }
-
-                  // Rule Assistants Menu (Controlled directly via Dioxus state)
+                  // Rule Assistants Menu
                   div { class: "dropdown position-relative",
                     button {
                       class: "btn btn-outline-info btn-sm dropdown-toggle d-flex align-items-center gap-1",
                       style: "height: 30px; font-size: 11px;",
                       r#type: "button",
+                      disabled: is_running(),
                       onclick: move |e: MouseEvent| {
                           e.stop_propagation();
-                          show_assistants.set(!show_assistants());
+                          if !is_running() {
+                              show_assistants.set(!show_assistants());
+                          }
                       },
                       Icon { icon: FaWandMagicSparkles }
                       "Rule Assistants"
                     }
-
-                    if show_assistants() {
+                    if show_assistants() && !is_running() {
                       div {
                         style: "position: fixed; inset: 0; z-index: 999;",
                         onclick: move |_| show_assistants.set(false),
                       }
-
                       ul {
                         class: "dropdown-menu dropdown-menu-dark shadow small show position-absolute",
                         style: "z-index: 1000; top: 100%; left: 0; display: block; min-width: 14rem;",
@@ -309,7 +317,6 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                       }
                     }
                   }
-
                   // Run / Abort Control
                   Button {
                     variant: if is_running() { ButtonVariant::Destructive } else { ButtonVariant::Primary },
@@ -330,7 +337,6 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                       "Run Optimization"
                     }
                   }
-
                   // Undo baseline restoration
                   Button {
                     variant: ButtonVariant::Outline,
@@ -343,7 +349,6 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                 }
               }
             }
-
             CardContent {
               // Pre-Flight Sanity Warning Drawer
               if !model.read().validation_issues.is_empty() {
@@ -376,12 +381,12 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                   }
                 }
               }
-
               // 3-Column Layout with Root Signals
               div { class: "row g-3",
                 div { class: "col-lg-5 col-md-12",
                   VariablesPanel {
                     model,
+                    is_running: is_running(),
                     show_add_dialog: show_add_var_dialog,
                     show_coupling_dialog,
                   }
@@ -389,6 +394,7 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                 div { class: "col-lg-4 col-md-12",
                   MeritDesignerPanel {
                     model,
+                    is_running: is_running(),
                     show_add_dialog: show_add_operand_dialog,
                   }
                 }
@@ -409,23 +415,23 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
         AlertDialogActions {
           AlertDialogCancel {
             on_click: move |_| {
-                sync_config_to_backend();
-                open.set(false);
+                request_close();
             },
-            "Close Window"
+            if is_running() {
+              "Running (Abort to Close)"
+            } else {
+              "Close Window"
+            }
           }
         }
       }
-
-      // Root-level sub-dialogs (rendered outside the table-scroll and card stacking contexts)
+      // Root-level sub-dialogs
       if show_add_var_dialog() {
         AddVariableDialog { model, open: show_add_var_dialog }
       }
-
       if show_coupling_dialog() {
         CouplingDialog { model, open: show_coupling_dialog }
       }
-
       if show_add_operand_dialog() {
         AddOperandDialog { model, open: show_add_operand_dialog }
       }
