@@ -1,8 +1,9 @@
 use super::{
+    dialogs::{AddOperandDialog, AddVariableDialog, CouplingDialog},
     live_monitor_panel::LiveMonitorPanel,
-    merit_designer_panel::{AddOperandDialog, MeritDesignerPanel},
+    merit_designer_panel::MeritDesignerPanel,
     state::{OptimizationModel, ValidationSeverity},
-    variables_panel::{AddVariableDialog, CouplingDialog, VariablesPanel},
+    variables_panel::VariablesPanel,
 };
 use crate::api::{
     eval_action_run, get_optimization_schema, post_abort_optimization,
