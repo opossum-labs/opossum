@@ -17,10 +17,10 @@ use dioxus_free_icons::{
 };
 use dioxus_primitives::alert_dialog::AlertDialogContent;
 use opossum_core::opm_document::optimization::{
-    MaxTotalLengthOperand, MetricOperand, MinEdgeThicknessOperand, OperandMode, ParameterAddress,
-    StandardOperand, TransmissionPenaltyOperand, default_scale_for_metric,
+    DiscoveredObservable, MaxTotalLengthOperand, MetricOperand, MinEdgeThicknessOperand,
+    OperandMode, ParameterAddress, StandardOperand, TransmissionPenaltyOperand,
+    default_scale_for_metric,
 };
-use opossum_optimization::DiscoveredObservable;
 use uuid::Uuid;
 
 type DiscoveredObservableHierarchy =
@@ -124,7 +124,7 @@ fn OperandRow(mut props: OperandRowProps) -> Element {
         StandardOperand::MinEdgeThickness(t) => (t.min_thickness * 1000.0, t.weight),
         StandardOperand::MaxTotalLength(t) => (t.max_length * 1000.0, t.weight),
         #[allow(clippy::cast_precision_loss)]
-        StandardOperand::TransmissionPenalty(t) => (t.expected_rays as f64, t.weight),
+        StandardOperand::TransmissionPenalty(t) => (t.expected_rays, t.weight),
     };
     let is_metric = matches!(op, StandardOperand::Metric(_));
     let badge_class = if badge_text == "Geometry" {

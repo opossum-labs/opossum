@@ -1,6 +1,7 @@
 use super::variable_row::UiVariableRow;
-use opossum_core::opm_document::optimization::{CouplingType, ParameterAddress};
-use opossum_optimization::ModelOptimizationSchema;
+use opossum_core::opm_document::optimization::{
+    CouplingType, ModelOptimizationSchema, ParameterAddress,
+};
 use std::collections::{HashMap, HashSet};
 
 /// Pre-flight validation severity level.

@@ -366,7 +366,8 @@ mod test {
         millimeter, nanometer,
         nodes::{Lens, SourcePort, SpotDiagram},
         opm_document::optimization::{
-            FreeVariable, MetricOperand, ObservableAddress, OperandMode, OptimizationAlgorithm,
+            FreeVariable, MetricOperand, ModelOptimizationSchema, ObservableAddress, OperandMode,
+            OptimizationAlgorithm,
         },
         prelude::{AnalyzerType, RayTraceConfig, RefrIndexSchott},
     };
@@ -445,8 +446,7 @@ mod test {
         assert_eq!(resp.status(), StatusCode::OK);
 
         let body = test::read_body(resp).await;
-        let schema: opossum_optimization::ModelOptimizationSchema =
-            serde_json::from_slice(&body).unwrap();
+        let schema: ModelOptimizationSchema = serde_json::from_slice(&body).unwrap();
 
         assert!(
             !schema.controllable_variables.is_empty(),
@@ -657,8 +657,7 @@ mod test {
         let req = test::TestRequest::get().uri("/schema").to_request();
         let resp = app.call(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let schema: opossum_optimization::ModelOptimizationSchema =
-            test::read_body_json(resp).await;
+        let schema: ModelOptimizationSchema = test::read_body_json(resp).await;
         assert_eq!(schema.saved_config, Some(config));
     }
 }

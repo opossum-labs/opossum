@@ -1,16 +1,15 @@
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use super::discovery::{
-    DiscoveredAnalyzer, DiscoveredEdgeThicknessNode, DiscoveredObservable, DiscoveredVariable,
-    ModelOptimizationSchema,
-};
 use opossum_core::{
     core_optics::{NodeAttrExt, node_attr::HasNodeAttr},
     nodes::NodeGroup,
     opm_document::{
         OpmDocument,
-        optimization::{ObservableAddress, ParameterAddress},
+        optimization::{
+            DiscoveredAnalyzer, DiscoveredEdgeThicknessNode, DiscoveredObservable,
+            DiscoveredVariable, ModelOptimizationSchema, ObservableAddress, ParameterAddress,
+        },
     },
     properties::Proptype,
 };

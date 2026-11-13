@@ -1,5 +1,6 @@
-use opossum_core::opm_document::optimization::{MetricSource, ParameterAddress, StandardOperand};
-use opossum_optimization::ModelOptimizationSchema;
+use opossum_core::opm_document::optimization::{
+    MetricSource, ModelOptimizationSchema, ParameterAddress, StandardOperand,
+};
 use uuid::Uuid;
 
 /// UI-specific representation of a merit function operand row.

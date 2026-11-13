@@ -16,8 +16,7 @@ use dioxus_free_icons::{
     icons::fa_solid_icons::{FaLayerGroup, FaLink, FaPlus, FaSliders, FaTrash, FaXmark},
 };
 use dioxus_primitives::alert_dialog::AlertDialogContent;
-use opossum_core::opm_document::optimization::CouplingType;
-use opossum_optimization::DiscoveredVariable;
+use opossum_core::opm_document::optimization::{CouplingType, DiscoveredVariable};
 
 type DiscoveredVariableHierarchy = Vec<(String, Vec<(String, Vec<DiscoveredVariable>)>)>;
 
