@@ -9,8 +9,20 @@ use opossum_optimization::{
     OpticOptimizer, OptimizationProgressEvent, ParameterApplier, SchemaExtractor,
 };
 use std::collections::HashMap;
-use std::sync::atomic::Ordering;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
+use std::time::{Duration, Instant};
+use tokio::sync::broadcast;
+use tokio::time::timeout;
 use utoipa_actix_web::service_config::ServiceConfig;
+
+/// Grace period before an active optimization is aborted when no client listens to `/events`.
+const DISCONNECT_GRACE_PERIOD: Duration = Duration::from_secs(5);
+
+/// Interval for sending SSE keep-alive comments to promptly detect dropped connections.
+const SSE_KEEP_ALIVE_INTERVAL: Duration = Duration::from_secs(2);
 
 /// Get schema from the current model (`variables`, `observables`, `edge_thickness_nodes`)
 #[utoipa::path(responses((status = OK, description = "get optimization operands")), tag="optimization")]
@@ -90,8 +102,10 @@ pub async fn optimization_events(data: web::Data<AppState>) -> impl Responder {
     let rx = data.optimization.event_sender.subscribe();
     let stream = futures_util::stream::unfold(rx, |mut rx| async move {
         loop {
-            match rx.recv().await {
-                Ok(event) => match serde_json::to_string(&event) {
+            // Send a periodic SSE comment if no optimization event arrives so Actix-Web
+            // detects closed TCP sockets promptly and drops the broadcast receiver.
+            match timeout(SSE_KEEP_ALIVE_INTERVAL, rx.recv()).await {
+                Ok(Ok(event)) => match serde_json::to_string(&event) {
                     Ok(json) => {
                         let bytes = web::Bytes::from(format!("data: {json}\n\n"));
                         return Some((Ok::<_, actix_web::Error>(bytes), rx));
@@ -100,8 +114,12 @@ pub async fn optimization_events(data: web::Data<AppState>) -> impl Responder {
                         log::error!("Failed to serialize OptimizationProgressEvent: {e}");
                     }
                 },
-                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
-                Err(tokio::sync::broadcast::error::RecvError::Closed) => return None,
+                Ok(Err(tokio::sync::broadcast::error::RecvError::Lagged(_))) => {}
+                Ok(Err(tokio::sync::broadcast::error::RecvError::Closed)) => return None,
+                Err(_) => {
+                    let bytes = web::Bytes::from_static(b": keep-alive\n\n");
+                    return Some((Ok::<_, actix_web::Error>(bytes), rx));
+                }
             }
         }
     });
@@ -158,6 +176,43 @@ fn apply_results_and_record_undo(
     }));
 }
 
+/// Monitor active SSE subscribers and abort the optimization if no client listens
+/// continuously for `grace_period`.
+fn spawn_subscriber_watchdog(
+    tx: broadcast::Sender<OptimizationProgressEvent>,
+    cancel_flag: Arc<AtomicBool>,
+    disconnect_aborted: Arc<AtomicBool>,
+    done_flag: Arc<AtomicBool>,
+    grace_period: Duration,
+) {
+    tokio::spawn(async move {
+        let mut no_listener_since: Option<Instant> = Some(Instant::now());
+        let mut interval = tokio::time::interval(Duration::from_millis(500));
+
+        loop {
+            interval.tick().await;
+
+            if done_flag.load(Ordering::SeqCst) || cancel_flag.load(Ordering::SeqCst) {
+                break;
+            }
+
+            if tx.receiver_count() == 0 {
+                let start = no_listener_since.get_or_insert_with(Instant::now);
+                if start.elapsed() >= grace_period {
+                    log::warn!(
+                        "No active optimization event listeners for {grace_period:?}. Aborting optimization."
+                    );
+                    disconnect_aborted.store(true, Ordering::SeqCst);
+                    cancel_flag.store(true, Ordering::SeqCst);
+                    break;
+                }
+            } else {
+                no_listener_since = None;
+            }
+        }
+    });
+}
+
 fn spawn_optimization_worker(
     app_state: web::Data<AppState>,
     mut working_doc: OpmDocument,
@@ -166,8 +221,27 @@ fn spawn_optimization_worker(
 ) {
     let cancel_flag = app_state.optimization.cancel_flag.clone();
     let tx = app_state.optimization.event_sender.clone();
+    let disconnect_aborted = Arc::new(AtomicBool::new(false));
+    let done_flag = Arc::new(AtomicBool::new(false));
+
+    spawn_subscriber_watchdog(
+        tx.clone(),
+        cancel_flag.clone(),
+        disconnect_aborted.clone(),
+        done_flag.clone(),
+        DISCONNECT_GRACE_PERIOD,
+    );
 
     tokio::task::spawn_blocking(move || {
+        // Ensure `done_flag` is always set when the blocking worker exits so the watchdog stops.
+        struct DoneGuard(Arc<AtomicBool>);
+        impl Drop for DoneGuard {
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::SeqCst);
+            }
+        }
+        let _done_guard = DoneGuard(done_flag);
+
         let optimizer = match OpticOptimizer::from_config(&mut working_doc, opt_config) {
             Ok(opt) => opt,
             Err(e) => {
@@ -185,16 +259,21 @@ fn spawn_optimization_worker(
             true
         });
 
+        let was_disconnected = disconnect_aborted.load(Ordering::SeqCst);
+
         match opt_result {
             Ok(summary) => {
-                apply_results_and_record_undo(
-                    &app_state,
-                    &summary.optimized_parameters,
-                    &original_values,
-                );
-
                 let is_aborted = cancel_flag.load(Ordering::SeqCst);
                 if is_aborted {
+                    // Only apply intermediate best parameters if aborted manually by the user.
+                    // If aborted due to client disconnect, leave the document untouched.
+                    if !was_disconnected {
+                        apply_results_and_record_undo(
+                            &app_state,
+                            &summary.optimized_parameters,
+                            &original_values,
+                        );
+                    }
                     *app_state.optimization.status.write() = OptimizationStatus::Aborted;
                     let _ = tx.send(OptimizationProgressEvent::Aborted {
                         last_cost: summary.final_cost,
@@ -202,6 +281,11 @@ fn spawn_optimization_worker(
                         best_parameters: summary.optimized_parameters.into_iter().collect(),
                     });
                 } else {
+                    apply_results_and_record_undo(
+                        &app_state,
+                        &summary.optimized_parameters,
+                        &original_values,
+                    );
                     *app_state.optimization.status.write() = OptimizationStatus::Finished;
                     let _ = tx.send(OptimizationProgressEvent::Finished {
                         final_cost: summary.final_cost,
@@ -213,7 +297,7 @@ fn spawn_optimization_worker(
             }
             Err(err) => {
                 let err_str = err.to_string();
-                if err_str.contains("cancelled by user") {
+                if err_str.contains("cancelled by user") || was_disconnected {
                     *app_state.optimization.status.write() = OptimizationStatus::Aborted;
                     let _ = tx.send(OptimizationProgressEvent::Aborted {
                         last_cost: f64::NAN,
@@ -439,7 +523,7 @@ mod test {
                         break;
                     }
                     OptimizationProgressEvent::Failed { error } => {
-                        panic!("Optimierung fehlgeschlagen: {error}");
+                        panic!("Optimization failed: {error}");
                     }
                     _ => {}
                 }
