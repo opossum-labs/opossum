@@ -1,13 +1,14 @@
-use crate::components::{
-    optimization::state::UiVariableRow,
-    primitives::{
-        alert_dialog::{
-            AlertDialog, AlertDialogActions, AlertDialogCancel, AlertDialogDescription,
-            AlertDialogTitle,
-        },
-        button::{Button, ButtonSize, ButtonVariant},
-        scroll_area::ScrollArea,
+use super::{
+    numeric_input::NumericCommitInput,
+    state::{OptimizationModel, UiVariableRow, format_parameter_value},
+};
+use crate::components::primitives::{
+    alert_dialog::{
+        AlertDialog, AlertDialogActions, AlertDialogCancel, AlertDialogDescription,
+        AlertDialogTitle,
     },
+    button::{Button, ButtonSize, ButtonVariant},
+    scroll_area::ScrollArea,
 };
 use dioxus::prelude::*;
 use dioxus_free_icons::{
@@ -15,16 +16,15 @@ use dioxus_free_icons::{
     icons::fa_solid_icons::{FaLayerGroup, FaLink, FaPlus, FaSliders, FaTrash, FaXmark},
 };
 use dioxus_primitives::alert_dialog::AlertDialogContent;
-use opossum_core::opm_document::optimization::{CouplingType, ParameterAddress};
+use opossum_core::opm_document::optimization::CouplingType;
 use opossum_optimization::DiscoveredVariable;
-
-use super::state::OptimizationModel;
 
 type DiscoveredVariableHierarchy = Vec<(String, Vec<(String, Vec<DiscoveredVariable>)>)>;
 
 #[derive(Props, Clone, PartialEq, Eq)]
 pub struct VariablesPanelProps {
     pub model: Signal<OptimizationModel>,
+    pub is_running: bool,
     pub show_add_dialog: Signal<bool>,
     pub show_coupling_dialog: Signal<bool>,
 }
@@ -32,18 +32,17 @@ pub struct VariablesPanelProps {
 #[component]
 pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
     let grouped_vars = use_memo(move || {
-        let rows = props.model.read().variable_rows.clone();
+        let rows = &props.model.read().variable_rows;
         let mut groups: Vec<(String, Vec<UiVariableRow>)> = Vec::new();
         for row in rows {
             if let Some((_, list)) = groups.iter_mut().find(|(name, _)| name == &row.group_name) {
-                list.push(row);
+                list.push(row.clone());
             } else {
-                groups.push((row.group_name.clone(), vec![row]));
+                groups.push((row.group_name.clone(), vec![row.clone()]));
             }
         }
         groups
     });
-
     let total_vars = use_memo(move || props.model.read().variable_rows.len());
 
     rsx! {
@@ -57,6 +56,7 @@ pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
             Button {
               variant: ButtonVariant::Primary,
               size: ButtonSize::Sm,
+              disabled: props.is_running,
               title: "Pick parameter from model schema",
               onclick: move |_| props.show_add_dialog.set(true),
               Icon { icon: FaPlus }
@@ -65,7 +65,7 @@ pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
             Button {
               variant: ButtonVariant::Outline,
               size: ButtonSize::Sm,
-              disabled: total_vars() < 2,
+              disabled: props.is_running || total_vars() < 2,
               title: "Create parameter coupling (e.g. R2 = -R1)",
               onclick: move |_| props.show_coupling_dialog.set(true),
               Icon { icon: FaLink }
@@ -73,7 +73,6 @@ pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
             }
           }
         }
-
         ScrollArea { height: "31rem",
           div { class: "table-responsive",
             table {
@@ -113,7 +112,6 @@ pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
                       }
                     }
                   }
-
                   // Rows belonging to this group
                   for row in group_rows.iter() {
                     {
@@ -122,21 +120,19 @@ pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
                           tr {
                             key: "{row.address:?}",
                             class: if !row.is_enabled && row.coupling.is_none() { "opacity-50" } else { "" },
-
                             // Checkbox
                             td { class: "text-center px-1",
                               input {
                                 r#type: "checkbox",
                                 class: "form-check-input mt-0",
                                 checked: row.is_enabled,
-                                disabled: row.coupling.is_some(),
+                                disabled: props.is_running || row.coupling.is_some(),
                                 onchange: {
                                     let addr = row.address.clone();
                                     move |_| props.model.write().toggle_variable(&addr)
                                 },
                               }
                             }
-
                             // Node & Property with indentation
                             td { class: "ps-3",
                               div {
@@ -147,7 +143,6 @@ pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
                               }
                               div { class: "text-muted text-truncate", style: "max-width: 140px;", "{row.property_name}" }
                             }
-
                             // Current Value
                             td { class: "text-end px-1",
                               div { class: "text-light fw-bold", "{main_val}" }
@@ -155,12 +150,14 @@ pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
                                 div { class: "text-muted", style: "font-size: 9px;", "{sub}" }
                               }
                             }
-
                             // Min Bound
                             td { class: "px-1",
                               if row.coupling.is_none() {
-                                BoundInput {
+                                NumericCommitInput {
                                   value: row.min_bound,
+                                  disabled: props.is_running,
+                                  precision: 3,
+                                  allow_empty: true,
                                   on_commit: {
                                       let addr = row.address.clone();
                                       move |val| props.model.write().set_min_bound(&addr, val)
@@ -170,12 +167,14 @@ pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
                                 span { class: "text-muted small", "-" }
                               }
                             }
-
                             // Max Bound
                             td { class: "px-1",
                               if row.coupling.is_none() {
-                                BoundInput {
+                                NumericCommitInput {
                                   value: row.max_bound,
+                                  disabled: props.is_running,
+                                  precision: 3,
+                                  allow_empty: true,
                                   on_commit: {
                                       let addr = row.address.clone();
                                       move |val| props.model.write().set_max_bound(&addr, val)
@@ -185,17 +184,21 @@ pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
                                 span { class: "text-muted small", "-" }
                               }
                             }
-
                             // Coupling Status
                             td { class: "px-1",
                               if let Some(rule) = &row.coupling {
                                 span {
-                                  class: "badge bg-warning text-dark d-inline-flex align-items-center gap-1 text-truncate",
-                                  style: "max-width: 90px; cursor: pointer;",
-                                  title: "Click to remove coupling",
+                                  class: if props.is_running { "badge bg-warning text-dark d-inline-flex align-items-center gap-1 text-truncate opacity-50" } else { "badge bg-warning text-dark d-inline-flex align-items-center gap-1 text-truncate" },
+                                  style: if props.is_running { "max-width: 90px; cursor: not-allowed;" } else { "max-width: 90px; cursor: pointer;" },
+                                  title: if props.is_running { "Locked while optimization is running" } else { "Click to remove coupling" },
                                   onclick: {
                                       let addr = row.address.clone();
-                                      move |_| props.model.write().set_coupling(&addr, None)
+                                      let is_running = props.is_running;
+                                      move |_| {
+                                          if !is_running {
+                                              props.model.write().set_coupling(&addr, None);
+                                          }
+                                      }
                                   },
                                   Icon { icon: FaLink }
                                   match rule {
@@ -212,12 +215,12 @@ pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
                                 span { class: "text-muted", "Fixed" }
                               }
                             }
-
                             // Delete Action
                             td { class: "text-end px-1",
                               button {
                                 class: "btn btn-outline-danger btn-sm p-0 border-0",
                                 style: "line-height: 1;",
+                                disabled: props.is_running,
                                 title: "Remove variable",
                                 onclick: {
                                     let addr = row.address.clone();
@@ -231,7 +234,6 @@ pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
                     }
                   }
                 }
-
                 if total_vars() == 0 {
                   tr {
                     td {
@@ -252,20 +254,15 @@ pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
 /// Dialog allowing user to select controllable variables from the model schema grouped by `NodeGroup` and Node.
 #[component]
 pub fn AddVariableDialog(mut model: Signal<OptimizationModel>, mut open: Signal<bool>) -> Element {
-    let current_rows = model.read().variable_rows.clone();
-
-    // Grouping: group_name -> (node_name -> Vec<DiscoveredVariable>)
     let grouped_hierarchy = use_memo(move || {
-        let schema_opt = model.read().schema.clone();
+        let schema_read = model.read();
         let mut hierarchy: DiscoveredVariableHierarchy = Vec::new();
-
-        if let Some(schema) = &schema_opt {
+        if let Some(schema) = &schema_read.schema {
             for var in schema
                 .controllable_variables
                 .iter()
                 .filter(|v| !v.is_read_only)
             {
-                // 1. Group level
                 let group_entry =
                     if let Some(pos) = hierarchy.iter().position(|(g, _)| g == &var.group_name) {
                         &mut hierarchy[pos].1
@@ -274,7 +271,6 @@ pub fn AddVariableDialog(mut model: Signal<OptimizationModel>, mut open: Signal<
                         &mut hierarchy.last_mut().unwrap().1
                     };
 
-                // 2. Node level
                 if let Some(node_pos) = group_entry.iter().position(|(n, _)| n == &var.node_name) {
                     group_entry[node_pos].1.push(var.clone());
                 } else {
@@ -294,14 +290,12 @@ pub fn AddVariableDialog(mut model: Signal<OptimizationModel>, mut open: Signal<
           div {
             class: "bg-dark text-light p-3 rounded border border-secondary shadow-lg",
             style: "position: relative; z-index: 1060;",
-
             AlertDialogTitle { "Add Tuning Variable" }
             AlertDialogDescription {
               div { class: "d-flex flex-column gap-3 text-light mt-2",
                 p { class: "small text-muted mb-0",
                   "Select optical parameters organized by group and component:"
                 }
-
                 if !grouped_hierarchy.read().is_empty() {
                   ScrollArea { height: "22rem",
                     div { class: "d-flex flex-column gap-2",
@@ -312,7 +306,6 @@ pub fn AddVariableDialog(mut model: Signal<OptimizationModel>, mut open: Signal<
                             Icon { icon: FaLayerGroup }
                             span { "{group_name}" }
                           }
-
                           // Level 2: Component Nodes
                           div { class: "p-2 d-flex flex-column gap-2",
                             for (node_name , vars) in node_list {
@@ -325,24 +318,15 @@ pub fn AddVariableDialog(mut model: Signal<OptimizationModel>, mut open: Signal<
                                     "{vars.len()} props"
                                   }
                                 }
-
                                 div { class: "list-group list-group-flush",
                                   for var in vars {
                                     {
-                                        let is_already_added = current_rows.iter().any(|r| r.address == var.address);
-                                        let is_curv = matches!(var.address, ParameterAddress::SurfaceCurvature { .. });
-                                        let val_display = if is_curv {
-                                            if var.initial_value.abs() < 1e-9 {
-                                                "Plan (R = ∞)".to_string()
-                                            } else {
-                                                format!("R = {:.1} mm", 1000.0 / var.initial_value)
-                                            }
-                                        } else if matches!(var.address, ParameterAddress::ConnectionDistance { .. }) {
-                                            format!("{:.2} mm", var.initial_value * 1000.0)
-                                        } else {
-                                            format!("{:.3}", var.initial_value)
-                                        };
-
+                                        let is_already_added = model
+                                            .read()
+                                            .variable_rows
+                                            .iter()
+                                            .any(|r| r.address == var.address);
+                                        let (val_display, _) = format_parameter_value(&var.address, var.initial_value);
                                         rsx! {
                                           button {
                                             r#type: "button",
@@ -392,30 +376,48 @@ pub fn AddVariableDialog(mut model: Signal<OptimizationModel>, mut open: Signal<
 /// Modal dialog to configure a parameter coupling rule.
 #[component]
 pub fn CouplingDialog(mut model: Signal<OptimizationModel>, mut open: Signal<bool>) -> Element {
-    let vars = model.read().variable_rows.clone();
+    let vars_labels: Vec<(String, String)> = model
+        .read()
+        .variable_rows
+        .iter()
+        .map(|v| (v.node_name.clone(), v.property_name.clone()))
+        .collect();
+    let var_count = vars_labels.len();
+
     let mut target_idx = use_signal(|| 0_usize);
-    let mut source_idx = use_signal(|| usize::from(vars.len() > 1));
+    let mut source_idx = use_signal(|| usize::from(var_count > 1));
     let mut rule_kind = use_signal(|| "Opposite");
     let mut affine_factor = use_signal(|| -1.0_f64);
     let mut affine_offset = use_signal(|| 0.0_f64);
 
     let create_coupling = move |_| {
-        let rows = model.read().variable_rows.clone();
-        if let (Some(target), Some(source)) = (rows.get(target_idx()), rows.get(source_idx())) {
-            let rule = match *rule_kind.read() {
-                "Identical" => CouplingType::Identical {
-                    source: source.address.clone(),
-                },
-                "Affine" => CouplingType::Affine {
-                    source: source.address.clone(),
-                    factor: affine_factor(),
-                    offset: affine_offset(),
-                },
-                _ => CouplingType::Opposite {
-                    source: source.address.clone(),
-                },
-            };
-            model.write().set_coupling(&target.address, Some(rule));
+        let coupling_payload = {
+            let model_read = model.read();
+            let rows = &model_read.variable_rows;
+            if let (Some(target), Some(source)) = (rows.get(target_idx()), rows.get(source_idx()))
+                && target.address != source.address
+            {
+                let rule = match *rule_kind.read() {
+                    "Identical" => CouplingType::Identical {
+                        source: source.address.clone(),
+                    },
+                    "Affine" => CouplingType::Affine {
+                        source: source.address.clone(),
+                        factor: affine_factor(),
+                        offset: affine_offset(),
+                    },
+                    _ => CouplingType::Opposite {
+                        source: source.address.clone(),
+                    },
+                };
+                Some((target.address.clone(), rule))
+            } else {
+                None
+            }
+        };
+
+        if let Some((target_addr, rule)) = coupling_payload {
+            model.write().set_coupling(&target_addr, Some(rule));
             open.set(false);
         }
     };
@@ -429,7 +431,6 @@ pub fn CouplingDialog(mut model: Signal<OptimizationModel>, mut open: Signal<boo
           div {
             class: "bg-dark text-light p-3 rounded border border-secondary shadow-lg",
             style: "position: relative; z-index: 1060;",
-
             AlertDialogTitle { "Create Parameter Coupling" }
             AlertDialogDescription {
               div { class: "d-flex flex-column gap-3 text-light mt-2",
@@ -440,9 +441,15 @@ pub fn CouplingDialog(mut model: Signal<OptimizationModel>, mut open: Signal<boo
                   select {
                     class: "form-select form-select-sm bg-black text-light border-secondary",
                     value: "{target_idx}",
-                    onchange: move |e| target_idx.set(e.value().parse().unwrap_or(0)),
-                    for (i , v) in vars.iter().enumerate() {
-                      option { value: "{i}", "{v.node_name} — {v.property_name}" }
+                    onchange: move |e| {
+                        let next_target = e.value().parse().unwrap_or(0);
+                        target_idx.set(next_target);
+                        if next_target == source_idx() && var_count > 1 {
+                            source_idx.set(usize::from(next_target == 0));
+                        }
+                    },
+                    for (i , (node_name , prop_name)) in vars_labels.iter().enumerate() {
+                      option { value: "{i}", "{node_name} — {prop_name}" }
                     }
                   }
                 }
@@ -518,11 +525,9 @@ pub fn CouplingDialog(mut model: Signal<OptimizationModel>, mut open: Signal<boo
                     class: "form-select form-select-sm bg-black text-light border-secondary",
                     value: "{source_idx}",
                     onchange: move |e| source_idx.set(e.value().parse().unwrap_or(0)),
-                    for (i , v) in vars.iter().enumerate() {
+                    for (i , (node_name , prop_name)) in vars_labels.iter().enumerate() {
                       if i != target_idx() {
-                        option { value: "{i}",
-                          "{v.node_name} — {v.property_name}"
-                        }
+                        option { value: "{i}", "{node_name} — {prop_name}" }
                       }
                     }
                   }
@@ -540,70 +545,6 @@ pub fn CouplingDialog(mut model: Signal<OptimizationModel>, mut open: Signal<boo
             }
           }
         }
-      }
-    }
-}
-
-/// Local controlled text input for numeric bounds.
-/// Commits value changes only on blur or when the Enter key is pressed,
-/// formatting to up to 3 decimal places without redundant trailing zeros.
-#[component]
-fn BoundInput(value: Option<f64>, on_commit: EventHandler<Option<f64>>) -> Element {
-    let format_val = |v: Option<f64>| {
-        v.map_or_else(String::new, |num| {
-            let s = format!("{num:.3}");
-            if s.contains('.') {
-                let trimmed = s.trim_end_matches('0').trim_end_matches('.');
-                if trimmed.is_empty() || trimmed == "-" {
-                    "0".to_string()
-                } else {
-                    trimmed.to_string()
-                }
-            } else {
-                s
-            }
-        })
-    };
-
-    let val_memo = use_memo(use_reactive!(|value| value));
-    let mut text = use_signal(|| format_val(value));
-
-    // Synchronize cleanly when bound updates from outside (e.g. from Rule Assistants)
-    use_effect(move || {
-        let current = *val_memo.read();
-        let formatted = format_val(current);
-        if formatted != *text.peek() {
-            text.set(formatted);
-        }
-    });
-
-    let mut commit = move || {
-        let raw = text.read().trim().to_string();
-        if raw.is_empty() {
-            text.set(String::new());
-            on_commit.call(None);
-        } else if let Ok(parsed) = raw.parse::<f64>() {
-            text.set(format_val(Some(parsed)));
-            on_commit.call(Some(parsed));
-        } else {
-            // Revert invalid strings back to last valid value
-            text.set(format_val(*val_memo.peek()));
-        }
-    };
-
-    rsx! {
-      input {
-        r#type: "text",
-        class: "form-control form-control-sm bg-black text-light border-secondary p-0 px-1 font-monospace text-end",
-        style: "height: 22px; font-size: 11px;",
-        value: "{text}",
-        oninput: move |e: FormEvent| text.set(e.value()),
-        onblur: move |_| commit(),
-        onkeydown: move |e: KeyboardEvent| {
-            if e.key() == Key::Enter {
-                commit();
-            }
-        },
       }
     }
 }
