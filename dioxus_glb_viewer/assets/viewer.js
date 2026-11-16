@@ -21,10 +21,11 @@
  * @param {string}   threeBase - Absolute URL of the three.js asset directory.
  * @returns {Promise<object>}  - Viewer object with `.apply(op)` and `.dispose()`.
  */
-export async function createViewer(canvasId, options, send, threeBase) {
-    const THREE          = await import(threeBase + '/three.module.js');
-    const { OrbitControls } = await import(threeBase + '/examples/jsm/controls/OrbitControls.js');
-    const { GLTFLoader }    = await import(threeBase + '/examples/jsm/loaders/GLTFLoader.js');
+export async function createViewer(canvasId, options, send, threeUrl) {
+    // Import the unified module once so core and all addons share a single Three.js instance
+    const THREE = await import(threeUrl);
+    const { OrbitControls, GLTFLoader, ViewHelper } = THREE;
+
     const canvas = await waitForElement(canvasId, 10_000);
     if (!canvas) {
         throw new Error(`Canvas #${canvasId} not found after 10 s`);
@@ -44,7 +45,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
     renderer.setPixelRatio(Math.min(typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1, 2));
 
     // ── Scene, camera, controls ─────────────────────────────────────────────
-    const scene    = new THREE.Scene();
+    const scene = new THREE.Scene();
     scene.background = new THREE.Color(options.background);
 
     const camera = new THREE.PerspectiveCamera(options.fov_degrees, 1, 0.01, 10_000);
@@ -58,7 +59,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
 
     // ── Lights ──────────────────────────────────────────────────────────────
     const ambient = new THREE.AmbientLight(0xffffff, options.ambient_intensity);
-    const sun     = new THREE.DirectionalLight(0xffffff, options.directional_intensity);
+    const sun = new THREE.DirectionalLight(0xffffff, options.directional_intensity);
     sun.position.set(1, 2, 1.5);
 
     sun.castShadow = true;
@@ -87,15 +88,15 @@ export async function createViewer(canvasId, options, send, threeBase) {
 
     // ── Instance state ──────────────────────────────────────────────────────
     /** id -> { root: THREE.Group, helper: THREE.LineSegments|null } — see `setSelected` */
-    const objects      = new Map();
+    const objects = new Map();
     /** id -> generation counter (prevents stale load callbacks) */
-    const generations  = new Map();
+    const generations = new Map();
     /** transport key -> array of Base64 chunk strings */
     const pendingBytes = new Map();
 
     let hasAutoFitted = false;
-    let needsResize   = true;
-    let disposed      = false;
+    let needsResize = true;
+    let disposed = false;
     // Set whenever the set of visible models changes; consumed once per frame in the RAF loop to
     // refit the sun's shadow frustum. A flag (not a per-frame recompute) keeps the Box3 pass off
     // the hot path when nothing moved.
@@ -121,14 +122,10 @@ export async function createViewer(canvasId, options, send, threeBase) {
      *
      * @param {boolean} enabled - Whether the gizmo should be active.
      */
-    async function ensureGizmo(enabled) {
+    function ensureGizmo(enabled) {
         if (enabled && !viewHelper) {
             try {
-                const { ViewHelper } =
-                    await import(threeBase + '/examples/jsm/helpers/ViewHelper.js');
-                // The viewer may have been torn down (or disabled again) while we awaited.
-                // Also guard against a concurrent ensureGizmo(true) that finished first.
-                if (disposed || !currentOptions.orientation_gizmo || viewHelper) return;
+                if (disposed || !currentOptions.orientation_gizmo) return;
                 viewHelper = new ViewHelper(camera, renderer.domElement);
                 viewHelper.center = controls.target;
             } catch (e) {
@@ -181,9 +178,11 @@ export async function createViewer(canvasId, options, send, threeBase) {
         const usable = !!spec && Number.isFinite(spec.tile_size) && spec.tile_size > 0
             && Number.isFinite(spec.height);
         if (spec && !usable) {
-            send({ event: 'error',
-                   message: 'Ground not drawn: its tile size must be a positive number and its '
-                          + 'height a finite one' });
+            send({
+                event: 'error',
+                message: 'Ground not drawn: its tile size must be a positive number and its '
+                    + 'height a finite one'
+            });
         }
         if (!usable) { disposeGround(); shadowCameraDirty = true; return; }
         if (ground && ground.url === spec.tile_url && ground.tile === spec.tile_size) {
@@ -237,7 +236,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
         const tile = ground.tile;
         const wanted = Math.min(
             Math.max(camera.position.distanceTo(controls.target) * GROUND_REACH * 2,
-                     GROUND_MIN_TILES * tile),
+                GROUND_MIN_TILES * tile),
             camera.far,
         );
         const tiles = 2 * Math.ceil(wanted / (2 * tile));
@@ -296,8 +295,8 @@ export async function createViewer(canvasId, options, send, threeBase) {
                 + shader.fragmentShader.replace(
                     '#include <tonemapping_fragment>',
                     'gl_FragColor.rgb = mix(gl_FragColor.rgb, uFadeColor, '
-                        + 'smoothstep(uFadeStart, 1.0, length(vGroundXZ) * 2.0));'
-                        + '\n\t#include <tonemapping_fragment>',
+                    + 'smoothstep(uFadeStart, 1.0, length(vGroundXZ) * 2.0));'
+                    + '\n\t#include <tonemapping_fragment>',
                 );
             material.userData.groundShader = shader;
         };
@@ -367,9 +366,9 @@ export async function createViewer(canvasId, options, send, threeBase) {
 
         // NDC from CSS box (not canvas.width): at devicePixelRatio != 1 the values would otherwise be wrong.
         const rect = canvas.getBoundingClientRect();
-        const ndc  = new THREE.Vector2(
-             ((e.clientX - rect.left) / rect.width)  * 2 - 1,
-            -((e.clientY - rect.top)  / rect.height) * 2 + 1,
+        const ndc = new THREE.Vector2(
+            ((e.clientX - rect.left) / rect.width) * 2 - 1,
+            -((e.clientY - rect.top) / rect.height) * 2 + 1,
         );
         raycaster.setFromCamera(ndc, camera);
 
@@ -388,17 +387,19 @@ export async function createViewer(canvasId, options, send, threeBase) {
 
         if (hit) {
             send({
-                event:     'pick',
-                id:        findGlbId(hit.object),
+                event: 'pick',
+                id: findGlbId(hit.object),
                 mesh_name: hit.object.name || null,
-                point:     [hit.point.x, hit.point.y, hit.point.z],
-                shift:     e.shiftKey,
-                ctrl:      e.ctrlKey || e.metaKey,
-                alt:       e.altKey,
+                point: [hit.point.x, hit.point.y, hit.point.z],
+                shift: e.shiftKey,
+                ctrl: e.ctrlKey || e.metaKey,
+                alt: e.altKey,
             });
         } else {
-            send({ event: 'pick', id: null, mesh_name: null, point: null,
-                   shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey });
+            send({
+                event: 'pick', id: null, mesh_name: null, point: null,
+                shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey
+            });
         }
     }, { signal: ac.signal });
 
@@ -568,11 +569,11 @@ export async function createViewer(canvasId, options, send, threeBase) {
         const box = sceneBounds();
         if (box.isEmpty()) return;
         const center = box.getCenter(new THREE.Vector3());
-        const size   = box.getSize(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z);
-        const fov    = camera.fov * (Math.PI / 180);
-        const dist   = (maxDim / 2) / Math.tan(fov / 2) * 1.5;
-        const dir    = camera.position.clone().sub(controls.target).normalize();
+        const fov = camera.fov * (Math.PI / 180);
+        const dist = (maxDim / 2) / Math.tan(fov / 2) * 1.5;
+        const dir = camera.position.clone().sub(controls.target).normalize();
         camera.position.copy(center.clone().add(dir.multiplyScalar(dist)));
         controls.target.copy(center);
         controls.update();
@@ -605,22 +606,22 @@ export async function createViewer(canvasId, options, send, threeBase) {
         if (box.isEmpty()) return;
         box.getBoundingSphere(shadowSphere);
         const center = shadowSphere.center;
-        const r    = Math.max(shadowSphere.radius, 1e-3);
+        const r = Math.max(shadowSphere.radius, 1e-3);
         // Where shadows land: the ground plane if there is one, else the lowest model surface.
         const groundY = ground ? ground.height : box.min.y;
         // Distance along the light ray from the scene centre down to that plane. Colinear with the
         // light, so it adds only depth (never width) to what the shadow camera must cover.
-        const drop   = Math.max((center.y - groundY) / SUN_DIR.y, 0);
+        const drop = Math.max((center.y - groundY) / SUN_DIR.y, 0);
         const margin = r * 0.1 + 1e-3;
-        const dist   = r * 4;
+        const dist = r * 4;
         sun.position.copy(center).addScaledVector(SUN_DIR, dist);
         sun.target.position.copy(center);
         sun.target.updateMatrixWorld();
         const cam = sun.shadow.camera;
         cam.left = -r - margin; cam.right = r + margin;
-        cam.top  =  r + margin; cam.bottom = -r - margin;
+        cam.top = r + margin; cam.bottom = -r - margin;
         cam.near = Math.max(dist - r - margin, 0.01);
-        cam.far  = dist + r + drop + margin;
+        cam.far = dist + r + drop + margin;
         cam.updateProjectionMatrix();
     }
 
@@ -660,7 +661,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
      * exceeds one pixel; at one pixel they are left as they are, so a viewer that never asks for
      * wider lines draws exactly what the file holds and never loads the add-on.
      */
-    async function thickenLines(root) {
+    function thickenLines(root) {
         const width = currentOptions.line_width;
         const plain = [];
         root.traverse((o) => {
@@ -669,18 +670,17 @@ export async function createViewer(canvasId, options, send, threeBase) {
         });
         if (width <= 1 || plain.length === 0) return;
 
-        const [{ LineSegments2 }, { LineSegmentsGeometry }, { LineMaterial }] =
-            await loadFatLineModules();
+        const { LineSegments2, LineSegmentsGeometry, LineMaterial } = THREE;
         for (const line of plain) {
             if (!line.parent) continue;
             // Resolve the index (glTF lines are indexed) into one position pair per segment.
-            const pos   = line.geometry.attributes.position;
+            const pos = line.geometry.attributes.position;
             const index = line.geometry.index;
             const count = index ? index.count : pos.count;
-            const flat  = new Float32Array(count * 3);
+            const flat = new Float32Array(count * 3);
             for (let i = 0; i < count; i++) {
                 const v = index ? index.getX(i) : i;
-                flat[3 * i]     = pos.getX(v);
+                flat[3 * i] = pos.getX(v);
                 flat[3 * i + 1] = pos.getY(v);
                 flat[3 * i + 2] = pos.getZ(v);
             }
@@ -688,13 +688,13 @@ export async function createViewer(canvasId, options, send, threeBase) {
             const fat = new LineSegments2(
                 new LineSegmentsGeometry().setPositions(flat),
                 new LineMaterial({
-                    color:       src.color.clone(),
-                    linewidth:   width,
+                    color: src.color.clone(),
+                    linewidth: width,
                     transparent: src.transparent,
-                    opacity:     src.opacity,
-                    depthWrite:  src.depthWrite,
-                    depthTest:   src.depthTest,
-                    blending:    src.blending,
+                    opacity: src.opacity,
+                    depthWrite: src.depthWrite,
+                    depthTest: src.depthTest,
+                    blending: src.blending,
                 }),
             );
             fat.name = line.name;
@@ -704,7 +704,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
             fat.scale.copy(line.scale);
             // A fat line is a mesh, but still an annotation: never picked (see the click handler),
             // and it casts no shadow - its quads would throw wide smears onto the ground.
-            fat.raycast = () => {};
+            fat.raycast = () => { };
             fat.castShadow = false;
             // Keep what the file gave the line, so a later opacity change still scales that and
             // not the value an earlier change left behind, and keeps an overlay one (see setOpacity).
@@ -770,9 +770,9 @@ export async function createViewer(canvasId, options, send, threeBase) {
                 // Switching transparency changes the shader program, which only a recompile does.
                 if (m.transparent !== transparent) m.needsUpdate = true;
                 m.transparent = transparent;
-                m.opacity     = own.opacity * factor;
-                m.depthWrite  = (factor < 1 || overlay) ? false : own.depthWrite;
-                m.depthTest   = overlay ? false : own.depthTest;
+                m.opacity = own.opacity * factor;
+                m.depthWrite = (factor < 1 || overlay) ? false : own.depthWrite;
+                m.depthTest = overlay ? false : own.depthTest;
             }
         });
         setBlending(root);
@@ -815,8 +815,10 @@ export async function createViewer(canvasId, options, send, threeBase) {
                 await thickenLines(root);
             } catch (e) {
                 // The lines stay one pixel wide; the model itself is still worth showing.
-                send({ event: 'error',
-                       message: `lines could not be widened: ${(e && e.message) || e}` });
+                send({
+                    event: 'error',
+                    message: `lines could not be widened: ${(e && e.message) || e}`
+                });
             }
             // The add-on import is awaited above, so a newer request may have overtaken us since.
             if (generations.get(op.id) !== gen) {
@@ -845,8 +847,10 @@ export async function createViewer(canvasId, options, send, threeBase) {
 
         const onError = (err) => {
             if (generations.get(op.id) !== gen) return;
-            send({ event: 'load_error', id: op.id,
-                   message: String((err && err.message) || err) });
+            send({
+                event: 'load_error', id: op.id,
+                message: String((err && err.message) || err)
+            });
         };
 
         if (op.source.kind === 'url') {
@@ -856,7 +860,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
             const chunks = pendingBytes.get(op.source.key) || [];
             pendingBytes.delete(op.source.key);
             try {
-                const b64    = chunks.join('');
+                const b64 = chunks.join('');
                 const buffer = base64ToArrayBuffer(b64);
                 // path = '' because .glb is self-contained (no external references)
                 loader.parse(buffer, '', onLoad, onError);
@@ -887,16 +891,16 @@ export async function createViewer(canvasId, options, send, threeBase) {
      */
     function horizonPanorama({ above, below }) {
         const image = document.createElement('canvas');
-        image.width  = 1024;
+        image.width = 1024;
         image.height = 512;
         const g = image.getContext('2d');
         const shade = (colour, toward, amount) =>
             new THREE.Color(colour).lerp(new THREE.Color(toward), amount).getStyle();
         const gradient = g.createLinearGradient(0, 0, 0, image.height);
-        gradient.addColorStop(0,    shade(above, '#ffffff', 0.3));
+        gradient.addColorStop(0, shade(above, '#ffffff', 0.3));
         gradient.addColorStop(0.47, above);
         gradient.addColorStop(0.53, below);
-        gradient.addColorStop(1,    shade(below, '#000000', 0.5));
+        gradient.addColorStop(1, shade(below, '#000000', 0.5));
         g.fillStyle = gradient;
         g.fillRect(0, 0, image.width, image.height);
         return image;
@@ -911,9 +915,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
      */
     async function loadPanorama(url) {
         if (url.split(/[?#]/)[0].toLowerCase().endsWith('.hdr')) {
-            const { RGBELoader } =
-                await import(threeBase + '/examples/jsm/loaders/RGBELoader.js');
-            return new RGBELoader().loadAsync(url);
+            return new THREE.RGBELoader().loadAsync(url);
         }
         const texture = await new THREE.TextureLoader().loadAsync(url);
         texture.colorSpace = THREE.SRGBColorSpace;
@@ -928,21 +930,18 @@ export async function createViewer(canvasId, options, send, threeBase) {
      */
     async function environmentMapOf(spec) {
         if (spec === 'room') {
-            const { RoomEnvironment } =
-                await import(threeBase + '/examples/jsm/environments/RoomEnvironment.js');
             const pmrem = new THREE.PMREMGenerator(renderer);
-            const room  = new RoomEnvironment();
-            const map   = pmrem.fromScene(room).texture;
-            // Generator and room were scaffolding; only the cube texture outlives this call.
+            const room = new THREE.RoomEnvironment();
+            const map = pmrem.fromScene(room).texture;
             pmrem.dispose();
             room.dispose();
             return map;
         }
         if (spec && spec.horizon) {
-            const pmrem   = new THREE.PMREMGenerator(renderer);
+            const pmrem = new THREE.PMREMGenerator(renderer);
             const texture = new THREE.CanvasTexture(horizonPanorama(spec.horizon));
             texture.colorSpace = THREE.SRGBColorSpace;
-            texture.mapping    = THREE.EquirectangularReflectionMapping;
+            texture.mapping = THREE.EquirectangularReflectionMapping;
             const map = pmrem.fromEquirectangular(texture).texture;
             // As above: only the filtered map outlives this call.
             pmrem.dispose();
@@ -953,7 +952,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
             const texture = await loadPanorama(spec.image.url);
             texture.mapping = THREE.EquirectangularReflectionMapping;
             const pmrem = new THREE.PMREMGenerator(renderer);
-            const map   = pmrem.fromEquirectangular(texture).texture;
+            const map = pmrem.fromEquirectangular(texture).texture;
             // As above: only the filtered map outlives this call.
             pmrem.dispose();
             texture.dispose();
@@ -1015,7 +1014,7 @@ export async function createViewer(canvasId, options, send, threeBase) {
         const groundShader = ground && ground.mesh.material.userData.groundShader;
         if (groundShader) groundShader.uniforms.uFadeColor.value.set(opts.background);
         ambient.intensity = opts.ambient_intensity;
-        sun.intensity     = opts.directional_intensity;
+        sun.intensity = opts.directional_intensity;
         void applyEnvironment(opts.environment);
         scene.environmentIntensity = opts.environment_intensity;
         // Grid: add/remove based on flag
@@ -1037,8 +1036,10 @@ export async function createViewer(canvasId, options, send, threeBase) {
                 entry.helper.material.color.set(opts.selection_color);
             }
             // Line width and overlay blending apply to models already on screen too.
-            thickenLines(entry.root).catch((e) => send({ event: 'error',
-                message: `lines could not be widened: ${(e && e.message) || e}` }));
+            thickenLines(entry.root).catch((e) => send({
+                event: 'error',
+                message: `lines could not be widened: ${(e && e.message) || e}`
+            }));
             setBlending(entry.root);
         }
     }
