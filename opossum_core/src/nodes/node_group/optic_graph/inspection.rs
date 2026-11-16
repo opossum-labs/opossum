@@ -236,7 +236,7 @@ impl OpticGraph {
     /// A distance into a node placed absolutely, or into a reference taking the placement of the
     /// node it refers to, places nothing: such a connection is not listed.
     #[must_use]
-    pub fn placing_connections(&self) -> Vec<ConnectionInfo> {
+    pub fn connections_placing_by_distance(&self) -> Vec<ConnectionInfo> {
         // Both iterate the edges in the order of their index.
         self.connections()
             .into_iter()

@@ -9,6 +9,7 @@ mod analysis;
 mod analyzer_info;
 mod io;
 pub mod optimization;
+mod positioning_run;
 #[cfg(test)]
 mod tests;
 use crate::{
@@ -21,6 +22,7 @@ use crate::{
 pub use analyzer_info::AnalyzerInfo;
 use indexmap::IndexMap;
 pub use optimization::OptimizationConfig;
+pub use positioning_run::PositioningRun;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;

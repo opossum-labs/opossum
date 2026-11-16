@@ -195,14 +195,14 @@ pub fn rays_glb(bundles: &[Rays], colors: &LineColors, max_lines: usize) -> OpmR
 /// Build the glTF binary of a model's optical axis.
 ///
 /// The axis is the one ray per source the positioning run follows (see
-/// [`OpmDocument::positioning_rays`]), drawn in the purple of the axis. One ray per source leaves
-/// nothing to thin out.
+/// [`PositioningRun::optical_axis`](opossum_core::opm_document::PositioningRun::optical_axis)),
+/// drawn in the purple of the axis. One ray per source leaves nothing to thin out.
 ///
 /// # Arguments
 ///
 /// - `document`: the model whose axis to draw
 /// - `analyzer_id`: the analyzer to take the sources from, or `None` to follow the one chosen as
-///   for [`OpmDocument::placed_scenery`]
+///   for [`OpmDocument::run_positioning`]
 ///
 /// # Returns
 ///
@@ -213,7 +213,7 @@ pub fn rays_glb(bundles: &[Rays], colors: &LineColors, max_lines: usize) -> OpmR
 /// This function returns an error if the model cannot be placed, or if the lines cannot be drawn.
 pub fn axis_glb(document: &OpmDocument, analyzer_id: Option<Uuid>) -> OpmResult<Vec<u8>> {
     rays_glb(
-        &document.positioning_rays(analyzer_id)?,
+        document.run_positioning(analyzer_id)?.optical_axis()?,
         &LineColors::Axis,
         usize::MAX,
     )
@@ -228,7 +228,7 @@ pub fn axis_glb(document: &OpmDocument, analyzer_id: Option<Uuid>) -> OpmResult<
 ///
 /// - `document`: the model whose light to draw
 /// - `analyzer_id`: the analyzer to take the sources from, or `None` to follow the one chosen as
-///   for [`OpmDocument::placed_scenery`]
+///   for [`OpmDocument::run_positioning`]
 /// - `max_rays`: the most rays drawn from all sources together
 /// - `drawing`: whether each start point shines one wavelength or all of them
 ///
@@ -481,11 +481,12 @@ mod test {
     /// The same rays give the same bytes, so a viewer can tell an unchanged file from a new one.
     #[test]
     fn the_same_rays_give_the_same_file() -> OpmResult<()> {
-        let axes = two_lenses(millimeter!(100.0))?.positioning_rays(None)?;
+        let run = two_lenses(millimeter!(100.0))?.run_positioning(None)?;
+        let axes = run.optical_axis()?;
         assert!(!axes.is_empty(), "the model has an open output");
         assert_eq!(
-            rays_glb(&axes, &LineColors::Axis, 10)?,
-            rays_glb(&axes, &LineColors::Axis, 10)?
+            rays_glb(axes, &LineColors::Axis, 10)?,
+            rays_glb(axes, &LineColors::Axis, 10)?
         );
         Ok(())
     }

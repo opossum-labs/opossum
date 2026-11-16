@@ -48,10 +48,11 @@ pub async fn get_connections(
 
 /// List the connections whose distance places a node
 ///
-/// Returns the connections of a group whose distance places a node when the model is placed: the
-/// node a connection leads to is placed along it, or the node it comes from stands in front of
-/// where it leads. A distance into a node placed absolutely, or into a reference taking the
-/// placement of the node it refers to, places nothing, so there is no point in editing it.
+/// Returns the connections of the model, those of nested groups included, whose distance places a
+/// node when the model is placed: the node a connection leads to is placed along it, or the node
+/// it comes from stands in front of where it leads. A distance into a node placed absolutely, or
+/// into a reference taking the placement of the node it refers to, places nothing, so there is no
+/// point in editing it. The group named only has to exist.
 ///
 /// The model is placed on a copy, as for the 3D view, after the analyzer that view follows by
 /// default. A placement that stops part way lists the distances that placed a node before it
@@ -73,7 +74,10 @@ pub async fn get_placing_connections(
     let uuid = path.into_inner();
     let document = data.document.lock();
     document.scenery().with_group_node(uuid, |_| ())?;
-    let placing = document.placing_connections(None, uuid).unwrap_or_default();
+    let placing = document
+        .run_positioning(None)
+        .map(|run| run.connections_placing_by_distance())
+        .unwrap_or_default();
     let listed = connect_infos(document.scenery(), &placing);
     drop(document);
     Ok(Json(listed))

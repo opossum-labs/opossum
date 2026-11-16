@@ -800,12 +800,13 @@ mod test {
             round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 1)?,
         );
         document.add_analyzer(AnalyzerType::RayTrace(config));
-        let (aside_at, _) = placed(&document.placed_scenery(None)?, aside);
+        let run = document.run_positioning(None)?;
+        let (aside_at, _) = placed(run.positioned_scenery()?, aside);
 
-        let axes = document.positioning_rays(None)?;
+        let axes = run.optical_axis()?;
 
         assert_eq!(axes.len(), 2, "one end behind each output");
-        for axis in &axes {
+        for axis in axes {
             let via_aside = axis.iter().any(|ray| {
                 ray.position_history_with_current().row_iter().any(|point| {
                     let point = Vector3::new(point[0].value, point[1].value, point[2].value);

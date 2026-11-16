@@ -732,6 +732,40 @@ impl NodeGroup {
         result
     }
 
+    /// Takes the ray bundles collected at open output ports out of this group and the groups nested
+    /// in it, leaving them empty, so a later walk on the same copy starts without them.
+    ///
+    /// # Returns
+    ///
+    /// The bundles in the order [`ray_ends`](NodeGroup::ray_ends) lists them.
+    pub fn take_ray_ends(&mut self) -> Vec<Rays> {
+        let mut result = std::mem::take(&mut self.ray_ends);
+        for node in self.graph.g.node_weights_mut() {
+            if let Some(group) = node.as_any_mut().downcast_mut::<Self>() {
+                result.extend(group.take_ray_ends());
+            }
+        }
+        result
+    }
+
+    /// Returns the connections of this group and of the groups nested in it whose distance placed
+    /// a node in the last positioning run (see
+    /// [`OpticGraph::connections_placing_by_distance`]).
+    ///
+    /// # Returns
+    ///
+    /// This group's connections first, followed by those of nested groups in node-index order.
+    #[must_use]
+    pub fn connections_placing_by_distance(&self) -> Vec<ConnectionInfo> {
+        let mut result = self.graph.connections_placing_by_distance();
+        for node_ref in self.nodes() {
+            if let Some(group) = node_ref.as_any().downcast_ref::<Self>() {
+                result.extend(group.connections_placing_by_distance());
+            }
+        }
+        result
+    }
+
     /// Returns a reference to the accumulated rays after ghost focus analysis.
     #[must_use]
     pub const fn accumulated_rays(&self) -> &Vec<HashMap<Uuid, Rays>> {

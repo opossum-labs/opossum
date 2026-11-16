@@ -15,7 +15,7 @@ use log::{error, info, warn};
 use opossum_core::{
     core_optics::node_attr::HasNodeAttr,
     error::{OpmResult, OpossumError},
-    opm_document::OpmDocument,
+    opm_document::{OpmDocument, PositioningRun},
     types::api_types::{
         DocumentChange, ErrorResponse, JumpTarget, LoadDocumentResponse, PositionUpdate,
         SceneAnalyzer, SceneManifest, UndoRedoResponse, UpdateNodeRequest, ViewportChangeRequest,
@@ -219,11 +219,11 @@ async fn get_scene(
 ) -> Result<impl Responder, BackEndErrorResponse> {
     // Only the copy needs the live model. Meshing it is by far the longer half of the work, and
     // holding the document across that would block every other edit for as long as it takes.
-    let placed = {
+    let run = {
         let document = data.document.lock();
-        document.placed_scenery(analyzer_still_there(&document, query.analyzer))?
+        document.run_positioning(analyzer_still_there(&document, query.analyzer))?
     };
-    let glb = scene_glb(&placed)?;
+    let glb = scene_glb(run.positioned_scenery()?)?;
     Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
 }
 
@@ -265,7 +265,7 @@ async fn get_scene_manifest(
 ) -> Result<impl Responder, BackEndErrorResponse> {
     // Same split as `get_scene`: only the copy needs the live model, and the meshing that follows
     // must not block every other edit for as long as it takes.
-    let (placed, asked, analyzer, colors, axis, model) = {
+    let (run, asked, analyzer, colors, axis, model) = {
         let document = data.document.lock();
         let asked = analyzer_still_there(&document, query.analyzer);
         let analyzer = document
@@ -275,17 +275,18 @@ async fn get_scene_manifest(
                 name: info.display_name(),
             });
         let colors = LineColors::Wavelength(source_wavelength_range(&document, asked)?);
-        let placed = document.placed_scenery(asked);
+        let run = document.run_positioning(asked);
         // Light is only drawn over a placed model, and the rays only while a view asks for them.
-        let axis = placed
-            .is_ok()
-            .then(|| digest_of(&axis_glb(&document, asked)));
-        let model = if placed.is_ok() && query.max_rays.is_some() {
+        let placed = run
+            .as_ref()
+            .is_ok_and(|run| run.positioned_scenery().is_ok());
+        let axis = placed.then(|| digest_of(&axis_glb(&document, asked)));
+        let model = if placed && query.max_rays.is_some() {
             Some(document.to_opm_file_string()?)
         } else {
             None
         };
-        (placed, asked, analyzer, colors, axis, model)
+        (run, asked, analyzer, colors, axis, model)
     };
     let rays = match model {
         Some(model) => Some(digest_of(
@@ -293,10 +294,14 @@ async fn get_scene_manifest(
         )),
         None => None,
     };
+    let placed = run
+        .as_ref()
+        .map_err(Clone::clone)
+        .and_then(PositioningRun::positioned_scenery);
     let mut manifest = match placed {
         Ok(placed) => SceneManifest {
             spectrum: colors.legend(),
-            ..manifest_of(&placed)?
+            ..manifest_of(placed)?
         },
         Err(e) => SceneManifest {
             notice: Some(e.to_string()),

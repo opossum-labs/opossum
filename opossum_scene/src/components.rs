@@ -34,7 +34,7 @@ const RIM_SEGMENTS: usize = 64;
 /// scene, so one unusual lens does not cost the view of the rest of the setup.
 ///
 /// The model has to be placed already — a component only learns where it is from a positioning run,
-/// see [`OpmDocument::placed_scenery`](opossum_core::opm_document::OpmDocument::placed_scenery).
+/// see [`OpmDocument::run_positioning`](opossum_core::opm_document::OpmDocument::run_positioning).
 /// Placing it is kept out of here on purpose: that half needs the live document while this one,
 /// the longer of the two, does not, so a caller holding a lock on it can let go before the meshing
 /// starts.
@@ -363,7 +363,7 @@ mod test {
     fn drawing_a_model_leaves_it_alone() -> OpmResult<()> {
         let document = a_bit_of_everything()?;
         let before = document.to_opm_file_string()?;
-        scene_glb(&document.placed_scenery(None)?)?;
+        scene_glb(document.run_positioning(None)?.positioned_scenery()?)?;
         assert_eq!(document.to_opm_file_string()?, before);
         Ok(())
     }
@@ -389,7 +389,7 @@ mod test {
     ///
     /// The trap this pins down: a property is patched straight onto the live document without
     /// rebuilding the node's surfaces. A shape read off those surfaces would therefore be the *old*
-    /// one, while the manifest - built from a `placed_scenery` - reports a new hash. The viewer
+    /// one, while the manifest - built from a positioned copy - reports a new hash. The viewer
     /// would then refetch and get the old mesh back, and changing a lens thickness would appear to
     /// do nothing at all.
     #[test]
@@ -461,8 +461,8 @@ mod test {
             .node_attr()
             .uuid();
 
-        let placed = document.placed_scenery(None)?;
-        let from_placed = glb_of_node(&*placed.node_recursive(lens)?.0)?;
+        let run = document.run_positioning(None)?;
+        let from_placed = glb_of_node(&*run.positioned_scenery()?.node_recursive(lens)?.0)?;
 
         assert_eq!(
             from_placed,
@@ -482,8 +482,9 @@ mod test {
     #[test]
     fn a_components_own_file_holds_it_at_the_origin() -> OpmResult<()> {
         let document = two_lenses(millimeter!(100.0))?;
-        let placed = document.placed_scenery(None)?;
-        let far = placed
+        let run = document.run_positioning(None)?;
+        let far = run
+            .positioned_scenery()?
             .collect_all_nodes_recursive()
             .into_iter()
             .filter_map(|node| glb_of_node(&*node).transpose())

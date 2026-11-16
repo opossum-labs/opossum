@@ -1,15 +1,11 @@
 //! Execution and orchestration of optical analyses for [`OpmDocument`].
 
-use super::{AnalyzerInfo, OpmDocument};
+use super::{AnalyzerInfo, OpmDocument, PositioningRun};
 use crate::{
-    analyzers::{
-        AnalyzerKind, AnalyzerRegistration, AnalyzerType, RayTraceConfig,
-        raytrace::AnalysisRayTrace,
-    },
+    analyzers::{AnalyzerKind, AnalyzerRegistration, AnalyzerType, raytrace::AnalysisRayTrace},
     core_optics::OpticNode,
     error::{OpmResult, OpossumError},
-    light::{Rays, light_result::LightResult},
-    nodes::{ConnectionInfo, NodeGroup},
+    light::light_result::LightResult,
     reporting::analysis_report::AnalysisReport,
 };
 use log::info;
@@ -136,7 +132,7 @@ impl OpmDocument {
         Ok(reports)
     }
 
-    /// Return a copy of this model's scenery whose nodes have been placed in space.
+    /// Runs the positioning run on a copy of this model's scenery.
     ///
     /// A model states what is connected to what and how far apart, not where anything is: a node
     /// only learns its own placement from a positioning run, which traces the optical axis from a
@@ -147,7 +143,10 @@ impl OpmDocument {
     /// node itself and saved with the document, and a later run leaves an already placed node
     /// alone; running one on the live document would therefore freeze whatever the drawing happened
     /// to be asked for into the model itself. The copy is a plain [`Clone`] of the scenery, which
-    /// copies every node; the rest of the document places nothing and is not copied.
+    /// copies every node; the rest of the document places nothing and is not copied. An edit writes
+    /// a position or a property into a node without the node rebuilding its surfaces, so the copy
+    /// rebuilds them first, as a ray trace does: a source then sends its axis from where it stands
+    /// now.
     ///
     /// Which source the axis starts from comes from an analyzer, because that is where source data
     /// lives; see [`AnalyzerType::positioning_config`]. Unless one is named, it is the first
@@ -161,144 +160,38 @@ impl OpmDocument {
     ///
     /// # Returns
     ///
-    /// An independent copy of this model's scenery with its nodes placed.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the model has no source port or no analyzer, if the
-    /// named analyzer does not exist, or if the positioning run itself fails.
-    pub fn placed_scenery(&self, analyzer_id: Option<Uuid>) -> OpmResult<NodeGroup> {
-        let (mut scenery, run) = self.placing_run(&self.placing_config(analyzer_id)?)?;
-        run?;
-        scenery.reset_data();
-        Ok(scenery)
-    }
-
-    /// Returns the paths the optical axis takes through this model when it is placed.
-    ///
-    /// The positioning run behind [`placed_scenery`](OpmDocument::placed_scenery) follows one
-    /// ray per source — the optical axis — through the setup and places every component where
-    /// that ray meets it. The ray bundles that leave the model through an open output port carry
-    /// the whole path back to their source, which shows how the setup is built up. The run happens
-    /// on a copy for the same reason as there, so the model itself is left untouched.
-    ///
-    /// # Arguments
-    ///
-    /// - `analyzer_id`: the analyzer to take the sources from, or `None` to follow the one chosen
-    ///   exactly as for [`placed_scenery`](OpmDocument::placed_scenery)
-    ///
-    /// # Returns
-    ///
-    /// One bundle per open output port the axis reaches, each ray carrying its position history in
-    /// global coordinates. Light that ends in a component without any output port is missing.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error in the same cases as
-    /// [`placed_scenery`](OpmDocument::placed_scenery).
-    pub fn positioning_rays(&self, analyzer_id: Option<Uuid>) -> OpmResult<Vec<Rays>> {
-        let mut config = self.placing_config(analyzer_id)?;
-        // Only copies collect ray ends, so the scenery the copy came from holds none.
-        config.set_collect_ray_ends(true);
-        let (scenery, run) = self.placing_run(&config)?;
-        run?;
-        Ok(scenery.ray_ends().into_iter().cloned().collect())
-    }
-
-    /// Returns the connections of a group of this model whose distance places a node when the
-    /// model is placed.
-    ///
-    /// A distance places a node when the node it leads to is placed along it, or when the node it
-    /// comes from stands in front of where it leads. A distance into a node placed absolutely, or
-    /// into a reference taking the placement of the node it refers to, places nothing. The model
-    /// is placed on a copy, as for [`placed_scenery`](OpmDocument::placed_scenery). A placement
-    /// that stops part way still lists the distances that placed a node before it stopped; why it
-    /// stopped is what [`placed_scenery`](OpmDocument::placed_scenery) answers.
-    ///
-    /// # Arguments
-    ///
-    /// - `analyzer_id`: the analyzer to take the sources from, or `None` to follow the one chosen
-    ///   as for [`placed_scenery`](OpmDocument::placed_scenery)
-    /// - `group_id`: the group whose connections to look at; the scenery itself is a group too
-    ///
-    /// # Returns
-    ///
-    /// The connections of that group, not of the groups nested in it, whose distance places a
-    /// node.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the model has no source port or no analyzer, if the
-    /// named analyzer does not exist, if a node cannot rebuild its surfaces, or if the model has
-    /// no group `group_id`.
-    pub fn placing_connections(
-        &self,
-        analyzer_id: Option<Uuid>,
-        group_id: Uuid,
-    ) -> OpmResult<Vec<ConnectionInfo>> {
-        let (scenery, _) = self.placing_run(&self.placing_config(analyzer_id)?)?;
-        scenery.with_group_node(group_id, |group| group.graph().placing_connections())
-    }
-
-    /// Runs a positioning run on a copy of this model's scenery.
-    ///
-    /// An edit writes a position or a property into a node without the node rebuilding its
-    /// surfaces, so the copy rebuilds them first, as a ray trace does: a source then sends its axis
-    /// from where it stands now.
-    ///
-    /// # Arguments
-    ///
-    /// - `config`: the configuration of the positioning run
-    ///
-    /// # Returns
-    ///
-    /// The copy, placed as far as the run got and with the data the run left on it, and what the
-    /// run gave: an error if it stopped part way.
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if a node cannot rebuild its surfaces.
-    fn placing_run(
-        &self,
-        config: &RayTraceConfig,
-    ) -> OpmResult<(NodeGroup, OpmResult<LightResult>)> {
-        let mut scenery = self.scenery.clone();
-        scenery.rebuild_surfaces()?;
-        let run =
-            AnalysisRayTrace::calc_node_positions(&mut scenery, LightResult::default(), config);
-        Ok((scenery, run))
-    }
-
-    /// Returns the configuration a positioning run of this model starts from.
-    ///
-    /// # Arguments
-    ///
-    /// - `analyzer_id`: the analyzer to take the sources from, or `None` to follow the one chosen
-    ///   as for [`placed_scenery`](OpmDocument::placed_scenery)
-    ///
-    /// # Returns
-    ///
-    /// The ray-trace configuration whose sources the positioning run follows.
+    /// The run: the copy with its nodes placed, the optical axis, and the connections whose
+    /// distance placed a node. A run that stopped part way is returned as well; its copy and axis
+    /// then give the error it stopped with.
     ///
     /// # Errors
     ///
     /// This function returns an error if the model has no source port or no analyzer, saying which
-    /// it lacks, if the named analyzer does not exist, or if the source ports cannot be found.
-    fn placing_config(&self, analyzer_id: Option<Uuid>) -> OpmResult<RayTraceConfig> {
+    /// it lacks, if the named analyzer does not exist, if the source ports cannot be found, or if a
+    /// node cannot rebuild its surfaces.
+    pub fn run_positioning(&self, analyzer_id: Option<Uuid>) -> OpmResult<PositioningRun> {
         let analyzer = self.drawing_analyzer(analyzer_id)?;
         let has_source_port = !self.scenery.find_source_ports()?.is_empty();
-        let lacks = match (has_source_port, analyzer) {
-            (true, Some((_, analyzer))) => {
-                return Ok(analyzer.analyzer_type().positioning_config());
-            }
-            (false, Some(_)) => "no source port",
-            (true, None) => "no analyzer",
-            (false, None) => "neither",
+        let config = match (has_source_port, analyzer) {
+            (true, Some((_, analyzer))) => Ok(analyzer.analyzer_type().positioning_config()),
+            (false, Some(_)) => Err("no source port"),
+            (true, None) => Err("no analyzer"),
+            (false, None) => Err("neither"),
         };
-        Err(OpossumError::OpmDocument(format!(
-            "placing a model needs a source port and an analyzer defining its light, and this \
-             model has {lacks}"
-        )))
+        let mut config = config.map_err(|lacks| {
+            OpossumError::OpmDocument(format!(
+                "placing a model needs a source port and an analyzer defining its light, and \
+                 this model has {lacks}"
+            ))
+        })?;
+        // Only copies collect ray ends, so the scenery the copy came from holds none.
+        config.set_collect_ray_ends(true);
+        let mut scenery = self.scenery.clone();
+        scenery.rebuild_surfaces()?;
+        let outcome =
+            AnalysisRayTrace::calc_node_positions(&mut scenery, LightResult::default(), &config)
+                .map(|_| ());
+        Ok(PositioningRun::new(scenery, outcome))
     }
 
     /// Returns the analyzer a drawing of this model follows.
@@ -395,11 +288,8 @@ impl OpmDocument {
 mod tests {
     use super::*;
     use crate::{
-        analyzers::{AnalyzerType, energy::EnergyConfig},
-        core_optics::{
-            OpticNode,
-            node_attr::{HasNodeAttr, NodePositioning},
-        },
+        analyzers::{AnalyzerType, RayTraceConfig, energy::EnergyConfig},
+        core_optics::{OpticNode, node_attr::NodePositioning},
         degree,
         gain::{ConstGain, GainModel},
         joule,
@@ -589,7 +479,8 @@ mod tests {
         config.map_source(source, RayDataBuilder::default());
         document.add_analyzer(AnalyzerType::RayTrace(config));
 
-        let axes = document.positioning_rays(None)?;
+        let run = document.run_positioning(None)?;
+        let axes = run.optical_axis()?;
         assert_eq!(axes.len(), 1, "one open output, so one end");
         assert_eq!(axes[0].nr_of_rays(true), 1, "the axis is a single ray");
         let path = axes[0]
@@ -598,7 +489,7 @@ mod tests {
             .map(Ray::position_history_with_current)
             .ok_or_else(|| OpossumError::Other("no axis ray".into()))?;
 
-        let placed = document.placed_scenery(None)?;
+        let placed = run.positioned_scenery()?;
         for lens in [first, second] {
             let position = placed
                 .with_node_attr(lens, |attr| {
@@ -639,8 +530,9 @@ mod tests {
             attr.set_positioning(NodePositioning::Absolute(moved));
         })?;
 
-        let lens_at = document
-            .placed_scenery(None)?
+        let run = document.run_positioning(None)?;
+        let lens_at = run
+            .positioned_scenery()?
             .with_node_attr(lens, |attr| {
                 attr.effective_position().map(Isometry::translation)
             })?
@@ -648,7 +540,7 @@ mod tests {
         assert_relative_eq!(lens_at.y.value, 0.010, epsilon = 1e-12);
         assert_relative_eq!(lens_at.z.value, 0.100, epsilon = 1e-12);
 
-        let axes = document.positioning_rays(None)?;
+        let axes = run.optical_axis()?;
         let path = axes
             .first()
             .and_then(|axis| axis.iter().next())
@@ -658,11 +550,11 @@ mod tests {
         Ok(())
     }
 
-    /// A model asked for the connections of one of its groups whose distance places a node, when
-    /// the model is placed: here the one into the lens and the one into a reference to it, which
-    /// an automatic source stands in front of. A group it does not have is an error.
+    /// A positioning run tells which connections placed a node by their distance: here the one
+    /// into the lens and the one into a reference to it, which an automatic source stands in front
+    /// of.
     #[test]
-    fn a_model_tells_which_distances_of_a_group_place_a_node() -> OpmResult<()> {
+    fn a_positioning_run_tells_which_distances_place_a_node() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
         let first = scenery.add_node(SourcePort::default())?;
         let lens = scenery.add_node(Lens::default())?;
@@ -672,7 +564,6 @@ mod tests {
         let second = scenery.add_node(second)?;
         scenery.connect_nodes(first, "output_1", lens, "input_1", millimeter!(100.0))?;
         scenery.connect_nodes(second, "output_1", reference, "input_1", millimeter!(50.0))?;
-        let root = scenery.node_attr().uuid();
         let mut document = OpmDocument::new(scenery);
         let mut config = RayTraceConfig::default();
         for source in [first, second] {
@@ -680,16 +571,64 @@ mod tests {
         }
         document.add_analyzer(AnalyzerType::RayTrace(config));
 
-        let mut placing: Vec<(Uuid, Uuid)> = document
-            .placing_connections(None, root)?
-            .into_iter()
-            .map(|connection| (connection.src_id, connection.target_id))
-            .collect();
+        let mut placing = placing_by_distance(&document.run_positioning(None)?);
         placing.sort();
         let mut expected = vec![(first, lens), (second, reference)];
         expected.sort();
         assert_eq!(placing, expected);
-        assert!(document.placing_connections(None, Uuid::new_v4()).is_err());
+        Ok(())
+    }
+
+    /// The source and target of every connection the positioning `run` lists as placing a node.
+    fn placing_by_distance(run: &PositioningRun) -> Vec<(Uuid, Uuid)> {
+        run.connections_placing_by_distance()
+            .into_iter()
+            .map(|connection| (connection.src_id, connection.target_id))
+            .collect()
+    }
+
+    /// A source feeding a group whose input leads to a first dummy, connected on to a second one
+    /// whose output is left open inside the group.
+    ///
+    /// Returns `(document, first, second)`.
+    fn source_into_a_group() -> OpmResult<(OpmDocument, Uuid, Uuid)> {
+        let mut group = NodeGroup::new("inner");
+        let first = group.add_node(Dummy::new("first"))?;
+        let second = group.add_node(Dummy::new("second"))?;
+        group.connect_nodes(first, "output_1", second, "input_1", millimeter!(20.0))?;
+        group.map_input_port(first, "input_1", "input_1")?;
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let group = scenery.add_node(group)?;
+        scenery.connect_nodes(source, "output_1", group, "input_1", millimeter!(100.0))?;
+        let mut document = OpmDocument::new(scenery);
+        let mut config = RayTraceConfig::default();
+        config.map_source(source, RayDataBuilder::default());
+        document.add_analyzer(AnalyzerType::RayTrace(config));
+        Ok((document, first, second))
+    }
+
+    /// The connections placing a node are listed for the groups nested in the model as well.
+    #[test]
+    fn the_distances_placing_a_node_inside_a_group_are_listed() -> OpmResult<()> {
+        let (document, first, second) = source_into_a_group()?;
+        let placing = placing_by_distance(&document.run_positioning(None)?);
+        assert!(placing.contains(&(first, second)), "{placing:?}");
+        Ok(())
+    }
+
+    /// The axis ends collected by the run, nested groups included, are handed out as the optical
+    /// axis and taken out of the copy, so a trace on the copy starts without them.
+    #[test]
+    fn the_optical_axis_is_taken_out_of_the_positioned_copy() -> OpmResult<()> {
+        let (document, _, _) = source_into_a_group()?;
+        let run = document.run_positioning(None)?;
+        assert_eq!(
+            run.optical_axis()?.len(),
+            1,
+            "the open output inside the group"
+        );
+        assert!(run.positioned_scenery()?.ray_ends().is_empty());
         Ok(())
     }
 
@@ -709,21 +648,15 @@ mod tests {
         scenery.connect_nodes(ahead, "output_1", window, "input_1", millimeter!(50.0))?;
         scenery.connect_nodes(window, "output_1", again, "input_1", millimeter!(10.0))?;
         scenery.connect_nodes(again, "output_1", screen, "input_1", millimeter!(10.0))?;
-        let root = scenery.node_attr().uuid();
         let mut document = OpmDocument::new(scenery);
         let mut config = RayTraceConfig::default();
         config.map_source(source, RayDataBuilder::default());
         document.add_analyzer(AnalyzerType::RayTrace(config));
-        assert!(
-            document.placed_scenery(None).is_err(),
-            "the placement fails"
-        );
+        let run = document.run_positioning(None)?;
+        assert!(run.positioned_scenery().is_err(), "the placement fails");
+        assert!(run.optical_axis().is_err(), "and with it the axis");
 
-        let placing: Vec<(Uuid, Uuid)> = document
-            .placing_connections(None, root)?
-            .into_iter()
-            .map(|connection| (connection.src_id, connection.target_id))
-            .collect();
+        let placing = placing_by_distance(&run);
         assert!(placing.contains(&(source, ahead)), "{placing:?}");
         Ok(())
     }

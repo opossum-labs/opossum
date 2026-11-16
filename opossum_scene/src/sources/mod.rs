@@ -29,7 +29,7 @@ use uuid::Uuid;
 /// Returns the rays of a model's sources, traced through it, for drawing them.
 ///
 /// The sources are the ones the analyzer defines, and the model is placed exactly as
-/// [`OpmDocument::placed_scenery`] places it, so the rays run through the components where the 3D
+/// [`OpmDocument::run_positioning`] places it, so the rays run through the components where the 3D
 /// view shows them. The sources share `max_rays` evenly, and each is coarsened to its share first:
 /// its rays are spread over its cross section, and its spectrum is laid on them as `drawing` says.
 /// That keeps the trace cheap however many rays and spectral samples the sources hold, while
@@ -41,7 +41,7 @@ use uuid::Uuid;
 ///
 /// - `document`: the model whose light to trace
 /// - `analyzer_id`: the analyzer to take the sources from, or `None` to follow the one chosen
-///   exactly as for [`OpmDocument::placed_scenery`]
+///   exactly as for [`OpmDocument::run_positioning`]
 /// - `max_rays`: the most rays traced from all sources together; each source keeps at least one
 /// - `drawing`: whether each start point shines one wavelength or all of them
 ///
@@ -103,7 +103,7 @@ pub fn traced_rays(
 ///
 /// - `document`: the model whose sources to look at
 /// - `analyzer_id`: the analyzer to take the sources from, or `None` to follow the one chosen
-///   exactly as for [`OpmDocument::placed_scenery`]
+///   exactly as for [`OpmDocument::run_positioning`]
 ///
 /// # Returns
 ///
