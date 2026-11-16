@@ -19,10 +19,13 @@ const VIEWER_JS: Asset = asset!("/assets/viewer.js");
 /// CSS for `.dxglb-root` and `.dxglb-canvas`.
 #[allow(clippy::volatile_composites)]
 const VIEWER_CSS: Asset = asset!("/assets/viewer.css");
+/// Single ES module entry point bundling Three.js and all required addons once.
+#[allow(clippy::volatile_composites)]
+const THREE_BUNDLE: Asset = asset!("/assets/three_entry.js");
 /// Base directory path of the folder asset containing three.js (unhashed, structure-preserving).
 /// Used as the base for importmap URLs.
 #[allow(clippy::volatile_composites)]
-const THREE_DIR: Asset = asset!("/assets/three");
+const _THREE_DIR: Asset = asset!("/assets/three", AssetOptions::folder());
 
 // ─── Instance counter ─────────────────────────────────────────────────────────
 
@@ -257,9 +260,7 @@ pub fn GlbViewer(
         document::Stylesheet { href: VIEWER_CSS }
         // STATIC SHAPE: no `if`, no `key`, no interpolation around this div/canvas.
         // Any reconstruction of the canvas destroys the WebGL context and the camera.
-        div {
-            class: "dxglb-root",
-            ..attributes,
+        div { class: "dxglb-root", ..attributes,
             canvas { id: "{canvas_id}", class: "dxglb-canvas" }
         }
     }
@@ -293,19 +294,15 @@ fn asset_url(asset: Asset) -> String {
 /// calls `dioxus.close()` — after that all further `eval.send()` calls fail.
 fn build_boot_script(canvas_id: &str, opts: &ViewerOptions) -> String {
     let viewer_url = asset_url(VIEWER_JS);
-    let three_base = asset_url(THREE_DIR);
+    let three_url = asset_url(THREE_BUNDLE);
     let canvas_id_j = serde_json::to_string(canvas_id).expect("canvas_id is ASCII");
     let opts_j = serde_json::to_string(opts).expect("ViewerOptions is serialisable");
     let viewer_url_j = serde_json::to_string(&viewer_url).expect("viewer_url is a string");
-    let three_base_j = serde_json::to_string(&three_base).expect("three_base is a string");
+    let three_url_j = serde_json::to_string(&three_url).expect("three_url is a string");
 
-    // All interpolations are serde_json::to_string() results → syntactically valid JS literals.
-    // Nothing from canvas IDs, paths, or colour values can break out of the string.
     format!(
         r"
 // 1. Load the viewer module (module registry caches it; multiple instances share the namespace).
-//    No importmap needed: the three.js addons use relative imports within their directory,
-//    and viewer.js receives threeBase as an explicit parameter.
 let mod_ = null;
 try {{
     mod_ = await import({viewer_url_j});
@@ -313,11 +310,11 @@ try {{
     dioxus.send({{ event: 'error', message: 'Could not load viewer module: ' + String(e) }});
 }}
 
-// 2. Create a viewer instance for this canvas.
+// 2. Create a viewer instance for this canvas using the unified Three.js bundle URL.
 let viewer_ = null;
 if (mod_) {{
     try {{
-        viewer_ = await mod_.createViewer({canvas_id_j}, {opts_j}, (m) => dioxus.send(m), {three_base_j});
+        viewer_ = await mod_.createViewer({canvas_id_j}, {opts_j}, (m) => dioxus.send(m), {three_url_j});
         dioxus.send({{ event: 'ready' }});
     }} catch (e) {{
         dioxus.send({{ event: 'error', message: String((e && e.stack) || e) }});
@@ -330,9 +327,9 @@ for (;;) {{
     const op_ = await dioxus.recv();
     if (op_.op === 'destroy') {{
         if (viewer_) viewer_.dispose();
-        break;   // leaves the loop; the promise resolves; the channel is closed.
+        break;
     }}
-    if (!viewer_) continue;   // fatal init error: ignore ops.
+    if (!viewer_) continue;
     try {{
         viewer_.apply(op_);
     }} catch (e) {{
