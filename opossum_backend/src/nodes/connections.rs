@@ -4,7 +4,7 @@ use actix_web::{
 };
 use opossum_core::{
     meter,
-    nodes::{ConnectionInfo, NodeGroup},
+    nodes::NodeGroup,
     types::api_types::{ConnectInfo, ErrorResponse, UpdateConnectionRequest},
 };
 use serde::Deserialize;
@@ -12,7 +12,9 @@ use utoipa::IntoParams;
 use uuid::Uuid;
 
 use crate::{
-    app_state::AppState, error::BackEndErrorResponse, helper_functions::is_reference_target,
+    app_state::AppState,
+    error::BackEndErrorResponse,
+    helper_functions::{connect_infos, is_reference_target},
     undo::Command,
 };
 
@@ -81,15 +83,6 @@ pub async fn get_placing_connections(
     let listed = connect_infos(document.scenery(), &placing);
     drop(document);
     Ok(Json(listed))
-}
-
-/// Returns `connections` of the model `scenery` as the GUI shows them, each marked when it leads
-/// into a reference.
-fn connect_infos(scenery: &NodeGroup, connections: &[ConnectionInfo]) -> Vec<ConnectInfo> {
-    connections
-        .iter()
-        .map(|c| ConnectInfo::from_connection_info(c, is_reference_target(scenery, c.target_id)))
-        .collect()
 }
 
 /// Connect two nodes
@@ -218,6 +211,7 @@ pub async fn delete_connection(
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::document::test::state_with_a_source_in_front_of_a_reference;
     use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
 
     fn create_test_state() -> Data<AppState> {
@@ -233,54 +227,6 @@ mod test {
             .to_request();
         let resp = app.call(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
-    }
-
-    /// A state whose model feeds a lens from a source, and a reference to the lens from a source
-    /// with an automatic position 50 mm in front of it, traced by a ray trace analyzer.
-    ///
-    /// # Returns
-    ///
-    /// The state, the uuid of the model's root group and the pairs of source and target of the
-    /// connections whose distance places a node: both.
-    fn state_with_a_source_in_front_of_a_reference() -> (Data<AppState>, Uuid, Vec<(Uuid, Uuid)>) {
-        use opossum_core::{
-            analyzers::{AnalyzerType, RayTraceConfig},
-            core_optics::{
-                OpticNode,
-                node_attr::{HasNodeAttr, NodePositioning},
-            },
-            light::lightdata::ray_data_builder::RayDataBuilder,
-            millimeter,
-            nodes::{Lens, NodeGroup, NodeReference, SourcePort},
-            opm_document::OpmDocument,
-        };
-
-        let mut scenery = NodeGroup::default();
-        let first = scenery.add_node(SourcePort::default()).unwrap();
-        let lens = scenery.add_node(Lens::default()).unwrap();
-        let reference = NodeReference::from_node(&scenery.node(lens).unwrap()).unwrap();
-        let reference = scenery.add_node(reference).unwrap();
-        let mut second = SourcePort::default();
-        second
-            .set_positioning(NodePositioning::Automatic(None))
-            .unwrap();
-        let second = scenery.add_node(second).unwrap();
-        scenery
-            .connect_nodes(first, "output_1", lens, "input_1", millimeter!(100.0))
-            .unwrap();
-        scenery
-            .connect_nodes(second, "output_1", reference, "input_1", millimeter!(50.0))
-            .unwrap();
-        let root = scenery.node_attr().uuid();
-        let mut document = OpmDocument::new(scenery);
-        let mut config = RayTraceConfig::default();
-        for source in [first, second] {
-            config.map_source(source, RayDataBuilder::default());
-        }
-        document.add_analyzer(AnalyzerType::RayTrace(config));
-        let app_state = create_test_state();
-        *app_state.document.lock() = document;
-        (app_state, root, vec![(first, lens), (second, reference)])
     }
 
     /// Ask `app_state` for the connections of the group `uuid` whose distance places a node.

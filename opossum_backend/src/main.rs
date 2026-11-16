@@ -3,6 +3,7 @@
 mod analyzers;
 mod app_state;
 mod document;
+mod drawn_light;
 mod error;
 mod general;
 mod helper_functions;

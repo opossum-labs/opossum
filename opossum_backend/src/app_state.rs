@@ -13,7 +13,7 @@ use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 
-use crate::undo::Command;
+use crate::{drawn_light::DrawnLight, undo::Command};
 
 /// Maximum number of entries kept per undo/redo stack. Entries are small (single-field diffs, or at
 /// most a handful of captured nodes for a delete/paste), so this is a generous ceiling, not a tight
@@ -59,6 +59,8 @@ pub struct AppState {
     pub undo_stack: Mutex<VecDeque<Command>>,
     pub redo_stack: Mutex<VecDeque<Command>>,
     pub optimization: OptimizationManager,
+    /// The light files the last `/scene/manifest` built, see [`DrawnLight`].
+    pub last_drawn_light: Mutex<DrawnLight>,
 }
 impl AppState {
     /// Sets the server handle to stop.
@@ -94,6 +96,7 @@ impl Clone for AppState {
             undo_stack: Mutex::new(VecDeque::new()),
             redo_stack: Mutex::new(VecDeque::new()),
             optimization: self.optimization.clone(),
+            last_drawn_light: Mutex::new(self.last_drawn_light.lock().clone()),
         }
     }
 }

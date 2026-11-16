@@ -1077,4 +1077,11 @@ pub struct SceneManifest {
     /// `axis`; `None` if no rays were asked for or the model cannot be placed.
     #[serde(default)]
     pub rays: Option<String>,
+    /// The connections of the model, those of nested groups included, whose distance placed a
+    /// node in the positioning this manifest follows, also when it stopped part way.
+    ///
+    /// A distance into a reference usually places nothing, as the reference takes the placement
+    /// of the node it refers to, so an editor offers it only where this list names it.
+    #[serde(default)]
+    pub connections_placing_by_distance: Vec<ConnectInfo>,
 }
