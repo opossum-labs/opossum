@@ -278,6 +278,26 @@ impl RayTracingAnalyzer {
     pub const fn new(config: RayTraceConfig) -> Self {
         Self { config }
     }
+    /// Traces the light of the sources through a scenery whose nodes are positioned already,
+    /// without positioning them again: the second half of [`analyze`](Analyzer::analyze).
+    ///
+    /// A copy positioned by
+    /// [`OpmDocument::run_positioning`](crate::opm_document::OpmDocument::run_positioning) is
+    /// traced where its nodes stand; positioning it again would only repeat that run.
+    ///
+    /// # Arguments
+    ///
+    /// - `scenery`: the positioned scenery to trace, which keeps the light it receives
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if a node cannot prepare its medium or the trace fails.
+    pub fn trace_positioned(&self, scenery: &mut NodeGroup) -> OpmResult<()> {
+        scenery.reset_data();
+        scenery.prepare_volume(&self.config)?;
+        AnalysisRayTrace::analyze(scenery, LightResult::default(), &self.config)?;
+        Ok(())
+    }
 }
 impl Analyzer for RayTracingAnalyzer {
     fn analyze(&self, scenery: &mut NodeGroup) -> OpmResult<()> {
@@ -298,12 +318,8 @@ impl Analyzer for RayTracingAnalyzer {
             LightResult::default(),
             &self.config.for_positioning(),
         )?;
-        scenery.reset_data();
-        scenery.prepare_volume(&self.config)?;
-
         info!("Performing ray tracing analysis of scenery{scenery_name}.");
-        AnalysisRayTrace::analyze(scenery, LightResult::default(), &self.config)?;
-        Ok(())
+        self.trace_positioned(scenery)
     }
     fn report(&self, scenery: &NodeGroup) -> OpmResult<AnalysisReport> {
         let mut report = scenery.toplevel_report(super::AnalyzerKind::RayTrace)?;
@@ -379,6 +395,7 @@ mod test {
         reporting::node_report::NodeReportResult,
         utils::test_helper::helper::check_logs,
     };
+    use approx::assert_relative_eq;
     #[test]
     fn config_default() {
         let rt_conf = RayTraceConfig::default();
@@ -400,6 +417,42 @@ mod test {
         );
         RayTracingAnalyzer::new(config).analyze(&mut scenery)?;
         assert_eq!(rays_recorded_by_meter(&scenery, meter)?, 1);
+        Ok(())
+    }
+    /// A positioned scenery is traced where its nodes stand, without positioning it again: a
+    /// distance changed after the positioning moves nothing, while a full analysis positions anew.
+    #[test]
+    fn a_positioned_scenery_is_traced_where_its_nodes_stand() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let dummy = scenery.add_node(Dummy::default())?;
+        scenery.connect_nodes(source, "output_1", dummy, "input_1", millimeter!(50.0))?;
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(1.0), joule!(1.0), 0)?,
+        );
+        config.set_collect_ray_ends(true);
+        AnalysisRayTrace::calc_node_positions(
+            &mut scenery,
+            LightResult::default(),
+            &config.for_positioning(),
+        )?;
+        scenery.update_connection_distance(source, "output_1", millimeter!(80.0))?;
+        let analyzer = RayTracingAnalyzer::new(config);
+        // Where the light leaves the open output of the dummy, along the axis.
+        let end_of = |scenery: &mut NodeGroup| -> OpmResult<f64> {
+            let ends = scenery.take_ray_ends();
+            let ray = ends.first().and_then(|end| end.iter().next());
+            ray.map(|ray| ray.position().z.value)
+                .ok_or_else(|| OpossumError::Other("no light left the dummy".into()))
+        };
+
+        analyzer.trace_positioned(&mut scenery)?;
+        assert_relative_eq!(end_of(&mut scenery)?, 0.05, epsilon = 1e-9);
+
+        analyzer.analyze(&mut scenery)?;
+        assert_relative_eq!(end_of(&mut scenery)?, 0.08, epsilon = 1e-9);
         Ok(())
     }
     /// A change that leaves a component without a valid shape stops the ray trace instead of

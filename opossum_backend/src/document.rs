@@ -13,6 +13,7 @@ use actix_web::{
 use futures_util::StreamExt;
 use log::{error, info, warn};
 use opossum_core::{
+    analyzers::RayTraceConfig,
     core_optics::node_attr::HasNodeAttr,
     error::{OpmResult, OpossumError},
     opm_document::{OpmDocument, PositioningRun},
@@ -22,8 +23,8 @@ use opossum_core::{
     },
 };
 use opossum_scene::{
-    LineColors, SpectrumDrawing, axis_glb, digest, glb_of_node, light_glb, manifest_of, scene_glb,
-    source_wavelength_range,
+    LineColors, SpectrumDrawing, axis_glb, digest, drawn_light_sources, glb_of_node, light_glb,
+    manifest_of, scene_glb, source_wavelength_range,
 };
 use serde::Deserialize;
 use std::{path::PathBuf, str::FromStr};
@@ -76,17 +77,40 @@ struct ManifestQuery {
     full_spectrum: Option<bool>,
 }
 
-/// Draw the light of a model's sources, off the request thread.
-///
-/// The trace is the long part, so it must hold neither the document nor the request thread: the
-/// model comes as its file, the only copy that shares nothing with the live document.
+/// How many rays a view asks to have drawn, and how, as `/scene/rays.glb` reads its parameters.
 ///
 /// # Arguments
 ///
-/// - `model`: the model as its OPM file
-/// - `analyzer`: the analyzer to take the sources from, or `None` for the default
 /// - `max_rays`: the most rays drawn, 500 if not given, at most 5000
 /// - `full_spectrum`: whether each start point shines every wavelength rather than one
+///
+/// # Returns
+///
+/// The capped number of rays and how their spectrum is drawn.
+fn drawn_rays(max_rays: Option<usize>, full_spectrum: Option<bool>) -> (usize, SpectrumDrawing) {
+    let drawing = if full_spectrum.unwrap_or(false) {
+        SpectrumDrawing::Full
+    } else {
+        SpectrumDrawing::Dealt
+    };
+    (
+        max_rays
+            .unwrap_or(DEFAULT_DISPLAY_RAYS)
+            .min(MAX_DISPLAY_RAYS),
+        drawing,
+    )
+}
+
+/// Draw the light of a model's sources, off the request thread.
+///
+/// The trace is the long part, so it must hold neither the document nor the request thread: it
+/// runs on the positioned copy, which shares nothing with the live document.
+///
+/// # Arguments
+///
+/// - `light`: the positioning run of the model with the sources whose light to draw, or `None`
+///   if the model has no light of its own
+/// - `max_rays`, `full_spectrum`: what the view asks for, see [`drawn_rays`]
 ///
 /// # Returns
 ///
@@ -94,31 +118,68 @@ struct ManifestQuery {
 ///
 /// # Errors
 ///
-/// This function returns an error if the model cannot be read back or its light not drawn.
+/// This function returns an error if the positioning run stopped part way or the light cannot be
+/// drawn.
 async fn traced_light(
-    model: String,
-    analyzer: Option<Uuid>,
+    light: Option<(PositioningRun, RayTraceConfig)>,
     max_rays: Option<usize>,
     full_spectrum: Option<bool>,
 ) -> OpmResult<Vec<u8>> {
-    let max_rays = max_rays
-        .unwrap_or(DEFAULT_DISPLAY_RAYS)
-        .min(MAX_DISPLAY_RAYS);
-    let drawing = if full_spectrum.unwrap_or(false) {
-        SpectrumDrawing::Full
-    } else {
-        SpectrumDrawing::Dealt
-    };
+    let (max_rays, drawing) = drawn_rays(max_rays, full_spectrum);
     web::block(move || {
-        light_glb(
-            &OpmDocument::from_string(&model)?,
-            analyzer,
-            max_rays,
-            drawing,
-        )
+        let light = light
+            .as_ref()
+            .map(|(run, sources)| OpmResult::Ok((run.positioned_scenery()?, sources)));
+        light_glb(light.transpose()?, max_rays, drawing)
     })
     .await
     .map_err(|e| OpossumError::Other(format!("the rays could not be traced: {e}")))?
+}
+
+/// Lists the drawable components of a model from its positioning run, with the digests of the
+/// light served for it, as `/scene/manifest` answers.
+///
+/// # Arguments
+///
+/// - `run`: the positioning run of the model, or why it could not be positioned at all
+/// - `sources`: the sources whose light is drawn, from [`drawn_light_sources`]
+/// - `rays`: how many rays to draw and how (see [`drawn_rays`]), or `None` if no view shows them
+///
+/// # Returns
+///
+/// The manifest, without the analyzer it follows. A model that cannot be placed is listed empty,
+/// with a notice saying why.
+///
+/// # Errors
+///
+/// This function returns an error if the wavelengths of the sources cannot be read or the
+/// components cannot be listed.
+fn listed_scene(
+    run: &OpmResult<PositioningRun>,
+    sources: Option<&RayTraceConfig>,
+    rays: Option<(usize, SpectrumDrawing)>,
+) -> OpmResult<SceneManifest> {
+    let colors = LineColors::Wavelength(source_wavelength_range(sources)?);
+    let run = run.as_ref().map_err(Clone::clone);
+    let positioned = match run.clone().and_then(PositioningRun::positioned_scenery) {
+        Ok(positioned) => positioned,
+        Err(e) => {
+            return Ok(SceneManifest {
+                notice: Some(e.to_string()),
+                ..SceneManifest::default()
+            });
+        }
+    };
+    let rays = rays.map(|(max_rays, drawing)| {
+        let light = sources.map(|sources| (positioned, sources));
+        digest_of(&light_glb(light, max_rays, drawing))
+    });
+    Ok(SceneManifest {
+        spectrum: colors.legend(),
+        axis: Some(digest_of(&run.and_then(axis_glb))),
+        rays,
+        ..manifest_of(positioned)?
+    })
 }
 
 /// Digest what an endpoint of drawn light answers: its file, or why it has none.
@@ -263,9 +324,9 @@ async fn get_scene_manifest(
     data: web::Data<AppState>,
     query: web::Query<ManifestQuery>,
 ) -> Result<impl Responder, BackEndErrorResponse> {
-    // Same split as `get_scene`: only the copy needs the live model, and the meshing that follows
-    // must not block every other edit for as long as it takes.
-    let (run, asked, analyzer, colors, axis, model) = {
+    // Only the positioning needs the live model: meshing and tracing its copy must not block every
+    // other edit for as long as they take.
+    let (run, analyzer, sources) = {
         let document = data.document.lock();
         let asked = analyzer_still_there(&document, query.analyzer);
         let analyzer = document
@@ -274,44 +335,20 @@ async fn get_scene_manifest(
                 uid,
                 name: info.display_name(),
             });
-        let colors = LineColors::Wavelength(source_wavelength_range(&document, asked)?);
-        let run = document.run_positioning(asked);
-        // Light is only drawn over a placed model, and the rays only while a view asks for them.
-        let placed = run
-            .as_ref()
-            .is_ok_and(|run| run.positioned_scenery().is_ok());
-        let axis = placed.then(|| digest_of(&axis_glb(&document, asked)));
-        let model = if placed && query.max_rays.is_some() {
-            Some(document.to_opm_file_string()?)
-        } else {
-            None
-        };
-        (run, asked, analyzer, colors, axis, model)
+        let sources = drawn_light_sources(&document, asked)?;
+        (document.run_positioning(asked), analyzer, sources)
     };
-    let rays = match model {
-        Some(model) => Some(digest_of(
-            &traced_light(model, asked, query.max_rays, query.full_spectrum).await,
-        )),
-        None => None,
-    };
-    let placed = run
-        .as_ref()
-        .map_err(Clone::clone)
-        .and_then(PositioningRun::positioned_scenery);
-    let mut manifest = match placed {
-        Ok(placed) => SceneManifest {
-            spectrum: colors.legend(),
-            ..manifest_of(placed)?
-        },
-        Err(e) => SceneManifest {
-            notice: Some(e.to_string()),
-            ..SceneManifest::default()
-        },
-    };
-    manifest.analyzer = analyzer;
-    manifest.axis = axis;
-    manifest.rays = rays;
-    Ok(Json(manifest))
+    // The rays are only traced while a view asks for them.
+    let rays = query
+        .max_rays
+        .map(|max_rays| drawn_rays(Some(max_rays), query.full_spectrum));
+    let manifest = web::block(move || listed_scene(&run, sources.as_ref(), rays))
+        .await
+        .map_err(|e| OpossumError::Other(format!("the scene could not be listed: {e}")))??;
+    Ok(Json(SceneManifest {
+        analyzer,
+        ..manifest
+    }))
 }
 
 /// Get one component of the model as a 3D scene
@@ -376,7 +413,7 @@ async fn get_scene_axis(
 ) -> Result<impl Responder, BackEndErrorResponse> {
     let glb = {
         let document = data.document.lock();
-        axis_glb(&document, analyzer_still_there(&document, query.analyzer))?
+        axis_glb(&document.run_positioning(analyzer_still_there(&document, query.analyzer))?)?
     };
     Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
 }
@@ -412,14 +449,15 @@ async fn get_scene_rays(
     data: web::Data<AppState>,
     query: web::Query<RaysQuery>,
 ) -> Result<impl Responder, BackEndErrorResponse> {
-    let (model, analyzer) = {
+    let light = {
         let document = data.document.lock();
-        (
-            document.to_opm_file_string()?,
-            analyzer_still_there(&document, query.analyzer),
-        )
+        let analyzer = analyzer_still_there(&document, query.analyzer);
+        // A model without light of its own is not positioned for it.
+        drawn_light_sources(&document, analyzer)?
+            .map(|sources| OpmResult::Ok((document.run_positioning(analyzer)?, sources)))
+            .transpose()?
     };
-    let glb = traced_light(model, analyzer, query.max_rays, query.full_spectrum).await?;
+    let glb = traced_light(light, query.max_rays, query.full_spectrum).await?;
     Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
 }
 

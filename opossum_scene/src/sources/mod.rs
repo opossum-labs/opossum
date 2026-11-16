@@ -14,90 +14,17 @@ use std::ops::Range;
 pub use coarsen::SpectrumDrawing;
 use coarsen::coarsened;
 use opossum_core::{
-    analyzers::{
-        Analyzer,
-        raytrace::{AnalysisRayTrace, RayTracingAnalyzer},
-    },
-    core_optics::OpticNode,
+    analyzers::{RayTraceConfig, raytrace::RayTracingAnalyzer},
     error::OpmResult,
-    light::{LightResult, Rays},
+    light::Rays,
+    nodes::NodeGroup,
     opm_document::OpmDocument,
 };
 use uom::si::f64::Length;
 use uuid::Uuid;
 
-/// Returns the rays of a model's sources, traced through it, for drawing them.
-///
-/// The sources are the ones the analyzer defines, and the model is placed exactly as
-/// [`OpmDocument::run_positioning`] places it, so the rays run through the components where the 3D
-/// view shows them. The sources share `max_rays` evenly, and each is coarsened to its share first:
-/// its rays are spread over its cross section, and its spectrum is laid on them as `drawing` says.
-/// That keeps the trace cheap however many rays and spectral samples the sources hold, while
-/// every wavelength is still traced. Only the primary path is traced: a ghost focus analyzer
-/// contributes its sources, not its reflections. The trace runs on a copy and leaves the model
-/// untouched.
-///
-/// # Arguments
-///
-/// - `document`: the model whose light to trace
-/// - `analyzer_id`: the analyzer to take the sources from, or `None` to follow the one chosen
-///   exactly as for [`OpmDocument::run_positioning`]
-/// - `max_rays`: the most rays traced from all sources together; each source keeps at least one
-/// - `drawing`: whether each start point shines one wavelength or all of them
-///
-/// # Returns
-///
-/// One bundle per open output port the light reaches, each ray carrying its path in global
-/// coordinates; rays stopped on the way are included up to where they stopped. Empty if the
-/// model has no analyzer, or if the one followed has no rays of its own, as an energy analysis:
-/// default rays would only show something that is not the setup's own light.
-///
-/// # Errors
-///
-/// This function returns an error if the named analyzer does not exist, if the positioning run
-/// fails, or if a source cannot be built or the trace fails.
-pub fn traced_rays(
-    document: &OpmDocument,
-    analyzer_id: Option<Uuid>,
-    max_rays: usize,
-    drawing: SpectrumDrawing,
-) -> OpmResult<Vec<Rays>> {
-    let Some((_, analyzer)) = document
-        .drawing_analyzer(analyzer_id)?
-        .filter(|(_, analyzer)| analyzer.analyzer_type().has_ray_sources())
-    else {
-        return Ok(Vec::new());
-    };
-    let placing = analyzer.analyzer_type().positioning_config();
-    let mut scenery = document.scenery().clone();
-    // Placed from the full sources first, exactly as the components are drawn: the trace below
-    // leaves placed nodes where they are, so the coarsened sources cannot move anything.
-    AnalysisRayTrace::calc_node_positions(&mut scenery, LightResult::default(), &placing)?;
-    scenery.reset_data();
-
-    let mut config = placing;
-    config.set_positioning_run(false);
-    // Only copies collect ray ends, so the scenery the copy came from holds none.
-    config.set_collect_ray_ends(true);
-    let per_source = max_rays / config.source_map().len().max(1);
-    // A coarsened source keeps its builder's isometry and is aligned like the full one.
-    let coarse_sources = config
-        .source_map()
-        .iter()
-        .map(|(source, builder)| {
-            let mut coarse = builder.clone();
-            coarse.set_alignment_wavelength(Some(builder.axis_wavelength()?));
-            coarse.set_source(coarsened(builder.source(), per_source, drawing)?);
-            Ok((*source, coarse))
-        })
-        .collect::<OpmResult<_>>()?;
-    config.set_source_map(coarse_sources);
-    RayTracingAnalyzer::new(config).analyze(&mut scenery)?;
-    Ok(scenery.ray_ends().into_iter().cloned().collect())
-}
-
-/// Returns the range of wavelengths the sources of [`traced_rays`] emit, without building any
-/// rays.
+/// Returns the sources whose light a drawing of a model shows: those of the analyzer the drawing
+/// follows, in the configuration the model is positioned with.
 ///
 /// # Arguments
 ///
@@ -107,30 +34,100 @@ pub fn traced_rays(
 ///
 /// # Returns
 ///
-/// The shortest and longest wavelength of all those sources, the same for light of one
-/// wavelength. `None` if there are no rays to draw, as for [`traced_rays`].
+/// The configuration holding the sources, or `None` if the model has no analyzer, or if the one
+/// followed has no rays of its own, as an energy analysis: default rays would only show something
+/// that is not the setup's own light.
 ///
 /// # Errors
 ///
-/// This function returns an error if the named analyzer does not exist or a spectrum cannot be
-/// sampled.
-pub fn source_wavelength_range(
+/// This function returns an error if the named analyzer does not exist.
+pub fn drawn_light_sources(
     document: &OpmDocument,
     analyzer_id: Option<Uuid>,
-) -> OpmResult<Option<Range<Length>>> {
-    let Some((_, analyzer)) = document
+) -> OpmResult<Option<RayTraceConfig>> {
+    Ok(document
         .drawing_analyzer(analyzer_id)?
         .filter(|(_, analyzer)| analyzer.analyzer_type().has_ray_sources())
-    else {
-        return Ok(None);
-    };
+        .map(|(_, analyzer)| analyzer.analyzer_type().positioning_config()))
+}
+
+/// Returns the rays of a model's sources, traced through it, for drawing them.
+///
+/// The model is traced as its positioning run placed it and is not positioned again (see
+/// [`RayTracingAnalyzer::trace_positioned`]), so the rays run through the components where the 3D
+/// view shows them. The sources share `max_rays` evenly, and each is coarsened to its share first:
+/// its rays are spread over its cross section, and its spectrum is laid on them as `drawing` says.
+/// That keeps the trace cheap however many rays and spectral samples the sources hold, while
+/// every wavelength is still traced. Only the primary path is traced: a ghost focus analyzer
+/// contributes its sources, not its reflections. The trace runs on a copy of `positioned`.
+///
+/// # Arguments
+///
+/// - `positioned`: the model, positioned by
+///   [`OpmDocument::run_positioning`](opossum_core::opm_document::OpmDocument::run_positioning)
+/// - `sources`: the sources to trace, from [`drawn_light_sources`]
+/// - `max_rays`: the most rays traced from all sources together; each source keeps at least one
+/// - `drawing`: whether each start point shines one wavelength or all of them
+///
+/// # Returns
+///
+/// One bundle per open output port the light reaches, each ray carrying its path in global
+/// coordinates; rays stopped on the way are included up to where they stopped.
+///
+/// # Errors
+///
+/// This function returns an error if a source cannot be built or the trace fails.
+pub fn traced_rays(
+    positioned: &NodeGroup,
+    sources: &RayTraceConfig,
+    max_rays: usize,
+    drawing: SpectrumDrawing,
+) -> OpmResult<Vec<Rays>> {
+    let mut config = sources.clone();
+    config.set_positioning_run(false);
+    // Only copies collect ray ends, so the scenery the copy came from holds none.
+    config.set_collect_ray_ends(true);
+    let per_source = max_rays / config.source_map().len().max(1);
+    // A coarsened source keeps its builder's isometry.
+    let coarse_sources = config
+        .source_map()
+        .iter()
+        .map(|(source, builder)| {
+            let mut coarse = builder.clone();
+            coarse.set_source(coarsened(builder.source(), per_source, drawing)?);
+            Ok((*source, coarse))
+        })
+        .collect::<OpmResult<_>>()?;
+    config.set_source_map(coarse_sources);
+    let mut scenery = positioned.clone();
+    RayTracingAnalyzer::new(config).trace_positioned(&mut scenery)?;
+    Ok(scenery.take_ray_ends())
+}
+
+/// Returns the range of wavelengths the sources of [`traced_rays`] emit, without building any
+/// rays.
+///
+/// # Arguments
+///
+/// - `sources`: the sources whose light is drawn, from [`drawn_light_sources`]; `None` if there
+///   is none
+///
+/// # Returns
+///
+/// The shortest and longest wavelength of all those sources, the same for light of one
+/// wavelength. `None` if there are no rays to draw.
+///
+/// # Errors
+///
+/// This function returns an error if a spectrum cannot be sampled.
+pub fn source_wavelength_range(
+    sources: Option<&RayTraceConfig>,
+) -> OpmResult<Option<Range<Length>>> {
     let mut range: Option<Range<Length>> = None;
     // A range does not depend on the order the sources are visited in.
-    for builder in analyzer
-        .analyzer_type()
-        .positioning_config()
-        .source_map()
-        .values()
+    for builder in sources
+        .into_iter()
+        .flat_map(|sources| sources.source_map().values())
     {
         for wavelength in builder.source().wavelengths()? {
             range = Some(range.map_or(wavelength..wavelength, |range| {
@@ -222,15 +219,28 @@ mod test {
         let lens = scenery.add_node(Lens::default())?;
         scenery.connect_nodes(source, "output_1", lens, "input_1", millimeter!(100.0))?;
         let document = OpmDocument::new(scenery);
-        assert!(traced_rays(&document, None, 100, SpectrumDrawing::Dealt)?.is_empty());
+        assert!(drawn_light_sources(&document, None)?.is_none());
         Ok(())
     }
 
     /// An energy analysis places a model, but it has no rays of its own to show.
     #[test]
     fn an_energy_analysis_has_no_rays_to_draw() -> OpmResult<()> {
-        assert!(traced_rays(&energy_analyzed()?, None, 100, SpectrumDrawing::Dealt)?.is_empty());
+        assert!(drawn_light_sources(&energy_analyzed()?, None)?.is_none());
         Ok(())
+    }
+
+    /// Traces the light of the analyzer `document` is drawn after as the 3D view does: through
+    /// the model as its positioning run placed it.
+    fn light_of(
+        document: &OpmDocument,
+        max_rays: usize,
+        drawing: SpectrumDrawing,
+    ) -> OpmResult<Vec<Rays>> {
+        let sources = drawn_light_sources(document, None)?
+            .ok_or_else(|| OpossumError::Other("the model has no light to draw".into()))?;
+        let run = document.run_positioning(None)?;
+        traced_rays(run.positioned_scenery()?, &sources, max_rays, drawing)
     }
 
     /// A source of 721 rays is traced with at most the asked number, which still cover all of it:
@@ -243,7 +253,7 @@ mod test {
             15,
         )?)?;
 
-        let ends = traced_rays(&document, None, 100, SpectrumDrawing::Dealt)?;
+        let ends = light_of(&document, 100, SpectrumDrawing::Dealt)?;
 
         assert_eq!(ends.len(), 1, "one open output");
         assert!(ends[0].nr_of_rays(false) <= 100);
@@ -267,7 +277,7 @@ mod test {
         let document = source_then_open_dummy(collimated_source(15, ten_lines()?)?)?;
 
         for drawing in [SpectrumDrawing::Dealt, SpectrumDrawing::Full] {
-            let ends = traced_rays(&document, None, 100, drawing)?;
+            let ends = light_of(&document, 100, drawing)?;
 
             assert_eq!(ends.len(), 1, "{drawing:?}: one open output");
             assert!(ends[0].nr_of_rays(false) <= 100, "{drawing:?}");
@@ -293,7 +303,7 @@ mod test {
         document.add_analyzer(AnalyzerType::RayTrace(config));
 
         for drawing in [SpectrumDrawing::Dealt, SpectrumDrawing::Full] {
-            let ends = traced_rays(&document, None, 100, drawing)?;
+            let ends = light_of(&document, 100, drawing)?;
 
             assert_eq!(ends.len(), 2, "{drawing:?}: one open output per source");
             assert!(
@@ -307,9 +317,8 @@ mod test {
     }
 
     /// A spectrum through a grating set to Littrow for its center, on to a mirror with a component
-    /// behind it. The trace re-runs the positioning along the sources it traces, so it has to find
-    /// the axis the model was placed by. Thinning used to leave only the shortest wavelength, whose
-    /// axis left the grating at another angle and missed the mirror.
+    /// behind it: the coarsened light still reaches the end. Thinning used to leave only the
+    /// shortest wavelength, which left the grating at another angle and missed the mirror.
     #[test]
     fn a_spectrum_behind_a_grating_is_traced_to_the_end() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
@@ -334,7 +343,7 @@ mod test {
         config.map_source(source, collimated_source(7, spectrum.into())?);
         document.add_analyzer(AnalyzerType::RayTrace(config));
 
-        let ends = traced_rays(&document, None, 100, SpectrumDrawing::Dealt)?;
+        let ends = light_of(&document, 100, SpectrumDrawing::Dealt)?;
 
         assert_eq!(
             ends.len(),
@@ -345,8 +354,7 @@ mod test {
     }
 
     /// Two lines either side of a grating's Littrow wavelength, few rays, and a mirror far behind
-    /// it. The trace re-runs the positioning, so the coarsened source must put its axis where the
-    /// full one did: a few nanometers off, it would leave the grating beside the mirror.
+    /// it: the coarsened light still reaches the end.
     #[test]
     fn a_coarsened_source_is_aligned_like_the_full_one() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
@@ -365,7 +373,37 @@ mod test {
         config.map_source(source, collimated_source(1, lines.into())?);
         document.add_analyzer(AnalyzerType::RayTrace(config));
 
-        traced_rays(&document, None, 7, SpectrumDrawing::Dealt)?;
+        light_of(&document, 7, SpectrumDrawing::Dealt)?;
+        Ok(())
+    }
+
+    /// The light runs through the model as its positioning run placed it, without positioning it
+    /// again: a distance changed on the positioned copy afterwards moves nothing the light passes.
+    #[test]
+    fn the_light_runs_through_the_model_as_it_was_positioned() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let dummy = scenery.add_node(Dummy::default())?;
+        scenery.connect_nodes(source, "output_1", dummy, "input_1", millimeter!(50.0))?;
+        let mut document = OpmDocument::new(scenery);
+        let mut config = RayTraceConfig::default();
+        config.map_source(source, collimated_source(1, ten_lines()?)?);
+        document.add_analyzer(AnalyzerType::RayTrace(config));
+        let sources = drawn_light_sources(&document, None)?
+            .ok_or_else(|| OpossumError::Other("the model has no light to draw".into()))?;
+        let mut positioned = document
+            .run_positioning(None)?
+            .positioned_scenery()?
+            .clone();
+        positioned.update_connection_distance(source, "output_1", millimeter!(80.0))?;
+
+        let ends = traced_rays(&positioned, &sources, 10, SpectrumDrawing::Dealt)?;
+
+        let end = ends
+            .first()
+            .and_then(|end| end.iter().next())
+            .ok_or_else(|| OpossumError::Other("no light left the dummy".into()))?;
+        assert_relative_eq!(end.position().z.get::<millimeter>(), 50.0, epsilon = 1e-9);
         Ok(())
     }
 
@@ -389,7 +427,7 @@ mod test {
             (lines.into(), nanometer!(1053.0)..nanometer!(1053.0)),
         ] {
             let document = source_then_open_dummy(collimated_source(1, spectrum)?)?;
-            let drawn = source_wavelength_range(&document, None)?
+            let drawn = source_wavelength_range(drawn_light_sources(&document, None)?.as_ref())?
                 .ok_or_else(|| OpossumError::Other("no range".into()))?;
             assert_relative_eq!(drawn.start.value, range.start.value, max_relative = 1e-12);
             assert_relative_eq!(drawn.end.value, range.end.value, max_relative = 1e-12);
@@ -412,7 +450,7 @@ mod test {
         document.add_analyzer(AnalyzerType::RayTrace(config));
 
         assert_eq!(
-            source_wavelength_range(&document, None)?,
+            source_wavelength_range(drawn_light_sources(&document, None)?.as_ref())?,
             Some(nanometer!(527.0)..nanometer!(1053.0))
         );
         Ok(())
@@ -421,7 +459,8 @@ mod test {
     /// An energy analysis has no rays to draw, so no wavelengths to draw them in.
     #[test]
     fn an_energy_analysis_has_no_wavelengths_to_draw() -> OpmResult<()> {
-        assert_eq!(source_wavelength_range(&energy_analyzed()?, None)?, None);
+        let sources = drawn_light_sources(&energy_analyzed()?, None)?;
+        assert_eq!(source_wavelength_range(sources.as_ref())?, None);
         Ok(())
     }
 
@@ -449,7 +488,7 @@ mod test {
         );
         document.add_analyzer(AnalyzerType::RayTrace(config));
 
-        let ends = traced_rays(&document, None, 100, SpectrumDrawing::Dealt)?;
+        let ends = light_of(&document, 100, SpectrumDrawing::Dealt)?;
         assert_eq!(ends.len(), 1, "one open output");
         let rays = &ends[0];
         assert!(rays.nr_of_rays(false) <= 100);
