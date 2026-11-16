@@ -2049,6 +2049,20 @@ pub(crate) mod test {
         assert!(placing_pairs(&manifest).contains(&(source, ahead)));
     }
 
+    /// A model that cannot be positioned at all, here for lack of an analyzer, places nothing by
+    /// any distance: the list is empty, next to the notice why.
+    #[actix_web::test]
+    async fn the_manifest_lists_no_connection_when_the_model_cannot_be_positioned() {
+        let (app_state, _, _) = state_with_a_source_in_front_of_a_reference();
+        app_state.document.lock().analyzers_mut().clear();
+
+        let manifest: SceneManifest =
+            test::read_body_json(request_manifest(&app_state, "").await).await;
+
+        assert!(manifest.notice.is_some());
+        assert!(manifest.connections_placing_by_distance.is_empty());
+    }
+
     /// The light files a manifest digested are served as it built them when asked for by their
     /// digest, without positioning the model again: an edit after the manifest leaves the files
     /// named by its digests as they were, while the files asked for without a digest follow it.

@@ -31,7 +31,6 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     // connection CRUD services
     cfg.service(connections::post_connection);
     cfg.service(connections::get_connections);
-    cfg.service(connections::get_placing_connections);
     cfg.service(connections::update_connection);
     cfg.service(connections::delete_connection);
 

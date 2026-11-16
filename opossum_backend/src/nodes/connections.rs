@@ -48,43 +48,6 @@ pub async fn get_connections(
     Ok(Json(connect_infos(scenery, &connections)))
 }
 
-/// List the connections whose distance places a node
-///
-/// Returns the connections of the model, those of nested groups included, whose distance places a
-/// node when the model is placed: the node a connection leads to is placed along it, or the node
-/// it comes from stands in front of where it leads. A distance into a node placed absolutely, or
-/// into a reference taking the placement of the node it refers to, places nothing, so there is no
-/// point in editing it. The group named only has to exist.
-///
-/// The model is placed on a copy, as for the 3D view, after the analyzer that view follows by
-/// default. A placement that stops part way lists the distances that placed a node before it
-/// stopped. A model without a source port or an analyzer places nothing: the list is empty.
-#[utoipa::path(tag = "node",
-    params(
-        ("uuid" = Uuid, Path, description = "UUID of the group node"),
-    ),
-    responses(
-        (status = OK, description = "the connections of the group whose distance places a node", body = Vec<ConnectInfo>, content_type = "application/json"),
-        (status = BAD_REQUEST, body = ErrorResponse, description = "UUID not found or not a group node", content_type = "application/json")
-    )
-)]
-#[get("/{uuid}/placing_connections")]
-pub async fn get_placing_connections(
-    data: web::Data<AppState>,
-    path: web::Path<Uuid>,
-) -> Result<Json<Vec<ConnectInfo>>, BackEndErrorResponse> {
-    let uuid = path.into_inner();
-    let document = data.document.lock();
-    document.scenery().with_group_node(uuid, |_| ())?;
-    let placing = document
-        .run_positioning(None)
-        .map(|run| run.connections_placing_by_distance())
-        .unwrap_or_default();
-    let listed = connect_infos(document.scenery(), &placing);
-    drop(document);
-    Ok(Json(listed))
-}
-
 /// Connect two nodes
 ///
 /// Connect two optical nodes by the given connection info.
@@ -229,23 +192,6 @@ mod test {
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
-    /// Ask `app_state` for the connections of the group `uuid` whose distance places a node.
-    async fn request_placing_connections(
-        app_state: Data<AppState>,
-        uuid: Uuid,
-    ) -> actix_web::dev::ServiceResponse {
-        let app = test::init_service(
-            App::new()
-                .app_data(app_state)
-                .service(get_placing_connections),
-        )
-        .await;
-        let req = test::TestRequest::get()
-            .uri(&format!("/{uuid}/placing_connections"))
-            .to_request();
-        app.call(req).await.unwrap()
-    }
-
     /// Every connection of a group is listed with its distance in meters, marked when it leads
     /// into a reference.
     #[actix_web::test]
@@ -266,44 +212,6 @@ mod test {
         assert_eq!(seen.len(), 2);
         assert!(!seen[0].0 && (seen[0].1 - 0.1).abs() < 1e-12, "{seen:?}");
         assert!(seen[1].0 && (seen[1].1 - 0.05).abs() < 1e-12, "{seen:?}");
-    }
-
-    /// The connections whose distance places a node are listed with the distance they have, and
-    /// marked when they lead into a reference.
-    #[actix_web::test]
-    async fn the_connections_whose_distance_places_a_node_are_listed() {
-        let (app_state, root, expected) = state_with_a_source_in_front_of_a_reference();
-        let resp = request_placing_connections(app_state, root).await;
-        assert_eq!(resp.status(), StatusCode::OK);
-        let listed: Vec<ConnectInfo> = test::read_body_json(resp).await;
-        let mut pairs: Vec<(Uuid, Uuid)> = listed
-            .iter()
-            .map(|c| (c.src_uuid(), c.target_uuid()))
-            .collect();
-        pairs.sort();
-        let mut expected = expected;
-        expected.sort();
-        assert_eq!(pairs, expected);
-        let into_reference = listed
-            .iter()
-            .find(|c| c.targets_reference())
-            .expect("the connection into the reference is listed");
-        assert!((into_reference.distance() - 0.05).abs() < 1e-12);
-    }
-
-    /// A model that cannot be placed, here for lack of an analyzer, places nothing by any
-    /// distance: the list is empty. A group the model does not have is an error.
-    #[actix_web::test]
-    async fn no_connection_is_listed_when_the_model_cannot_be_placed() {
-        let (app_state, root, _) = state_with_a_source_in_front_of_a_reference();
-        app_state.document.lock().analyzers_mut().clear();
-        let resp = request_placing_connections(app_state.clone(), root).await;
-        assert_eq!(resp.status(), StatusCode::OK);
-        let listed: Vec<ConnectInfo> = test::read_body_json(resp).await;
-        assert_eq!(listed, Vec::<ConnectInfo>::new());
-
-        let resp = request_placing_connections(app_state, Uuid::new_v4()).await;
-        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
     #[actix_web::test]
