@@ -585,7 +585,7 @@ pub fn App() -> Element {
 
     #[cfg(not(feature = "desktop"))]
     rsx! {
-        div { class: "app-container", tabindex: 0,
+        div { class: "app-container", tabindex: 0, "data-theme": "dark",
             CommonAppLayout {
                 cxt_command_handler: EventHandler::new(move |cxt_cmd_opt: Option<CxtCommand>| {
                     cxt_command.set(cxt_cmd_opt);
@@ -609,6 +609,11 @@ pub fn App() -> Element {
         SettingsDialog { open: show_settings }
         CatalogSynchronizer { open: show_catalog_synchronizer }
         OptimizationModal { open: show_optimization }
+        // Invisible master sprite containing all icon definitions
+        div {
+            style: "position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none;",
+            dangerous_inner_html: include_str!("../../assets/icons/NodeIcons.svg"),
+        }
     }
 }
 
