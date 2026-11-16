@@ -37,11 +37,12 @@ fn add_dot_header(scenery_name: &str, rankdir: &str) -> String {
     dot_string
 }
 
-/// Recursively resolves the endpoint string (`i<uuid>:<port>`) for a port connection.
+/// Recursively resolves the endpoint string (`i<uuid>:"<port>"`) for a port connection.
 fn resolve_port_endpoint(
     group: &NodeGroup,
     node_uuid: Uuid,
     port_name: &str,
+    port_type: PortType,
 ) -> ReporterResult<String> {
     let node_idx = group
         .graph()
@@ -49,28 +50,28 @@ fn resolve_port_endpoint(
         .ok_or_else(|| ReporterError::Other(format!("Node {node_uuid} not found in group")))?;
     let node_ref = group.graph().node_by_idx(node_idx)?;
     let node_id = format!("i{}", node_ref.uuid().as_simple());
-
     if let Some(group_node) = node_ref.as_any().downcast_ref::<NodeGroup>()
         && group_node.expand_view()?
     {
-        let in_port = group_node.graph().port_map(&PortType::Input).get(port_name);
-        let out_port = group_node
-            .graph()
-            .port_map(&PortType::Output)
-            .get(port_name);
-        let port_info = if let Some(port) = in_port {
-            port
-        } else if let Some(port) = out_port {
-            port
+        let effective_port_type = if group_node.graph().is_inverted() {
+            port_type.opposite()
         } else {
-            return Err(ReporterError::Other(format!(
-                "Port {port_name} is not mapped in group {}",
-                group_node.name()
-            )));
+            port_type
         };
-        return resolve_port_endpoint(group_node, port_info.0, &port_info.1);
+        let port_info = group_node
+            .graph()
+            .port_map(&effective_port_type)
+            .get(port_name)
+            .ok_or_else(|| {
+                ReporterError::Other(format!(
+                    "Port {port_name} is not mapped in group {}",
+                    group_node.name()
+                ))
+            })?;
+        return resolve_port_endpoint(group_node, port_info.0, &port_info.1, port_type);
     }
-    Ok(format!("{node_id}:{port_name}"))
+    let escaped_port_name = port_name.replace('"', "\\\"");
+    Ok(format!("{node_id}:\"{escaped_port_name}\""))
 }
 
 /// Writes all nodes and connections of a `NodeGroup` to the DOT output string.
@@ -82,7 +83,6 @@ fn write_group_dot(group: &NodeGroup, rankdir: &str, out: &mut String) -> Report
         let node_name = node_ref.name();
         let inverted = node_ref.inverted();
         let ports = node_ref.ports();
-
         if let Some(subgroup) = node_ref.as_any().downcast_ref::<NodeGroup>()
             && subgroup.expand_view()?
         {
@@ -95,7 +95,6 @@ fn write_group_dot(group: &NodeGroup, rankdir: &str, out: &mut String) -> Report
             out.push_str("}\n");
             continue;
         }
-
         let dot_cell = format_node_to_dot(
             &uuid,
             node_name,
@@ -106,10 +105,11 @@ fn write_group_dot(group: &NodeGroup, rankdir: &str, out: &mut String) -> Report
         )?;
         out.push_str(&dot_cell);
     }
-
     for conn in group.graph().connections() {
-        let src_edge_str = resolve_port_endpoint(group, conn.src_id, &conn.src_port)?;
-        let target_edge_str = resolve_port_endpoint(group, conn.target_id, &conn.target_port)?;
+        let src_edge_str =
+            resolve_port_endpoint(group, conn.src_id, &conn.src_port, PortType::Output)?;
+        let target_edge_str =
+            resolve_port_endpoint(group, conn.target_id, &conn.target_port, PortType::Input)?;
         let _ = writeln!(
             out,
             "  {src_edge_str} -> {target_edge_str} [label=\"{}\"]",
@@ -264,6 +264,27 @@ mod tests {
         let svg_file = temp_dir.path().join("scenery.svg");
         assert!(dot_file.is_file());
         assert!(svg_file.is_file());
+        Ok(())
+    }
+    #[test]
+    fn test_collapsed_group_with_numeric_prefixed_port_name() -> ReporterResult<()> {
+        let mut scenery = NodeGroup::new("Collapsed Group UUID Port Test");
+        let i_s = scenery.add_node(SourcePort::default())?;
+        let mut group = NodeGroup::new("group");
+        group.set_expand_view(false)?;
+        let g_n1 = group.add_node(Dummy::new("dummy"))?;
+        let uuid_port_name = "39fb599df71a4c31a280994255bd0387";
+        group.map_input_port(g_n1, "input_1", uuid_port_name)?;
+        let i_g = scenery.add_node(group)?;
+        scenery.connect_nodes(
+            i_s,
+            "output_1",
+            i_g,
+            uuid_port_name,
+            uom::si::f64::Length::zero(),
+        )?;
+        let dot = scenery_to_dot(&scenery, "TB")?;
+        assert!(dot.contains(&format!(":\"{uuid_port_name}\"")));
         Ok(())
     }
 }
