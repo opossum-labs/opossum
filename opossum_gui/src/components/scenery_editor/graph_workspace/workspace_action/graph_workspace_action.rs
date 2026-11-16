@@ -47,7 +47,10 @@ pub enum GraphsWorkspaceAction {
         node_id: Uuid,
     },
     /// Resynchronizes frontend state with backend state.
-    Refresh,
+    Refresh {
+        /// If `true`, keeps undo/redo available (e.g. after an optimization run).
+        preserve_undo: bool,
+    },
     /// Adds a node to the current selection.
     AddToNodeSelection {
         /// The ID of the graph.

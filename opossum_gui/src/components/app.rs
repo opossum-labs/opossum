@@ -263,7 +263,9 @@ pub fn App() -> Element {
             }
         }
         AppCommand::Refresh => {
-            node_editor_command_handler.call(Some(NodeEditorCommand::Refresh));
+            node_editor_command_handler.call(Some(NodeEditorCommand::Refresh {
+                preserve_undo: false,
+            }));
             backend_status_future.restart();
         }
         AppCommand::Settings => {
@@ -575,7 +577,7 @@ pub fn App() -> Element {
         SettingsDialog { open: show_settings }
         MaterialCatalog { open: show_material_catalog }
         CatalogSynchronizer { open: show_catalog_synchronizer }
-        OptimizationModal { open: show_optimization }
+        OptimizationModal { open: show_optimization, node_editor_command_handler }
         // Invisible master sprite containing all icon definitions
         div {
             style: "position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none;",
@@ -608,7 +610,7 @@ pub fn App() -> Element {
         }
         SettingsDialog { open: show_settings }
         CatalogSynchronizer { open: show_catalog_synchronizer }
-        OptimizationModal { open: show_optimization }
+        OptimizationModal { open: show_optimization, node_editor_command_handler }
         // Invisible master sprite containing all icon definitions
         div {
             style: "position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none;",
