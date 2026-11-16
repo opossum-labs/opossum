@@ -142,6 +142,17 @@ static SCENE_VIEW_ANALYZER: GlobalSignal<Option<Uuid>> = Signal::global(|| None)
 /// only the view itself holds, its model resource or its viewer handle, so a caller outside can do no
 /// more than ask. `None` whenever nothing has been asked for, which is nearly always.
 static SCENE_VIEW_REQUEST: GlobalSignal<Option<SceneViewRequest>> = Signal::global(|| None);
+/// The connections whose distance placed a node when the 3D view last positioned the model, as
+/// pairs of source node and source port, or `None` while no 3D view has positioned the document
+/// loaded.
+///
+/// Whether the distance of a connection into a reference places anything depends on the whole
+/// model, so only a positioning run can tell. The 3D view runs one anyway, and the edges take its
+/// answer instead of running one of their own: until there is one, every connection into a
+/// reference offers its distance; after it, the answer stays until the view positions the model
+/// again, closed or not.
+static CONNECTIONS_PLACING_BY_DISTANCE: GlobalSignal<Option<HashSet<(Uuid, String)>>> =
+    Signal::global(|| None);
 /// Set right before a `RevealNode` action whose `bring_to_front` is `false` changes `active_tab`
 /// (a 3D view pick), so `GraphEditor`'s effect that otherwise brings a graph's tab to the front
 /// whenever `active_tab` changes can skip that step this one time - where the graph would cover the
