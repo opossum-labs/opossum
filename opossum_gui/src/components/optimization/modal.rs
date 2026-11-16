@@ -5,15 +5,18 @@ use super::{
     state::{OptimizationModel, ValidationSeverity},
     variables_panel::VariablesPanel,
 };
-use crate::api::{
-    eval_action_run, get_optimization_schema, post_abort_optimization,
-    post_save_optimization_config, post_start_optimization, subscribe_optimization_events,
-    undo_document,
-};
 use crate::components::primitives::{
     alert_dialog::{AlertDialog, AlertDialogActions, AlertDialogCancel, AlertDialogDescription},
     button::{Button, ButtonSize, ButtonVariant},
     card::{Card, CardAction, CardContent, CardHeader, CardTitle},
+};
+use crate::{
+    api::{
+        eval_action_run, get_optimization_schema, post_abort_optimization,
+        post_save_optimization_config, post_start_optimization, subscribe_optimization_events,
+        undo_document,
+    },
+    components::scenery_editor::NodeEditorCommand,
 };
 use dioxus::prelude::*;
 use dioxus_free_icons::{
@@ -28,7 +31,11 @@ use opossum_core::opm_document::optimization::{
 };
 
 #[component]
-pub fn OptimizationModal(open: Signal<bool>) -> Element {
+#[component]
+pub fn OptimizationModal(
+    open: Signal<bool>,
+    node_editor_command_handler: EventHandler<Option<NodeEditorCommand>>,
+) -> Element {
     let mut model = use_signal(OptimizationModel::default);
     let mut is_running = use_signal(|| false);
     let mut current_iteration = use_signal(|| 0_u64);
@@ -113,7 +120,10 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                         current_cost.set(final_cost);
                         is_running.set(false);
                         model.write().update_values(&optimized_parameters);
-                        *crate::NODE_DETAILS_REFRESH.write() += 1;
+                        *crate::UNDO_REDO_STATUS.write() = (true, false);
+                        node_editor_command_handler.call(Some(NodeEditorCommand::Refresh {
+                            preserve_undo: true,
+                        }));
                     }
                     OptimizationProgressEvent::Aborted {
                         last_cost,
@@ -125,8 +135,11 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
                         is_running.set(false);
                         if !best_parameters.is_empty() {
                             model.write().update_values(&best_parameters);
+                            *crate::UNDO_REDO_STATUS.write() = (true, false);
                         }
-                        *crate::NODE_DETAILS_REFRESH.write() += 1;
+                        node_editor_command_handler.call(Some(NodeEditorCommand::Refresh {
+                            preserve_undo: true,
+                        }));
                     }
                     OptimizationProgressEvent::Failed { error } => {
                         log::error!("Optimization failed: {error}");
@@ -186,8 +199,11 @@ pub fn OptimizationModal(open: Signal<bool>) -> Element {
             let res = undo_document().await;
             eval_action_run(
                 res,
-                Some(|_| {
-                    *crate::NODE_DETAILS_REFRESH.write() += 1;
+                Some(move |r: opossum_core::types::api_types::UndoRedoResponse| {
+                    *crate::UNDO_REDO_STATUS.write() = (r.can_undo, r.can_redo);
+                    node_editor_command_handler.call(Some(NodeEditorCommand::Refresh {
+                        preserve_undo: true,
+                    }));
                 }),
             );
             let schema_res = get_optimization_schema().await;

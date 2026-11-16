@@ -140,8 +140,14 @@ pub fn use_workspace_processor(
                         // Clear undo/redo history on initial startup/reset
                         *crate::UNDO_REDO_STATUS.write() = (false, false);
                     }
-                    GraphsWorkspaceAction::Refresh => {
-                        process_refresh(workspace, root_graph_id, workspace_handlers).await;
+                    GraphsWorkspaceAction::Refresh { preserve_undo } => {
+                        process_refresh(
+                            workspace,
+                            root_graph_id,
+                            workspace_handlers,
+                            preserve_undo,
+                        )
+                        .await;
                     }
                     GraphsWorkspaceAction::AddRootSceneryTab { name } => {
                         process_add_root_scenery_tab(workspace, workspace_handlers, name).await;
@@ -2409,11 +2415,11 @@ async fn process_refresh(
     workspace: ReadStore<GraphsWorkspaceState>,
     root_scenery_id: Memo<Uuid>,
     ws_handler: WorkSpaceSignalHandlers,
+    preserve_undo: bool,
 ) {
     match api::get_document_root_uuid().await {
         Ok(id) => {
             let tab_exists = workspace.tabs().read().contains_key(&id);
-
             if tab_exists {
                 // 1. Update scenery display name and hierarchy in case it changed on the backend
                 if let Ok(hierarchy) = api::get_group_hierarchy(id).await {
@@ -2422,17 +2428,26 @@ async fn process_refresh(
                         .map_or_else(|| "Root Scenery".to_string(), |(_, n)| n.clone());
                     ws_handler.nodes.set_node_name(name, id, id, false);
                 }
-
-                // 2. Clear only graph store elements (nodes, edges, analyzers)
-                // This keeps EditorState (pan & zoom) completely intact and prevents GraphViewEditor from remounting.
-                ws_handler.nodes.clear_graph_store(id);
+                // 2. Clear and refill all currently open tabs (root + any open group tabs)
+                // while keeping EditorState (pan & zoom) intact.
+                let open_tab_ids: Vec<Uuid> = workspace.tabs().read().keys().copied().collect();
+                for tab_id in open_tab_ids {
+                    ws_handler.nodes.clear_graph_store(tab_id);
+                    process_fill_graph_of_group(
+                        root_scenery_id.into(),
+                        tab_id,
+                        ws_handler,
+                        false,
+                        workspace,
+                    )
+                    .await;
+                }
             } else {
                 // Fallback: If the root scenery tab does not exist yet, initialize it cleanly
                 let saved_editor_area = *workspace.editor_area().read();
                 ws_handler.workspace.clear_workspace();
                 ws_handler.workspace.set_root_scenery_id(id);
                 ws_handler.workspace.set_editor_area(saved_editor_area);
-
                 if let Ok(hierarchy) = api::get_group_hierarchy(id).await {
                     let name = hierarchy
                         .last()
@@ -2444,18 +2459,24 @@ async fn process_refresh(
                     });
                 }
                 process_get_editor_area(ws_handler, id).await;
-            }
-
-            // 3. Refill the graph from backend; never recenter if the tab already existed
-            process_fill_graph_of_group(root_scenery_id.into(), id, ws_handler, false, workspace)
+                process_fill_graph_of_group(
+                    root_scenery_id.into(),
+                    id,
+                    ws_handler,
+                    false,
+                    workspace,
+                )
                 .await;
-
-            // 4. Sync document-wide caches (candidates and gain models) with backend state
+            }
+            // 3. Sync document-wide caches (candidates and gain models) with backend state
             refresh_amplifier_candidates(ws_handler).await;
             refresh_active_scenario_gain_models(ws_handler).await;
-
             ws_handler.workspace.set_needs_saving(true);
-            *crate::UNDO_REDO_STATUS.write() = (false, false);
+            *crate::NODE_DETAILS_REFRESH.write() += 1;
+            *crate::SCENE_REVISION.write() += 1;
+            if !preserve_undo {
+                *crate::UNDO_REDO_STATUS.write() = (false, false);
+            }
         }
         Err(err_str) => {
             OPOSSUM_UI_LOGS
