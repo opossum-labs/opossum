@@ -355,6 +355,18 @@ pub struct ViewerOptions {
     pub overlay_blending: OverlayBlending,
     /// Perspective or parallel projection; see [`Projection`]. Does not move the camera.
     pub projection: Projection,
+    /// Whether a grid is drawn over the picture in the [orthographic](Projection::Orthographic)
+    /// projection.
+    ///
+    /// Its lines lie at whole multiples of a round step (1, 2 or 5 × 10ⁿ meters, glTF's unit) along
+    /// the screen's axes, counted from the world origin, so they move with the scene when it is
+    /// panned. The step follows the zoom and is shown in the top-left corner. Nothing is drawn in
+    /// perspective, where no one length on screen holds across the picture. Defaults to `false`.
+    pub view_grid: bool,
+    /// Whether rulers along the top and the left edge label the grid's steps with their
+    /// coordinates, in the [orthographic](Projection::Orthographic) projection only; see
+    /// [`view_grid`](Self::view_grid). Defaults to `false`.
+    pub rulers: bool,
 }
 
 impl Default for ViewerOptions {
@@ -377,6 +389,8 @@ impl Default for ViewerOptions {
             line_width: 1.0,
             overlay_blending: OverlayBlending::default(),
             projection: Projection::default(),
+            view_grid: false,
+            rulers: false,
         }
     }
 }

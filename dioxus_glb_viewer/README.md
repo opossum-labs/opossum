@@ -91,7 +91,8 @@ asset. See `assets/VENDORING.md` for the file list, upgrade recipe, and licence.
 
 - **Hot-reload of `viewer.js` does not work** — the browser caches the module by URL.
   Restart `dx serve` to pick up JS changes.
-- **Static RSX shape** — the `div.dxglb-root > canvas` subtree must never contain an
+- **Static RSX shape** — the `div.dxglb-root > canvas` subtree (the scene canvas and the
+  2D overlay over it) must never contain an
   `if`, `key`, or interpolated node. Any reconstruction of the canvas destroys the
   WebGL context and the camera.
 - **Desktop file loading** — wry cannot load `file://` URLs. To display a local file,

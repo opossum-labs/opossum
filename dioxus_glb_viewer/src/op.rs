@@ -156,8 +156,10 @@ impl Serialize for ViewerOptions {
             line_width,
             overlay_blending,
             projection,
+            view_grid,
+            rulers,
         } = self;
-        let mut st = s.serialize_struct("ViewerOptions", 17)?;
+        let mut st = s.serialize_struct("ViewerOptions", 19)?;
         st.serialize_field("background", background)?;
         st.serialize_field("grid", grid)?;
         st.serialize_field("ambient_intensity", ambient_intensity)?;
@@ -175,6 +177,8 @@ impl Serialize for ViewerOptions {
         st.serialize_field("line_width", line_width)?;
         st.serialize_field("overlay_blending", overlay_blending)?;
         st.serialize_field("projection", projection)?;
+        st.serialize_field("view_grid", view_grid)?;
+        st.serialize_field("rulers", rulers)?;
         st.end()
     }
 }
@@ -233,9 +237,38 @@ mod tests {
                 "orientation_gizmo",
                 "overlay_blending",
                 "projection",
+                "rulers",
                 "selection_color",
+                "view_grid",
             ]
         );
+    }
+
+    /// `viewer.js` draws the grid only when `view_grid` arrives as exactly `true`, so the default must
+    /// arrive as `false` and a switched-on grid as `true`.
+    #[test]
+    fn the_view_grid_reaches_the_wire() {
+        let json = serde_json::to_value(ViewerOptions::default()).expect("options serialise");
+        assert_eq!(json["view_grid"], false);
+        let opts = ViewerOptions {
+            view_grid: true,
+            ..ViewerOptions::default()
+        };
+        let json = serde_json::to_value(opts).expect("options serialise");
+        assert_eq!(json["view_grid"], true);
+    }
+
+    /// As for the grid: the rulers are drawn only when `rulers` arrives as exactly `true`.
+    #[test]
+    fn the_rulers_reach_the_wire() {
+        let json = serde_json::to_value(ViewerOptions::default()).expect("options serialise");
+        assert_eq!(json["rulers"], false);
+        let opts = ViewerOptions {
+            rulers: true,
+            ..ViewerOptions::default()
+        };
+        let json = serde_json::to_value(opts).expect("options serialise");
+        assert_eq!(json["rulers"], true);
     }
 
     /// `viewer.js` compares the projection with the string `"orthographic"`, so both ways have to

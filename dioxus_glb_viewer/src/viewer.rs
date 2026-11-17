@@ -96,10 +96,11 @@ pub fn use_glb_viewer_handle() -> ViewerHandle {
 ///
 /// # Static canvas shape (maintenance constraint)
 ///
-/// The RSX template has exactly one `div.dxglb-root` with one `canvas#dxglb-<N>`. No
-/// `if`, no `key`, no interpolation around that node — Dioxus may only patch canvas
-/// attributes, never replace the node. Any reconstruction of the canvas destroys the
-/// WebGL context and the camera.
+/// The RSX template has exactly one `div.dxglb-root` with two canvases: the scene's
+/// `canvas#dxglb-<N>` and the 2D overlay `canvas#dxglb-<N>-overlay` over it. No `if`, no
+/// `key`, no interpolation around them — Dioxus may only patch canvas attributes, never
+/// replace the nodes. Any reconstruction of the scene canvas destroys the WebGL context and
+/// the camera.
 ///
 /// # Arguments
 ///
@@ -268,6 +269,9 @@ pub fn GlbViewer(
         // Any reconstruction of the canvas destroys the WebGL context and the camera.
         div { class: "dxglb-root", ..attributes,
             canvas { id: "{canvas_id}", class: "dxglb-canvas" }
+            // The grid and the rulers, drawn in 2D by viewer.js over the scene; the pointer
+            // passes through it to the scene canvas.
+            canvas { id: "{canvas_id}-overlay", class: "dxglb-overlay" }
         }
     }
 }
