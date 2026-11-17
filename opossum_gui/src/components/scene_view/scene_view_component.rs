@@ -19,9 +19,9 @@ use crate::{
     components::{
         context_menu::cx_menu::CxMenu,
         scene_view::{
-            AXIS_OBJECT_ID, RAYS_OBJECT_ID, SceneShortcut, SceneViewRequest, action_for_pick,
-            apply_node_selection, is_ray_object, objects_of, ray_object, set_environment,
-            table_ground,
+            AXIS_OBJECT_ID, RAYS_OBJECT_ID, SceneShortcut, SceneViewControls, SceneViewRequest,
+            action_for_pick, apply_node_selection, is_ray_object, objects_of, ray_object,
+            set_environment, table_ground,
         },
         scenery_editor::{
             GraphStateStoreExt, GraphsWorkspaceAction, GraphsWorkspaceState,
@@ -298,6 +298,18 @@ pub fn SceneView() -> Element {
             )
         });
 
+    // The projection switch over the canvas names the projection that is on and, in its tooltip, the
+    // one a click switches to; while the orientation gizmo is shown, it sits above it.
+    let SceneViewControls {
+        orthographic, axes, ..
+    } = SCENE_VIEW_CONTROLS();
+    let (projection, other_projection) = if orthographic {
+        ("Ortho", "perspective")
+    } else {
+        ("Persp", "orthographic")
+    };
+    let projection_key = SceneShortcut::Projection.key_hint();
+
     rsx! {
         div {
             class: "scene-view",
@@ -487,6 +499,16 @@ pub fn SceneView() -> Element {
                         _ => {}
                     }
                 },
+            }
+            // Next to the viewer, never around it: the canvas must keep its static shape.
+            button {
+                class: if axes { "scene-view-projection above-gizmo" } else { "scene-view-projection" },
+                title: "Switch to {other_projection} projection ({projection_key})",
+                onclick: move |_| {
+                    let mut controls = SCENE_VIEW_CONTROLS.write();
+                    controls.orthographic = !controls.orthographic;
+                },
+                "{projection}"
             }
         }
     }
