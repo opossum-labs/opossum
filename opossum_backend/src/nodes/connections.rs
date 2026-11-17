@@ -229,4 +229,112 @@ mod test {
         let resp = app.call(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
+    #[actix_web::test]
+    async fn test_update_connection_status_codes() {
+        let (app_state, root, _) = state_with_a_source_in_front_of_a_reference();
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state)
+                .service(get_connections)
+                .service(update_connection),
+        )
+        .await;
+
+        // Fetch an existing connection from the test scenery
+        let get_req = test::TestRequest::get()
+            .uri(&format!("/{root}/connections"))
+            .to_request();
+        let get_resp = app.call(get_req).await.unwrap();
+        assert_eq!(get_resp.status(), StatusCode::OK);
+        let listed: Vec<ConnectInfo> = test::read_body_json(get_resp).await;
+        let existing = &listed[0];
+        let original_distance = existing.distance();
+
+        // 1. Negative distance must be rejected with 400 Bad Request
+        let invalid_req = UpdateConnectionRequest {
+            src_uuid: existing.src_uuid(),
+            src_port: existing.src_port().to_string(),
+            distance: -0.1,
+        };
+        let patch_invalid = test::TestRequest::patch()
+            .uri(&format!("/{root}/connections"))
+            .set_json(&invalid_req)
+            .to_request();
+        let resp_invalid = app.call(patch_invalid).await.unwrap();
+        assert_eq!(resp_invalid.status(), StatusCode::BAD_REQUEST);
+
+        // Verify that the stored distance remained unchanged
+        let verify_req = test::TestRequest::get()
+            .uri(&format!("/{root}/connections"))
+            .to_request();
+        let verify_resp = app.call(verify_req).await.unwrap();
+        let after_invalid: Vec<ConnectInfo> = test::read_body_json(verify_resp).await;
+        let current = after_invalid
+            .iter()
+            .find(|c| c.src_uuid() == existing.src_uuid() && c.src_port() == existing.src_port())
+            .unwrap();
+        assert!((current.distance() - original_distance).abs() < 1e-12);
+
+        // 2. Non-negative distance must succeed with 204 No Content
+        let valid_req = UpdateConnectionRequest {
+            src_uuid: existing.src_uuid(),
+            src_port: existing.src_port().to_string(),
+            distance: 0.25,
+        };
+        let patch_valid = test::TestRequest::patch()
+            .uri(&format!("/{root}/connections"))
+            .set_json(&valid_req)
+            .to_request();
+        let resp_valid = app.call(patch_valid).await.unwrap();
+        assert_eq!(resp_valid.status(), StatusCode::NO_CONTENT);
+    }
+
+    #[actix_web::test]
+    async fn test_post_connection_status_codes() {
+        let (app_state, root, _) = state_with_a_source_in_front_of_a_reference();
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state)
+                .service(get_connections)
+                .service(post_connection)
+                .service(delete_connection),
+        )
+        .await;
+
+        // Fetch an existing connection and remove it so its ports can be reconnected
+        let get_req = test::TestRequest::get()
+            .uri(&format!("/{root}/connections"))
+            .to_request();
+        let get_resp = app.call(get_req).await.unwrap();
+        let listed: Vec<ConnectInfo> = test::read_body_json(get_resp).await;
+        let mut conn_info = listed[0].clone();
+
+        let del_req = test::TestRequest::delete()
+            .uri(&format!(
+                "/{root}/connections?src_uuid={}&src_port={}",
+                conn_info.src_uuid(),
+                conn_info.src_port()
+            ))
+            .to_request();
+        let del_resp = app.call(del_req).await.unwrap();
+        assert_eq!(del_resp.status(), StatusCode::NO_CONTENT);
+
+        // 1. Creating a connection with a negative distance must return 400 Bad Request
+        conn_info.set_distance(-0.05);
+        let post_invalid = test::TestRequest::post()
+            .uri(&format!("/{root}/connections"))
+            .set_json(&conn_info)
+            .to_request();
+        let resp_invalid = app.call(post_invalid).await.unwrap();
+        assert_eq!(resp_invalid.status(), StatusCode::BAD_REQUEST);
+
+        // 2. Creating a connection with a valid non-negative distance must return 201 Created
+        conn_info.set_distance(0.15);
+        let post_valid = test::TestRequest::post()
+            .uri(&format!("/{root}/connections"))
+            .set_json(&conn_info)
+            .to_request();
+        let resp_valid = app.call(post_valid).await.unwrap();
+        assert_eq!(resp_valid.status(), StatusCode::CREATED);
+    }
 }

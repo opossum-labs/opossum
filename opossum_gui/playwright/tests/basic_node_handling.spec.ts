@@ -116,4 +116,59 @@ test.describe('Basic node handling', () => {
     // edge_1 should still be there
     await expect(createdEdge_1).toBeVisible();
   });
+  test('should update connection distance and revert on negative or invalid input', async ({ page }) => {
+    const node_0 = await addNode(page, 'Dummy', 0);
+    const node_1 = await addNode(page, 'Dummy', 1);
+
+    // Move first node to the left so the edge and its distance field are clearly accessible
+    await dragElementByOffset(page, node_0, -300, 0);
+
+    const sourcePort = node_0.getByTestId('port-output-output_1');
+    const targetPort = node_1.getByTestId('port-input-input_1');
+    await connectElements(page, sourcePort, targetPort);
+
+    const createdEdge = page.getByTestId('edge-0');
+    await expect(createdEdge).toBeVisible();
+
+    // Locate the distance input inside the edge's foreignObject container
+    const edgeInputContainer = page.getByTestId('edge-input-0');
+    await expect(edgeInputContainer).toBeVisible();
+    const distanceInput = edgeInputContainer.locator('input');
+    await expect(distanceInput).toBeVisible();
+
+    // 1. Set a valid positive distance and wait for backend confirmation (HTTP 204)
+    const validPatchPromise = page.waitForResponse(
+      (resp) => resp.url().includes('/connections') && resp.request().method() === 'PATCH'
+    );
+    await distanceInput.click();
+    await distanceInput.fill('0.2 m');
+    await distanceInput.press('Enter');
+
+    const validResponse = await validPatchPromise;
+    expect(validResponse.status()).toBe(204);
+
+    // Capture the formatted valid value (e.g. "200 mm" or "0.2 m")
+    const confirmedValidValue = await distanceInput.inputValue();
+    expect(confirmedValidValue).not.toContain('-');
+
+    // 2. Attempt to enter a negative distance; backend must reject with HTTP 400 and UI must revert
+    const invalidPatchPromise = page.waitForResponse(
+      (resp) => resp.url().includes('/connections') && resp.request().method() === 'PATCH'
+    );
+    await distanceInput.click();
+    await distanceInput.fill('-0.05 m');
+    await distanceInput.press('Enter');
+
+    const invalidResponse = await invalidPatchPromise;
+    expect(invalidResponse.status()).toBe(400);
+
+    // Verify that the input field reverted to the previous valid distance
+    await expect(distanceInput).toHaveValue(confirmedValidValue);
+
+    // 3. Attempt to enter a malformed value without unit; frontend validation must revert immediately
+    await distanceInput.click();
+    await distanceInput.fill('42');
+    await distanceInput.press('Enter');
+    await expect(distanceInput).toHaveValue(confirmedValidValue);
+  });
 });

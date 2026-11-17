@@ -309,7 +309,7 @@ pub fn RowedInputs(inputs: Vec<InputData>) -> Element {
 
     rsx! {
         // Standard slice chunks yield sub-slices without any intermediate heap allocation
-        for (row_idx, chunk) in inputs.chunks(2).enumerate() {
+        for (row_idx , chunk) in inputs.chunks(2).enumerate() {
             div {
                 // Key ensures fast and stable Virtual DOM reconciliation
                 key: "input_row_{row_idx}",
@@ -555,6 +555,7 @@ pub fn UnitInput(
     #[props(default = String::new())] label_class: String,
     #[props(default = false)] readonly: bool,
     #[props(default = false)] flushable_input: bool,
+    #[props(optional)] reset_trigger: Option<ReadSignal<usize>>,
 ) -> Element {
     let mut val_str =
         use_signal(|| format_si_with_base_unit(*value.read(), &unit_config, reciprocal));
@@ -568,6 +569,19 @@ pub fn UnitInput(
                 format_si_with_base_unit(*val_memo.read(), &current_unit_config, reciprocal);
             if new_str != *val_str.peek() {
                 val_str.set(new_str);
+            }
+        }
+    });
+
+    // Revert displayed string to the last confirmed prop value when requested by parent
+    use_effect({
+        let current_unit_config = unit_config.clone();
+        move || {
+            if let Some(trigger) = reset_trigger {
+                let _ = trigger.read();
+                let reverted_str =
+                    format_si_with_base_unit(*val_memo.read(), &current_unit_config, reciprocal);
+                val_str.set(reverted_str);
             }
         }
     });
@@ -613,8 +627,10 @@ pub fn UnitInput(
         if readonly {
             input_class = format!("{input_class} ref-connection-input");
         }
+        let reset_gen = reset_trigger.map_or(0, |t| *t.read());
         rsx! {
             input {
+                key: "{id}-{reset_gen}",
                 class: input_class,
                 id,
                 value: val_str,
@@ -669,7 +685,7 @@ pub fn LabeledSelect(
                     onchange.call(e);
                 },
                 // Use key for fast VDOM list reconciliation and avoid .clone()
-                for (is_selected, option) in &options {
+                for (is_selected , option) in &options {
                     option {
                         key: "{option}",
                         selected: *is_selected,

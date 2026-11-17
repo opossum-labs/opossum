@@ -15,7 +15,7 @@ use opossum_core::{
     error::OpmResult,
     opm_document::{
         OpmDocument,
-        optimization::{FiniteDifferenceMethod, FreeVariable, ParameterCoupling},
+        optimization::{FiniteDifferenceMethod, FreeVariable, ParameterAddress, ParameterCoupling},
     },
 };
 use rayon::prelude::*;
@@ -168,17 +168,24 @@ impl MeritFunction {
                 .into_par_iter()
                 .map(|i| {
                     let h = self.free_variables[i].finite_difference_step(x[i]);
-
                     let mut x_plus = x.to_vec();
                     x_plus[i] += h;
-
                     let mut x_minus = x.to_vec();
                     x_minus[i] -= h;
-
+                    // Physical connection distances cannot be negative; clamp backward step to 0.0
+                    // so finite differences do not hit the fatal_penalty wall near zero distance.
+                    if matches!(
+                        self.free_variables[i].address,
+                        ParameterAddress::ConnectionDistance { .. }
+                    ) && x[i] >= 0.0
+                        && x_minus[i] < 0.0
+                    {
+                        x_minus[i] = 0.0;
+                    }
+                    let actual_span = x_plus[i] - x_minus[i];
                     let f_plus = self.evaluate(&x_plus);
                     let f_minus = self.evaluate(&x_minus);
-
-                    (f_plus - f_minus) / (2.0 * h)
+                    (f_plus - f_minus) / actual_span
                 })
                 .collect(),
             FiniteDifferenceMethod::Forward => {
@@ -282,12 +289,17 @@ impl MeritFunction {
                 let mut x_minus = x.to_vec();
                 x_plus[j] += h;
                 x_minus[j] -= h;
-
+                if matches!(var.address, ParameterAddress::ConnectionDistance { .. })
+                    && x[j] >= 0.0
+                    && x_minus[j] < 0.0
+                {
+                    x_minus[j] = 0.0;
+                }
+                let actual_span = x_plus[j] - x_minus[j];
                 let r_plus = self.evaluate_residuals(&x_plus);
                 let r_minus = self.evaluate_residuals(&x_minus);
-
                 if r_plus.len() == m && r_minus.len() == m {
-                    (r_plus - r_minus) / (2.0 * h)
+                    (r_plus - r_minus) / actual_span
                 } else {
                     DVector::zeros(m)
                 }

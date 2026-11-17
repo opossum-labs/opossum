@@ -64,6 +64,7 @@ pub fn EdgeComponent(edge: ReadStore<EdgeElement>, distance_places: bool) -> Ele
     // Construct persistent, deterministic test IDs for path and input field separately
     let edge_test_id = format!("edge-{}", edge.edge_index());
     let edge_input_test_id = format!("edge-input-{}", edge.edge_index());
+    let reset_trigger = use_signal(|| 0usize);
 
     rsx! {
         path {
@@ -118,6 +119,7 @@ pub fn EdgeComponent(edge: ReadStore<EdgeElement>, distance_places: bool) -> Ele
                     value: edge.distance(),
                     readonly: !distance_offered,
                     unit_config: UnitHandling::new("m", true),
+                    reset_trigger: ReadSignal::from(reset_trigger),
                     onchange: {
                         let connect_info: ConnectInfo = edge.info().clone();
                         move |new_distance: f64| {
@@ -127,6 +129,7 @@ pub fn EdgeComponent(edge: ReadStore<EdgeElement>, distance_places: bool) -> Ele
                                 .send(GraphsWorkspaceAction::UpdateEdge {
                                     connection: updated_info,
                                     graph_id,
+                                    reset_trigger,
                                 });
                         }
                     },

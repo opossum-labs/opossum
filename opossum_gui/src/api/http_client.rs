@@ -182,9 +182,8 @@ impl HTTPClient {
     /// # Errors
     ///
     /// This function will return an error if
-    ///
     /// - the request fails (e.g. the route is not reachable)
-    /// - the response cannot be deserialized into the expected type
+    /// - the server responds with a non-success HTTP status code
     pub async fn patch<B: Serialize + DeserializeOwned>(
         &self,
         route: &str,
@@ -196,10 +195,7 @@ impl HTTPClient {
             .json(&body)
             .send()
             .await;
-        res.map_or_else(
-            |_| Err(format!("Error on patch request on route: \"{route}\"")),
-            |_| Ok(()),
-        )
+        Self::no_content_result(res, route, "patch").await
     }
 
     pub async fn patch_ron<B: Serialize + DeserializeOwned>(
