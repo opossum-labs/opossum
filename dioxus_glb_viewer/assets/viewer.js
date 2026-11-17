@@ -800,18 +800,13 @@ export async function createViewer(canvasId, options, send, threeUrl) {
             }
             const root = gltf.scene;
             try {
-                await thickenLines(root);
+                thickenLines(root);
             } catch (e) {
                 // The lines stay one pixel wide; the model itself is still worth showing.
                 send({
                     event: 'error',
                     message: `lines could not be widened: ${(e && e.message) || e}`
                 });
-            }
-            // The add-on import is awaited above, so a newer request may have overtaken us since.
-            if (generations.get(op.id) !== gen) {
-                disposeSceneGraph(root);
-                return;
             }
             root.userData.glbId = op.id;
             // Every mesh both casts and receives: the models shadow the ground and each other.
@@ -1024,10 +1019,14 @@ export async function createViewer(canvasId, options, send, threeUrl) {
                 entry.helper.material.color.set(opts.selection_color);
             }
             // Line width and overlay blending apply to models already on screen too.
-            thickenLines(entry.root).catch((e) => send({
-                event: 'error',
-                message: `lines could not be widened: ${(e && e.message) || e}`
-            }));
+            try {
+                thickenLines(entry.root);
+            } catch (e) {
+                send({
+                    event: 'error',
+                    message: `lines could not be widened: ${(e && e.message) || e}`
+                });
+            }
             setBlending(entry.root);
         }
     }
