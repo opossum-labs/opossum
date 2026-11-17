@@ -23,13 +23,15 @@ use crate::{
 
 /// A node that splits the light of two inputs into two outputs.
 ///
-/// Its ports are `input_1`, `input_2`, `out1_trans1_refl2` and `out2_trans2_refl1`. Light arriving
-/// at an input is split at the face of that input (see [`OpticNode::surface_ports`]). The part the
-/// face transmits keeps its way, the part it reflects leaves through the other output:
-/// `out1_trans1_refl2` collects what `input_1` transmits and `input_2` reflects,
-/// `out2_trans2_refl1` the rest. An inverted node swaps inputs and outputs. How the light is
-/// split is up to the geometry and the coatings; this trait only routes it. Light entering the
-/// body of a node is not traced through it yet: only light passing a bore gets through a body.
+/// Its first and second input and output are the ports it declares in that order (see
+/// [`OpticNode::surface_ports`]), such as `input_1`, `input_2`, `out1_trans1_refl2` and
+/// `out2_trans2_refl1` of a [`BeamSplitter`](crate::nodes::BeamSplitter). Light arriving at an
+/// input is split at the face of that input. The part the face transmits keeps its way, the part
+/// it reflects leaves through the other output: the first output collects what the first input
+/// transmits and the second reflects, the second output the rest. An inverted node swaps inputs
+/// and outputs. How the light is split is up to the geometry and the coatings; this trait only
+/// routes it. Light entering the body of a node is not traced through it yet: only light passing
+/// a bore gets through a body.
 pub trait Splitter: OpticNode {
     /// Split the rays arriving at both inputs on the surface and merge them per output, as a ray
     /// trace does (see [`AnalysisRayTrace::analyze`](crate::analyzers::raytrace::AnalysisRayTrace::analyze)).
@@ -63,27 +65,17 @@ pub trait Splitter: OpticNode {
             }
             return self.split_axis(incoming_data, config);
         }
-        let (input_port1, input_port2) = if self.inverted() {
-            ("out1_trans1_refl2", "out2_trans2_refl1")
-        } else {
-            ("input_1", "input_2")
-        };
-        let in1 = incoming_data.get(input_port1);
-        let in2 = incoming_data.get(input_port2);
-        let (out1_data, out2_data) =
-            self.split_both_inputs(in1, in2, &AnalyzerType::RayTrace(config.clone()))?;
+        let (input_1, input_2) = self.port_pair(PortType::Input)?;
+        let (out1_data, out2_data) = self.split_both_inputs(
+            incoming_data.get(&input_1),
+            incoming_data.get(&input_2),
+            &AnalyzerType::RayTrace(config.clone()),
+        )?;
         if let Some(out1_data) = out1_data
             && let Some(out2_data) = out2_data
         {
-            let (target1, target2) = if self.inverted() {
-                ("input_1", "input_2")
-            } else {
-                ("out1_trans1_refl2", "out2_trans2_refl1")
-            };
-            Ok(LightResult::from([
-                (target1.into(), out1_data),
-                (target2.into(), out2_data),
-            ]))
+            let (out_1, out_2) = self.port_pair(PortType::Output)?;
+            Ok(LightResult::from([(out_1, out1_data), (out_2, out2_data)]))
         } else {
             Ok(LightResult::default())
         }
@@ -117,31 +109,18 @@ pub trait Splitter: OpticNode {
         incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
-        let (input_1, input_2, out_1, out_2) = if self.inverted() {
-            (
-                "out1_trans1_refl2",
-                "out2_trans2_refl1",
-                "input_1",
-                "input_2",
-            )
-        } else {
-            (
-                "input_1",
-                "input_2",
-                "out1_trans1_refl2",
-                "out2_trans2_refl1",
-            )
-        };
+        let (input_1, input_2) = self.port_pair(PortType::Input)?;
+        let (out_1, out_2) = self.port_pair(PortType::Output)?;
         // Transmission keeps the beam direction, reflection exits on the other output. So the first
         // input feeds (out_1, out_2) with its (transmitted, reflected) rays; the second input, whose
         // transmission continues into out_2, feeds them in swapped order.
         let first = incoming_data
-            .get(input_1)
-            .map(|input| self.split_axis_rays(input, input_1, out_1, config))
+            .get(&input_1)
+            .map(|input| self.split_axis_rays(input, &input_1, &out_1, config))
             .transpose()?;
         let second = incoming_data
-            .get(input_2)
-            .map(|input| self.split_axis_rays(input, input_2, out_2, config))
+            .get(&input_2)
+            .map(|input| self.split_axis_rays(input, &input_2, &out_2, config))
             .transpose()?
             .map(|(transmitted, reflected)| (reflected, transmitted));
         let mut parts = first.into_iter().chain(second);
@@ -156,8 +135,8 @@ pub trait Splitter: OpticNode {
             on_out_2.merge(&to_out_2);
         }
         Ok(LightResult::from([
-            (out_1.into(), LightData::Geometric(on_out_1)),
-            (out_2.into(), LightData::Geometric(on_out_2)),
+            (out_1, LightData::Geometric(on_out_1)),
+            (out_2, LightData::Geometric(on_out_2)),
         ]))
     }
     /// Returns the local frame from which the optical axis enters the given input port (see
@@ -526,20 +505,31 @@ pub trait Splitter: OpticNode {
         }
         Ok((transmitted, reflected))
     }
-    /// Return the names of the two ports of the given type, first and second, as the node shows
-    /// them (inverted, if it is).
+    /// Return the names of the two ports of the given type, first and second, in the order the
+    /// node declares them (see [`OpticNode::surface_ports`]); an inverted node takes those of the
+    /// other type.
     ///
     /// # Errors
     ///
     /// This function returns an error if the node does not have exactly two such ports.
     fn port_pair(&self, port_type: PortType) -> OpmResult<(String, String)> {
-        <[String; 2]>::try_from(self.ports().names(&port_type))
-            .map(Into::into)
-            .map_err(|names| {
-                OpossumError::Analysis(format!(
-                    "{} needs two {port_type:?} ports, but has {names:?}",
-                    self.node_type()
-                ))
-            })
+        let physical = if self.inverted() {
+            port_type.opposite()
+        } else {
+            port_type
+        };
+        let ports = self.surface_ports();
+        let declared = match physical {
+            PortType::Input => ports.inputs,
+            PortType::Output => ports.outputs,
+        };
+        let [(first, _), (second, _)] = declared else {
+            return Err(OpossumError::Analysis(format!(
+                "{} needs two {port_type:?} ports, but has {:?}",
+                self.node_type(),
+                declared.iter().map(|(name, _)| name).collect::<Vec<_>>()
+            )));
+        };
+        Ok(((*first).to_string(), (*second).to_string()))
     }
 }
