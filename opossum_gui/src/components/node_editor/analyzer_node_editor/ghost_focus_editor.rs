@@ -3,7 +3,7 @@ use crate::components::{
     node_editor::{
         accordion::StaticSection,
         analyzer_node_editor::{
-            light_data_editor::default_ray_data_source, source_port_card::SourcePortCard,
+            light_data_editor::default_ray_data_builder, source_port_card::SourcePortCard,
         },
         inputs::{
             input_components::{FlushableTextInput, LabeledSelect},
@@ -102,23 +102,20 @@ pub fn GhostFocusEditor(
             if available_sources.is_empty() {
                 div { class: "text-muted small italic", "No Source Ports found." }
             }
-
             {
                 available_sources
                     .into_iter()
                     .map(|port| {
                         let port_uuid = port.uuid;
-                        let source = current_config
+                        let ray_data_builder = current_config
                             .get_source(&port_uuid)
-                            .map_or_else(
-                                || {
-                                    let default_wvl = crate::APP_CONFIG
-                                        .read()
-                                        .default_wavelength();
-                                    default_ray_data_source(default_wvl)
-                                },
-                                |builder| builder.source().clone(),
-                            );
+                            .cloned()
+                            .unwrap_or_else(|| {
+                                let default_wvl = crate::APP_CONFIG
+                                    .read()
+                                    .default_wavelength();
+                                default_ray_data_builder(default_wvl)
+                            });
                         let on_save_source = move |updated_builder| {
                             let mut updated_config = ghost_focus_config.peek().clone();
                             updated_config.map_source(port_uuid, updated_builder);
@@ -135,7 +132,7 @@ pub fn GhostFocusEditor(
                                 key: "{port_uuid}",
                                 analyzer_id: node_id,
                                 port,
-                                source,
+                                ray_data_builder,
                                 on_save: on_save_source,
                             }
                         }
