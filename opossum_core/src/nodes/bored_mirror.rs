@@ -37,18 +37,18 @@ inventory::submit! {
 /// mirrored, with one bore through the plate.
 ///
 /// The mirror reflects the light on its front face, while light in the bore passes the plate
-/// untouched. It thus splits a beam in two, so it has the ports of a
-/// [`BeamSplitter`](crate::nodes::BeamSplitter): what `input_1` sends through the bore leaves
-/// `out1_trans1_refl2`, what the mirror reflects leaves `out2_trans2_refl1`. Light that enters the
-/// glass, through the coating or at the rear face, is not traced through it yet: it is lost. Like a
-/// beam splitter, the mirror is turned by its alignment (e.g. by 45°) to send the reflected light
-/// sideways.
+/// untouched. It thus splits a beam in two, like a [`BeamSplitter`](crate::nodes::BeamSplitter):
+/// what `mirror` sends through the bore leaves `behind`, what the mirror reflects leaves
+/// `in_front`, together with what `through_bore` sends through the bore from behind. Light that
+/// enters the glass, through the coating or at the rear face, is not traced through it yet: it is
+/// lost. Like a beam splitter, the mirror is turned by its alignment (e.g. by 45°) to send the
+/// reflected light sideways.
 ///
 /// The optical axis is placed by the edge of the mirror alone: the mirror reflects it as if there
 /// were no bore, and behind the plate it runs on through the center of the bore, parallel to the
-/// arriving axis. Light at `input_2` only passes the bore, so a mirror placed through it gets the
-/// axis from behind along the bore, through its center on the rear face. An energy analysis knows
-/// no geometry, so it cannot split the light at the bore and refuses the mirror.
+/// arriving axis. Light at `through_bore` only passes the bore, so a mirror placed through it gets
+/// the axis from behind along the bore, through its center on the rear face. An energy analysis
+/// knows no geometry, so it cannot split the light at the bore and refuses the mirror.
 ///
 /// Curvature convention of the front face:
 /// - negative curvature will be a concave (focusing) mirror
@@ -56,11 +56,11 @@ inventory::submit! {
 ///
 /// ## Optical Ports
 ///   - Inputs
-///     - `input_1`, at the front face
-///     - `input_2`, at the rear face
+///     - `mirror`, at the mirrored front face
+///     - `through_bore`, at the rear face, for light that passes the bore from behind
 ///   - Outputs
-///     - `out1_trans1_refl2`, behind the plate
-///     - `out2_trans2_refl1`, in front of the plate
+///     - `behind`, behind the plate
+///     - `in_front`, in front of the plate
 ///
 /// ## Properties
 ///   - `name`
@@ -199,11 +199,11 @@ impl OpticNode for BoredMirror {
     }
     fn surface_ports(&self) -> SurfacePorts {
         SurfacePorts {
-            inputs: &[("input_1", Extruded::FRONT), ("input_2", Extruded::REAR)],
-            outputs: &[
-                ("out1_trans1_refl2", Extruded::REAR),
-                ("out2_trans2_refl1", Extruded::FRONT),
+            inputs: &[
+                ("mirror", Extruded::FRONT),
+                ("through_bore", Extruded::REAR),
             ],
+            outputs: &[("behind", Extruded::REAR), ("in_front", Extruded::FRONT)],
             splitting: &[],
         }
     }
@@ -340,23 +340,17 @@ mod test {
             names.sort();
             names
         };
-        assert_eq!(sorted(&node, PortType::Input), ["input_1", "input_2"]);
-        assert_eq!(
-            sorted(&node, PortType::Output),
-            ["out1_trans1_refl2", "out2_trans2_refl1"]
-        );
+        assert_eq!(sorted(&node, PortType::Input), ["mirror", "through_bore"]);
+        assert_eq!(sorted(&node, PortType::Output), ["behind", "in_front"]);
         node.set_inverted(true)?;
-        assert_eq!(
-            sorted(&node, PortType::Input),
-            ["out1_trans1_refl2", "out2_trans2_refl1"]
-        );
+        assert_eq!(sorted(&node, PortType::Input), ["behind", "in_front"]);
         Ok(())
     }
     /// Send rays into an input of the mirror in a ray trace.
     ///
     /// # Returns
     ///
-    /// The bundles leaving the first and the second output.
+    /// The bundles leaving behind and in front of the plate.
     fn ray_trace(mirror: &mut BoredMirror, input: &str, rays: Rays) -> OpmResult<(Rays, Rays)> {
         let output = AnalysisRayTrace::analyze(
             mirror,
@@ -367,7 +361,7 @@ mod test {
             Some(LightData::Geometric(rays)) => rays.clone(),
             _ => panic!("expected rays at port {port}"),
         };
-        Ok((bundle("out1_trans1_refl2"), bundle("out2_trans2_refl1")))
+        Ok((bundle("behind"), bundle("in_front")))
     }
     /// Assert whether a warning holding the given text was logged since `testing_logger::setup`.
     fn assert_warning(text: &str, logged: bool) {
@@ -394,7 +388,7 @@ mod test {
             nanometer!(1000.0),
         )?;
         testing_logger::setup();
-        let (behind, in_front) = ray_trace(&mut mirror, "input_1", rays)?;
+        let (behind, in_front) = ray_trace(&mut mirror, "mirror", rays)?;
         assert_warning("enters its body", false);
         assert_valid_energies(&behind, &[1.0], "the ray through the bore passes");
         assert_valid_energies(&in_front, &[1.0], "the ray on the mirror is reflected");
@@ -405,8 +399,8 @@ mod test {
         assert_abs_diff_eq!(back.direction(), -Vector3::z(), epsilon = 1e-12);
         Ok(())
     }
-    /// Light arriving from behind passes the bore into the second output. Light on the rear face
-    /// enters the glass, which is not traced yet: it is lost, with a warning.
+    /// Light arriving from behind passes the bore and leaves in front of the plate. Light on the
+    /// rear face enters the glass, which is not traced yet: it is lost, with a warning.
     #[test]
     fn light_from_behind_on_the_glass_is_lost_with_a_warning() -> OpmResult<()> {
         let mut mirror = placed_at_origin::<BoredMirror>()?;
@@ -420,7 +414,7 @@ mod test {
         };
         let rays = Rays::from(vec![from_behind(0.0)?, from_behind(5.0)?]);
         testing_logger::setup();
-        let (behind, in_front) = ray_trace(&mut mirror, "input_2", rays)?;
+        let (behind, in_front) = ray_trace(&mut mirror, "through_bore", rays)?;
         assert_warning("enters its body", true);
         assert_valid_energies(&in_front, &[1.0], "the ray through the bore passes");
         assert_valid_energies(&behind, &[], "the rear face reflects nothing");
@@ -433,7 +427,7 @@ mod test {
         let mut mirror = BoredMirror::default().with_curvature(millimeter!(-200.0))?;
         mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let rays = rays_along_z_from(&[millimeter!(0.0, 5.0, -10.0)], nanometer!(1000.0))?;
-        let (_, in_front) = ray_trace(&mut mirror, "input_1", rays)?;
+        let (_, in_front) = ray_trace(&mut mirror, "mirror", rays)?;
         let back = in_front.iter().find(|ray| ray.valid()).expect("one ray");
         let (position, direction) = (back.position(), back.direction());
         let across = -position.y.value / direction.y;
@@ -489,21 +483,9 @@ mod test {
         let mirror = scenery.add_node(mirror)?;
         let behind = scenery.add_node(Dummy::new("behind"))?;
         let reflected = scenery.add_node(Dummy::new("reflected"))?;
-        scenery.connect_nodes(src, "output_1", mirror, "input_1", millimeter!(100.0))?;
-        scenery.connect_nodes(
-            mirror,
-            "out1_trans1_refl2",
-            behind,
-            "input_1",
-            millimeter!(50.0),
-        )?;
-        scenery.connect_nodes(
-            mirror,
-            "out2_trans2_refl1",
-            reflected,
-            "input_1",
-            millimeter!(50.0),
-        )?;
+        scenery.connect_nodes(src, "output_1", mirror, "mirror", millimeter!(100.0))?;
+        scenery.connect_nodes(mirror, "behind", behind, "input_1", millimeter!(50.0))?;
+        scenery.connect_nodes(mirror, "in_front", reflected, "input_1", millimeter!(50.0))?;
         let mut config = RayTraceConfig::default();
         config.map_source(
             src,
@@ -570,10 +552,10 @@ mod test {
         let axis = rays_along_z_from(&[millimeter!(0.0, 0.0, -10.0)], nanometer!(1000.0))?;
         let output = AnalysisRayTrace::calc_node_positions(
             &mut mirror,
-            LightResult::from([("input_1".into(), LightData::Geometric(axis))]),
+            LightResult::from([("mirror".into(), LightData::Geometric(axis))]),
             &RayTraceConfig::default(),
         )?;
-        let Some(LightData::Geometric(behind)) = output.get("out1_trans1_refl2") else {
+        let Some(LightData::Geometric(behind)) = output.get("behind") else {
             panic!("expected the axis behind the plate");
         };
         let path = behind
@@ -610,7 +592,7 @@ mod test {
             nanometer!(1000.0),
         )?;
         testing_logger::setup();
-        let (behind, in_front) = ray_trace(&mut mirror, "input_1", rays)?;
+        let (behind, in_front) = ray_trace(&mut mirror, "mirror", rays)?;
         assert_warning("hits the wall of the bore", true);
         assert_valid_energies(
             &behind,
@@ -637,10 +619,10 @@ mod test {
         )?);
         let output = AnalysisRayTrace::calc_node_positions(
             &mut mirror,
-            LightResult::from([("input_2".into(), LightData::Geometric(axis))]),
+            LightResult::from([("through_bore".into(), LightData::Geometric(axis))]),
             &RayTraceConfig::default(),
         )?;
-        let Some(LightData::Geometric(in_front)) = output.get("out2_trans2_refl1") else {
+        let Some(LightData::Geometric(in_front)) = output.get("in_front") else {
             panic!("expected the axis in front of the plate");
         };
         let path = in_front
@@ -663,16 +645,16 @@ mod test {
         mirror.set_alignment(millimeter!(0., 0., 0.), degree!(0., 45., 0.))?;
         Ok(mirror)
     }
-    /// The second input lies on the rear face, where light only passes the bore: its axis enters
+    /// `through_bore` lies on the rear face, where light only passes the bore: its axis enters
     /// from behind along the axis of the bore, through the center of the bore on the rear face.
     /// On [`a_scraper_along_the_beam`] that center lies at (−1, 0, 6) mm of the mirror's own frame,
-    /// which the turn carries to (3.536, 0, 4.950) mm, and the axis enters along −z. The first
-    /// input keeps the axis of every node. Inverted, the port on the rear face enters the same way
-    /// and the one on the front face like the first input.
+    /// which the turn carries to (3.536, 0, 4.950) mm, and the axis enters along −z. `mirror`
+    /// keeps the axis of every node. Inverted, the port on the rear face, `behind`, enters the same
+    /// way and the one on the front face, `in_front`, like `mirror`.
     #[test]
     fn the_bore_input_enters_along_the_bore_from_behind() -> OpmResult<()> {
         let mut mirror = a_scraper_along_the_beam()?;
-        let through_the_bore = mirror.axis_entrance_frame("input_2")?;
+        let through_the_bore = mirror.axis_entrance_frame("through_bore")?;
         let entry = through_the_bore.translation();
         assert_abs_diff_eq!(
             Vector3::new(entry.x.value, entry.y.value, entry.z.value),
@@ -686,14 +668,11 @@ mod test {
                 epsilon = 1e-12
             );
         }
-        assert_eq!(mirror.axis_entrance_frame("input_1")?, Isometry::identity());
+        assert_eq!(mirror.axis_entrance_frame("mirror")?, Isometry::identity());
         mirror.set_inverted(true)?;
+        assert_eq!(mirror.axis_entrance_frame("behind")?, through_the_bore);
         assert_eq!(
-            mirror.axis_entrance_frame("out1_trans1_refl2")?,
-            through_the_bore
-        );
-        assert_eq!(
-            mirror.axis_entrance_frame("out2_trans2_refl1")?,
+            mirror.axis_entrance_frame("in_front")?,
             Isometry::identity()
         );
         Ok(())
@@ -703,9 +682,9 @@ mod test {
     #[test]
     fn a_shifted_mirror_takes_the_entrance_of_its_bore_along() -> OpmResult<()> {
         let mut mirror = BoredMirror::default();
-        let upright = mirror.axis_entrance_frame("input_2")?;
+        let upright = mirror.axis_entrance_frame("through_bore")?;
         mirror.set_alignment(millimeter!(0., 2., 0.), degree!(0., 0., 0.))?;
-        let shifted = mirror.axis_entrance_frame("input_2")?;
+        let shifted = mirror.axis_entrance_frame("through_bore")?;
         let (from, to) = (upright.translation(), shifted.translation());
         assert_abs_diff_eq!(
             Vector3::new(
@@ -718,7 +697,7 @@ mod test {
         );
         Ok(())
     }
-    /// Place the given mirror 100 mm from a source along z, fed through its second input, with an
+    /// Place the given mirror 100 mm from a source along z, fed through `through_bore`, with an
     /// energy meter 50 mm in front of it, and trace a collimated beam of 1 mm radius through it.
     ///
     /// # Returns
@@ -730,14 +709,8 @@ mod test {
         let src = scenery.add_node(SourcePort::default())?;
         let mirror = scenery.add_node(mirror)?;
         let meter = scenery.add_node(EnergyMeter::default())?;
-        scenery.connect_nodes(src, "output_1", mirror, "input_2", millimeter!(100.0))?;
-        scenery.connect_nodes(
-            mirror,
-            "out2_trans2_refl1",
-            meter,
-            "input_1",
-            millimeter!(50.0),
-        )?;
+        scenery.connect_nodes(src, "output_1", mirror, "through_bore", millimeter!(100.0))?;
+        scenery.connect_nodes(mirror, "in_front", meter, "input_1", millimeter!(50.0))?;
         let mut config = RayTraceConfig::default();
         config.map_source(
             src,
@@ -753,7 +726,7 @@ mod test {
             rays_recorded_by_meter(&scenery, meter)?,
         ))
     }
-    /// Placed through its second input, the mirror lets the light pass its bore from behind,
+    /// Placed through `through_bore`, the mirror lets the light pass its bore from behind,
     /// along the axis of the bore: none of it is lost on the glass or on the wall of the bore, and
     /// the node in front of the mirror is placed along the bore. The distance from the source counts
     /// to where the axis meets the rear face. On a default mirror the front face lies 6 mm further
@@ -776,8 +749,8 @@ mod test {
         }
         Ok(())
     }
-    /// With light on both inputs, the first places the mirror. A source left to the positioning
-    /// run on the second input is put behind the bore, aimed along its axis, 80 mm from its center
+    /// With light on both inputs, `mirror` places the mirror. A source left to the positioning run
+    /// on `through_bore` is put behind the bore, aimed along its axis, 80 mm from its center
     /// on the rear face. [`a_scraper_along_the_beam`] placed 100 mm from the first source has that
     /// center at (3.536, 0, 104.950) mm. The light of both sources meets the mirror without a
     /// warning.
@@ -789,8 +762,14 @@ mod test {
         behind.set_positioning(NodePositioning::Automatic(None))?;
         let behind = scenery.add_node(behind)?;
         let mirror = scenery.add_node(a_scraper_along_the_beam()?)?;
-        scenery.connect_nodes(first, "output_1", mirror, "input_1", millimeter!(100.0))?;
-        scenery.connect_nodes(behind, "output_1", mirror, "input_2", millimeter!(80.0))?;
+        scenery.connect_nodes(first, "output_1", mirror, "mirror", millimeter!(100.0))?;
+        scenery.connect_nodes(
+            behind,
+            "output_1",
+            mirror,
+            "through_bore",
+            millimeter!(80.0),
+        )?;
         let mut config = RayTraceConfig::default();
         for source in [first, behind] {
             config.map_source(
@@ -833,7 +812,7 @@ mod test {
     fn an_energy_analysis_refuses_the_mirror() -> OpmResult<()> {
         let mut mirror = BoredMirror::new("scraper");
         let input =
-            LightResult::from([("input_1".into(), LightData::Energy(create_he_ne_spec(1.0)?))]);
+            LightResult::from([("mirror".into(), LightData::Energy(create_he_ne_spec(1.0)?))]);
         let error = AnalysisEnergy::analyze(&mut mirror, input, &EnergyConfig::default())
             .expect_err("the energy analysis split the light at the bore");
         assert!(error.to_string().contains("'scraper'"), "{error}");
