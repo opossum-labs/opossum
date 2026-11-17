@@ -368,6 +368,7 @@ async fn get_scene_manifest(
             |_| Vec::new(),
             |run| connect_infos(document.scenery(), &run.connections_placing_by_distance()),
         );
+        drop(document);
         (run, analyzer, sources, placing)
     };
     // The rays are only traced while a view asks for them.
@@ -452,12 +453,11 @@ async fn get_scene_axis(
         .axis
         .as_ref()
         .and_then(|axis| axis.named(query.v.as_deref()));
-    let glb = match built {
-        Some(glb) => glb,
-        None => {
-            let document = data.document.lock();
-            axis_glb(&document.run_positioning(analyzer_still_there(&document, query.analyzer))?)?
-        }
+    let glb = if let Some(glb) = built {
+        glb
+    } else {
+        let document = data.document.lock();
+        axis_glb(&document.run_positioning(analyzer_still_there(&document, query.analyzer))?)?
     };
     Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
 }
@@ -501,19 +501,20 @@ async fn get_scene_rays(
         .rays
         .as_ref()
         .and_then(|rays| rays.named(query.v.as_deref()));
-    let glb = match built {
-        Some(glb) => glb,
-        None => {
-            let light = {
-                let document = data.document.lock();
-                let analyzer = analyzer_still_there(&document, query.analyzer);
-                // A model without light of its own is not positioned for it.
-                drawn_light_sources(&document, analyzer)?
-                    .map(|sources| OpmResult::Ok((document.run_positioning(analyzer)?, sources)))
-                    .transpose()?
-            };
-            traced_light(light, query.max_rays, query.full_spectrum).await?
-        }
+    let glb = if let Some(glb) = built {
+        glb
+    } else {
+        let light = {
+            let document = data.document.lock();
+            let analyzer = analyzer_still_there(&document, query.analyzer);
+            // A model without light of its own is not positioned for it.
+            let light = drawn_light_sources(&document, analyzer)?
+                .map(|sources| OpmResult::Ok((document.run_positioning(analyzer)?, sources)))
+                .transpose()?;
+            drop(document);
+            light
+        };
+        traced_light(light, query.max_rays, query.full_spectrum).await?
     };
     Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
 }
