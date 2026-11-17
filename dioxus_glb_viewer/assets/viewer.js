@@ -332,6 +332,7 @@ export async function createViewer(canvasId, options, send, threeUrl) {
         controls.update(); // needed for enableDamping
         updateGround();
         if (shadowCameraDirty) { updateShadowCamera(); shadowCameraDirty = false; }
+        reportScale();
         renderer.render(scene, viewCamera());
         // Overlay the orientation gizmo after the main scene is rendered.
         // autoClear must be false so the gizmo's internal renderer.render() does not
@@ -660,7 +661,7 @@ export async function createViewer(canvasId, options, send, threeUrl) {
     function syncOrtho() {
         const target = controls.target;
         const dist = camera.position.distanceTo(target);
-        const halfHeight = dist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+        const halfHeight = targetHalfHeight();
         ortho.top = halfHeight;
         ortho.bottom = -halfHeight;
         ortho.right = halfHeight * camera.aspect;
@@ -681,6 +682,35 @@ export async function createViewer(canvasId, options, send, threeUrl) {
         ortho.far = 2 * back;
         ortho.updateProjectionMatrix();
         ortho.updateMatrixWorld();
+    }
+
+    /**
+     * Half the height of the plane through the orbit target as `camera` sees it - and so of the
+     * orthographic twin's frustum.
+     *
+     * @returns {number} in world units.
+     */
+    function targetHalfHeight() {
+        const dist = camera.position.distanceTo(controls.target);
+        return dist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    }
+
+    // ── View scale ────────────────────────────────────────────────────────────
+    /** World units per CSS pixel as last reported to Rust; 0 before the first report. */
+    let reportedScale = 0;
+
+    /**
+     * Tells Rust how many world units one CSS pixel spans on the plane through the orbit target,
+     * whenever that changes by more than a ten-thousandth: on zooming, resizing and framing. Orbiting
+     * and panning keep it. In the orthographic projection it holds everywhere in the picture.
+     */
+    function reportScale() {
+        const height = Math.max(1, Math.floor(canvas.clientHeight));
+        const scale = 2 * targetHalfHeight() / height;
+        // OrbitControls rewrites the camera every frame, which jitters the last digits of the scale.
+        if (Math.abs(scale - reportedScale) <= 1e-4 * scale) return;
+        reportedScale = scale;
+        send({ event: 'view_scale', units_per_pixel: scale });
     }
 
     // ── Base64 → ArrayBuffer ─────────────────────────────────────────────────

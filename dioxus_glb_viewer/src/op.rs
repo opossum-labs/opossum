@@ -108,6 +108,8 @@ pub enum WireEvent {
     LoadError { id: String, message: String },
     /// Non-recoverable error.
     Error { message: String },
+    /// World units per CSS pixel on the plane through the orbit target; sent when it changes.
+    ViewScale { units_per_pixel: f32 },
     /// Click result (including a miss).
     Pick {
         id: Option<String>,
@@ -313,6 +315,21 @@ mod tests {
         };
         let json = serde_json::to_value(opts).expect("options serialise");
         assert_eq!(json["orientation_gizmo"], true);
+    }
+
+    /// `viewer.js` sends the scale as `{ event: 'view_scale', units_per_pixel }`. An event that does
+    /// not deserialize ends the viewer's event loop, picks included, so the names must match exactly.
+    #[test]
+    fn the_view_scale_arrives_as_viewer_js_sends_it() {
+        let event: WireEvent = serde_json::from_value(serde_json::json!({
+            "event": "view_scale",
+            "units_per_pixel": 0.5,
+        }))
+        .expect("the event deserializes");
+        assert!(
+            matches!(event, WireEvent::ViewScale { units_per_pixel } if (units_per_pixel - 0.5).abs() < f32::EPSILON),
+            "{event:?}"
+        );
     }
 
     /// `viewer.js` dispatches on the `op` tag and reads `id` and `opacity`.

@@ -49,4 +49,14 @@ pub enum ViewerEvent {
         /// Description of the error.
         message: String,
     },
+    /// How many world units one CSS pixel spans on the plane through the orbit target.
+    ///
+    /// Reported once the view is up and again whenever it changes: on zooming, resizing and
+    /// framing, not on orbiting or panning. In perspective it holds at the target's depth only; in
+    /// the [orthographic](crate::Projection::Orthographic) projection everywhere in the picture,
+    /// which is what makes a scale bar possible there.
+    ViewScale {
+        /// World units per CSS pixel. glTF's unit of length is the meter.
+        units_per_pixel: f32,
+    },
 }

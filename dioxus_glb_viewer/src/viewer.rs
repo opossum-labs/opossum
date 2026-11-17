@@ -184,6 +184,11 @@ pub fn GlbViewer(
                         h.call(ViewerEvent::Error { message });
                     }
                 }
+                WireEvent::ViewScale { units_per_pixel } => {
+                    if let Some(h) = on_event {
+                        h.call(ViewerEvent::ViewScale { units_per_pixel });
+                    }
+                }
             }
         }
     });
