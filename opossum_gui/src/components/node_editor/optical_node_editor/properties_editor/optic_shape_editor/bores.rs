@@ -1,7 +1,6 @@
 use super::OutlineShapeInput;
 use crate::components::node_editor::{
     accordion::AccordionItem,
-    hooks::use_synced_signal,
     inputs::{
         InputParam, IntoInputData, IntoInputDataStrings,
         input_components::{LabeledSelect, RowedInputs},
@@ -10,7 +9,7 @@ use crate::components::node_editor::{
 };
 use dioxus::prelude::*;
 use opossum_core::{
-    apertures::{Bore, Outline, OutlineShape},
+    apertures::{Bore, OutlineShape},
     degree, meter,
     utils::default_from_name::DefaultFromName,
 };
@@ -74,84 +73,49 @@ impl IntoInputData<f64, Bore, Bore> for BoreParam {
     }
 }
 
-/// Editor for the bore through a component: a collapsed section with the bore being drafted
-/// (shape, offset and rotation), starting as the bore the optic shape has. Whether a component
-/// has a bore is up to its kind, so the bore can be changed but neither added nor removed.
+/// Editor for the bore through a component: a collapsed section with its shape, offset, rotation
+/// and tilt. Whether a component has a bore is up to its kind, so the bore can be changed but
+/// neither added nor removed.
 ///
-/// Updating the bore hands it on once, so it is one step to undo. Editing the draft hands
-/// nothing on; while the core refuses the outline the draft would make ([`Outline::new`]), the
-/// button looks refused, does nothing and tells why on hover.
+/// Like every other field, an input hands the changed bore on as soon as it is committed (on
+/// Enter or when it loses focus); whether the core accepts the outline it makes is up to the
+/// caller.
 ///
 /// # Arguments
 ///
-/// * `edge` - the edge of the component shown, which the bore has to lie within.
-/// * `bore` - the bore the optic shape has.
+/// * `bore` - the bore shown.
 /// * `on_bore_change` - handler receiving the changed bore.
 /// * `readonly` - whether the inputs are shown read-only.
 #[component]
-pub fn BoreEditor(
-    edge: OutlineShape,
-    bore: Bore,
-    on_bore_change: EventHandler<Bore>,
-    readonly: bool,
-) -> Element {
-    let mut draft = use_synced_signal(bore);
-
-    let on_draft_change = EventHandler::new(move |bore: Bore| draft.set(bore));
-    let on_draft_shape_change = EventHandler::new(move |shape: OutlineShape| {
-        let (center, rotation, tilt) = {
-            let bore = draft.read();
-            (bore.center(), bore.rotation(), bore.tilt())
-        };
-        draft.set(Bore::new(shape, center, rotation).with_tilt(tilt.0, tilt.1));
+pub fn BoreEditor(bore: Bore, on_bore_change: EventHandler<Bore>, readonly: bool) -> Element {
+    let on_shape_change = EventHandler::new({
+        let bore = bore.clone();
+        move |shape: OutlineShape| {
+            let tilt = bore.tilt();
+            on_bore_change
+                .call(Bore::new(shape, bore.center(), bore.rotation()).with_tilt(tilt.0, tilt.1));
+        }
     });
-
-    let draft_bore = draft.read().clone();
-    let submitted = draft_bore.clone();
-    let refusal = (!readonly)
-        .then(|| Outline::new(edge, Some(draft_bore.clone())).err())
-        .flatten()
-        .map(|refusal| refusal.to_string());
-    let refused = refusal.is_some();
-    let draft_inputs = rsx! {
+    let inputs = rsx! {
         LabeledSelect {
             id: "boreShapeSelector",
             label: "Bore",
-            options: select_options_from_enum_iterator(draft_bore.shape(), None),
+            options: select_options_from_enum_iterator(bore.shape(), None),
             readonly,
             onchange: move |e: Event<FormData>| {
                 if let Some(shape) = OutlineShape::default_from_name(&e.value()) {
-                    on_draft_shape_change.call(shape);
+                    on_shape_change.call(shape);
                 }
             },
         }
         div { class: "accordion-content-wrapper-div border-start",
-            OutlineShapeInput {
-                shape: draft_bore.shape().clone(),
-                on_shape_change: on_draft_shape_change,
-                readonly,
-            }
-            RowedInputs { inputs: BoreParam::to_input_data_vec(&draft_bore, on_draft_change, readonly) }
-        }
-        input {
-            class: if refused { "border-start btn refused" } else { "border-start btn" },
-            r#type: "button",
-            id: "boreSubmit",
-            value: "Update bore",
-            disabled: readonly,
-            // Refused, the button stays hoverable so that its title can say why.
-            "aria-disabled": refused,
-            title: refusal.unwrap_or_default(),
-            onclick: move |_| {
-                if !refused {
-                    on_bore_change.call(submitted.clone());
-                }
-            },
+            OutlineShapeInput { shape: bore.shape().clone(), on_shape_change, readonly }
+            RowedInputs { inputs: BoreParam::to_input_data_vec(&bore, on_bore_change, readonly) }
         }
     };
     rsx! {
         AccordionItem {
-            elements: vec![draft_inputs],
+            elements: vec![inputs],
             header: "Bore",
             header_id: "boreEditorHeading",
             parent_id: "boreEditorAccordion",
