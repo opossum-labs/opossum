@@ -230,6 +230,8 @@ pub fn SceneView() -> Element {
         } else {
             Projection::Perspective
         };
+        wanted.view_grid = controls.view_grid;
+        wanted.rulers = controls.rulers;
         set_environment(&mut wanted, controls.hdr_environment);
         if *options.peek() != wanted {
             options.set(wanted);
@@ -313,7 +315,7 @@ pub fn SceneView() -> Element {
     rsx! {
         div {
             class: "scene-view",
-            // The view's keyboard shortcuts - Fit, Reset, the four visibility toggles and the
+            // The view's keyboard shortcuts - Fit, Reset, the visibility toggles and the
             // projection - act only while this container is focused, so it is made focusable and
             // refocused on every click into it: a click to orbit is enough to be "in" the view. They
             // are kept off the global
@@ -370,6 +372,20 @@ pub fn SceneView() -> Element {
                         SceneShortcut::Projection => {
                             let mut controls = SCENE_VIEW_CONTROLS.write();
                             controls.orthographic = !controls.orthographic;
+                        }
+                        // Like their menu entries, these two act only where they show: in
+                        // orthographic projection.
+                        SceneShortcut::Grid => {
+                            let mut controls = SCENE_VIEW_CONTROLS.write();
+                            if controls.orthographic {
+                                controls.view_grid = !controls.view_grid;
+                            }
+                        }
+                        SceneShortcut::Rulers => {
+                            let mut controls = SCENE_VIEW_CONTROLS.write();
+                            if controls.orthographic {
+                                controls.rulers = !controls.rulers;
+                            }
                         }
                     }
                 }

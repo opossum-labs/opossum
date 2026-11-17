@@ -121,6 +121,28 @@ pub fn SceneViewMenu(on_menu_action: EventHandler<AppCommand>, is_connected: boo
                         controls.orthographic = !controls.orthographic;
                     },
                 }
+                // Drawn in orthographic projection only, so greyed out in perspective, where a
+                // click would change nothing to be seen; they keep their setting meanwhile.
+                SceneViewMenuEntry {
+                    label: "Grid",
+                    shown: Some(controls.view_grid),
+                    disabled: !open || !controls.orthographic,
+                    shortcut: SceneShortcut::Grid.key_hint(),
+                    on_click: move |()| {
+                        let mut controls = SCENE_VIEW_CONTROLS.write();
+                        controls.view_grid = !controls.view_grid;
+                    },
+                }
+                SceneViewMenuEntry {
+                    label: "Rulers",
+                    shown: Some(controls.rulers),
+                    disabled: !open || !controls.orthographic,
+                    shortcut: SceneShortcut::Rulers.key_hint(),
+                    on_click: move |()| {
+                        let mut controls = SCENE_VIEW_CONTROLS.write();
+                        controls.rulers = !controls.rulers;
+                    },
+                }
                 SceneViewMenuEntry {
                     label: "Optical axis",
                     shown: Some(controls.beam_axis),

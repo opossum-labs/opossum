@@ -48,6 +48,14 @@ pub struct SceneViewControls {
     /// the setup everywhere, rather than in perspective. Off by default. Switching keeps the camera
     /// where it is. Mirrors `ViewerOptions::projection`.
     pub orthographic: bool,
+    /// Whether a grid at round steps, counted from the world origin, is drawn over the picture. Shown
+    /// in orthographic projection only, where one length on screen holds everywhere; the setting is
+    /// kept meanwhile. Off by default. Mirrors `ViewerOptions::view_grid`.
+    pub view_grid: bool,
+    /// Whether rulers along the top and the left edge label the grid's steps with their coordinates.
+    /// Shown in orthographic projection only, like the grid. Off by default. Mirrors
+    /// `ViewerOptions::rulers`.
+    pub rulers: bool,
 }
 
 impl Default for SceneViewControls {
@@ -63,6 +71,8 @@ impl Default for SceneViewControls {
             additive_rays: false,
             opacity: 0.2,
             orthographic: false,
+            view_grid: false,
+            rulers: false,
         }
     }
 }
@@ -89,7 +99,7 @@ pub enum SceneViewRequest {
 /// that would steal the same letters from every other panel. This type is the single place that pairs
 /// a key with its action; the view's key handler reads it, and the 3D View menu will show the key
 /// beside the matching entry. Each variant is one of the actions the menu already offers - two that
-/// move the camera ([`SceneViewRequest`]) and five that flip a switch in [`SceneViewControls`].
+/// move the camera ([`SceneViewRequest`]) and seven that flip a switch in [`SceneViewControls`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SceneShortcut {
     /// Frame all components - the menu's **Fit view**.
@@ -107,6 +117,10 @@ pub enum SceneShortcut {
     /// Switch between perspective and orthographic projection - the menu's **Orthographic
     /// projection** / **Perspective projection**.
     Projection,
+    /// Show or hide the grid over the orthographic picture - the menu's **Grid**.
+    Grid,
+    /// Show or hide the rulers along the orthographic picture's edges - the menu's **Rulers**.
+    Rulers,
 }
 
 impl SceneShortcut {
@@ -133,6 +147,8 @@ impl SceneShortcut {
             "b" => Some(Self::Beam),
             "l" => Some(Self::Rays),
             "o" => Some(Self::Projection),
+            "g" => Some(Self::Grid),
+            "u" => Some(Self::Rulers),
             _ => None,
         }
     }
@@ -155,6 +171,8 @@ impl SceneShortcut {
             Self::Beam => "B",
             Self::Rays => "L",
             Self::Projection => "O",
+            Self::Grid => "G",
+            Self::Rulers => "U",
         }
     }
 }
@@ -175,6 +193,8 @@ mod tests {
             SceneShortcut::Beam,
             SceneShortcut::Rays,
             SceneShortcut::Projection,
+            SceneShortcut::Grid,
+            SceneShortcut::Rulers,
         ] {
             let hint = shortcut.key_hint();
             assert_eq!(SceneShortcut::from_key(hint), Some(shortcut), "{hint}");
