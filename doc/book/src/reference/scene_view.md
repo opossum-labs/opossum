@@ -206,6 +206,7 @@ Lines keep their width on screen however far you zoom in or out.
 | Click a component | Select it; a box is drawn snugly around it |
 | Click empty space | Clear the selection |
 | Click a gizmo axis | Snap the camera to look straight along that axis |
+| Click **Persp** / **Ortho** above the gizmo | Switch between perspective and orthographic projection |
 
 Dragging never selects, so orbiting past a component does not pick it up by accident. The optical
 table is not selectable: clicking it clears the selection, the same as clicking empty space. Neither
@@ -233,11 +234,41 @@ menu entries, so you can frame, reset and toggle without leaving the viewport:
 | `A` | Show or hide the orientation gizmo |
 | `B` | Show or hide the optical axis |
 | `L` | Show or hide the traced rays |
+| `O` | Switch between perspective and orthographic projection |
 
 They act only while the viewport is focused, so the same letters typed in the graph or the properties
 sidebar are never caught by them. Only bare keys count: holding Ctrl, Cmd, Alt or Shift leaves them to
 whatever else the combination belongs to. `L` rather than `R` toggles the rays, because `R` is kept
 for resetting the camera. Each key is also shown beside its entry in the menu.
+
+## Perspective and orthographic projection
+
+The view starts in **perspective**, the way the eye sees: what is farther away looks smaller. That
+makes depth easy to read but lengths hard to compare. Two equal distances look different depending on
+how far they are from the camera, and parallel edges run together towards the back.
+
+In **orthographic** (parallel) projection, one length on screen stands for the same length in the
+setup everywhere in the picture, and parallel edges stay parallel. Click one of the gizmo's axes to
+look at the setup straight from above or from the side, and you can check by eye whether distances
+match, whether components line up, or whether a fold sits at the right height.
+
+There are three ways to switch between the two:
+
+- the small **Persp** / **Ortho** button above the orientation gizmo in the bottom-right corner of the
+  view, which moves down into the corner while the gizmo is hidden,
+- **Orthographic projection** / **Perspective projection** in the **3D View** menu,
+- `O` while the viewport is focused.
+
+The button names the projection that is on; the menu entry names the one a click switches to.
+
+Switching does not move the camera. Whatever sits at the point the camera orbits around keeps its size
+on screen, so only the depth changes: switch back and you see exactly what you saw before. Orbiting,
+zooming, panning, **Fit view**, **Reset camera**, the gizmo and clicking a component work the same in
+both projections. The projection is remembered like the menu's toggles.
+
+With **HDR environment** on, orthographic projection shows the plain background color behind the
+setup instead of the panorama, because a parallel view would only ever see one spot of it. Mirrors and
+glass still reflect the panorama.
 
 ## The status line
 
@@ -267,6 +298,7 @@ Everything else the view can be told sits in the **3D View** menu in the top nav
 | **Show / Hide Table** | Show or hide the optical table |
 | **Show / Hide HDR environment** | Put the shipped 360° panorama behind the setup and into mirrors and glass, or return to the background color and the calm horizon |
 | **Show / Hide World axes** | Show or hide the corner orientation gizmo |
+| **Orthographic projection / Perspective projection** | Switch to parallel projection, where lengths can be compared across the picture, or back to perspective (the default); see [Perspective and orthographic projection](#perspective-and-orthographic-projection) |
 | **Show / Hide Optical axis** | Show or hide the optical axis |
 | **Show / Hide Rays** | Show or hide the traced rays of the analyzer's sources |
 | **Full spectrum at each ray position / Spread spectrum over ray positions** | Give every ray position the whole spectrum of its source, or spread the spectrum over the positions, one wavelength each (the default) |
@@ -275,23 +307,24 @@ Everything else the view can be told sits in the **3D View** menu in the top nav
 | **ray opacity** | How opaque the rays are drawn; the axis is always solid |
 
 See [Light: the optical axis and the rays](#light-the-optical-axis-and-the-rays) for what the last
-six do. Fit view, Reset camera, Table, World axes, Optical axis and Rays also carry a keyboard
-shortcut, shown beside the entry — see [Keyboard shortcuts](#keyboard-shortcuts).
+six do. Fit view, Reset camera, Table, World axes, the projection, Optical axis and Rays also carry a
+keyboard shortcut, shown beside the entry — see [Keyboard shortcuts](#keyboard-shortcuts).
 
 Three things are worth knowing about the menu itself:
 
 - **It stays open while you change things.** A setup is usually judged by trying a few of these in a
   row — show the rays, fade them, then frame them — so the menu only closes on a click outside it.
   Each toggle's entry reads **Hide …** while what it switches is on and **Show …** while it is off, so
-  it always names what a click would do. The two entries that switch how the rays are drawn name the
-  way a click switches to instead.
+  it always names what a click would do. The projection entry and the two entries that switch how the
+  rays are drawn name the way a click switches to instead.
 - **Everything below the first entry needs an open view** and is greyed out until there is one.
-- **What the view shows is remembered.** Close the view and open it again and the toggles, the ray
-  count, the opacity and the analyzer it follows are as you left them. The camera is not — see below.
+- **What the view shows is remembered.** Close the view and open it again and the toggles, the
+  projection, the ray count, the opacity and the analyzer it follows are as you left them. The camera
+  is not — see below.
 
 Refresh, Fit view, and Reset camera move the camera, and so does clicking a gizmo axis in the
-viewport. Table, World axes, Optical axis and Rays are visibility toggles and, like the two ways of
-drawing the rays, do not move the camera.
+viewport. Table, World axes, Optical axis and Rays are visibility toggles and, like the projection and
+the two ways of drawing the rays, do not move the camera.
 Nothing that happens to the *model* moves it either — see below.
 
 ## When the view updates itself
@@ -363,7 +396,9 @@ so a mirror stands out against what lies behind it instead of vanishing into it.
 With **HDR environment** in the 3D View menu, a 360° panorama shipped with OPOSSUM takes the place of
 both: it stands behind the setup, and it is what mirrors, gratings and glass reflect, bright spots in
 it included. The table still fades into the plain background color at its edge, so against the
-panorama its rim shows.
+panorama its rim shows. In orthographic projection the plain background color returns behind the
+setup, while mirrors and glass keep reflecting the panorama; see
+[Perspective and orthographic projection](#perspective-and-orthographic-projection).
 
 ## The optical table and orientation
 
@@ -381,4 +416,5 @@ show. Show or hide it with the **Table** entry in the **3D View** menu.
 In the bottom-right corner of the view a small **orientation gizmo** shows which way x, y, and z
 point. It keeps you from losing your bearings while orbiting. Click one of its axes to snap the camera
 to look straight along that direction; show or hide it with the **World axes** entry in the **3D
-View** menu.
+View** menu. The small **Persp** / **Ortho** button just above it switches the projection; see
+[Perspective and orthographic projection](#perspective-and-orthographic-projection).

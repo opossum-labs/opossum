@@ -100,6 +100,7 @@ Scene-wide settings. The prop is optional; leaving it out uses these defaults.
 | `ground` | A floor reaching to the horizon: an image tiled at a given height (`Ground { height, tile_url, tile_size }`). Never framed by `fit_view`, never hit by a click. See [the ground](./renderer.md#the-ground). | `None` |
 | `line_width` | Width of line primitives (glTF `LINES`) in screen pixels. WebGL draws lines one pixel wide whatever is asked for, so above `1.0` lines are redrawn as three.js fat lines (`LineSegments2`), which keep their pixel width at any zoom, cast no shadow and are never hit by a click. | `1.0` |
 | `overlay_blending` | How the lines of overlays mix where they cross. `Ordered`: each covers those its file lists before it, so a crossing shows the same line in its own color. `Additive`: the colors add up like light, so crossings mix and brighten, but lines also add onto what lies behind them and look lighter. | `Ordered` |
+| `projection` | `Perspective`, or `Orthographic` for a parallel view in which one length on screen is one length in the world everywhere. Switching keeps the plane through the orbit target at its size on screen and does not move the camera. In orthographic a panorama background (`environment_background`) gives way to `background`; reflections keep it. See [orthographic projection](./camera.md#orthographic-projection). | `Perspective` |
 
 Colour values are handed to `new THREE.Color(...)`, so they must be something three.js
 can parse: `"#1e1e1e"`, `"rgb(30,30,30)"`, or a CSS colour name. A *transparent*
@@ -118,6 +119,7 @@ the camera**. They do not all apply at the same moment, though:
 | `orientation_gizmo` | Immediately, but asynchronously: the gizmo is imported on first use. |
 | `line_width` | Immediately, for the models on screen and every one loaded later. Widening past one pixel imports the fat-line add-on on first use, so that step is asynchronous. |
 | `overlay_blending` | Immediately, for the overlays on screen and every one loaded later. Nothing is loaded again. |
+| `projection` | Immediately, from the next frame on. The camera does not move. |
 | `ground` | Immediately. A new `height` moves the floor; a new `tile_url` or `tile_size` fetches the image again, which then appears once it has loaded. |
 | `initial_camera`, `initial_target` | On the next `reset_camera()` call. |
 | `fit_on_first_load` | Checked on every successful load, until an auto-fit has actually happened once. |

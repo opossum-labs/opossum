@@ -19,6 +19,27 @@ The camera is a `PerspectiveCamera` with a **near plane of 0.01 and a far plane 
 10 000 units from the camera is clipped. If a model is invisible after loading and
 `Loaded` did fire, scale is the first thing to check.
 
+## Orthographic projection
+
+`ViewerOptions::projection` switches to a parallel projection. That does not swap the
+camera the controls move. Instead an `OrthographicCamera` twin copies it before every
+frame and every pick, with a frustum exactly as large as the plane through the orbit
+target appears in perspective. Switching therefore moves nothing, and switching back
+shows exactly the picture from before.
+
+Everything else stays bound to the perspective camera, so orbit, pan, zoom, `fit_view`,
+`reset_camera` and the gizmo behave the same in both projections. A zoom still dollies the
+perspective camera and so scales the twin's frustum.
+
+The twin's distance changes nothing but what is clipped. It is pushed back along the view
+axis until every visible model and the ground lie between its clipping planes, so zooming
+in close never cuts off a long scene seen from the side. The near/far limits above apply to
+the perspective camera only.
+
+A panorama behind the scene (`environment_background`) gives way to the `background`
+color in orthographic. three.js draws it through a unit cube around the camera, which a
+parallel projection shrinks to a small square. Reflections keep the environment.
+
 ## The handle
 
 ```rust
