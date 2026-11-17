@@ -93,8 +93,10 @@ pub fn use_workspace_processor(
                         *crate::UNDO_REDO_STATUS.write() = (false, false);
                         *crate::AMP_LIST_REFRESH.write() += 1;
                         *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
-                        // A different document altogether - whatever the 3D view shows is gone.
+                        // A different document altogether - whatever the 3D view shows is gone,
+                        // and no view has positioned this one yet.
                         *crate::SCENE_REVISION.write() += 1;
+                        *crate::CONNECTIONS_PLACING_BY_DISTANCE.write() = None;
                     }
                     GraphsWorkspaceAction::SaveToFile(path) => {
                         process_save_root_scenery_to_file(
@@ -124,8 +126,10 @@ pub fn use_workspace_processor(
                         *crate::UNDO_REDO_STATUS.write() = (false, false);
                         *crate::AMP_LIST_REFRESH.write() += 1;
                         *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
-                        // A different document altogether - whatever the 3D view shows is gone.
+                        // A different document altogether - whatever the 3D view shows is gone,
+                        // and no view has positioned this one yet.
                         *crate::SCENE_REVISION.write() += 1;
+                        *crate::CONNECTIONS_PLACING_BY_DISTANCE.write() = None;
                     }
                     GraphsWorkspaceAction::ResetAndInitializeRootScenery { name } => {
                         // 1. Abort any running optimization/simulation session first
@@ -139,6 +143,8 @@ pub fn use_workspace_processor(
                         .await;
                         // Clear undo/redo history on initial startup/reset
                         *crate::UNDO_REDO_STATUS.write() = (false, false);
+                        // No view has positioned the new document yet.
+                        *crate::CONNECTIONS_PLACING_BY_DISTANCE.write() = None;
                     }
                     GraphsWorkspaceAction::Refresh { preserve_undo } => {
                         process_refresh(

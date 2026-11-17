@@ -22,7 +22,7 @@ pub use components::{glb_of_node, scene_glb};
 pub use hash::digest;
 pub use manifest::manifest_of;
 pub use rays::{LineColors, axis_glb, light_glb};
-pub use sources::{SpectrumDrawing, source_wavelength_range};
+pub use sources::{SpectrumDrawing, drawn_light_sources, source_wavelength_range};
 
 use nalgebra::Point3;
 use opossum_core::error::{OpmResult, OpossumError};

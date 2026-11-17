@@ -1,8 +1,9 @@
 //! Routes for managing the document
 use crate::{
     app_state::AppState,
+    drawn_light::{DigestedFile, DrawnLight},
     error::BackEndErrorResponse,
-    helper_functions::analyzer_mut_or_404,
+    helper_functions::{analyzer_mut_or_404, connect_infos},
     sse_logger::SENDER,
     undo::{Command, PatchNode, RepositionAnalyzer, SetViewport, capture_old_node_request},
 };
@@ -13,17 +14,18 @@ use actix_web::{
 use futures_util::StreamExt;
 use log::{error, info, warn};
 use opossum_core::{
+    analyzers::RayTraceConfig,
     core_optics::node_attr::HasNodeAttr,
     error::{OpmResult, OpossumError},
-    opm_document::OpmDocument,
+    opm_document::{OpmDocument, PositioningRun},
     types::api_types::{
         DocumentChange, ErrorResponse, JumpTarget, LoadDocumentResponse, PositionUpdate,
         SceneAnalyzer, SceneManifest, UndoRedoResponse, UpdateNodeRequest, ViewportChangeRequest,
     },
 };
 use opossum_scene::{
-    LineColors, SpectrumDrawing, axis_glb, digest, glb_of_node, light_glb, manifest_of, scene_glb,
-    source_wavelength_range,
+    LineColors, SpectrumDrawing, axis_glb, digest, drawn_light_sources, glb_of_node, light_glb,
+    manifest_of, scene_glb, source_wavelength_range,
 };
 use serde::Deserialize;
 use std::{path::PathBuf, str::FromStr};
@@ -44,6 +46,17 @@ struct SceneQuery {
     analyzer: Option<Uuid>,
 }
 
+/// Which analyzer's optical axis a 3D view of the model should draw, and which file of it.
+#[derive(Debug, Deserialize, IntoParams)]
+struct AxisQuery {
+    /// Uuid of the analyzer to take the sources from, or none to follow the first analyzer whose
+    /// light is rays, else the first. One the document no longer has is ignored.
+    analyzer: Option<Uuid>,
+    /// The digest `/scene/manifest` named the axis by. The file it built under that digest is
+    /// served without positioning the model again.
+    v: Option<String>,
+}
+
 /// How many rays of all sources together `/scene/rays.glb` draws unless asked for another number.
 const DEFAULT_DISPLAY_RAYS: usize = 500;
 /// The most rays of all sources together `/scene/rays.glb` draws, whatever is asked for: a
@@ -61,6 +74,9 @@ struct RaysQuery {
     /// Whether each start point shines every wavelength of its source's spectrum, as in the
     /// analysis, rather than one (default false).
     full_spectrum: Option<bool>,
+    /// The digest `/scene/manifest` named the rays by. The file it built under that digest is
+    /// served without positioning the model or tracing its light again.
+    v: Option<String>,
 }
 
 /// Which analyzer a 3D view of the model should follow, and which of its rays the view draws.
@@ -76,17 +92,40 @@ struct ManifestQuery {
     full_spectrum: Option<bool>,
 }
 
-/// Draw the light of a model's sources, off the request thread.
-///
-/// The trace is the long part, so it must hold neither the document nor the request thread: the
-/// model comes as its file, the only copy that shares nothing with the live document.
+/// How many rays a view asks to have drawn, and how, as `/scene/rays.glb` reads its parameters.
 ///
 /// # Arguments
 ///
-/// - `model`: the model as its OPM file
-/// - `analyzer`: the analyzer to take the sources from, or `None` for the default
 /// - `max_rays`: the most rays drawn, 500 if not given, at most 5000
 /// - `full_spectrum`: whether each start point shines every wavelength rather than one
+///
+/// # Returns
+///
+/// The capped number of rays and how their spectrum is drawn.
+fn drawn_rays(max_rays: Option<usize>, full_spectrum: Option<bool>) -> (usize, SpectrumDrawing) {
+    let drawing = if full_spectrum.unwrap_or(false) {
+        SpectrumDrawing::Full
+    } else {
+        SpectrumDrawing::Dealt
+    };
+    (
+        max_rays
+            .unwrap_or(DEFAULT_DISPLAY_RAYS)
+            .min(MAX_DISPLAY_RAYS),
+        drawing,
+    )
+}
+
+/// Draw the light of a model's sources, off the request thread.
+///
+/// The trace is the long part, so it must hold neither the document nor the request thread: it
+/// runs on the positioned copy, which shares nothing with the live document.
+///
+/// # Arguments
+///
+/// - `light`: the positioning run of the model with the sources whose light to draw, or `None`
+///   if the model has no light of its own
+/// - `max_rays`, `full_spectrum`: what the view asks for, see [`drawn_rays`]
 ///
 /// # Returns
 ///
@@ -94,31 +133,75 @@ struct ManifestQuery {
 ///
 /// # Errors
 ///
-/// This function returns an error if the model cannot be read back or its light not drawn.
+/// This function returns an error if the positioning run stopped part way or the light cannot be
+/// drawn.
 async fn traced_light(
-    model: String,
-    analyzer: Option<Uuid>,
+    light: Option<(PositioningRun, RayTraceConfig)>,
     max_rays: Option<usize>,
     full_spectrum: Option<bool>,
 ) -> OpmResult<Vec<u8>> {
-    let max_rays = max_rays
-        .unwrap_or(DEFAULT_DISPLAY_RAYS)
-        .min(MAX_DISPLAY_RAYS);
-    let drawing = if full_spectrum.unwrap_or(false) {
-        SpectrumDrawing::Full
-    } else {
-        SpectrumDrawing::Dealt
-    };
+    let (max_rays, drawing) = drawn_rays(max_rays, full_spectrum);
     web::block(move || {
-        light_glb(
-            &OpmDocument::from_string(&model)?,
-            analyzer,
-            max_rays,
-            drawing,
-        )
+        let light = light
+            .as_ref()
+            .map(|(run, sources)| OpmResult::Ok((run.positioned_scenery()?, sources)));
+        light_glb(light.transpose()?, max_rays, drawing)
     })
     .await
     .map_err(|e| OpossumError::Other(format!("the rays could not be traced: {e}")))?
+}
+
+/// Lists the drawable components of a model from its positioning run, with the digests of the
+/// light served for it, as `/scene/manifest` answers.
+///
+/// # Arguments
+///
+/// - `run`: the positioning run of the model, or why it could not be positioned at all
+/// - `sources`: the sources whose light is drawn, from [`drawn_light_sources`]
+/// - `rays`: how many rays to draw and how (see [`drawn_rays`]), or `None` if no view shows them
+///
+/// # Returns
+///
+/// The manifest, without the analyzer it follows and the connections placing a node, and the
+/// light files it names. A model that cannot be placed is listed empty, with a notice saying why.
+///
+/// # Errors
+///
+/// This function returns an error if the wavelengths of the sources cannot be read or the
+/// components cannot be listed.
+fn listed_scene(
+    run: &OpmResult<PositioningRun>,
+    sources: Option<&RayTraceConfig>,
+    rays: Option<(usize, SpectrumDrawing)>,
+) -> OpmResult<(SceneManifest, DrawnLight)> {
+    let colors = LineColors::Wavelength(source_wavelength_range(sources)?);
+    let run = run.as_ref().map_err(Clone::clone);
+    let positioned = match run.clone().and_then(PositioningRun::positioned_scenery) {
+        Ok(positioned) => positioned,
+        Err(e) => {
+            let manifest = SceneManifest {
+                notice: Some(e.to_string()),
+                ..SceneManifest::default()
+            };
+            return Ok((manifest, DrawnLight::default()));
+        }
+    };
+    let axis = run.and_then(axis_glb);
+    let rays = rays.map(|(max_rays, drawing)| {
+        let light = sources.map(|sources| (positioned, sources));
+        light_glb(light, max_rays, drawing)
+    });
+    let manifest = SceneManifest {
+        spectrum: colors.legend(),
+        axis: Some(digest_of(&axis)),
+        rays: rays.as_ref().map(digest_of),
+        ..manifest_of(positioned)?
+    };
+    let drawn = DrawnLight {
+        axis: axis.ok().map(DigestedFile::new),
+        rays: rays.and_then(Result::ok).map(DigestedFile::new),
+    };
+    Ok((manifest, drawn))
 }
 
 /// Digest what an endpoint of drawn light answers: its file, or why it has none.
@@ -219,11 +302,11 @@ async fn get_scene(
 ) -> Result<impl Responder, BackEndErrorResponse> {
     // Only the copy needs the live model. Meshing it is by far the longer half of the work, and
     // holding the document across that would block every other edit for as long as it takes.
-    let placed = {
+    let run = {
         let document = data.document.lock();
-        document.placed_scenery(analyzer_still_there(&document, query.analyzer))?
+        document.run_positioning(analyzer_still_there(&document, query.analyzer))?
     };
-    let glb = scene_glb(&placed)?;
+    let glb = scene_glb(run.positioned_scenery()?)?;
     Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
 }
 
@@ -247,10 +330,15 @@ async fn get_scene(
 /// for the same analyzer, and, if `max_rays` is given, of what `/scene/rays.glb` serves for the
 /// same parameters. A viewer that names the digest in the address fetches the light again only when
 /// it changed, so an edit that draws nothing new - another analyzer, an amplifier - redraws
-/// nothing. The rays are traced for their digest only when asked for.
+/// nothing. The rays are traced for their digest only when asked for. The files digested are kept,
+/// and fetched by their digest they are served as built here, without positioning the model again.
+///
+/// The list also names the connections whose distance placed a node in this positioning, so an
+/// editor can offer the distance of a connection into a reference only where it does something.
 ///
 /// A model that cannot be placed is answered with an empty list whose `notice` says why: that is
-/// a state of the model a viewer has to show, not a failed request.
+/// a state of the model a viewer has to show, not a failed request. The connections that placed a
+/// node before the positioning stopped are listed all the same.
 #[utoipa::path(tag = "document",
     params(ManifestQuery),
     responses(
@@ -263,9 +351,9 @@ async fn get_scene_manifest(
     data: web::Data<AppState>,
     query: web::Query<ManifestQuery>,
 ) -> Result<impl Responder, BackEndErrorResponse> {
-    // Same split as `get_scene`: only the copy needs the live model, and the meshing that follows
-    // must not block every other edit for as long as it takes.
-    let (placed, asked, analyzer, colors, axis, model) = {
+    // Only the positioning needs the live model: meshing and tracing its copy must not block every
+    // other edit for as long as they take.
+    let (run, analyzer, sources, placing) = {
         let document = data.document.lock();
         let asked = analyzer_still_there(&document, query.analyzer);
         let analyzer = document
@@ -274,39 +362,28 @@ async fn get_scene_manifest(
                 uid,
                 name: info.display_name(),
             });
-        let colors = LineColors::Wavelength(source_wavelength_range(&document, asked)?);
-        let placed = document.placed_scenery(asked);
-        // Light is only drawn over a placed model, and the rays only while a view asks for them.
-        let axis = placed
-            .is_ok()
-            .then(|| digest_of(&axis_glb(&document, asked)));
-        let model = if placed.is_ok() && query.max_rays.is_some() {
-            Some(document.to_opm_file_string()?)
-        } else {
-            None
-        };
-        (placed, asked, analyzer, colors, axis, model)
+        let sources = drawn_light_sources(&document, asked)?;
+        let run = document.run_positioning(asked);
+        let placing = run.as_ref().map_or_else(
+            |_| Vec::new(),
+            |run| connect_infos(document.scenery(), &run.connections_placing_by_distance()),
+        );
+        drop(document);
+        (run, analyzer, sources, placing)
     };
-    let rays = match model {
-        Some(model) => Some(digest_of(
-            &traced_light(model, asked, query.max_rays, query.full_spectrum).await,
-        )),
-        None => None,
-    };
-    let mut manifest = match placed {
-        Ok(placed) => SceneManifest {
-            spectrum: colors.legend(),
-            ..manifest_of(&placed)?
-        },
-        Err(e) => SceneManifest {
-            notice: Some(e.to_string()),
-            ..SceneManifest::default()
-        },
-    };
-    manifest.analyzer = analyzer;
-    manifest.axis = axis;
-    manifest.rays = rays;
-    Ok(Json(manifest))
+    // The rays are only traced while a view asks for them.
+    let rays = query
+        .max_rays
+        .map(|max_rays| drawn_rays(Some(max_rays), query.full_spectrum));
+    let (manifest, drawn) = web::block(move || listed_scene(&run, sources.as_ref(), rays))
+        .await
+        .map_err(|e| OpossumError::Other(format!("the scene could not be listed: {e}")))??;
+    *data.last_drawn_light.lock() = drawn;
+    Ok(Json(SceneManifest {
+        analyzer,
+        connections_placing_by_distance: placing,
+        ..manifest
+    }))
 }
 
 /// Get one component of the model as a 3D scene
@@ -355,9 +432,10 @@ async fn get_scene_node(
 /// The axis is traced on a copy, leaving the document itself untouched, and the `analyzer`
 /// parameter picks which analyzer's sources to follow exactly as for `/scene.glb`. The axis is
 /// drawn up to every open output port it reaches; light that ends in a component without any
-/// output port is not drawn into it.
+/// output port is not drawn into it. Asked for by the digest `/scene/manifest` named it by, the
+/// axis that manifest built is served without positioning the model again.
 #[utoipa::path(tag = "document",
-    params(SceneQuery),
+    params(AxisQuery),
     responses(
         (status = 200, description = "glTF binary of the optical axis", body = Vec<u8>,
             content_type = GLB_MEDIA_TYPE),
@@ -367,11 +445,19 @@ async fn get_scene_node(
 #[get("/scene/axis.glb")]
 async fn get_scene_axis(
     data: web::Data<AppState>,
-    query: web::Query<SceneQuery>,
+    query: web::Query<AxisQuery>,
 ) -> Result<impl Responder, BackEndErrorResponse> {
-    let glb = {
+    let built = data
+        .last_drawn_light
+        .lock()
+        .axis
+        .as_ref()
+        .and_then(|axis| axis.named(query.v.as_deref()));
+    let glb = if let Some(glb) = built {
+        glb
+    } else {
         let document = data.document.lock();
-        axis_glb(&document, analyzer_still_there(&document, query.analyzer))?
+        axis_glb(&document.run_positioning(analyzer_still_there(&document, query.analyzer))?)?
     };
     Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
 }
@@ -393,7 +479,9 @@ async fn get_scene_axis(
 /// primary path is traced; a ghost focus analyzer contributes its sources, not its reflections.
 /// Without an analyzer whose light is rays - none at all, or an energy analysis - the file is
 /// empty. The trace runs on a copy, off the request thread, and the `analyzer` parameter picks
-/// which analyzer's sources to follow exactly as for `/scene.glb`.
+/// which analyzer's sources to follow exactly as for `/scene.glb`. Asked for by the digest
+/// `/scene/manifest` named them by, the rays that manifest traced are served without positioning
+/// the model or tracing its light again.
 #[utoipa::path(tag = "document",
     params(RaysQuery),
     responses(
@@ -407,14 +495,27 @@ async fn get_scene_rays(
     data: web::Data<AppState>,
     query: web::Query<RaysQuery>,
 ) -> Result<impl Responder, BackEndErrorResponse> {
-    let (model, analyzer) = {
-        let document = data.document.lock();
-        (
-            document.to_opm_file_string()?,
-            analyzer_still_there(&document, query.analyzer),
-        )
+    let built = data
+        .last_drawn_light
+        .lock()
+        .rays
+        .as_ref()
+        .and_then(|rays| rays.named(query.v.as_deref()));
+    let glb = if let Some(glb) = built {
+        glb
+    } else {
+        let light = {
+            let document = data.document.lock();
+            let analyzer = analyzer_still_there(&document, query.analyzer);
+            // A model without light of its own is not positioned for it.
+            let light = drawn_light_sources(&document, analyzer)?
+                .map(|sources| OpmResult::Ok((document.run_positioning(analyzer)?, sources)))
+                .transpose()?;
+            drop(document);
+            light
+        };
+        traced_light(light, query.max_rays, query.full_spectrum).await?
     };
-    let glb = traced_light(model, analyzer, query.max_rays, query.full_spectrum).await?;
     Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
 }
 
@@ -763,7 +864,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
 }
 
 #[cfg(test)]
-mod test {
+pub(crate) mod test {
     use super::*;
     use crate::{app_state::AppState, undo::Command};
     use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
@@ -1826,6 +1927,182 @@ mod test {
         let app_state = Data::new(AppState::default());
         *app_state.document.lock() = document;
         app_state
+    }
+
+    /// A state whose model feeds a lens from a source, and a reference to the lens from a source
+    /// with an automatic position 50 mm in front of it, traced by a ray trace analyzer.
+    ///
+    /// # Returns
+    ///
+    /// The state, the uuid of the model's root group and the pairs of source and target of the
+    /// connections whose distance places a node: both.
+    pub(crate) fn state_with_a_source_in_front_of_a_reference()
+    -> (Data<AppState>, Uuid, Vec<(Uuid, Uuid)>) {
+        use opossum_core::{
+            analyzers::{AnalyzerType, RayTraceConfig},
+            core_optics::{OpticNode, node_attr::NodePositioning},
+            light::lightdata::ray_data_builder::RayDataBuilder,
+            millimeter,
+            nodes::{Lens, NodeGroup, NodeReference, SourcePort},
+        };
+
+        let mut scenery = NodeGroup::default();
+        let first = scenery.add_node(SourcePort::default()).unwrap();
+        let lens = scenery.add_node(Lens::default()).unwrap();
+        let reference = NodeReference::from_node(&scenery.node(lens).unwrap()).unwrap();
+        let reference = scenery.add_node(reference).unwrap();
+        let mut second = SourcePort::default();
+        second
+            .set_positioning(NodePositioning::Automatic(None))
+            .unwrap();
+        let second = scenery.add_node(second).unwrap();
+        scenery
+            .connect_nodes(first, "output_1", lens, "input_1", millimeter!(100.0))
+            .unwrap();
+        scenery
+            .connect_nodes(second, "output_1", reference, "input_1", millimeter!(50.0))
+            .unwrap();
+        let root = scenery.node_attr().uuid();
+        let mut document = OpmDocument::new(scenery);
+        let mut config = RayTraceConfig::default();
+        for source in [first, second] {
+            config.map_source(source, RayDataBuilder::default());
+        }
+        document.add_analyzer(AnalyzerType::RayTrace(config));
+        let app_state = Data::new(AppState::default());
+        *app_state.document.lock() = document;
+        (app_state, root, vec![(first, lens), (second, reference)])
+    }
+
+    /// The source and target of every connection `manifest` lists as placing a node.
+    fn placing_pairs(manifest: &SceneManifest) -> Vec<(Uuid, Uuid)> {
+        let mut pairs: Vec<(Uuid, Uuid)> = manifest
+            .connections_placing_by_distance
+            .iter()
+            .map(|c| (c.src_uuid(), c.target_uuid()))
+            .collect();
+        pairs.sort();
+        pairs
+    }
+
+    /// The manifest lists the connections whose distance placed a node, marked when they lead
+    /// into a reference: here the one into the lens, and the one into the reference that the
+    /// automatic source stands in front of.
+    #[actix_web::test]
+    async fn the_manifest_lists_the_connections_placing_a_node_by_distance() {
+        let (app_state, _, mut expected) = state_with_a_source_in_front_of_a_reference();
+
+        let manifest: SceneManifest =
+            test::read_body_json(request_manifest(&app_state, "").await).await;
+
+        expected.sort();
+        assert_eq!(placing_pairs(&manifest), expected);
+        assert!(
+            manifest
+                .connections_placing_by_distance
+                .iter()
+                .any(opossum_core::types::api_types::ConnectInfo::targets_reference)
+        );
+    }
+
+    /// A positioning that stops part way still lists the connections that placed a node before
+    /// it stopped, next to the notice why: here the one into a forward reference, ahead of a
+    /// component passed twice in a row, which no ray can follow.
+    #[actix_web::test]
+    async fn the_manifest_lists_the_connections_placed_before_a_stop() {
+        use opossum_core::{
+            analyzers::{AnalyzerType, RayTraceConfig},
+            light::lightdata::ray_data_builder::RayDataBuilder,
+            millimeter,
+            nodes::{Dummy, NodeGroup, NodeReference, SourcePort},
+        };
+
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default()).unwrap();
+        let lens = scenery.add_node(Dummy::new("lens")).unwrap();
+        let ahead = NodeReference::from_node(&scenery.node(lens).unwrap()).unwrap();
+        let ahead = scenery.add_node(ahead).unwrap();
+        let window = scenery.add_node(Dummy::new("window")).unwrap();
+        let again = NodeReference::from_node(&scenery.node(window).unwrap()).unwrap();
+        let again = scenery.add_node(again).unwrap();
+        let screen = scenery.add_node(Dummy::new("screen")).unwrap();
+        for (from, to, mm) in [
+            (source, ahead, 100.0),
+            (ahead, window, 50.0),
+            (window, again, 10.0),
+            (again, screen, 10.0),
+        ] {
+            scenery
+                .connect_nodes(from, "output_1", to, "input_1", millimeter!(mm))
+                .unwrap();
+        }
+        let mut document = OpmDocument::new(scenery);
+        let mut config = RayTraceConfig::default();
+        config.map_source(source, RayDataBuilder::default());
+        document.add_analyzer(AnalyzerType::RayTrace(config));
+        let app_state = Data::new(AppState::default());
+        *app_state.document.lock() = document;
+
+        let manifest: SceneManifest =
+            test::read_body_json(request_manifest(&app_state, "").await).await;
+
+        assert!(manifest.notice.is_some(), "the positioning stops");
+        assert!(placing_pairs(&manifest).contains(&(source, ahead)));
+    }
+
+    /// A model that cannot be positioned at all, here for lack of an analyzer, places nothing by
+    /// any distance: the list is empty, next to the notice why.
+    #[actix_web::test]
+    async fn the_manifest_lists_no_connection_when_the_model_cannot_be_positioned() {
+        let (app_state, _, _) = state_with_a_source_in_front_of_a_reference();
+        app_state.document.lock().analyzers_mut().clear();
+
+        let manifest: SceneManifest =
+            test::read_body_json(request_manifest(&app_state, "").await).await;
+
+        assert!(manifest.notice.is_some());
+        assert!(manifest.connections_placing_by_distance.is_empty());
+    }
+
+    /// The light files a manifest digested are served as it built them when asked for by their
+    /// digest, without positioning the model again: an edit after the manifest leaves the files
+    /// named by its digests as they were, while the files asked for without a digest follow it.
+    #[actix_web::test]
+    async fn the_light_named_by_the_manifest_is_served_as_it_built_it() {
+        use opossum_core::millimeter;
+
+        let app_state = state_with_a_traced_source();
+        let manifest = manifest_drawing_rays(&app_state).await;
+        let (axis, rays) = (manifest.axis.unwrap(), manifest.rays.unwrap());
+        let source = app_state
+            .document
+            .lock()
+            .scenery()
+            .find_source_ports()
+            .unwrap()[0];
+        app_state
+            .document
+            .lock()
+            .scenery_mut()
+            .update_connection_distance(source, "output_1", millimeter!(150.0))
+            .unwrap();
+
+        let served = |resp| async { digest(&test::read_body(resp).await) };
+        let axis_query = format!("?v={axis}");
+        let rays_query = format!("?max_rays=50&v={rays}");
+        assert_eq!(
+            served(request_axis(&app_state, &axis_query).await).await,
+            axis
+        );
+        assert_eq!(
+            served(request_rays(&app_state, &rays_query).await).await,
+            rays
+        );
+        assert_ne!(served(request_axis(&app_state, "").await).await, axis);
+        assert_ne!(
+            served(request_rays(&app_state, "?max_rays=50").await).await,
+            rays
+        );
     }
 
     /// Light of several wavelengths is drawn in false colors, which the manifest names for a

@@ -379,7 +379,7 @@ the identity.
 
 **Step 2: place.** `RayTracingAnalyzer::analyze` (`analyzers/raytrace.rs`) first calls `NodeGroup::rebuild_surfaces`.
 It then calls `calc_node_positions` with `RayTraceConfig::for_positioning`. Placing a model for the 3D view
-(`OpmDocument::placed_scenery`) rebuilds the surfaces of its copy the same way, since an edit in the GUI writes a
+(`OpmDocument::run_positioning`) rebuilds the surfaces of its copy the same way, since an edit in the GUI writes a
 position or a property into a node without rebuilding them. The run visits the nodes in a topological order that takes
 ordinary nodes before references and nodes no axis reaches last (`PlacingOrder` in
 `nodes/node_group/optic_graph/raytrace.rs`); it marks every connection whose distance places a node

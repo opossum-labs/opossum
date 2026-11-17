@@ -6,7 +6,7 @@ use opossum_core::{
     nodes::{ConnectionInfo, NodeGroup},
     opm_document::OpmDocument,
     prelude::{PortType, Proptype},
-    types::api_types::NodeInfo,
+    types::api_types::{ConnectInfo, NodeInfo},
 };
 use std::collections::HashSet;
 use uuid::Uuid;
@@ -91,6 +91,16 @@ pub fn is_reference_target(scenery: &NodeGroup, node_id: Uuid) -> bool {
             attr.properties().get("reference id").is_ok()
         })
         .unwrap_or(false)
+}
+
+/// Returns `connections` of the model `scenery` as the GUI shows them, each marked when it leads
+/// into a reference (see [`is_reference_target`]).
+#[must_use]
+pub fn connect_infos(scenery: &NodeGroup, connections: &[ConnectionInfo]) -> Vec<ConnectInfo> {
+    connections
+        .iter()
+        .map(|c| ConnectInfo::from_connection_info(c, is_reference_target(scenery, c.target_id)))
+        .collect()
 }
 
 /// Recursively resolves a "reference" node to the actual node it (transitively) points at, following

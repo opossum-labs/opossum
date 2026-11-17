@@ -1408,7 +1408,7 @@ mod test {
     fn placed_by_distance(scenery: &NodeGroup) -> Vec<(Uuid, Uuid)> {
         scenery
             .graph()
-            .placing_connections()
+            .connections_placing_by_distance()
             .into_iter()
             .map(|connection| (connection.src_id, connection.target_id))
             .collect()

@@ -1,13 +1,13 @@
 /**
  * dioxus_glb_viewer — three.js viewer module
  *
- * No importmap needed: three.js addons use relative imports, and this module
- * receives the absolute base URL of the three.js directory as `threeBase`.
+ * No importmap needed: this module receives the URL of `three_entry.js`, which re-exports
+ * three.js and every add-on used here from one module, so all of them share one three.js instance.
  *
  * Loaded via `await import(viewerUrl)` from the boot script.
  * The browser caches the module so multiple GlbViewer instances share the same module namespace.
  *
- * Exports: createViewer(canvasId, options, send, threeBase) -> Viewer object
+ * Exports: createViewer(canvasId, options, send, threeUrl) -> Viewer object
  */
 
 // ─── Entry point ─────────────────────────────────────────────────────────────
@@ -18,7 +18,7 @@
  * @param {string}   canvasId  - DOM ID of the <canvas> element (polled until available).
  * @param {object}   options   - ViewerOptions object from Rust (snake_case fields).
  * @param {function} send      - Callback for sending events to Rust: send({event, ...}).
- * @param {string}   threeBase - Absolute URL of the three.js asset directory.
+ * @param {string}   threeUrl  - URL of `three_entry.js`, three.js with its add-ons.
  * @returns {Promise<object>}  - Viewer object with `.apply(op)` and `.dispose()`.
  */
 export async function createViewer(canvasId, options, send, threeUrl) {
@@ -640,19 +640,7 @@ export async function createViewer(canvasId, options, send, threeUrl) {
     // WebGL draws GL_LINES exactly one pixel wide on most platforms (ANGLE on Windows ignores
     // `linewidth`), and glTF has no line width at all. A wider line is therefore drawn as the
     // three.js "fat line" add-on instead: LineSegments2 renders each segment as a screen-space quad
-    // of `line_width` pixels. The add-on is imported only once a line actually has to be widened.
-    let fatLineModules = null;
-
-    function loadFatLineModules() {
-        if (!fatLineModules) {
-            fatLineModules = Promise.all([
-                import(threeBase + '/examples/jsm/lines/LineSegments2.js'),
-                import(threeBase + '/examples/jsm/lines/LineSegmentsGeometry.js'),
-                import(threeBase + '/examples/jsm/lines/LineMaterial.js'),
-            ]);
-        }
-        return fatLineModules;
-    }
+    // of `line_width` pixels. The add-on comes with three.js, through `three_entry.js`.
 
     /**
      * Brings every line under `root` to the current `line_width`.
@@ -812,18 +800,13 @@ export async function createViewer(canvasId, options, send, threeUrl) {
             }
             const root = gltf.scene;
             try {
-                await thickenLines(root);
+                thickenLines(root);
             } catch (e) {
                 // The lines stay one pixel wide; the model itself is still worth showing.
                 send({
                     event: 'error',
                     message: `lines could not be widened: ${(e && e.message) || e}`
                 });
-            }
-            // The add-on import is awaited above, so a newer request may have overtaken us since.
-            if (generations.get(op.id) !== gen) {
-                disposeSceneGraph(root);
-                return;
             }
             root.userData.glbId = op.id;
             // Every mesh both casts and receives: the models shadow the ground and each other.
@@ -1036,10 +1019,14 @@ export async function createViewer(canvasId, options, send, threeUrl) {
                 entry.helper.material.color.set(opts.selection_color);
             }
             // Line width and overlay blending apply to models already on screen too.
-            thickenLines(entry.root).catch((e) => send({
-                event: 'error',
-                message: `lines could not be widened: ${(e && e.message) || e}`
-            }));
+            try {
+                thickenLines(entry.root);
+            } catch (e) {
+                send({
+                    event: 'error',
+                    message: `lines could not be widened: ${(e && e.message) || e}`
+                });
+            }
             setBlending(entry.root);
         }
     }

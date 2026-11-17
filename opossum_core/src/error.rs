@@ -9,7 +9,7 @@ use std::{error::Error, fmt::Display};
 pub type OpmResult<T> = std::result::Result<T, OpossumError>;
 
 /// Errors that can be returned by various OPOSSUM functions.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OpossumError {
     /// error while handling an `OpmDocument`
     OpmDocument(String),

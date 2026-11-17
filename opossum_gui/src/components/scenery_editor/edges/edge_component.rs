@@ -17,7 +17,7 @@ use opossum_core::{prelude::*, types::api_types::ConnectInfo};
 /// The distance of a connection into a reference usually places nothing - the reference takes the
 /// placement of the node it refers to - so its field is offered only where `distance_places` says
 /// it does: into a reference the light reaches before that node, or with a source standing in
-/// front of it.
+/// front of it, and wherever that is not known yet.
 #[component]
 pub fn EdgeComponent(edge: ReadStore<EdgeElement>, distance_places: bool) -> Element {
     let edge = edge();

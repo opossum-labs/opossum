@@ -280,21 +280,22 @@ fn is_placed(scenery: &NodeGroup, node_id: Uuid) -> OpmResult<bool> {
 /// A placement is saved with the model and a later run leaves an already placed node alone, so
 /// drawing a setup must not reach back into the document it was asked about.
 #[test]
-fn a_placed_scenery_leaves_the_document_it_came_from_alone() -> OpmResult<()> {
+fn a_positioning_run_leaves_the_document_it_came_from_alone() -> OpmResult<()> {
     let (mut document, source, first, second) = lined_up_model()?;
     let mut config = RayTraceConfig::default();
     config.map_source(source, RayDataBuilder::default());
     document.add_analyzer(AnalyzerType::RayTrace(config));
     let before = document.to_opm_file_string()?;
 
-    let placed = document.placed_scenery(None)?;
+    let run = document.run_positioning(None)?;
+    let placed = run.positioned_scenery()?;
 
     assert_eq!(document.to_opm_file_string()?, before);
     assert!(!is_placed(document.scenery(), first)?);
     assert!(!is_placed(document.scenery(), second)?);
     // The distances of the connections, measured from the source port in the origin.
-    assert_relative_eq!(placed_at(&placed, first)?, 0.1, epsilon = 1e-12);
-    assert_relative_eq!(placed_at(&placed, second)?, 0.15, epsilon = 1e-12);
+    assert_relative_eq!(placed_at(placed, first)?, 0.1, epsilon = 1e-12);
+    assert_relative_eq!(placed_at(placed, second)?, 0.15, epsilon = 1e-12);
     Ok(())
 }
 
@@ -303,7 +304,7 @@ fn a_placed_scenery_leaves_the_document_it_came_from_alone() -> OpmResult<()> {
 #[test]
 fn a_model_without_an_analyzer_is_not_placed() -> OpmResult<()> {
     let (document, ..) = lined_up_model()?;
-    let Err(error) = document.placed_scenery(None) else {
+    let Err(error) = document.run_positioning(None) else {
         panic!("a model nobody analyzes has no light to place it with");
     };
     assert!(error.to_string().contains("no analyzer"), "{error}");
@@ -323,7 +324,7 @@ fn a_model_without_a_source_port_is_not_placed() -> OpmResult<()> {
     document.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
     let before = document.to_opm_file_string()?;
 
-    let Err(error) = document.placed_scenery(None) else {
+    let Err(error) = document.run_positioning(None) else {
         panic!("a model without a source port has nowhere to start the optical axis");
     };
 
@@ -345,11 +346,15 @@ fn a_model_analyzed_several_ways_is_drawn_after_its_first_analysis_unless_one_is
     document.add_analyzer(AnalyzerType::RayTrace(config));
     let ghost_focus = document.add_analyzer(AnalyzerType::GhostFocus(GhostFocusConfig::default()));
 
-    let placed = document.placed_scenery(None)?;
-    assert_relative_eq!(placed_at(&placed, first)?, 0.1, epsilon = 1e-12);
+    let run = document.run_positioning(None)?;
+    assert_relative_eq!(
+        placed_at(run.positioned_scenery()?, first)?,
+        0.1,
+        epsilon = 1e-12
+    );
 
-    let placed = document.placed_scenery(Some(ghost_focus))?;
-    assert_eq!(z_of(&placed, first)?, None);
+    let run = document.run_positioning(Some(ghost_focus))?;
+    assert_eq!(z_of(run.positioned_scenery()?, first)?, None);
     Ok(())
 }
 
@@ -357,7 +362,7 @@ fn a_model_analyzed_several_ways_is_drawn_after_its_first_analysis_unless_one_is
 #[test]
 fn a_model_is_not_drawn_after_an_analyzer_it_does_not_have() -> OpmResult<()> {
     let (document, ..) = lined_up_model()?;
-    assert!(document.placed_scenery(Some(Uuid::new_v4())).is_err());
+    assert!(document.run_positioning(Some(Uuid::new_v4())).is_err());
     Ok(())
 }
 
@@ -365,16 +370,16 @@ fn a_model_is_not_drawn_after_an_analyzer_it_does_not_have() -> OpmResult<()> {
 /// says so.
 #[test]
 fn an_empty_model_says_what_it_lacks() {
-    let Err(error) = OpmDocument::default().placed_scenery(None) else {
+    let Err(error) = OpmDocument::default().run_positioning(None) else {
         panic!("an empty model has nothing to place");
     };
     assert!(error.to_string().contains("neither"), "{error}");
 }
 
-/// The placement a document that went through its file form arrives at: what a placement copy
-/// started from before it was a plain clone, and so the oracle the clone has to agree with.
-fn placed_through_file(document: &OpmDocument) -> OpmResult<NodeGroup> {
-    OpmDocument::from_string(&document.to_opm_file_string()?)?.placed_scenery(None)
+/// The positioning a document that went through its file form arrives at: what a positioning
+/// copy started from before it was a plain clone, and so the oracle the clone has to agree with.
+fn placed_through_file(document: &OpmDocument) -> OpmResult<PositioningRun> {
+    OpmDocument::from_string(&document.to_opm_file_string()?)?.run_positioning(None)
 }
 
 /// Where a node sits along the optical axis, or `None` if it was not placed.
@@ -399,7 +404,7 @@ fn a_property_changed_after_adding_the_node_reaches_the_placement() -> OpmResult
     scenery.connect_nodes(lens, "output_1", after, "input_1", millimeter!(50.0))?;
     let mut document = OpmDocument::new(scenery);
     document.add_analyzer(AnalyzerType::RayTrace(single_ray_config(source)?));
-    let default_thickness = document.placed_scenery(None)?;
+    let default_thickness = document.run_positioning(None)?;
 
     document
         .scenery_mut()
@@ -408,12 +413,16 @@ fn a_property_changed_after_adding_the_node_reaches_the_placement() -> OpmResult
         .node_attr_mut()
         .set_property("center thickness", millimeter!(30.0).into())?;
 
-    let placed = document.placed_scenery(None)?;
+    let run = document.run_positioning(None)?;
+    let placed = run.positioned_scenery()?;
     let oracle = placed_through_file(&document)?;
-    assert_eq!(z_of(&placed, after)?, z_of(&oracle, after)?);
+    assert_eq!(
+        z_of(placed, after)?,
+        z_of(oracle.positioned_scenery()?, after)?
+    );
     assert_ne!(
-        z_of(&placed, after)?,
-        z_of(&default_thickness, after)?,
+        z_of(placed, after)?,
+        z_of(default_thickness.positioned_scenery()?, after)?,
         "the thicker lens has to push the component behind it"
     );
     Ok(())
@@ -449,14 +458,16 @@ fn a_group_and_a_reference_are_placed_as_through_the_file_form() -> OpmResult<()
     document.add_analyzer(AnalyzerType::RayTrace(single_ray_config(source)?));
     let before = document.to_opm_file_string()?;
 
-    let placed = document.placed_scenery(None)?;
+    let run = document.run_positioning(None)?;
+    let placed = run.positioned_scenery()?;
     let oracle = placed_through_file(&document)?;
+    let oracle = oracle.positioned_scenery()?;
 
     for node_id in [source, group, inner_first, inner_second, fold, second_pass] {
-        assert_eq!(z_of(&placed, node_id)?, z_of(&oracle, node_id)?);
+        assert_eq!(z_of(placed, node_id)?, z_of(oracle, node_id)?);
     }
-    assert!(is_placed(&placed, inner_second)?);
-    assert!(is_placed(&placed, fold)?);
+    assert!(is_placed(placed, inner_second)?);
+    assert!(is_placed(placed, fold)?);
     assert_eq!(document.to_opm_file_string()?, before);
     assert!(!is_placed(document.scenery(), inner_second)?);
     Ok(())
@@ -498,7 +509,8 @@ fn positioning_stops_at_an_evanescent_grating_with_a_clear_error() -> OpmResult<
     let mut document = OpmDocument::new(scenery);
     document.add_analyzer(AnalyzerType::RayTrace(single_ray_config(source)?));
 
-    let Err(error) = document.placed_scenery(None) else {
+    let run = document.run_positioning(None)?;
+    let Err(error) = run.positioned_scenery() else {
         panic!("the mirror after the grating cannot be placed");
     };
     let error = error.to_string();
@@ -518,9 +530,9 @@ fn a_terminal_evanescent_grating_is_still_placed() -> OpmResult<()> {
     let mut document = OpmDocument::new(scenery);
     document.add_analyzer(AnalyzerType::RayTrace(single_ray_config(source)?));
 
-    let placed = document.placed_scenery(None)?;
+    let run = document.run_positioning(None)?;
 
-    assert!(is_placed(&placed, grating)?);
+    assert!(is_placed(run.positioned_scenery()?, grating)?);
     Ok(())
 }
 
@@ -532,10 +544,11 @@ fn the_axis_a_terminal_grating_swallows_ends_at_the_grating() -> OpmResult<()> {
     let (scenery, source, grating) = source_then_untilted_grating(false)?;
     let mut document = OpmDocument::new(scenery);
     document.add_analyzer(AnalyzerType::RayTrace(single_ray_config(source)?));
-    let grating_at = z_of(&document.placed_scenery(None)?, grating)?
+    let run = document.run_positioning(None)?;
+    let grating_at = z_of(run.positioned_scenery()?, grating)?
         .ok_or_else(|| OpossumError::Other("the grating is not placed".into()))?;
 
-    let axes = document.positioning_rays(None)?;
+    let axes = run.optical_axis()?;
 
     assert_eq!(axes.len(), 1, "the axis ends at the grating");
     let ends: Vec<f64> = axes[0].iter().map(|ray| ray.position().z.value).collect();
@@ -606,9 +619,9 @@ fn an_energy_analysis_places_the_model_at_the_wavelength_of_its_light() -> OpmRe
         nanometer!(500.0),
     )?));
 
-    let placed = document.placed_scenery(None)?;
+    let run = document.run_positioning(None)?;
 
-    assert!(is_placed(&placed, grating)?);
+    assert!(is_placed(run.positioned_scenery()?, grating)?);
     Ok(())
 }
 
@@ -626,11 +639,13 @@ fn an_energy_analysis_is_passed_over_for_one_whose_light_is_rays() -> OpmResult<
     )?));
     document.add_analyzer(AnalyzerType::RayTrace(single_ray_config(source)?));
 
-    let Err(error) = document.placed_scenery(None) else {
+    let run = document.run_positioning(None)?;
+    let Err(error) = run.positioned_scenery() else {
         panic!("the ray trace's axis ends at the grating");
     };
     assert!(error.to_string().contains("evanescent"), "{error}");
-    assert!(document.placed_scenery(Some(energy)).is_ok());
+    let run = document.run_positioning(Some(energy))?;
+    assert!(run.positioned_scenery().is_ok());
     Ok(())
 }
 
@@ -663,11 +678,12 @@ fn a_strand_the_axis_does_not_reach_leaves_the_rest_placed() -> OpmResult<()> {
     let mut document = OpmDocument::new(scenery);
     document.add_analyzer(AnalyzerType::RayTrace(single_ray_config(source)?));
 
-    let placed = document.placed_scenery(None)?;
+    let run = document.run_positioning(None)?;
+    let placed = run.positioned_scenery()?;
 
-    assert!(is_placed(&placed, lens)?);
+    assert!(is_placed(placed, lens)?);
     for unreached in [loose_lens, splitter, after] {
-        assert!(!is_placed(&placed, unreached)?);
+        assert!(!is_placed(placed, unreached)?);
     }
     Ok(())
 }
