@@ -4,7 +4,6 @@
 //! [`BoredMirror`](crate::nodes::BoredMirror).
 
 use log::warn;
-use nalgebra::{Rotation3, Vector3};
 use uom::si::energy::joule;
 
 use crate::{
@@ -17,8 +16,6 @@ use crate::{
     error::{OpmResult, OpossumError},
     joule,
     light::{LightData, LightRays, LightResult, Rays, rays::ReflectedPart},
-    meter,
-    utils::geom_transformation::Isometry,
 };
 
 /// A node that splits the light of two inputs into two outputs.
@@ -138,46 +135,6 @@ pub trait Splitter: OpticNode {
             (out_1, LightData::Geometric(on_out_1)),
             (out_2, LightData::Geometric(on_out_2)),
         ]))
-    }
-    /// Returns the local frame from which the optical axis enters the given input port (see
-    /// [`AnalysisRayTrace::axis_entrance_frame`](crate::analyzers::raytrace::AnalysisRayTrace::axis_entrance_frame)).
-    ///
-    /// The first input keeps the default (identity) frame: its axis enters along local +z through
-    /// the local origin. The second input arrives from the direction of the beam that leaves the
-    /// second output, i.e. mirrored on the plane of the node, where its splitting or mirroring
-    /// face lies, so its frame is the mirror image of the identity frame. On a body that is the
-    /// front face: what the second input sends through a bore then runs on along what the front
-    /// face reflects of the first. See `doc/book` (geometry: beam combiners) for the convention.
-    /// The second input is `input_2`, or `out2_trans2_refl1` when inverted.
-    ///
-    /// # Arguments
-    ///
-    /// * `port_name` - the input port the axis enters.
-    ///
-    /// # Returns
-    ///
-    /// The identity frame for the first input, the mirrored frame for the second.
-    fn second_input_frame(&self, port_name: &str) -> Isometry {
-        let second_input = if self.inverted() {
-            "out2_trans2_refl1"
-        } else {
-            "input_2"
-        };
-        if port_name != second_input {
-            return Isometry::identity();
-        }
-        // Splitting plane in node-local coordinates: unit normal `n` = alignment applied to +z,
-        // through the alignment's translation `t`. The second input's axis is the +z axis mirrored
-        // on that plane: entry point `q` (origin mirrored) and direction `d` (+z mirrored).
-        let alignment = (*self.node_attr().alignment()).unwrap_or_else(Isometry::identity);
-        let n = alignment.transform_vector_f64(&Vector3::z());
-        let t = alignment.translation();
-        let t_vec = Vector3::new(t.x.value, t.y.value, t.z.value);
-        let q = 2.0 * n.dot(&t_vec) * n;
-        let d = Vector3::z() - 2.0 * Vector3::z().dot(&n) * n;
-        let up = Rotation3::rotation_between(&Vector3::z(), &d)
-            .map_or_else(Vector3::y, |rot| rot * Vector3::y());
-        Isometry::new_from_view(meter!(q.x, q.y, q.z), d, up)
     }
     /// Split the ray bundles arriving at both inputs one by one, as a ghost focus analysis does
     /// (see [`AnalysisGhostFocus::analyze`](crate::analyzers::ghostfocus::AnalysisGhostFocus::analyze)),
