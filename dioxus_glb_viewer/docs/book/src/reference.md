@@ -66,6 +66,8 @@ nothing.
 | `line_width` | `1.0` |
 | `overlay_blending` | `Ordered` |
 | `projection` | `Perspective` |
+| `view_grid` | `false` |
+| `rulers` | `false` |
 
 Only some of these apply live; see [when option changes take
 effect](./scene.md#when-option-changes-take-effect).

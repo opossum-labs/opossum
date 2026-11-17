@@ -235,6 +235,8 @@ menu entries, so you can frame, reset and toggle without leaving the viewport:
 | `B` | Show or hide the optical axis |
 | `L` | Show or hide the traced rays |
 | `O` | Switch between perspective and orthographic projection |
+| `G` | Show or hide the grid (orthographic projection only) |
+| `U` | Show or hide the rulers (orthographic projection only) |
 
 They act only while the viewport is focused, so the same letters typed in the graph or the properties
 sidebar are never caught by them. Only bare keys count: holding Ctrl, Cmd, Alt or Shift leaves them to
@@ -270,6 +272,33 @@ With **HDR environment** on, orthographic projection shows the plain background 
 setup instead of the panorama, because a parallel view would only ever see one spot of it. Mirrors and
 glass still reflect the panorama.
 
+### Grid and rulers
+
+In orthographic projection the view can lay a **grid** over the picture and **rulers** along its top
+and left edges, so sizes and positions can be read off rather than guessed. Switch them on with
+**Show Grid** and **Show Rulers** in the **3D View** menu, or with `G` and `U` while the viewport is
+focused.
+
+- **The grid** has lines at round steps: 1, 2 or 5 times a power of ten, in meters. The step follows
+  the zoom, so a grid cell is always at least about 50 pixels wide, and the top-left corner of the
+  view shows the current step, for example **grid 20 mm**. The lines are counted from the world
+  origin, and the two lines through it are drawn a little brighter. Panning moves the grid along with
+  the setup, so a component stays on the line it sits on.
+- **The rulers** carry a tick and a label at every grid line, with or without the grid itself. All
+  labels are whole numbers in the unit shown in the box where the two rulers meet (**µm**, **mm** or
+  **m**, whichever suits the step). With the rulers on, that box replaces the step label in the
+  corner.
+
+Seen straight along a world axis — after clicking one of the gizmo's axes — the rulers show the world
+coordinates of the two other axes: a component at z = 250 mm sits on the line labeled 250. Each
+ruler counts the way the world axis it lies along points, so its numbers may grow to the left or
+downwards. In a tilted view the rulers still measure true lengths along the screen's edges, counted
+the same way from the origin, but no longer the coordinates of a single world axis.
+
+Grid and rulers exist only in orthographic projection. In perspective a length on screen holds at one
+depth only, so they are not drawn, their menu entries are greyed out and `G` and `U` do nothing. They
+keep their setting and come back with the next switch to orthographic.
+
 ## The status line
 
 Above the picture the view keeps a single line about itself:
@@ -299,6 +328,8 @@ Everything else the view can be told sits in the **3D View** menu in the top nav
 | **Show / Hide HDR environment** | Put the shipped 360° panorama behind the setup and into mirrors and glass, or return to the background color and the calm horizon |
 | **Show / Hide World axes** | Show or hide the corner orientation gizmo |
 | **Orthographic projection / Perspective projection** | Switch to parallel projection, where lengths can be compared across the picture, or back to perspective (the default); see [Perspective and orthographic projection](#perspective-and-orthographic-projection) |
+| **Show / Hide Grid** | Show or hide a grid at round steps over the picture; orthographic projection only — see [Grid and rulers](#grid-and-rulers) |
+| **Show / Hide Rulers** | Show or hide rulers with labeled coordinates along the top and left edges; orthographic projection only |
 | **Show / Hide Optical axis** | Show or hide the optical axis |
 | **Show / Hide Rays** | Show or hide the traced rays of the analyzer's sources |
 | **Full spectrum at each ray position / Spread spectrum over ray positions** | Give every ray position the whole spectrum of its source, or spread the spectrum over the positions, one wavelength each (the default) |
@@ -307,8 +338,8 @@ Everything else the view can be told sits in the **3D View** menu in the top nav
 | **ray opacity** | How opaque the rays are drawn; the axis is always solid |
 
 See [Light: the optical axis and the rays](#light-the-optical-axis-and-the-rays) for what the last
-six do. Fit view, Reset camera, Table, World axes, the projection, Optical axis and Rays also carry a
-keyboard shortcut, shown beside the entry — see [Keyboard shortcuts](#keyboard-shortcuts).
+six do. Fit view, Reset camera, Table, World axes, the projection, Grid, Rulers, Optical axis and Rays
+also carry a keyboard shortcut, shown beside the entry — see [Keyboard shortcuts](#keyboard-shortcuts).
 
 Three things are worth knowing about the menu itself:
 
@@ -317,14 +348,15 @@ Three things are worth knowing about the menu itself:
   Each toggle's entry reads **Hide …** while what it switches is on and **Show …** while it is off, so
   it always names what a click would do. The projection entry and the two entries that switch how the
   rays are drawn name the way a click switches to instead.
-- **Everything below the first entry needs an open view** and is greyed out until there is one.
+- **Everything below the first entry needs an open view** and is greyed out until there is one. Grid
+  and Rulers need orthographic projection as well.
 - **What the view shows is remembered.** Close the view and open it again and the toggles, the
   projection, the ray count, the opacity and the analyzer it follows are as you left them. The camera
   is not — see below.
 
 Refresh, Fit view, and Reset camera move the camera, and so does clicking a gizmo axis in the
-viewport. Table, World axes, Optical axis and Rays are visibility toggles and, like the projection and
-the two ways of drawing the rays, do not move the camera.
+viewport. Table, World axes, Grid, Rulers, Optical axis and Rays are visibility toggles and, like the
+projection and the two ways of drawing the rays, do not move the camera.
 Nothing that happens to the *model* moves it either — see below.
 
 ## When the view updates itself

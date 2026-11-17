@@ -40,6 +40,31 @@ A panorama behind the scene (`environment_background`) gives way to the `backgro
 color in orthographic. three.js draws it through a unit cube around the camera, which a
 parallel projection shrinks to a small square. Reflections keep the environment.
 
+## Grid and rulers
+
+With `view_grid` and `rulers` on, `viewer.js` draws a grid and rulers on the 2D overlay
+canvas the template lays over the scene canvas, in the orthographic projection only. They
+are redrawn every frame after the scene, so they follow a pan or a zoom in the same frame
+as the picture. The overlay ignores the pointer, so picking and the orbit controls never
+notice it.
+
+- **Spacing.** One CSS pixel spans `2 · halfHeight / canvasHeight` world units, where
+  `halfHeight` is that of the plane through the orbit target. The step is the smallest
+  1, 2 or 5 × 10ⁿ that gives a cell at least 50 px wide.
+- **Position.** A world point `p` lies at `(p · right, p · up)` in the view plane, with
+  `right` and `up` the camera's screen axes, and the orbit target sits in the middle of the
+  screen. The lines are at whole multiples of the step in those two coordinates, so they
+  are anchored to the world origin and move with the scene.
+- **Labels.** All are whole numbers in the SI unit (in steps of 10³, as meters) under which
+  the step is one; the corner box where the rulers meet names it. Without rulers, the
+  top-left corner shows the step itself instead.
+- **Direction.** Each ruler counts the way the world axis closest to its screen axis
+  points. Seen straight along a world axis, the rulers therefore show the coordinates of
+  the other two axes, not their negatives. A tilted view is not treated differently: the
+  rulers still measure true lengths from the origin, just not along a single world axis.
+
+In perspective the overlay stays empty: a length on screen holds there only at one depth.
+
 ## The handle
 
 ```rust
