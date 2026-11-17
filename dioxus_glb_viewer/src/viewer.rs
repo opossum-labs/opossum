@@ -22,10 +22,16 @@ const VIEWER_CSS: Asset = asset!("/assets/viewer.css");
 /// Single ES module entry point bundling Three.js and all required addons once.
 #[allow(clippy::volatile_composites)]
 const THREE_BUNDLE: Asset = asset!("/assets/three_entry.js");
-/// Base directory path of the folder asset containing three.js (unhashed, structure-preserving).
-/// Used as the base for importmap URLs.
+/// The folder holding three.js and its add-ons, which [`THREE_BUNDLE`] imports by relative path.
+///
+/// No Rust code reads it, so `#[used]` keeps it in the bundle, and without a hash suffix it lands
+/// at `assets/three/`, where those relative imports look for it.
+#[used]
 #[allow(clippy::volatile_composites)]
-const _THREE_DIR: Asset = asset!("/assets/three", AssetOptions::folder());
+static THREE_DIR: Asset = asset!(
+    "/assets/three",
+    AssetOptions::folder().with_hash_suffix(false)
+);
 
 // ─── Instance counter ─────────────────────────────────────────────────────────
 
