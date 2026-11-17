@@ -19,9 +19,11 @@ Read this before changing `viewer.rs` or `viewer.js`.
 
 ## The RSX around the canvas stays static
 
-The component's template is exactly one `div.dxglb-root` containing one
-`canvas#dxglb-<N>`. **Never put an `if`, a `key`, or an interpolated node around that
-subtree.**
+The component's template is exactly one `div.dxglb-root` containing two canvases: the
+scene's `canvas#dxglb-<N>` and, over it, the 2D overlay `canvas#dxglb-<N>-overlay` that the
+grid and the rulers are drawn on. **Never put an `if`, a `key`, or an interpolated node
+around that subtree.** The overlay is not drawn conditionally in the template either: it is
+always there, and `viewer.js` leaves it empty when nothing is to be drawn on it.
 
 Dioxus diffs templates structurally. As long as the shape is fixed it patches the canvas
 element's attributes, and the element — with its WebGL context, its camera and everything

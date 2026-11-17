@@ -6,7 +6,8 @@ an app is mostly a matter of giving it a size and letting it clean up after itse
 ## Sizing
 
 `GlbViewer` renders a `div.dxglb-root` containing a `canvas.dxglb-canvas`, and both are
-`width: 100%; height: 100%`. The component therefore fills its parent and never decides
+`width: 100%; height: 100%`; a second, transparent `canvas.dxglb-overlay` lies exactly over
+the first. The component therefore fills its parent and never decides
 its own size — **the host controls the size.**
 
 Any global attribute you pass is forwarded to that outer `div`:

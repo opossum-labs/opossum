@@ -16,3 +16,13 @@
     width: 100%;
     height: 100%;
 }
+
+.dxglb-overlay {
+    /* Lies exactly over the scene canvas, for the grid and the rulers. Clicks and drags pass
+       through to the scene canvas, where picking and the orbit controls listen. */
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}

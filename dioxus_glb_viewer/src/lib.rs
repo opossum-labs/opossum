@@ -58,6 +58,7 @@ mod wire;
 
 pub use event::{PickEvent, ViewerEvent};
 pub use model::{
-    Environment, GlbObject, GlbSource, Ground, OverlayBlending, Transform, ViewerOptions,
+    Environment, GlbObject, GlbSource, Ground, OverlayBlending, Projection, Transform,
+    ViewerOptions,
 };
 pub use viewer::{GlbViewer, ViewerHandle, use_glb_viewer_handle};

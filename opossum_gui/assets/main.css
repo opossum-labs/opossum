@@ -349,6 +349,9 @@ body {
     flex: 1;
     min-height: 0;
     min-width: 0;
+    /* The projection switch floats over the canvas, placed against this box. The canvas is its last
+       flex child, so the two share the bottom-right corner. */
+    position: relative;
 }
 
 /* What the 3D view reports about itself. It used to be a toolbar; everything it can be told moved
@@ -423,6 +426,34 @@ body {
     margin-left: auto;
     color: #9e9e9e;
     font-size: 0.75rem;
+}
+
+/* Perspective/orthographic switch over the canvas, in its bottom-right corner. Dressed like the
+   status strip, so it reads as part of the view rather than of the scene. */
+.scene-view-projection {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    padding: 0 6px;
+    border: 1px solid #252525;
+    border-radius: 3px;
+    background-color: #363636;
+    color: #d0d0d0;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    cursor: pointer;
+}
+
+.scene-view-projection:hover {
+    background-color: #4a4a4a;
+}
+
+/* Centered just above the orientation gizmo, which three.js' ViewHelper draws as a fixed 128 px
+   square in the canvas' bottom-right corner. */
+.scene-view-projection.above-gizmo {
+    right: 64px;
+    bottom: 132px;
+    transform: translateX(50%);
 }
 
 /* A labelled input among the 3D View menu's entries: label text and control side by side. No colour
