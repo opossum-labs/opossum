@@ -36,6 +36,13 @@ export async function createViewer(canvasId, options, send, threeUrl) {
         throw new Error('WebGL not available (VM, RDP, or outdated graphics driver?)');
     }
 
+    // The 2D overlay the template lays over the scene canvas, for the grid and the rulers.
+    const overlay = document.getElementById(`${canvasId}-overlay`);
+    const overlay2d = overlay ? overlay.getContext('2d') : null;
+    if (!overlay2d) {
+        send({ event: 'error', message: 'No overlay canvas: the grid and the rulers cannot be drawn' });
+    }
+
     // ── Renderer ────────────────────────────────────────────────────────────
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     renderer.shadowMap.enabled = true;
@@ -318,6 +325,11 @@ export async function createViewer(canvasId, options, send, threeUrl) {
         // false = no inline CSS: three would otherwise set width/height attributes which
         // would re-trigger ResizeObserver → feedback loop.
         renderer.setSize(w, h, false);
+        if (overlay) {
+            // The overlay's bitmap at the renderer's pixel ratio, so its lines and text stay sharp.
+            overlay.width = Math.round(w * renderer.getPixelRatio());
+            overlay.height = Math.round(h * renderer.getPixelRatio());
+        }
         camera.aspect = w / h;
         camera.updateProjectionMatrix();
         needsResize = false;
@@ -343,6 +355,7 @@ export async function createViewer(canvasId, options, send, threeUrl) {
             viewHelper.render(renderer);
             renderer.autoClear = true;
         }
+        drawOverlay();
     });
 
     // ── Picking ───────────────────────────────────────────────────────────────
@@ -692,6 +705,172 @@ export async function createViewer(canvasId, options, send, threeUrl) {
     function targetHalfHeight() {
         const dist = camera.position.distanceTo(controls.target);
         return dist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    }
+
+    // ── Grid and rulers ───────────────────────────────────────────────────────
+    // Drawn in 2D on the overlay, in the orthographic projection only: there one length on screen is
+    // one length in the world everywhere, so lines at round steps make sizes and positions readable.
+    // They are counted from the world origin along the screen's axes and move with the scene when it
+    // is panned. In perspective the overlay stays empty.
+
+    /** Smallest width of a grid cell on screen, in CSS pixels. */
+    const GRID_MIN_CELL = 50;
+    /** Thickness of the rulers along the top and the left edge, in CSS pixels. */
+    const RULER_SIZE = 18;
+    const GRID_COLOR = 'rgba(255, 255, 255, 0.15)';
+    /** The two lines through the world origin stand out from the others. */
+    const GRID_ORIGIN_COLOR = 'rgba(255, 255, 255, 0.4)';
+    const RULER_FILL = 'rgba(54, 54, 54, 0.9)';
+    const RULER_EDGE = '#252525';
+    const RULER_TEXT = '#d0d0d0';
+    const RULER_FONT = '10px sans-serif';
+    /** SI prefixes by power of ten, for labeling lengths in meters (glTF's unit). */
+    const PREFIXES = new Map([[-12, 'p'], [-9, 'n'], [-6, 'µ'], [-3, 'm'], [0, ''], [3, 'k']]);
+    const screenRight = new THREE.Vector3();
+    const screenUp = new THREE.Vector3();
+
+    /**
+     * The grid's step: the smallest length of 1, 2 or 5 × 10ⁿ that is at least `minimum`.
+     *
+     * @param {number} minimum - a positive length, in world units.
+     * @returns {number}
+     */
+    function gridStep(minimum) {
+        const decade = 10 ** Math.floor(Math.log10(minimum));
+        for (const multiple of [1, 2, 5]) {
+            if (multiple * decade >= minimum) return multiple * decade;
+        }
+        return 10 * decade;
+    }
+
+    /**
+     * The unit lengths are labeled in: the SI prefix, in steps of 10³, under which `step` is a whole
+     * number, so that every multiple of it is one too.
+     *
+     * @param {number} step - the grid's step, in meters.
+     * @returns {{name: string, size: number}} e.g. `{ name: 'mm', size: 1e-3 }`.
+     */
+    function lengthUnit(step) {
+        const power = Math.min(3, Math.max(-12, 3 * Math.floor(Math.log10(step) / 3)));
+        return { name: `${PREFIXES.get(power)}m`, size: 10 ** power };
+    }
+
+    /**
+     * The grid lines across one screen axis: every whole multiple `k` of `step` that falls on the
+     * screen, with its distance from the screen's middle along that axis.
+     *
+     * @param {number} middle - the coordinate at the screen's middle, i.e. the target's, in world units.
+     * @param {number} extent - the screen's size along the axis, in CSS pixels.
+     * @param {number} perPixel - world units per CSS pixel.
+     * @param {number} step - the grid's step, in world units.
+     * @returns {{k: number, offset: number}[]} `offset` in CSS pixels, positive along the axis.
+     */
+    function gridLines(middle, extent, perPixel, step) {
+        const first = Math.ceil((middle - extent / 2 * perPixel) / step);
+        const last = Math.floor((middle + extent / 2 * perPixel) / step);
+        const lines = [];
+        for (let k = first; k <= last; k++) lines.push({ k, offset: (k * step - middle) / perPixel });
+        return lines;
+    }
+
+    /**
+     * Which way a ruler along `axis` counts: `1` if the world axis closest to it points the same way,
+     * `-1` if against it. In a view straight along a world axis a ruler then shows the coordinates of
+     * the world axis it lies on, rather than their negatives.
+     *
+     * @param {THREE.Vector3} axis - a screen axis, as a unit vector in the world.
+     * @returns {number}
+     */
+    function rulerSign(axis) {
+        const { x, y, z } = axis;
+        const closest = Math.abs(x) >= Math.abs(y) && Math.abs(x) >= Math.abs(z) ? x
+            : Math.abs(y) >= Math.abs(z) ? y : z;
+        return closest < 0 ? -1 : 1;
+    }
+
+    /**
+     * Draws the grid and the rulers the options ask for over the picture, or leaves the overlay empty
+     * in perspective. Called every frame, after the scene.
+     *
+     * The target sits in the middle of the screen, so a line `k` steps from the world origin lies
+     * `(k · step − target · axis) / perPixel` pixels from the middle. The rulers along the top and the
+     * left label the lines in the unit of the step; the box where they meet names that unit. Without
+     * rulers, a label in the top-left corner gives the step instead.
+     */
+    function drawOverlay() {
+        if (!overlay2d) return;
+        const g = overlay2d;
+        const ratio = renderer.getPixelRatio();
+        const width = overlay.width / ratio;
+        const height = overlay.height / ratio;
+        g.setTransform(ratio, 0, 0, ratio, 0, 0);
+        g.clearRect(0, 0, width, height);
+        const { projection, view_grid: grid, rulers } = currentOptions;
+        const perPixel = 2 * targetHalfHeight() / height;
+        if (projection !== 'orthographic' || !(grid || rulers) || !(perPixel > 0)) return;
+
+        const step = gridStep(perPixel * GRID_MIN_CELL);
+        const unit = lengthUnit(step);
+        // A multiple of the step in the unit, rid of floating-point noise: 150, not 150.00000000000003.
+        const label = (k) => String(Number((k * step / unit.size).toPrecision(12)));
+        screenRight.set(1, 0, 0).applyQuaternion(camera.quaternion);
+        screenUp.set(0, 1, 0).applyQuaternion(camera.quaternion);
+        const columns = gridLines(screenRight.dot(controls.target), width, perPixel, step)
+            .map(({ k, offset }) => ({ k, x: Math.round(width / 2 + offset) + 0.5 }));
+        const rows = gridLines(screenUp.dot(controls.target), height, perPixel, step)
+            .map(({ k, offset }) => ({ k, y: Math.round(height / 2 - offset) + 0.5 }));
+        // Lines sit on half pixels, so a one pixel wide line covers one pixel rather than two halves.
+        const strokeLine = (x0, y0, x1, y1, color) => {
+            g.strokeStyle = color;
+            g.beginPath();
+            g.moveTo(x0, y0);
+            g.lineTo(x1, y1);
+            g.stroke();
+        };
+        g.lineWidth = 1;
+        g.font = RULER_FONT;
+
+        if (grid) {
+            for (const { k, x } of columns) {
+                strokeLine(x, 0, x, height, k === 0 ? GRID_ORIGIN_COLOR : GRID_COLOR);
+            }
+            for (const { k, y } of rows) {
+                strokeLine(0, y, width, y, k === 0 ? GRID_ORIGIN_COLOR : GRID_COLOR);
+            }
+        }
+
+        if (!rulers) {
+            const text = `grid ${label(1)} ${unit.name}`;
+            g.fillStyle = RULER_FILL;
+            g.fillRect(6, 6, g.measureText(text).width + 8, 16);
+            g.fillStyle = RULER_TEXT;
+            g.fillText(text, 10, 18);
+            return;
+        }
+        g.fillStyle = RULER_FILL;
+        g.fillRect(0, 0, width, RULER_SIZE);
+        g.fillRect(0, RULER_SIZE, RULER_SIZE, height - RULER_SIZE);
+        strokeLine(0, RULER_SIZE - 0.5, width, RULER_SIZE - 0.5, RULER_EDGE);
+        strokeLine(RULER_SIZE - 0.5, RULER_SIZE, RULER_SIZE - 0.5, height, RULER_EDGE);
+        g.fillStyle = RULER_TEXT;
+        g.fillText(unit.name, 3, 13);
+        const signRight = rulerSign(screenRight);
+        for (const { k, x } of columns) {
+            if (x < RULER_SIZE) continue; // under the corner box
+            strokeLine(x, 0, x, RULER_SIZE, RULER_TEXT);
+            g.fillText(label(signRight * k), x + 3, 11);
+        }
+        const signUp = rulerSign(screenUp);
+        for (const { k, y } of rows) {
+            if (y < RULER_SIZE) continue;
+            strokeLine(0, y, RULER_SIZE, y, RULER_TEXT);
+            // Turned a quarter, reading upwards beside its tick.
+            g.save();
+            g.translate(11, y - 3);
+            g.rotate(-Math.PI / 2);
+            g.fillText(label(signUp * k), 0, 0);
+            g.restore();
+        }
     }
 
     // ── Base64 → ArrayBuffer ─────────────────────────────────────────────────
