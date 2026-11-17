@@ -2,7 +2,7 @@
 //! Module for handling optical rays
 use std::{f64::consts::PI, fmt::Display};
 
-use nalgebra::{MatrixXx3, Point3, Rotation3, Vector3, vector};
+use nalgebra::{MatrixXx3, Point3, Rotation3, Unit, Vector3, vector};
 use num_traits::{ToPrimitive, Zero};
 use serde::{Deserialize, Serialize};
 use uom::si::{
@@ -239,16 +239,24 @@ impl Ray {
     /// Turns this [`Ray`] into a new direction, turning the up direction it carries along.
     ///
     /// The up direction follows the smallest rotation that takes the old direction into the new
-    /// one. A ray sent straight back keeps its up direction, since no such rotation exists.
+    /// one. Directions that differ by rounding alone count as the same or as opposite ones, and
+    /// for those the up direction stays as it is: a ray sent straight back has no such rotation.
     ///
     /// # Arguments
     ///
     /// * `dir` - the new direction.
     fn turn_to(&mut self, dir: Vector3<f64>) {
-        if let Some(up_direction) = self.up_direction.as_mut()
-            && let Some(rotation) = Rotation3::rotation_between(&self.dir, &dir)
-        {
-            *up_direction = rotation.transform_vector(up_direction);
+        // The sine of the angle below which two directions count as collinear.
+        const COLLINEAR: f64 = 1e-9;
+        if let Some(up_direction) = self.up_direction.as_mut() {
+            let (from, to) = (self.dir.normalize(), dir.normalize());
+            let axis = from.cross(&to);
+            // `atan2` stays finite where the `acos` of a dot product rounded past 1 does not.
+            let angle = axis.norm().atan2(from.dot(&to));
+            if let Some(axis) = Unit::try_new(axis, COLLINEAR) {
+                *up_direction =
+                    Rotation3::from_axis_angle(&axis, angle).transform_vector(up_direction);
+            }
         }
         self.dir = dir;
     }
@@ -1718,6 +1726,37 @@ mod test {
         assert_turned(Vector3::z(), Vector3::y());
         assert_turned(Vector3::x(), Vector3::y());
         assert_turned(-Vector3::x(), Vector3::y());
+        Ok(())
+    }
+    /// Directions that differ by rounding alone - a ray through the center of a ball lens meets
+    /// every face head on - leave the up direction as it was, whether the ray goes on or is sent
+    /// back. Their dot product rounds past 1, which used to turn the up direction into NaN.
+    #[test]
+    fn turn_to_keeps_the_up_direction_through_rounding_noise() -> OpmResult<()> {
+        let from = vector![
+            -0.1830127018922193,
+            -0.18301270189221933,
+            -0.9659258262890684
+        ];
+        let up = vector![
+            -0.03406905672867731,
+            0.9831105486902831,
+            -0.17981364916910095
+        ];
+        for to in [
+            vector![
+                -0.18301270189223545,
+                -0.18301270189222718,
+                -0.9659258262890638
+            ],
+            vector![0.18301270189230562, 0.1830127018922614, 0.9659258262890438],
+        ] {
+            let mut ray = Ray::new(meter!(0., 0., 0.), from, nanometer!(1000.), joule!(1.))?;
+            ray.dir = from;
+            ray.set_up_direction(up);
+            ray.turn_to(to);
+            assert_relative_eq!(ray.up_direction.unwrap(), up, epsilon = 1e-9);
+        }
         Ok(())
     }
     /// A ray places a node looking along the ray, its y axis towards the up direction the ray
