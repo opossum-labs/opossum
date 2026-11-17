@@ -1,5 +1,8 @@
 use crate::components::scenery_editor::{DragStatus, edges::edges_component::EdgeCreation};
-use dioxus::html::geometry::euclid::default::{Point2D, Rect};
+use dioxus::{
+    html::geometry::euclid::default::{Point2D, Rect},
+    signals::Signal,
+};
 use opossum_core::{
     gain::{GainModel, PumpSource},
     prelude::{AnalyzerType, PortType},
@@ -263,6 +266,7 @@ pub enum GraphsWorkspaceAction {
         connection: ConnectInfo,
         /// The ID of the graph containing the edge.
         graph_id: Uuid,
+        reset_trigger: Signal<usize>,
     },
 
     /// Deletes a specific edge from the graph.

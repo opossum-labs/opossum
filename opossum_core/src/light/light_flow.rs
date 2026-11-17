@@ -37,10 +37,13 @@ impl LightFlow {
     ///
     /// # Errors
     ///
-    /// This function will return an error if .
+    /// This function will return an error if the given distance is negative or not finite.
     pub fn new(src_port: &str, target_port: &str, distance: Length) -> OpmResult<Self> {
         if !distance.is_finite() {
             return Err(OpossumError::Other("distance must be finite".into()));
+        }
+        if distance.is_sign_negative() {
+            return Err(OpossumError::Other("distance must be >=0".into()));
         }
         Ok(Self {
             src_port: src_port.into(),
@@ -86,11 +89,16 @@ impl LightFlow {
     ///
     /// # Errors
     ///
-    /// This function will return an error if .
+    /// This function will return an error if the given distance is negative or not finite.
     pub fn set_distance(&mut self, distance: Length) -> OpmResult<()> {
         if !distance.is_finite() {
             return Err(OpossumError::Other(
                 "distance between nodes must be finite".into(),
+            ));
+        }
+        if distance.is_sign_negative() {
+            return Err(OpossumError::Other(
+                "distance between nodes must be >=0".into(),
             ));
         }
         self.distance = distance;
@@ -151,6 +159,7 @@ mod test {
         assert!(light.set_distance(millimeter!(f64::NAN)).is_err());
         assert!(light.set_distance(millimeter!(f64::INFINITY)).is_err());
         assert!(light.set_distance(millimeter!(f64::NEG_INFINITY)).is_err());
+        assert!(light.set_distance(millimeter!(-0.1)).is_err());
         light.set_distance(millimeter!(50.0))?;
         assert_eq!(light.distance(), &millimeter!(50.0));
         Ok(())

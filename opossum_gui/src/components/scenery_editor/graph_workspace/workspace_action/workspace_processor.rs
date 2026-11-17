@@ -239,8 +239,15 @@ pub fn use_workspace_processor(
                     GraphsWorkspaceAction::UpdateEdge {
                         connection,
                         graph_id,
+                        reset_trigger,
                     } => {
-                        process_update_edge(connection, workspace_handlers, graph_id).await;
+                        process_update_edge(
+                            connection,
+                            workspace_handlers,
+                            graph_id,
+                            reset_trigger,
+                        )
+                        .await;
                     }
                     GraphsWorkspaceAction::DeleteEdge {
                         connection,
@@ -681,7 +688,6 @@ const fn is_document_edit_action(action: &GraphsWorkspaceAction) -> bool {
             | GraphsWorkspaceAction::AddOpticReference { .. }
             | GraphsWorkspaceAction::AddAnalyzer { .. }
             | GraphsWorkspaceAction::OptimizeLayout { .. }
-            | GraphsWorkspaceAction::UpdateEdge { .. }
             | GraphsWorkspaceAction::DeleteEdge { .. }
             | GraphsWorkspaceAction::PasteNode { .. }
             | GraphsWorkspaceAction::AddEdge { .. }
@@ -1647,16 +1653,24 @@ async fn process_update_edge(
     connect_info: ConnectInfo,
     ws_handler: WorkSpaceSignalHandlers,
     graph_id: Uuid,
+    mut reset_trigger: Signal<usize>,
 ) {
     let update_connection_request = UpdateConnectionRequest {
         src_uuid: connect_info.src_uuid(),
         src_port: connect_info.src_port().to_string(),
         distance: connect_info.distance(),
     };
-    eval_action_run(
-        api::update_distance(update_connection_request, graph_id).await,
-        Some(move |()| ws_handler.edges.update_edge(connect_info, graph_id)),
-    );
+    match api::update_distance(update_connection_request, graph_id).await {
+        Ok(()) => {
+            ws_handler.edges.update_edge(connect_info, graph_id);
+            *crate::UNDO_REDO_STATUS.write() = (true, false);
+            *crate::SCENE_REVISION.write() += 1;
+        }
+        Err(err_str) => {
+            OPOSSUM_UI_LOGS.write().add_log(&err_str);
+            *reset_trigger.write() += 1;
+        }
+    }
 }
 async fn process_optimize_layout(
     workspace: ReadStore<GraphsWorkspaceState>,
