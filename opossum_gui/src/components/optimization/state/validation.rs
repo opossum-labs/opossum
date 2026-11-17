@@ -30,25 +30,53 @@ pub fn run_validation(
     issues
 }
 
-/// Checks that enabled variables have valid bounds (`min < max`) and still exist in the active schema.
+/// Checks that enabled variables have valid bounds (`min < max`, non-negative distances)
+/// and still exist in the active schema.
 fn validate_bounds_and_schema(
     variable_rows: &[UiVariableRow],
     schema: Option<&ModelOptimizationSchema>,
     issues: &mut Vec<ValidationIssue>,
 ) {
     for row in variable_rows {
-        if row.is_enabled
-            && let (Some(min), Some(max)) = (row.min_bound, row.max_bound)
-            && min >= max
-        {
-            issues.push(ValidationIssue {
-                severity: ValidationSeverity::Error,
-                message: format!(
-                    "{}: Lower bound ({min}) must be less than upper bound ({max}).",
-                    row.node_name
-                ),
-                target_address: Some(row.address.clone()),
-            });
+        if row.is_enabled {
+            if matches!(row.address, ParameterAddress::ConnectionDistance { .. }) {
+                if let Some(min) = row.min_bound
+                    && min < 0.0
+                {
+                    issues.push(ValidationIssue {
+                        severity: ValidationSeverity::Error,
+                        message: format!(
+                            "{}: Connection distance lower bound ({min} mm) cannot be negative.",
+                            row.node_name
+                        ),
+                        target_address: Some(row.address.clone()),
+                    });
+                }
+                if let Some(max) = row.max_bound
+                    && max < 0.0
+                {
+                    issues.push(ValidationIssue {
+                        severity: ValidationSeverity::Error,
+                        message: format!(
+                            "{}: Connection distance upper bound ({max} mm) cannot be negative.",
+                            row.node_name
+                        ),
+                        target_address: Some(row.address.clone()),
+                    });
+                }
+            }
+            if let (Some(min), Some(max)) = (row.min_bound, row.max_bound)
+                && min >= max
+            {
+                issues.push(ValidationIssue {
+                    severity: ValidationSeverity::Error,
+                    message: format!(
+                        "{}: Lower bound ({min}) must be less than upper bound ({max}).",
+                        row.node_name
+                    ),
+                    target_address: Some(row.address.clone()),
+                });
+            }
         }
     }
 
