@@ -18,14 +18,14 @@ use strum::EnumIter;
 use uom::si::angle::degree;
 
 /// Where a bore lies: its offset from the axis, its rotation about its center and its tilt
-/// against the axis.
+/// against the axis, as the direction it leans towards and how far (see [`Bore::with_tilt`]).
 #[derive(Clone, Copy, PartialEq, Debug, Eq, EnumIter)]
 enum BoreParam {
     X,
     Y,
     Rotation,
-    TiltX,
-    TiltY,
+    TiltDirection,
+    TiltAngle,
 }
 
 impl From<BoreParam> for InputParam {
@@ -34,8 +34,8 @@ impl From<BoreParam> for InputParam {
             BoreParam::X => Self::SIUnit("Offset x".into(), "m".into()),
             BoreParam::Y => Self::SIUnit("Offset y".into(), "m".into()),
             BoreParam::Rotation => Self::SIUnit("Rotation".into(), "°".into()),
-            BoreParam::TiltX => Self::SIUnit("Tilt x".into(), "°".into()),
-            BoreParam::TiltY => Self::SIUnit("Tilt y".into(), "°".into()),
+            BoreParam::TiltDirection => Self::SIUnit("Tilt direction".into(), "°".into()),
+            BoreParam::TiltAngle => Self::SIUnit("Tilt angle".into(), "°".into()),
         }
     }
 }
@@ -50,8 +50,8 @@ impl IntoInputDataStrings<Bore> for BoreParam {
             Self::X => format!("{}", bore.center().x.value),
             Self::Y => format!("{}", bore.center().y.value),
             Self::Rotation => format!("{}", bore.rotation().get::<degree>()),
-            Self::TiltX => format!("{}", bore.tilt().0.get::<degree>()),
-            Self::TiltY => format!("{}", bore.tilt().1.get::<degree>()),
+            Self::TiltDirection => format!("{}", bore.tilt().0.get::<degree>()),
+            Self::TiltAngle => format!("{}", bore.tilt().1.get::<degree>()),
         }
     }
 }
@@ -66,8 +66,8 @@ impl IntoInputData<f64, Bore, Bore> for BoreParam {
                 Self::X => center.x = meter!(value),
                 Self::Y => center.y = meter!(value),
                 Self::Rotation => rotation = degree!(value),
-                Self::TiltX => tilt.0 = degree!(value),
-                Self::TiltY => tilt.1 = degree!(value),
+                Self::TiltDirection => tilt.0 = degree!(value),
+                Self::TiltAngle => tilt.1 = degree!(value),
             }
             *bore = Bore::new(bore.shape().clone(), center, rotation).with_tilt(tilt.0, tilt.1);
         }
@@ -178,8 +178,8 @@ mod test {
             (BoreParam::X, 0.004),
             (BoreParam::Y, -0.003),
             (BoreParam::Rotation, 30.0),
-            (BoreParam::TiltX, -10.0),
-            (BoreParam::TiltY, 45.0),
+            (BoreParam::TiltDirection, 120.0),
+            (BoreParam::TiltAngle, -10.0),
         ];
         for (param, value) in values {
             let mut set = param.setter_from_obj();
@@ -188,8 +188,8 @@ mod test {
         assert_eq!(bore.shape(), &shape);
         assert_eq!(bore.center(), meter!(0.004, -0.003));
         assert_relative_eq!(bore.rotation().get::<degree>(), 30.0, max_relative = 1e-12);
-        assert_relative_eq!(bore.tilt().0.get::<degree>(), -10.0, max_relative = 1e-12);
-        assert_relative_eq!(bore.tilt().1.get::<degree>(), 45.0, max_relative = 1e-12);
+        assert_relative_eq!(bore.tilt().0.get::<degree>(), 120.0, max_relative = 1e-12);
+        assert_relative_eq!(bore.tilt().1.get::<degree>(), -10.0, max_relative = 1e-12);
         for (param, shown) in values {
             let value = param.create_value_string(&bore).parse::<f64>().unwrap();
             assert_relative_eq!(value, shown, max_relative = 1e-12);

@@ -421,8 +421,8 @@ mod test {
         ))
     }
     /// A default bored mirror with its bore moved to the given x in mm of its own plane and
-    /// tilted by the given angle in degrees about y.
-    fn bored_at(x: f64, tilt_y: f64) -> OpmResult<BoredMirror> {
+    /// tilted by the given angle in degrees towards +x.
+    fn bored_at(x: f64, towards_x: f64) -> OpmResult<BoredMirror> {
         let mut mirror = BoredMirror::default();
         let outline = Outline::new(
             CircleShape::new(millimeter!(12.5))?,
@@ -432,7 +432,7 @@ mod test {
                     millimeter!(x, 0.0),
                     degree!(0.0),
                 )
-                .with_tilt(degree!(0.0), degree!(tilt_y)),
+                .with_tilt(degree!(0.0), degree!(towards_x)),
             ),
         )?;
         mirror.set_property(OPTIC_SHAPE, OpticShape::from(outline).into())?;
@@ -558,14 +558,14 @@ mod test {
         Ok(())
     }
     /// Light in a bore tilted against it may hit the wall of the bore before it leaves the plate:
-    /// that light is lost, with a warning. The bore of 2.5 mm radius is tilted by 30° about y, so
-    /// on the rear face, 6 mm deep, its axis lies 6 mm · tan 30° = 3.464 mm towards −x. A ray along
-    /// z through the center of the bore on the front face lies 3.464 mm · cos 30° = 3.0 mm from that
-    /// axis there and hits the wall; one 1.5 mm towards −x stays 1.70 mm from it and passes; one
-    /// 6 mm towards +x meets the mirror and is reflected.
+    /// that light is lost, with a warning. The bore of 2.5 mm radius is tilted by 30° towards −x,
+    /// so on the rear face, 6 mm deep, its axis lies 6 mm · tan 30° = 3.464 mm towards −x. A ray
+    /// along z through the center of the bore on the front face lies 3.464 mm · cos 30° = 3.0 mm
+    /// from that axis there and hits the wall; one 1.5 mm towards −x stays 1.70 mm from it and
+    /// passes; one 6 mm towards +x meets the mirror and is reflected.
     #[test]
     fn light_that_hits_the_wall_of_the_bore_is_lost_with_a_warning() -> OpmResult<()> {
-        let mut mirror = bored_at(0.0, 30.0)?;
+        let mut mirror = bored_at(0.0, -30.0)?;
         mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let rays = rays_along_z_from(
             &[
@@ -589,11 +589,11 @@ mod test {
         Ok(())
     }
     /// Arriving from behind, the axis passes a tilted bore from where the axis of the bore meets
-    /// the rear face, 6 mm · tan 30° = 3.464 mm towards −x for a bore tilted by 30° about y, and runs
-    /// on along the arriving axis to the front face.
+    /// the rear face, 6 mm · tan 30° = 3.464 mm towards −x for a bore tilted by 30° towards −x, and
+    /// runs on along the arriving axis to the front face.
     #[test]
     fn from_behind_the_axis_passes_the_bore_from_its_center_on_the_rear_face() -> OpmResult<()> {
-        let mut mirror = bored_at(0.0, 30.0)?;
+        let mut mirror = bored_at(0.0, -30.0)?;
         mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let axis = Rays::from(Ray::new(
             millimeter!(0.0, 0.0, 20.0),

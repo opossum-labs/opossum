@@ -1681,7 +1681,7 @@ mod test {
         );
         Ok(())
     }
-    /// A bore tilted by 45° about y runs through a 6 mm plate along its own axis: a ray along that
+    /// A bore tilted by 45° towards −x runs through a 6 mm plate along its own axis: a ray along that
     /// axis meets both faces in the bore, while one along the axis of the plate meets the front
     /// face in the bore and the rear face on the material, 6 mm beside where the bore comes out.
     #[test]
@@ -1698,7 +1698,7 @@ mod test {
                         millimeter!(0.0, 0.0),
                         degree!(0.0),
                     )
-                    .with_tilt(degree!(0.0), degree!(45.0)),
+                    .with_tilt(degree!(0.0), degree!(-45.0)),
                 ),
             )?,
             Material::from(&RefrIndexConst::new(1.5)?),

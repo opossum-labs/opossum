@@ -195,8 +195,9 @@ mod test {
             Some(Bore::new(bore, millimeter!(2.0, -1.0), degree!(0.0))),
         )
     }
-    /// A circle of 10 mm with a round bore of 3 mm beside its center, tilted by the given angles.
-    fn tilted_bore(about_x: Angle, about_y: Angle) -> OpmResult<Outline> {
+    /// A circle of 10 mm with a round bore of 3 mm beside its center, tilted by the given angle
+    /// towards the given direction.
+    fn tilted_bore(direction: Angle, angle: Angle) -> OpmResult<Outline> {
         Outline::new(
             CircleShape::new(millimeter!(10.0))?,
             Some(
@@ -205,7 +206,7 @@ mod test {
                     millimeter!(2.0, -1.0),
                     degree!(0.0),
                 )
-                .with_tilt(about_x, about_y),
+                .with_tilt(direction, angle),
             ),
         )
     }
