@@ -2,9 +2,7 @@ use crate::components::node_editor::accordion::AccordionItem;
 use crate::components::node_editor::analyzer_node_editor::light_data_editor::ray_source_editor::RaySourceEditor;
 use dioxus::prelude::*;
 use opossum_core::{
-    light::lightdata::ray_data_builder::RayDataBuilder,
-    prelude::{LightDataBuilder, RayDataSource},
-    types::api_types::SourcePortDto,
+    light::lightdata::ray_data_builder::RayDataBuilder, types::api_types::SourcePortDto,
 };
 use uuid::Uuid;
 
@@ -18,7 +16,7 @@ use uuid::Uuid;
 /// # Arguments
 /// * `analyzer_id` - UUID of the parent analyzer node (used for undo/redo autofocus tracking).
 /// * `port` - metadata of the source port being configured.
-/// * `source` - the ray data source currently mapped to the port.
+/// * `ray_data_builder` - the ray data builder currently mapped to the port.
 /// * `on_save` - emitted when the ray source definition is modified and saved.
 /// * `readonly` - disables editing when set.
 ///
@@ -30,8 +28,8 @@ pub fn SourcePortCard(
     analyzer_id: Uuid,
     /// Metadata of the source port being configured.
     port: SourcePortDto,
-    /// Currently mapped ray data source.
-    source: RayDataSource,
+    /// Currently mapped ray data builder.
+    ray_data_builder: RayDataBuilder,
     /// Event emitted when the ray source definition is modified and saved.
     on_save: EventHandler<RayDataBuilder>,
     /// Flag to disable editing.
@@ -40,23 +38,17 @@ pub fn SourcePortCard(
 ) -> Element {
     let port_uuid = port.uuid;
     let port_name = port.name;
-
     // Trigger auto-focus and accordion expansion on undo/redo actions
     super::use_source_card_focus(analyzer_id, port_uuid);
-
     // The accordion body: the ray source editor for this port.
     let body = vec![rsx! {
         RaySourceEditor {
-            ray_data_builder: source,
+            port_uuid,
+            ray_data_builder,
             readonly,
-            on_save: move |light_builder| {
-                if let LightDataBuilder::Geometric(updated_builder) = light_builder {
-                    on_save.call(updated_builder.into());
-                }
-            },
+            on_save,
         }
     }];
-
     rsx! {
         // Each card is its own accordion group (unique `parent_id`) so ports collapse
         // independently. The wrapper id doubles as the scroll target in `use_source_card_focus`.

@@ -1,9 +1,10 @@
 pub mod energy_source_editor;
 pub mod ray_source_editor;
-
 use opossum_core::{
     distributions::spectral::{Gaussian, LaserLines, SpecDistType},
-    joule, nanometer,
+    joule,
+    light::lightdata::ray_data_builder::RayDataBuilder,
+    nanometer,
     prelude::{EnergyDataBuilder, EnergyLaserLines, RayDataSource},
 };
 use uom::si::f64::Length;
@@ -18,7 +19,6 @@ pub fn default_gaussian(default_wvl: Length) -> Gaussian {
         default_wvl / 2.0
     };
     let end = default_wvl + span;
-
     // Set bounds in proper order to satisfy the start < end invariant
     if start >= g.wvl_end() {
         let _ = g.set_wvl_end(end);
@@ -74,4 +74,9 @@ pub fn default_ray_data_source(default_wvl: Length) -> RayDataSource {
     let mut rds = RayDataSource::default();
     apply_default_wavelength_to_ray_source(&mut rds, default_wvl);
     rds
+}
+
+/// Creates a default `RayDataBuilder` configured with the application default wavelength.
+pub fn default_ray_data_builder(default_wvl: Length) -> RayDataBuilder {
+    RayDataBuilder::from(default_ray_data_source(default_wvl))
 }
