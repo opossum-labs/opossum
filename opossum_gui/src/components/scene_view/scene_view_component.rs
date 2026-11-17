@@ -4,7 +4,7 @@ use std::collections::HashSet;
 
 use dioxus::prelude::*;
 use dioxus_glb_viewer::{
-    GlbObject, GlbViewer, OverlayBlending, PickEvent, ViewerEvent, ViewerOptions,
+    GlbObject, GlbViewer, OverlayBlending, PickEvent, Projection, ViewerEvent, ViewerOptions,
     use_glb_viewer_handle,
 };
 use opossum_core::types::api_types::{
@@ -225,6 +225,11 @@ pub fn SceneView() -> Element {
         } else {
             OverlayBlending::Ordered
         };
+        wanted.projection = if controls.orthographic {
+            Projection::Orthographic
+        } else {
+            Projection::Perspective
+        };
         set_environment(&mut wanted, controls.hdr_environment);
         if *options.peek() != wanted {
             options.set(wanted);
@@ -296,9 +301,10 @@ pub fn SceneView() -> Element {
     rsx! {
         div {
             class: "scene-view",
-            // The view's keyboard shortcuts - Fit, Reset, and the four visibility toggles - act only
-            // while this container is focused, so it is made focusable and refocused on every click
-            // into it: a click to orbit is enough to be "in" the view. They are kept off the global
+            // The view's keyboard shortcuts - Fit, Reset, the four visibility toggles and the
+            // projection - act only while this container is focused, so it is made focusable and
+            // refocused on every click into it: a click to orbit is enough to be "in" the view. They
+            // are kept off the global
             // shortcut listener on purpose - those bare letters must stay free for whatever panel
             // holds focus elsewhere.
             tabindex: 0,
@@ -348,6 +354,10 @@ pub fn SceneView() -> Element {
                         SceneShortcut::Rays => {
                             let mut controls = SCENE_VIEW_CONTROLS.write();
                             controls.rays = !controls.rays;
+                        }
+                        SceneShortcut::Projection => {
+                            let mut controls = SCENE_VIEW_CONTROLS.write();
+                            controls.orthographic = !controls.orthographic;
                         }
                     }
                 }

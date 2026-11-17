@@ -4,7 +4,7 @@
 //! the component tree - and read inside it; see [`SCENE_VIEW_CONTROLS`](crate::SCENE_VIEW_CONTROLS)
 //! and [`SCENE_VIEW_REQUEST`](crate::SCENE_VIEW_REQUEST).
 
-/// Which parts of the 3D view are shown, and how the light in it is drawn.
+/// Which parts of the 3D view are shown, how the light in it is drawn, and how it is projected.
 ///
 /// State, not actions: every field here is something that stays the way it was set, and every one of
 /// them can be answered by looking at the view. The three things that only *happen* are
@@ -44,6 +44,10 @@ pub struct SceneViewControls {
     /// at full opacity; `0.0` draws no rays at all. The optical axis is not affected - it is always
     /// drawn solid, being the one line every component is placed on.
     pub opacity: f32,
+    /// Whether the view is drawn in parallel projection, where one length on screen is one length in
+    /// the setup everywhere, rather than in perspective. Off by default. Switching keeps the camera
+    /// where it is. Mirrors `ViewerOptions::projection`.
+    pub orthographic: bool,
 }
 
 impl Default for SceneViewControls {
@@ -58,6 +62,7 @@ impl Default for SceneViewControls {
             full_spectrum: false,
             additive_rays: false,
             opacity: 0.2,
+            orthographic: false,
         }
     }
 }
@@ -84,7 +89,7 @@ pub enum SceneViewRequest {
 /// that would steal the same letters from every other panel. This type is the single place that pairs
 /// a key with its action; the view's key handler reads it, and the 3D View menu will show the key
 /// beside the matching entry. Each variant is one of the actions the menu already offers - two that
-/// move the camera ([`SceneViewRequest`]) and four that flip a switch in [`SceneViewControls`].
+/// move the camera ([`SceneViewRequest`]) and five that flip a switch in [`SceneViewControls`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SceneShortcut {
     /// Frame all components - the menu's **Fit view**.
@@ -99,6 +104,9 @@ pub enum SceneShortcut {
     Beam,
     /// Show or hide the traced rays - the menu's **Rays**.
     Rays,
+    /// Switch between perspective and orthographic projection - the menu's **Orthographic
+    /// projection** / **Perspective projection**.
+    Projection,
 }
 
 impl SceneShortcut {
@@ -124,6 +132,7 @@ impl SceneShortcut {
             "a" => Some(Self::Axes),
             "b" => Some(Self::Beam),
             "l" => Some(Self::Rays),
+            "o" => Some(Self::Projection),
             _ => None,
         }
     }
@@ -145,6 +154,35 @@ impl SceneShortcut {
             Self::Axes => "A",
             Self::Beam => "B",
             Self::Rays => "L",
+            Self::Projection => "O",
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The menu shows `key_hint` and the viewport acts on `from_key`, so every shortcut has to come
+    /// back from its own hint, typed with or without Shift, or the menu names a key that does nothing.
+    #[test]
+    fn every_shortcut_is_triggered_by_the_key_its_menu_entry_shows() {
+        for shortcut in [
+            SceneShortcut::Fit,
+            SceneShortcut::Reset,
+            SceneShortcut::Table,
+            SceneShortcut::Axes,
+            SceneShortcut::Beam,
+            SceneShortcut::Rays,
+            SceneShortcut::Projection,
+        ] {
+            let hint = shortcut.key_hint();
+            assert_eq!(SceneShortcut::from_key(hint), Some(shortcut), "{hint}");
+            assert_eq!(
+                SceneShortcut::from_key(&hint.to_ascii_lowercase()),
+                Some(shortcut),
+                "{hint} in lower case"
+            );
         }
     }
 }

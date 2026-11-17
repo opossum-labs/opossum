@@ -110,6 +110,17 @@ pub fn SceneViewMenu(on_menu_action: EventHandler<AppCommand>, is_connected: boo
                         controls.axes = !controls.axes;
                     },
                 }
+                // Switches between two projections rather than showing or hiding something, so it
+                // names the one a click switches to, like the two ray entries below.
+                SceneViewMenuEntry {
+                    label: if controls.orthographic { "Perspective projection" } else { "Orthographic projection" },
+                    disabled: !open,
+                    shortcut: SceneShortcut::Projection.key_hint(),
+                    on_click: move |()| {
+                        let mut controls = SCENE_VIEW_CONTROLS.write();
+                        controls.orthographic = !controls.orthographic;
+                    },
+                }
                 SceneViewMenuEntry {
                     label: "Optical axis",
                     shown: Some(controls.beam_axis),
