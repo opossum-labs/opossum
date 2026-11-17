@@ -155,8 +155,9 @@ impl Serialize for ViewerOptions {
             ground,
             line_width,
             overlay_blending,
+            projection,
         } = self;
-        let mut st = s.serialize_struct("ViewerOptions", 16)?;
+        let mut st = s.serialize_struct("ViewerOptions", 17)?;
         st.serialize_field("background", background)?;
         st.serialize_field("grid", grid)?;
         st.serialize_field("ambient_intensity", ambient_intensity)?;
@@ -173,6 +174,7 @@ impl Serialize for ViewerOptions {
         st.serialize_field("ground", ground)?;
         st.serialize_field("line_width", line_width)?;
         st.serialize_field("overlay_blending", overlay_blending)?;
+        st.serialize_field("projection", projection)?;
         st.end()
     }
 }
@@ -230,9 +232,24 @@ mod tests {
                 "line_width",
                 "orientation_gizmo",
                 "overlay_blending",
+                "projection",
                 "selection_color",
             ]
         );
+    }
+
+    /// `viewer.js` compares the projection with the string `"orthographic"`, so both ways have to
+    /// arrive as exactly the snake-case names it knows, and the default as `"perspective"`.
+    #[test]
+    fn the_projection_reaches_the_wire() {
+        let json = serde_json::to_value(ViewerOptions::default()).expect("options serialise");
+        assert_eq!(json["projection"], "perspective");
+        let opts = ViewerOptions {
+            projection: crate::model::Projection::Orthographic,
+            ..ViewerOptions::default()
+        };
+        let json = serde_json::to_value(opts).expect("options serialise");
+        assert_eq!(json["projection"], "orthographic");
     }
 
     /// `viewer.js` compares the blending of overlays with the string `"additive"`, so both ways have

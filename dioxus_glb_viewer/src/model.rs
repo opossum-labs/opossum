@@ -249,6 +249,26 @@ pub enum OverlayBlending {
     Additive,
 }
 
+// ─── Projection ──────────────────────────────────────────────────────────────
+
+/// How the camera projects the scene onto the screen.
+///
+/// Switching between the two does not move the camera: the plane through the orbit target keeps
+/// the size it has on screen, so what the camera looks at stays put and only the depth cue changes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Projection {
+    /// Farther things look smaller, as to the eye.
+    #[default]
+    Perspective,
+    /// Parallel projection: one length on screen is one length in the world everywhere in the
+    /// picture, so distances and alignments can be compared by eye. An
+    /// [environment](ViewerOptions::environment_background) drawn behind the scene gives way to the
+    /// plain [`background`](ViewerOptions::background) color, since a parallel view would see the
+    /// panorama from one direction only; reflections keep it.
+    Orthographic,
+}
+
 // ─── Ground ──────────────────────────────────────────────────────────────────
 
 /// A flat floor under the scene that reaches to the horizon.
@@ -333,6 +353,8 @@ pub struct ViewerOptions {
     pub line_width: f32,
     /// How the lines of overlays mix where they cross; see [`OverlayBlending`].
     pub overlay_blending: OverlayBlending,
+    /// Perspective or parallel projection; see [`Projection`]. Does not move the camera.
+    pub projection: Projection,
 }
 
 impl Default for ViewerOptions {
@@ -354,6 +376,7 @@ impl Default for ViewerOptions {
             ground: None,
             line_width: 1.0,
             overlay_blending: OverlayBlending::default(),
+            projection: Projection::default(),
         }
     }
 }
