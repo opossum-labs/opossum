@@ -48,6 +48,8 @@ export async function createViewer(canvasId, options, send, threeUrl) {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(options.background);
 
+    // The one camera the controls and the gizmo move; the orthographic projection draws through a
+    // twin that copies it (see viewCamera).
     const camera = new THREE.PerspectiveCamera(options.fov_degrees, 1, 0.01, 10_000);
     camera.position.set(...options.initial_camera);
 
@@ -330,7 +332,7 @@ export async function createViewer(canvasId, options, send, threeUrl) {
         controls.update(); // needed for enableDamping
         updateGround();
         if (shadowCameraDirty) { updateShadowCamera(); shadowCameraDirty = false; }
-        renderer.render(scene, camera);
+        renderer.render(scene, viewCamera());
         // Overlay the orientation gizmo after the main scene is rendered.
         // autoClear must be false so the gizmo's internal renderer.render() does not
         // wipe the frame; ViewHelper saves/restores the viewport itself.
@@ -370,7 +372,7 @@ export async function createViewer(canvasId, options, send, threeUrl) {
             ((e.clientX - rect.left) / rect.width) * 2 - 1,
             -((e.clientY - rect.top) / rect.height) * 2 + 1,
         );
-        raycaster.setFromCamera(ndc, camera);
+        raycaster.setFromCamera(ndc, viewCamera());
 
         // Only raycast against model roots (NOT scene.children, because GridHelper and the ground
         // are also raycastable and would produce hits without a glbId).
@@ -587,7 +589,8 @@ export async function createViewer(canvasId, options, send, threeUrl) {
 
     /** Direction the sunlight comes from, kept fixed (matches the original sun.position). */
     const SUN_DIR = new THREE.Vector3(1, 2, 1.5).normalize();
-    const shadowSphere = new THREE.Sphere();
+    /** Bounding sphere of the visible models, refitted by updateShadowCamera; empty without any. */
+    const sceneSphere = new THREE.Sphere();
 
     /**
      * Aims the sun at the scene centre and shrinks its orthographic shadow frustum to just
@@ -600,13 +603,16 @@ export async function createViewer(canvasId, options, send, threeUrl) {
      * reach past the models down to the ground — otherwise the ground lies behind the far plane
      * and the shadow is clipped (a small model then shows no shadow at all, a large one a shadow
      * cut off in a straight line).
+     *
+     * Also leaves the models' bounding sphere in `sceneSphere`, which the orthographic twin keeps in
+     * front of itself (see syncOrtho).
      */
     function updateShadowCamera() {
         const box = sceneBounds();
+        box.getBoundingSphere(sceneSphere); // an empty box gives an empty sphere
         if (box.isEmpty()) return;
-        box.getBoundingSphere(shadowSphere);
-        const center = shadowSphere.center;
-        const r = Math.max(shadowSphere.radius, 1e-3);
+        const center = sceneSphere.center;
+        const r = Math.max(sceneSphere.radius, 1e-3);
         // Where shadows land: the ground plane if there is one, else the lowest model surface.
         const groundY = ground ? ground.height : box.min.y;
         // Distance along the light ray from the scene centre down to that plane. Colinear with the
@@ -623,6 +629,58 @@ export async function createViewer(canvasId, options, send, threeUrl) {
         cam.near = Math.max(dist - r - margin, 0.01);
         cam.far = dist + r + drop + margin;
         cam.updateProjectionMatrix();
+    }
+
+    // ── Orthographic twin ─────────────────────────────────────────────────────
+    // OrbitControls and the gizmo stay bound to `camera`, so orbit, pan, zoom, fit and reset work the
+    // same in both projections and switching never moves anything. With the orthographic projection
+    // this twin copies `camera` before every use and is what draws and picks.
+    const ortho = new THREE.OrthographicCamera();
+
+    /**
+     * The camera the scene is drawn and picked with: `camera` itself, or for the orthographic
+     * projection its twin, brought up to date with `camera` first.
+     *
+     * @returns {THREE.Camera}
+     */
+    function viewCamera() {
+        if (currentOptions.projection !== 'orthographic') return camera;
+        syncOrtho();
+        return ortho;
+    }
+
+    /**
+     * Makes the orthographic twin show what `camera` shows, in parallel projection.
+     *
+     * Its frustum is the plane through the orbit target as `camera` sees it, so switching keeps that
+     * plane's size on screen, zooming (which moves `camera`) scales it, and the controls' pan keeps
+     * the point under the cursor. Its distance changes nothing but what is clipped, so it is pushed
+     * back along the view axis until the models and the ground all lie between its near and far plane.
+     */
+    function syncOrtho() {
+        const target = controls.target;
+        const dist = camera.position.distanceTo(target);
+        const halfHeight = dist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+        ortho.top = halfHeight;
+        ortho.bottom = -halfHeight;
+        ortho.right = halfHeight * camera.aspect;
+        ortho.left = -ortho.right;
+
+        // How far from the target something visible can be: the models, and the ground's corners.
+        let reach = sceneSphere.isEmpty()
+            ? 0
+            : target.distanceTo(sceneSphere.center) + sceneSphere.radius;
+        if (ground) {
+            reach = Math.max(reach,
+                target.distanceTo(ground.mesh.position) + ground.mesh.scale.x * Math.SQRT1_2);
+        }
+        const back = Math.max(dist, reach * 1.1);
+        ortho.position.copy(camera.position).sub(target).setLength(back).add(target);
+        ortho.quaternion.copy(camera.quaternion);
+        ortho.near = 0;
+        ortho.far = 2 * back;
+        ortho.updateProjectionMatrix();
+        ortho.updateMatrixWorld();
     }
 
     // ── Base64 → ArrayBuffer ─────────────────────────────────────────────────
@@ -946,12 +1004,15 @@ export async function createViewer(canvasId, options, send, threeUrl) {
 
     /**
      * Puts the plain background colour behind the scene, or the environment map when
-     * `environment_background` asks for it and the map has arrived.
+     * `environment_background` asks for it, the map has arrived and the projection is perspective.
+     *
+     * three.js draws a panorama through a unit cube around the camera, which a parallel projection
+     * shrinks to a small square; a parallel view would see the panorama from one direction only anyway.
      */
     function applyBackground() {
-        scene.background = currentOptions.environment_background && environmentMap
-            ? environmentMap
-            : new THREE.Color(currentOptions.background);
+        const panorama = currentOptions.environment_background && environmentMap
+            && currentOptions.projection !== 'orthographic';
+        scene.background = panorama ? environmentMap : new THREE.Color(currentOptions.background);
     }
 
     async function applyEnvironment(spec) {
