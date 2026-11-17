@@ -12,12 +12,14 @@
 pub mod absorption;
 pub mod analyzers;
 pub mod apertures;
+pub mod asset;
 pub mod coatings;
 pub mod core_optics;
 pub mod distributions;
 pub mod error;
 pub mod gain;
 pub mod generic_validators;
+pub mod geometry;
 mod kde;
 pub mod light;
 pub mod material;
@@ -26,11 +28,8 @@ pub mod opm_document;
 pub mod prelude;
 pub mod properties;
 pub mod refractive_index;
-pub mod types;
-// pub mod render;
-pub mod asset;
-pub mod geometry;
 pub mod reporting;
+pub mod types;
 pub mod utils;
 
 use chrono::DateTime;
