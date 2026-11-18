@@ -158,7 +158,8 @@ A face reaches into a bore as well: only its edge ends it.
 Only the optic shape of a bored mirror has a bore; the validator of every other optic shape refuses one
 (`Validator::OpticShape`). A bore is a prism along its own axis (`Bore::axis`): its shape is the cross section across
 that axis, and its center is where the axis crosses the plane of the outline. Untilted, it runs along the z axis of
-the rim.
+the rim; its tilt leans it by an angle towards a direction in the plane of the outline (`Bore::with_tilt`), turning
+it about the line in that plane square to the direction.
 
 - **Hit test.** The bore lies within the component, it only holds no material. A ray through it meets the face, and
   `Geometry::intersect` returns a `SurfaceHit` that is not on the material (`SurfaceHit::on_material`) and is not
@@ -177,6 +178,11 @@ the rim.
 - **Axis.** The transmitted axis starts anew (`Ray::restart_at`, which clears its position history) at the center of
   the bore on the entry face (`Rim::bore_center_on`). From there it runs parallel to the arriving axis to the exit
   face.
+- **Entrance.** Light at `through_bore`, on the rear face, only passes the bore, so the axis enters there along the
+  bore: `BoredMirror::axis_entrance_frame` takes the centers of the bore on the rear and on the front face
+  (`Rim::bore_center_on`) and looks from the first towards the second, turned and shifted by the alignment of the
+  node. The axis thus arrives exactly where the transmitted axis starts anew. A port on the front face keeps the
+  identity frame.
 - **Drawing.** The core states where the bore meets each face (`Bore::placed`, `Bore::meeting`) and how the face lies
   there (`SurfacePlacement::above`). From that, `opossum_scene` meshes each face over the outline where the bore meets
   it (`OutlineMesh::on`) and draws the wall of the bore between those two rings along the axis of the bore
@@ -393,7 +399,8 @@ by the face of its output port. The nodes put back are then traced front to back
 2. It turns the ray into a frame, `world_frame`.
 3. It computes `node_iso = world_frame ∘ entrance_frame⁻¹`. The entrance frame
    (`AnalysisRayTrace::axis_entrance_frame`) is the identity for every node except the second input of a beam
-   splitter. Here `node_iso` is therefore a translation by (0, 0, 100 mm).
+   splitter, mirrored on its plane, and the `through_bore` input of a bored mirror, along its bore (see
+   [Bores](#bores)). Here `node_iso` is therefore a translation by (0, 0, 100 mm).
 4. It stores the result through `OpticNode::set_positioning(NodePositioning::Automatic(..))`, which calls
    `update_surfaces`.
 
@@ -562,8 +569,8 @@ in `opossum_backend/src/document.rs` answers "not found" for a node that is not 
 | Node | What differs |
 |---|---|
 | Parabolic mirror | `Geometry::surface` with an axis other than the identity. The node sits where the chief ray hits the mirror. `calc_off_axis_frames` returns two frames: the frame of the parent parabola's axis through the node, in which the optic shape is measured, and the vertex of the parent parabola, stated in that frame. |
-| Beam splitter | One plane, face 0, under four port names: its surface ports put `input_1` and `input_2` and the outputs `out1_trans1_refl2` and `out2_trans2_refl1` all on `SurfaceGeometry::FACE`, so all four share the one optic surface, and declare that face splitting, so its `surface` takes only a `Separator`. Its analysis addresses the ports by name itself and splits with `Refraction(None)` and `ReflectedPart::Branch`, so the coating of its `surface` is the split (by default a `Separator` of 50 %). Its positioning splits the axis with `SplittingConfig::Ratio(0.5)` as the effect, whatever the coating. The second input enters mirrored on the plane (`axis_entrance_frame`). |
-| Bored mirror | `Geometry::singlet` with a flat rear face: an `Extruded` plate whose outline has a bore. Its surface ports put `input_1` and `out2_trans2_refl1` on the front face and `input_2` and `out1_trans1_refl2` on the rear face, and declare no face splitting. Ray tracing, positioning and ghost focus are those of the beam splitter (`Splitter`), with the bore deciding what passes (see [Bores](#bores)). Its energy analysis is an error. |
+| Beam splitter | One plane, face 0, under four port names: its surface ports put `input_1` and `input_2` and the outputs `out1_trans1_refl2` and `out2_trans2_refl1` all on `SurfaceGeometry::FACE`, so all four share the one optic surface, and declare that face splitting, so its `surface` takes only a `Separator`. Its analysis (`Splitter` in `nodes/splitter.rs`) takes the ports in the order its surface ports declare them and splits with `Refraction(None)` and `ReflectedPart::Branch`, so the coating of its `surface` is the split (by default a `Separator` of 50 %). Its positioning splits the axis with `SplittingConfig::Ratio(0.5)` as the effect, whatever the coating. The second input enters mirrored on the plane (`axis_entrance_frame`). |
+| Bored mirror | `Geometry::singlet` with a flat rear face: an `Extruded` plate whose outline has a bore. Its surface ports put the inputs `mirror` and `through_bore` on the front and the rear face and the outputs `behind` and `in_front` on the rear and the front face, and declare no face splitting. Ray tracing, positioning and ghost focus are those of the beam splitter (`Splitter`), with the bore deciding what passes, except that the axis enters `through_bore` along the bore (see [Bores](#bores)). Its energy analysis is an error. |
 | Detectors | `Geometry::detector` gives the extent window. A window is no edge: the face reaches everywhere, so all light passes. `SurfaceHit::recorded` decides which hit points are recorded, and `record_within_window` cuts the recorded light to the window of the geometry. With an open optic shape there is no window, and everything is recorded. |
 | Ideal filter, paraxial surface | `Geometry::plane`. Their effects (`FilterType`, `ParaxialLens`) attenuate or deflect at the hit, so a ray or helper ray that misses is neither. The paraxial surface may be unbounded. |
 | Grating | `Geometry::plane`. Its effect, `Diffraction`, sends the whole energy into one order, and the diffracted part is the intended beam (`ReflectedPart::Main`), like the reflection of a mirror. |

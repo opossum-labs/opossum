@@ -179,8 +179,8 @@ mod test {
         Ok(())
     }
     /// A bored mirror with a round bore of 4 mm through the center of its 12.5 mm disc, tilted by
-    /// the given angles.
-    fn bored_mirror(about_x: f64, about_y: f64) -> OpmResult<BoredMirror> {
+    /// the given angle towards the given direction, both in degrees.
+    fn bored_mirror(direction: f64, angle: f64) -> OpmResult<BoredMirror> {
         let ring = OpticShape::Bounded(Outline::new(
             CircleShape::new(millimeter!(12.5))?,
             Some(
@@ -189,7 +189,7 @@ mod test {
                     millimeter!(0., 0.),
                     degree!(0.),
                 )
-                .with_tilt(degree!(about_x), degree!(about_y)),
+                .with_tilt(degree!(direction), degree!(angle)),
             ),
         )?);
         let mut mirror = BoredMirror::default();

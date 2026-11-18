@@ -302,7 +302,8 @@ pub fn InputParamLabeledInput(input_data: InputData) -> Element {
     }
 }
 
-/// Renders a list of input components arranged in two-column grid rows.
+/// Renders a list of input components arranged in two-column grid rows. An input with a tooltip
+/// shows it when the pointer rests anywhere on its column.
 #[component]
 pub fn RowedInputs(inputs: Vec<InputData>) -> Element {
     debug!("🔄 Render: RowedInputs");
@@ -318,16 +319,22 @@ pub fn RowedInputs(inputs: Vec<InputData>) -> Element {
                 match chunk {
                     // Two inputs in a row: Split equally into two columns
                     [first, second] => rsx! {
-                        div { class: "col-sm-6",
+                        div {
+                            class: "col-sm-6",
+                            title: first.tooltip.clone().unwrap_or_default(),
                             InputParamLabeledInput { input_data: first.clone() }
                         }
-                        div { class: "col-sm-6",
+                        div {
+                            class: "col-sm-6",
+                            title: second.tooltip.clone().unwrap_or_default(),
                             InputParamLabeledInput { input_data: second.clone() }
                         }
                     },
                     // Single trailing input: Render in a half-width column for visual consistency
                     [single] => rsx! {
-                        div { class: "col-sm-6",
+                        div {
+                            class: "col-sm-6",
+                            title: single.tooltip.clone().unwrap_or_default(),
                             InputParamLabeledInput { input_data: single.clone() }
                         }
                     },

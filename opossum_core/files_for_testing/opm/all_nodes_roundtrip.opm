@@ -511,7 +511,7 @@
                     src_id: "d3c4e32e-212f-4edf-8366-674cae41d47c",
                     src_port: "output_1",
                     target_id: "51f2eb4a-55d9-4f73-8354-fb721822a1e0",
-                    target_port: "input_1",
+                    target_port: "mirror",
                     distance: 0.05,
                 ),
             ],
