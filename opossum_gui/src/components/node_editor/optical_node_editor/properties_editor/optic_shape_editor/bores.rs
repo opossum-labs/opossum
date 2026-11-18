@@ -53,6 +53,36 @@ impl IntoInputDataStrings<Bore> for BoreParam {
             Self::TiltAngle => format!("{}", bore.tilt().1.get::<degree>()),
         }
     }
+
+    fn create_tooltip(&self) -> Option<String> {
+        Some(
+            match self {
+                Self::X => {
+                    "Where the axis of the bore crosses the plane of the edge, along x from the \
+                     axis of the component"
+                }
+                Self::Y => {
+                    "Where the axis of the bore crosses the plane of the edge, along y from the \
+                     axis of the component"
+                }
+                Self::Rotation => {
+                    "Turn of the cross section of the bore about the axis of the bore; a positive \
+                     angle turns x towards y"
+                }
+                Self::TiltDirection => {
+                    "Direction in the plane of the edge the bore leans towards: 0° = +x, \
+                     90° = +y, 180° = −x, 270° = −y. It has no effect while the tilt angle is 0°"
+                }
+                Self::TiltAngle => {
+                    "How far the bore leans from the axis of the component towards the tilt \
+                     direction, less than 90°; a negative angle leans it the other way.\n\
+                     To run the bore along the beam: on a mirror turned by a roll of r, \
+                     direction 90° and angle r; by a pitch of p, direction 180° and angle p"
+                }
+            }
+            .into(),
+        )
+    }
 }
 
 impl IntoInputData<f64, Bore, Bore> for BoreParam {
@@ -131,6 +161,7 @@ mod test {
     use approx::assert_relative_eq;
     use nalgebra::Point2;
     use opossum_core::apertures::CircleShape;
+    use strum::IntoEnumIterator;
 
     /// A bore is shifted in meters, turned and tilted in degrees, each input leaving the shape and
     /// the other values of the bore as they were; the inputs show the values back in those units.
@@ -158,5 +189,16 @@ mod test {
             let value = param.create_value_string(&bore).parse::<f64>().unwrap();
             assert_relative_eq!(value, shown, max_relative = 1e-12);
         }
+    }
+    /// Every input of a bore says on hover what it sets: the tilt direction names its angles, the
+    /// tilt angle how to run the bore along the beam of a turned mirror.
+    #[test]
+    fn every_bore_input_says_what_it_sets() {
+        let tooltip = |param: BoreParam| param.create_tooltip().unwrap_or_default();
+        for param in BoreParam::iter() {
+            assert!(!tooltip(param).is_empty(), "{param:?} has no tooltip");
+        }
+        assert!(tooltip(BoreParam::TiltDirection).contains("0° = +x"));
+        assert!(tooltip(BoreParam::TiltAngle).contains("roll"));
     }
 }

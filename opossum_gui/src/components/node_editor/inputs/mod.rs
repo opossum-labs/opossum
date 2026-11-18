@@ -55,14 +55,17 @@ where
 
     fn to_input_data(&self, obj: D, handler: EventHandler<B>, readonly: bool) -> InputData {
         let value_str = self.create_value_string(&obj);
-        InputData::new(
-            Into::<InputParam>::into(*self),
-            self.create_id_string().as_str(),
-            self.create_callback(obj.clone(), handler), // Für Legacy/Events
-            self.create_callback_str(obj, handler),     // Für Flushable
-            value_str,
-            readonly,
-        )
+        InputData {
+            tooltip: self.create_tooltip(),
+            ..InputData::new(
+                Into::<InputParam>::into(*self),
+                self.create_id_string().as_str(),
+                self.create_callback(obj.clone(), handler), // Für Legacy/Events
+                self.create_callback_str(obj, handler),     // Für Flushable
+                value_str,
+                readonly,
+            )
+        }
     }
 
     fn to_input_data_vec(obj: &D, handler: EventHandler<B>, readonly: bool) -> Vec<InputData> {
@@ -77,6 +80,10 @@ where
 pub trait IntoInputDataStrings<D> {
     fn create_value_string(&self, obj: &D) -> String;
     fn create_id_string(&self) -> String;
+    /// Returns what the input sets, shown when the pointer rests on it; `None` shows nothing.
+    fn create_tooltip(&self) -> Option<String> {
+        None
+    }
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -168,6 +175,8 @@ pub struct InputData {
     pub callback: EventHandler<Event<FormData>>,
     pub callback_str: EventHandler<String>,
     pub readonly: bool,
+    /// What the input sets, shown when the pointer rests on it.
+    pub tooltip: Option<String>,
 }
 
 impl InputData {
@@ -186,6 +195,7 @@ impl InputData {
             callback,
             callback_str,
             readonly,
+            tooltip: None,
         }
     }
 }
