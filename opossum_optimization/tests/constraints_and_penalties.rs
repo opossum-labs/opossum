@@ -84,11 +84,11 @@ fn test_optimize_kepler_with_min_edge_thickness() -> OpmResult<()> {
 
     let front_curvature_addr = ParameterAddress::NodeProperty {
         node_id: lens2_id,
-        property_name: "front curvature".into(),
+        property_name: "front radius of curvature".into(),
     };
     let rear_curvature_addr = ParameterAddress::NodeProperty {
         node_id: lens2_id,
-        property_name: "rear curvature".into(),
+        property_name: "rear radius of curvature".into(),
     };
     let spot_observable_addr = ObservableAddress {
         analyzer_id,

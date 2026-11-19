@@ -148,7 +148,7 @@ pub fn proptype_to_html(
             Proptype::SpectrometerType(value) => {
                 template_engine.render("simple", &value.to_string())
             }
-            Proptype::Metertype(value) => template_engine.render("simple", &value.to_string()),
+            Proptype::MeterType(value) => template_engine.render("simple", &value.to_string()),
             Proptype::Spectrum(_)
             | Proptype::HitMap(_)
             | Proptype::SpotDiagram(_)

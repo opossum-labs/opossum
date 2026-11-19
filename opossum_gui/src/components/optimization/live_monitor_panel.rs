@@ -49,7 +49,7 @@ pub fn LiveMonitorPanel(mut props: LiveMonitorProps) -> Element {
             option { value: "DLS", "Damped Least Squares (Levenberg-Marquardt)" }
             option { value: "LBFGS", "L-BFGS (Quasi-Newton)" }
             option { value: "NelderMead", "Nelder-Mead (Simplex)" }
-            option { value: "SimulatedAnnealing", "Simulated Annealing" }
+            option { value: "AdaptiveSimulatedAnnealing", "Simulated Annealing" }
           }
         }
         // Combined Solver Hyperparameters Box (Iterations & optional SA Parameters)
@@ -75,7 +75,7 @@ pub fn LiveMonitorPanel(mut props: LiveMonitorProps) -> Element {
               }
             }
             // Optional Annealing Parameters embedded within the same container
-            if current_algo_kind == "SimulatedAnnealing" {
+            if current_algo_kind == "AdaptiveSimulatedAnnealing" {
               div { class: "col-6 mt-2 pt-2 border-top border-secondary border-opacity-50",
                 label {
                   class: "form-label text-warning mb-0",

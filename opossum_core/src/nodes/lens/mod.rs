@@ -60,22 +60,22 @@ impl Default for Lens {
         let mut node_attr = NodeAttr::new("lens");
         node_attr
             .create_property_with_validator(
-                "front curvature",
+                "front radius of curvature",
                 "radius of curvature of front surface",
                 Validator::AndValidator {
                     validators: vec![Validator::NumericIsNotZero, Validator::NumericIsNotNaN],
                 },
-                Proptype::Curvature(millimeter!(500.0)),
+                Proptype::RadiusOfCurvature(millimeter!(500.0)),
             )
             .unwrap();
         node_attr
             .create_property_with_validator(
-                "rear curvature",
+                "rear radius of curvature",
                 "radius of curvature of rear surface",
                 Validator::AndValidator {
                     validators: vec![Validator::NumericIsNotZero, Validator::NumericIsNotNaN],
                 },
-                Proptype::Curvature(millimeter!(-500.0)),
+                Proptype::RadiusOfCurvature(millimeter!(-500.0)),
             )
             .unwrap();
         node_attr
@@ -148,10 +148,14 @@ impl Lens {
     ) -> OpmResult<Self> {
         let mut lens = Self::default();
         lens.node_attr.set_name(name);
-        lens.node_attr
-            .set_property("front curvature", Proptype::Curvature(front_curvature))?;
-        lens.node_attr
-            .set_property("rear curvature", Proptype::Curvature(rear_curvature))?;
+        lens.node_attr.set_property(
+            "front radius of curvature",
+            Proptype::RadiusOfCurvature(front_curvature),
+        )?;
+        lens.node_attr.set_property(
+            "rear radius of curvature",
+            Proptype::RadiusOfCurvature(rear_curvature),
+        )?;
         lens.node_attr
             .set_property("center thickness", center_thickness.into())?;
         lens.node_attr
@@ -204,17 +208,17 @@ impl Lens {
 impl EdgeThickness for Lens {
     fn min_edge_thickness(&self) -> OpmResult<Length> {
         let (
-            Ok(Proptype::Curvature(front_roc)),
-            Ok(Proptype::Curvature(rear_roc)),
+            Ok(Proptype::RadiusOfCurvature(front_roc)),
+            Ok(Proptype::RadiusOfCurvature(rear_roc)),
             Ok(Proptype::Length(center_thickness)),
         ) = (
-            self.node_attr.get_property("front curvature"),
-            self.node_attr.get_property("rear curvature"),
+            self.node_attr.get_property("front radius of curvature"),
+            self.node_attr.get_property("rear radius of curvature"),
             self.node_attr.get_property("center thickness"),
         )
         else {
             return Err(OpossumError::Analysis(
-                "Cannot read curvatures and center thickness from lens".into(),
+                "Cannot read radii of curvatures and center thickness from lens".into(),
             ));
         };
 
@@ -239,17 +243,17 @@ impl EdgeThickness for Lens {
 impl OpticNode for Lens {
     fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         let (
-            Ok(Proptype::Curvature(front_curvature)),
-            Ok(Proptype::Curvature(rear_curvature)),
+            Ok(Proptype::RadiusOfCurvature(front_curvature)),
+            Ok(Proptype::RadiusOfCurvature(rear_curvature)),
             Ok(Proptype::Length(center_thickness)),
         ) = (
-            self.node_attr.get_property("front curvature"),
-            self.node_attr.get_property("rear curvature"),
+            self.node_attr.get_property("front radius of curvature"),
+            self.node_attr.get_property("rear radius of curvature"),
             self.node_attr.get_property("center thickness"),
         )
         else {
             return Err(OpossumError::Analysis(
-                "cannot read the curvatures and the center thickness of the lens".into(),
+                "cannot read the radii of curvatures and the center thickness of the lens".into(),
             ));
         };
         let cross_section = self.cross_section()?.ok_or_else(|| {
@@ -306,11 +310,15 @@ mod test {
         assert_eq!(node.node_type(), "lens");
         assert!(!node.inverted());
         assert_eq!(node.node_color(), "aqua");
-        let Ok(Proptype::Curvature(roc)) = node.node_attr.get_property("front curvature") else {
+        let Ok(Proptype::RadiusOfCurvature(roc)) =
+            node.node_attr.get_property("front radius of curvature")
+        else {
             panic!()
         };
         assert_eq!(*roc, millimeter!(500.0));
-        let Ok(Proptype::Curvature(roc)) = node.node_attr.get_property("rear curvature") else {
+        let Ok(Proptype::RadiusOfCurvature(roc)) =
+            node.node_attr.get_property("rear radius of curvature")
+        else {
             panic!()
         };
         assert_eq!(*roc, millimeter!(-500.0));
@@ -331,30 +339,33 @@ mod test {
         let mut lens = Lens::default();
         assert!(
             lens.node_attr
-                .set_property("front curvature", Proptype::Curvature(Length::zero()))
-                .is_err()
-        );
-        assert!(
-            lens.node_attr
                 .set_property(
-                    "front curvature",
-                    Proptype::Curvature(millimeter!(f64::NAN))
+                    "front radius of curvature",
+                    Proptype::RadiusOfCurvature(Length::zero())
                 )
                 .is_err()
         );
         assert!(
             lens.node_attr
                 .set_property(
-                    "front curvature",
-                    Proptype::Curvature(millimeter!(f64::INFINITY))
+                    "front radius of curvature",
+                    Proptype::RadiusOfCurvature(millimeter!(f64::NAN))
+                )
+                .is_err()
+        );
+        assert!(
+            lens.node_attr
+                .set_property(
+                    "front radius of curvature",
+                    Proptype::RadiusOfCurvature(millimeter!(f64::INFINITY))
                 )
                 .is_ok()
         );
         assert!(
             lens.node_attr
                 .set_property(
-                    "front curvature",
-                    Proptype::Curvature(millimeter!(f64::NEG_INFINITY))
+                    "front radius of curvature",
+                    Proptype::RadiusOfCurvature(millimeter!(f64::NEG_INFINITY))
                 )
                 .is_ok()
         );
@@ -364,27 +375,33 @@ mod test {
         let mut lens = Lens::default();
         assert!(
             lens.node_attr
-                .set_property("rear curvature", Proptype::Curvature(Length::zero()))
-                .is_err()
-        );
-        assert!(
-            lens.node_attr
-                .set_property("rear curvature", Proptype::Curvature(millimeter!(f64::NAN)))
+                .set_property(
+                    "rear radius of curvature",
+                    Proptype::RadiusOfCurvature(Length::zero())
+                )
                 .is_err()
         );
         assert!(
             lens.node_attr
                 .set_property(
-                    "rear curvature",
-                    Proptype::Curvature(millimeter!(f64::INFINITY))
+                    "rear radius of curvature",
+                    Proptype::RadiusOfCurvature(millimeter!(f64::NAN))
+                )
+                .is_err()
+        );
+        assert!(
+            lens.node_attr
+                .set_property(
+                    "rear radius of curvature",
+                    Proptype::RadiusOfCurvature(millimeter!(f64::INFINITY))
                 )
                 .is_ok()
         );
         assert!(
             lens.node_attr
                 .set_property(
-                    "rear curvature",
-                    Proptype::Curvature(millimeter!(f64::NEG_INFINITY))
+                    "rear radius of curvature",
+                    Proptype::RadiusOfCurvature(millimeter!(f64::NEG_INFINITY))
                 )
                 .is_ok()
         );
@@ -451,11 +468,15 @@ mod test {
         let ref_index = RefrIndexConst::new(2.0)?;
         let node = Lens::new("test", roc, roc, ct, ref_index)?;
         assert_eq!(node.name(), "test");
-        let Ok(Proptype::Curvature(roc)) = node.node_attr.get_property("front curvature") else {
+        let Ok(Proptype::RadiusOfCurvature(roc)) =
+            node.node_attr.get_property("front radius of curvature")
+        else {
             panic!()
         };
         assert_eq!(*roc, millimeter!(100.0));
-        let Ok(Proptype::Curvature(roc)) = node.node_attr.get_property("rear curvature") else {
+        let Ok(Proptype::RadiusOfCurvature(roc)) =
+            node.node_attr.get_property("rear radius of curvature")
+        else {
             panic!()
         };
         assert_eq!(*roc, millimeter!(100.0));
@@ -502,8 +523,14 @@ mod test {
         let optic_shape: OpticShape = CircleShape::new(millimeter!(9.0))?.into();
         let mut lens = Lens::default();
         lens.set_property(OPTIC_SHAPE, optic_shape.clone().into())?;
-        lens.set_property("front curvature", Proptype::Curvature(millimeter!(10.0)))?;
-        lens.set_property("rear curvature", Proptype::Curvature(millimeter!(9.0)))?;
+        lens.set_property(
+            "front radius of curvature",
+            Proptype::RadiusOfCurvature(millimeter!(10.0)),
+        )?;
+        lens.set_property(
+            "rear radius of curvature",
+            Proptype::RadiusOfCurvature(millimeter!(9.0)),
+        )?;
         lens.set_property("center thickness", millimeter!(1.0).into())?;
         lens.update_surfaces()?;
         assert_eq!(

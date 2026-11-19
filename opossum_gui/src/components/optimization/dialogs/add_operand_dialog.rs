@@ -255,7 +255,7 @@ pub fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<b
                                   .read()
                                   .schema
                                   .as_ref()
-                                  .map(|s| {
+                                  .map_or_default(|s| {
                                       s.controllable_variables
                                           .iter()
                                           .filter_map(|v| match &v.address {
@@ -265,8 +265,7 @@ pub fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<b
                                               _ => None,
                                           })
                                           .collect()
-                                  })
-                                  .unwrap_or_default();
+                                  });
                               if !distance_segments.is_empty() {
                                   model
                                       .write()

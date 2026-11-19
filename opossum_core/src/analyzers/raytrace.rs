@@ -462,7 +462,7 @@ mod test {
     fn a_ray_trace_stops_at_a_component_changed_into_no_valid_shape() -> OpmResult<()> {
         let (mut scenery, source, _) = scenery_with_a_mirror_changed_behind_its_back(
             "curvature",
-            Proptype::Curvature(millimeter!(-10.0)),
+            Proptype::RadiusOfCurvature(millimeter!(-10.0)),
         )?;
         let mut config = RayTraceConfig::default();
         config.map_source(

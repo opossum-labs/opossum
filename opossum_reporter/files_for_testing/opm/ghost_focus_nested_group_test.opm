@@ -87,8 +87,8 @@
                         lidt: 10000.0,
                         props: {
                             "center thickness": Length(0.001),
-                            "front curvature": Curvature(inf),
-                            "rear curvature": Curvature(inf),
+                            "front radius of curvature": Curvature(inf),
+                            "rear radius of curvature": Curvature(inf),
                             "refractive index": RefractiveIndex(Const(
                                 refractive_index: 1.4,
                             )),
@@ -134,8 +134,8 @@
                         lidt: 10000.0,
                         props: {
                             "center thickness": Length(0.001),
-                            "front curvature": Curvature(inf),
-                            "rear curvature": Curvature(inf),
+                            "front radius of curvature": Curvature(inf),
+                            "rear radius of curvature": Curvature(inf),
                             "refractive index": RefractiveIndex(Const(
                                 refractive_index: 1.4,
                             )),
@@ -198,8 +198,8 @@
                                     lidt: 10000.0,
                                     props: {
                                         "center thickness": Length(0.001),
-                                        "front curvature": Curvature(inf),
-                                        "rear curvature": Curvature(inf),
+                                        "front radius of curvature": Curvature(inf),
+                                        "rear radius of curvature": Curvature(inf),
                                         "refractive index": RefractiveIndex(Const(
                                             refractive_index: 1.4,
                                         )),
@@ -262,8 +262,8 @@
                                                 lidt: 10000.0,
                                                 props: {
                                                     "center thickness": Length(0.001),
-                                                    "front curvature": Curvature(inf),
-                                                    "rear curvature": Curvature(inf),
+                                                    "front radius of curvature": Curvature(inf),
+                                                    "rear radius curvature": Curvature(inf),
                                                     "refractive index": RefractiveIndex(Const(
                                                         refractive_index: 1.4,
                                                     )),
@@ -326,8 +326,8 @@
                                                             lidt: 10000.0,
                                                             props: {
                                                                 "center thickness": Length(0.001),
-                                                                "front curvature": Curvature(inf),
-                                                                "rear curvature": Curvature(inf),
+                                                                "front radius of curvature": Curvature(inf),
+                                                                "rear radius of curvature": Curvature(inf),
                                                                 "refractive index": RefractiveIndex(Const(
                                                                     refractive_index: 1.4,
                                                                 )),

@@ -43,13 +43,10 @@ pub fn default_scale_for_metric(dimension: MetricDimension, metric_name: &str) -
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum OperandMode {
     /// Penalizes deviation from `target` symmetrically: $((v - \text{target}) / \text{scale})^2$.
-    #[serde(rename = "equal")]
     Equal,
     /// Penalizes values exceeding the upper limit: $(\max(0, v - \text{limit}) / \text{scale})^2$.
-    #[serde(rename = "upper_limit")]
     UpperLimit,
     /// Penalizes values falling below the lower limit: $(\max(0, \text{limit} - v) / \text{scale})^2$.
-    #[serde(rename = "lower_limit")]
     LowerLimit,
 }
 impl OperandMode {

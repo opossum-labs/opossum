@@ -29,7 +29,7 @@ use crate::{
 /// Same purpose as [`OPTIC_SHAPE`](crate::geometry::body::OPTIC_SHAPE) for the transversal
 /// extent: the node declarations and every reader refer to the property by this constant rather
 /// than by a literal.
-pub const MATERIAL: &str = "Material";
+pub const MATERIAL: &str = "material";
 
 /// The wavelength a material is characterised at when nothing else is given.
 ///

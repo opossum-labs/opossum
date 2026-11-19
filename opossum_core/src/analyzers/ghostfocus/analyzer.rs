@@ -65,7 +65,7 @@ impl GhostFocusAnalyzer {
                             hit_map_props.create(
                                 "Origin",
                                 "Surface bounces that enabled this fluence",
-                                origin_str.clone().into(),
+                                origin_str.into(),
                             )?;
                             let fluence_data = hit_map
                                 .get_rays_hit_map(*bounce, *rays_uuid)

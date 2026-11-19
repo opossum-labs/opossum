@@ -68,8 +68,6 @@ impl BoxBounds {
 pub struct FreeVariable {
     /// Address of the optical property or connection distance being varied.
     pub address: ParameterAddress,
-    /// Optional explicit start value in SI base units; if `None`, the current model value is read at solver startup.
-    pub initial_value: Option<f64>,
     /// Optional lower and upper box constraints in SI base units.
     pub bounds: Option<BoxBounds>,
     /// Relative step size factor for finite-difference derivatives (defaults to [`DEFAULT_DELTA_REL`]).
@@ -83,23 +81,10 @@ impl FreeVariable {
     pub const fn new(address: ParameterAddress) -> Self {
         Self {
             address,
-            initial_value: None,
             bounds: None,
             delta_rel: DEFAULT_DELTA_REL,
             delta_abs_min: DEFAULT_DELTA_ABS_MIN,
         }
-    }
-    /// Sets an explicit initial value in raw SI base units.
-    #[must_use]
-    pub const fn with_initial_value(mut self, value: f64) -> Self {
-        self.initial_value = Some(value);
-        self
-    }
-    /// Sets an explicit initial value from a typed [`Length`] quantity (stored in meters).
-    #[must_use]
-    pub fn with_initial_length(mut self, length: Length) -> Self {
-        self.initial_value = Some(length.get::<meter>());
-        self
     }
     /// Sets the [`BoxBounds`] constraining this variable.
     #[must_use]

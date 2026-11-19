@@ -36,7 +36,6 @@ ron.workspace = true
 serde.workspace = true
 strum.workspace = true
 strum_macros.workspace = true
-tempfile.workspace = true
 uom.workspace = true
 utoipa.workspace = true
 uuid.workspace = true
@@ -46,7 +45,6 @@ libm = { version = "0.2" }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 fastrand = "2.3"
 sobol = "1"
-delaunator = "1"
 kahan = "0.1"
 roots = "0.0.8"
 voronator = "0.2"
@@ -54,7 +52,7 @@ rayon = "1"
 spade = "2"
 earcutr = "0.5"
 num-traits = "0.2"
-mutants = "0.0.4"
+# mutants = "0.0.4"
 inventory = "0.3"
 indexmap = { version = "2", features = ["serde"] }
 
@@ -67,6 +65,7 @@ regex = "1"
 assert_matches = "1"
 testing_logger = "0.1"
 criterion = { version = "0.8.0", features = ["html_reports"] }
+tempfile.workspace = true
 
 [[example]]
 name = "hhts"

@@ -89,8 +89,8 @@ pub fn MaterialCatalog(
     let mut max_nd = use_signal(|| Option::<f64>::None);
 
     // Formatted string values for input elements to ensure controlled inputs
-    let min_nd_str = min_nd().map(|v| v.to_string()).unwrap_or_default();
-    let max_nd_str = max_nd().map(|v| v.to_string()).unwrap_or_default();
+    let min_nd_str = min_nd().map_or_default(|v| v.to_string());
+    let max_nd_str = max_nd().map_or_default(|v| v.to_string());
 
     // Reactive filter pipeline reading from the in-memory registry index
     let filtered_entries = use_memo(move || {

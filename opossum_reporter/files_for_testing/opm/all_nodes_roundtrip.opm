@@ -29,10 +29,10 @@
                     "name": "cylindric lens",
                     "uuid": "aeb87e95-54ab-4752-be23-3f33151b343a",
                     "props": {
-                        "front curvature": Curvature(0.5),
-                        "rear curvature": Curvature(-0.5),
+                        "front radius of curvature": Curvature(0.5),
+                        "rear radius of curvature": Curvature(-0.5),
                         "center thickness": Length(0.01),
-                        "Material": Material(Id("080b7ced-292d-403e-afa9-6f022e58801b")),
+                        "material": Material(Id("080b7ced-292d-403e-afa9-6f022e58801b")),
                         "clear aperture": Aperture(BinaryCircle(
                             radius: 0.0125,
                         )),
@@ -51,10 +51,10 @@
                     "name": "lens",
                     "uuid": "09e4a440-e57e-4fca-b532-9b0aff080d0b",
                     "props": {
-                        "front curvature": Curvature(0.5),
-                        "rear curvature": Curvature(-0.5),
+                        "front radius of curvature": Curvature(0.5),
+                        "rear radius of curvature": Curvature(-0.5),
                         "center thickness": Length(0.01),
-                        "Material": Material(Id("c278deba-11b5-4e1c-bd2e-0a08ca2dcdd2")),
+                        "material": Material(Id("c278deba-11b5-4e1c-bd2e-0a08ca2dcdd2")),
                         "clear aperture": Aperture(BinaryCircle(
                             radius: 0.0125,
                         )),
@@ -66,7 +66,7 @@
                     "uuid": "fdcd1d7d-2425-41d0-9f62-38c570400ff8",
                     "props": {
                         "center thickness": Length(0.01),
-                        "Material": Material(Id("c06f49d2-1422-4d16-ab1e-210a8e9a6281")),
+                        "material": Material(Id("c06f49d2-1422-4d16-ab1e-210a8e9a6281")),
                         "wedge": Angle(0.0),
                         "clear aperture": Aperture(BinaryCircle(
                             radius: 0.0125,
@@ -154,7 +154,7 @@
                     "name": "ray propagation",
                     "uuid": "c25bcc18-c63a-4857-a170-17141cb75684",
                     "props": {
-                        "view_direction": Vec3(1.0, 0.0, 0.0),
+                        "view direction": Vec3(1.0, 0.0, 0.0),
                         "ray transparency": F64(0.4),
                     },
                 },

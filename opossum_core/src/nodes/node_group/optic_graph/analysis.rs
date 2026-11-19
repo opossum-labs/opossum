@@ -233,7 +233,7 @@ impl OpticGraph {
             }
 
             for edge in self.incoming_edges(node_id) {
-                mapped_light_result.insert(edge.0.clone(), edge.1.clone());
+                mapped_light_result.insert(edge.0, edge.1);
             }
 
             Ok(mapped_light_result)

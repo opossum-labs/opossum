@@ -1563,15 +1563,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "delaunator"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e1ee323c1275374f7e612d3724d12707079fb6a2117349fe144def656f5a880"
-dependencies = [
- "robust",
-]
-
-[[package]]
 name = "deranged"
 version = "0.5.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5356,12 +5347,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "743fb55ba31b18fb1ecef6bdc9aa2743314978ac084044301a7eee33fb99a20d"
 
 [[package]]
-name = "mutants"
-version = "0.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "add0ac067452ff1aca8c5002111bd6b1c895baee6e45fcbc44e0193aea17be56"
-
-[[package]]
 name = "nalgebra"
 version = "0.35.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5856,7 +5841,6 @@ dependencies = [
  "assert_matches",
  "chrono",
  "criterion",
- "delaunator",
  "earcutr",
  "fastrand",
  "image 0.25.10",
@@ -5866,7 +5850,6 @@ dependencies = [
  "kahan",
  "libm",
  "log",
- "mutants",
  "nalgebra",
  "num-traits",
  "opm_macros_lib",

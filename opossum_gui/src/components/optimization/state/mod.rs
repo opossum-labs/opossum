@@ -82,7 +82,7 @@ impl OptimizationModel {
                 group_name: "Main System".to_string(),
                 node_name: default_node_name,
                 property_name: default_prop_name,
-                current_value: var.initial_value.unwrap_or(0.0),
+                current_value: 0.0,
                 is_enabled: true,
                 min_bound: min_b,
                 max_bound: max_b,
@@ -373,8 +373,7 @@ impl OptimizationModel {
                     rule: rule.clone(),
                 });
             } else if row.is_enabled {
-                let mut var =
-                    FreeVariable::new(row.address.clone()).with_initial_value(row.current_value);
+                let mut var = FreeVariable::new(row.address.clone());
                 match row.solver_bounds() {
                     Ok(Some(bounds)) => var = var.with_bounds(bounds),
                     Err(err) if strict => return Err(err),
@@ -513,7 +512,9 @@ impl OptimizationModel {
             OptimizationAlgorithm::Dls { .. } => "DLS",
             OptimizationAlgorithm::LBFGS { .. } => "LBFGS",
             OptimizationAlgorithm::NelderMead { .. } => "NelderMead",
-            OptimizationAlgorithm::SimulatedAnnealing { .. } => "SimulatedAnnealing",
+            OptimizationAlgorithm::AdaptiveSimulatedAnnealing { .. } => {
+                "AdaptiveSimulatedAnnealing"
+            }
         }
     }
 
@@ -524,7 +525,9 @@ impl OptimizationModel {
             OptimizationAlgorithm::Dls { max_iterations, .. }
             | OptimizationAlgorithm::NelderMead { max_iterations, .. }
             | OptimizationAlgorithm::LBFGS { max_iterations, .. }
-            | OptimizationAlgorithm::SimulatedAnnealing { max_iterations, .. } => max_iterations,
+            | OptimizationAlgorithm::AdaptiveSimulatedAnnealing { max_iterations, .. } => {
+                max_iterations
+            }
         }
     }
 
@@ -534,8 +537,8 @@ impl OptimizationModel {
         self.algorithm = match kind {
             "DLS" => OptimizationAlgorithm::dls().with_max_iterations(iters),
             "NelderMead" => OptimizationAlgorithm::nelder_mead().with_max_iterations(iters),
-            "SimulatedAnnealing" => {
-                OptimizationAlgorithm::simulated_annealing().with_max_iterations(iters)
+            "AdaptiveSimulatedAnnealing" => {
+                OptimizationAlgorithm::adaptive_simulated_annealing().with_max_iterations(iters)
             }
             _ => OptimizationAlgorithm::lbfgs().with_max_iterations(iters),
         };
@@ -546,11 +549,11 @@ impl OptimizationModel {
         self.algorithm = self.algorithm.clone().with_max_iterations(iters);
     }
 
-    /// Returns initial temperature if Simulated Annealing is active.
+    /// Returns initial temperature if Adaptive Simulated Annealing is active.
     #[must_use]
     pub const fn sa_initial_temperature(&self) -> f64 {
         match self.algorithm {
-            OptimizationAlgorithm::SimulatedAnnealing {
+            OptimizationAlgorithm::AdaptiveSimulatedAnnealing {
                 initial_temperature,
                 ..
             } => initial_temperature,
@@ -558,9 +561,9 @@ impl OptimizationModel {
         }
     }
 
-    /// Sets the initial temperature for Simulated Annealing.
+    /// Sets the initial temperature for Adaptive Simulated Annealing.
     pub const fn set_sa_initial_temperature(&mut self, temp: f64) {
-        if let OptimizationAlgorithm::SimulatedAnnealing {
+        if let OptimizationAlgorithm::AdaptiveSimulatedAnnealing {
             initial_temperature,
             ..
         } = &mut self.algorithm
@@ -569,18 +572,19 @@ impl OptimizationModel {
         }
     }
 
-    /// Returns the cooling rate alpha if Simulated Annealing is active.
+    /// Returns the cooling rate alpha if Adaptive Simulated Annealing is active.
     #[must_use]
     pub const fn sa_cooling_rate(&self) -> f64 {
         match self.algorithm {
-            OptimizationAlgorithm::SimulatedAnnealing { cooling_rate, .. } => cooling_rate,
+            OptimizationAlgorithm::AdaptiveSimulatedAnnealing { cooling_rate, .. } => cooling_rate,
             _ => 0.92,
         }
     }
 
-    /// Sets the cooling rate alpha for Simulated Annealing.
+    /// Sets the cooling rate alpha for Adaptive Simulated Annealing.
     pub const fn set_sa_cooling_rate(&mut self, rate: f64) {
-        if let OptimizationAlgorithm::SimulatedAnnealing { cooling_rate, .. } = &mut self.algorithm
+        if let OptimizationAlgorithm::AdaptiveSimulatedAnnealing { cooling_rate, .. } =
+            &mut self.algorithm
         {
             *cooling_rate = rate.clamp(0.5, 0.999);
         }
@@ -677,9 +681,7 @@ mod tests {
             node_id,
             property_name: "thickness".to_string(),
         };
-        let var = FreeVariable::new(addr.clone())
-            .with_initial_value(0.02)
-            .with_bounds(BoxBounds::new(0.01, 0.05).unwrap());
+        let var = FreeVariable::new(addr.clone()).with_bounds(BoxBounds::new(0.01, 0.05).unwrap());
         let operand = StandardOperand::Metric(MetricOperand::new(
             addr.clone(),
             0.04,

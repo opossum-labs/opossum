@@ -140,7 +140,10 @@ mod test {
         let mut mirror = ThinMirror::default();
         mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let radius = 100.0_f64;
-        mirror.set_property("curvature", Proptype::Curvature(millimeter!(radius)))?;
+        mirror.set_property(
+            "curvature",
+            Proptype::RadiusOfCurvature(millimeter!(radius)),
+        )?;
         let mesh = surface_mesh(&mirror, 32)?;
         let rise = mesh
             .points()

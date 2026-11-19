@@ -213,7 +213,5 @@ pub fn scene_rays_url(
 
 /// The query parameter naming `analyzer`, to append after another one; empty for none.
 fn analyzer_param(analyzer: Option<Uuid>) -> String {
-    analyzer
-        .map(|id| format!("&analyzer={id}"))
-        .unwrap_or_default()
+    analyzer.map_or_default(|id| format!("&analyzer={id}"))
 }

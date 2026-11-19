@@ -201,7 +201,7 @@ impl SchemaExtractor {
 
             for (prop_name, prop) in attr.properties() {
                 match prop.prop() {
-                    Proptype::Curvature(radius_len) => {
+                    Proptype::RadiusOfCurvature(radius_len) => {
                         let radius_m = radius_len.value;
                         let initial_c = if !radius_m.is_finite() || radius_m.abs() < 1e-12 {
                             0.0

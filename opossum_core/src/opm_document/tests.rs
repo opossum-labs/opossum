@@ -108,7 +108,7 @@ fn amplifier_node_candidacy_roundtrip() -> OpmResult<()> {
 
     document.set_is_amplifier_node(lens_id, true);
     assert!(document.is_amplifier_node(lens_id));
-    assert_eq!(document.amplifier_nodes(), &HashSet::from([lens_id]));
+    assert_eq!(document.amplifier_nodes(), &BTreeSet::from([lens_id]));
 
     document.set_is_amplifier_node(lens_id, false);
     assert!(!document.is_amplifier_node(lens_id));
@@ -157,7 +157,7 @@ fn set_amplifier_nodes_replaces_the_whole_set_without_touching_scenarios() -> Op
         .expect("the scenario just added must be there")
         .set_gain_model(lens_id, gain);
 
-    document.set_amplifier_nodes(HashSet::new());
+    document.set_amplifier_nodes(BTreeSet::new());
     assert!(document.amplifier_nodes().is_empty());
     assert_eq!(
         document
@@ -167,8 +167,8 @@ fn set_amplifier_nodes_replaces_the_whole_set_without_touching_scenarios() -> Op
         "a whole-set replace must not wipe any scenario's gain model"
     );
 
-    document.set_amplifier_nodes(HashSet::from([lens_id]));
-    assert_eq!(document.amplifier_nodes(), &HashSet::from([lens_id]));
+    document.set_amplifier_nodes(BTreeSet::from([lens_id]));
+    assert_eq!(document.amplifier_nodes(), &BTreeSet::from([lens_id]));
     Ok(())
 }
 
@@ -703,7 +703,7 @@ fn opm_document_optimization_config_roundtrip() -> OpmResult<()> {
         node_id,
         property_name: "thickness".to_string(),
     };
-    let var = FreeVariable::new(addr.clone()).with_initial_value(0.01);
+    let var = FreeVariable::new(addr.clone());
     let coupling = ParameterCoupling {
         target: addr.clone(),
         rule: CouplingType::Identical {

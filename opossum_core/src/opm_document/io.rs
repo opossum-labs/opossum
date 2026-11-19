@@ -6,7 +6,6 @@ use crate::{
     error::{OpmResult, OpossumError},
     properties::{Proptype, proptype::AssetRef},
 };
-use log::warn;
 use ron::{extensions::Extensions, ser::PrettyConfig};
 use serde::Deserialize;
 use std::{
@@ -61,6 +60,7 @@ impl OpmDocument {
     /// Extracts full `Material` structs into `embedded_materials` from all nodes
     /// (including all nested groups) and replaces node properties with explicit `AssetRef::Id(Uuid)`.
     pub(crate) fn prepare_materials_for_serialization(&mut self) -> OpmResult<()> {
+        self.embedded_materials.clear();
         let embedded_materials = &mut self.embedded_materials;
         let mut err = None;
         self.scenery.for_each_node_mut(&mut |node_ref| {
@@ -102,30 +102,43 @@ impl OpmDocument {
         Self::from_string(&contents)
     }
 
+    /// Migrates raw RON document strings from older supported schema versions to `CURRENT_OPM_FILE_VERSION`.
+    fn migrate_file_string(file_string: &str, found_version: u32) -> OpmResult<String> {
+        match found_version {
+            super::CURRENT_OPM_FILE_VERSION => Ok(file_string.to_string()),
+            v if v > super::CURRENT_OPM_FILE_VERSION => Err(OpossumError::OpmDocument(format!(
+                "Unsupported OPM file version {v}: this version of OPOSSUM supports up to version {}. Please upgrade OPOSSUM.",
+                super::CURRENT_OPM_FILE_VERSION
+            ))),
+            v => Err(OpossumError::OpmDocument(format!(
+                "Legacy OPM file version {v} is no longer supported (minimum supported version is {}).",
+                super::CURRENT_OPM_FILE_VERSION
+            ))),
+        }
+    }
+
     /// Creates a new [`OpmDocument`] from the given `.opm` file string content.
     ///
     /// # Errors
     ///
-    /// Returns an error if the RON deserialization or graph hook resolution fails.
+    /// Returns an error if the version is unsupported, RON deserialization fails,
+    /// or graph reference / material resolution fails.
     pub fn from_string(file_string: &str) -> OpmResult<Self> {
-        // 1. Fast header check: catches mismatched versions before deep parsing fails
-        if let Ok(header) = ron::from_str::<OpmHeader>(file_string)
-            && header.opm_file_version != super::CURRENT_OPM_FILE_VERSION
-        {
-            warn!(
-                "OPM file version mismatch: file has '{}', expected '{}'.",
-                header.opm_file_version,
-                super::CURRENT_OPM_FILE_VERSION
-            );
-        }
+        let header: OpmHeader = ron::from_str(file_string)
+            .map_err(|e| OpossumError::OpmDocument(format!("parsing of OPM header failed: {e}")))?;
 
-        // 2. Full document deserialization
-        let mut document: Self = ron::from_str(file_string)
+        let migrated_ron = Self::migrate_file_string(file_string, header.opm_file_version)?;
+
+        let mut document: Self = ron::from_str(&migrated_ron)
             .map_err(|e| OpossumError::OpmDocument(format!("parsing of model failed: {e}")))?;
 
         document.scenery.after_deserialization_hook()?;
         document.scenery.graph_mut().resolve_all_references()?;
         document.resolve_embedded_materials()?;
+
+        // Clean up dangling node references if any unknown/corrupt nodes were skipped during load
+        document.prune_amplifier_nodes();
+        document.prune_pump_scenarios();
 
         Ok(document)
     }
@@ -316,12 +329,10 @@ mod tests {
         let result = OpmDocument::from_file(Path::new("./files_for_testing/opm/incorrect_opm.opm"));
         assert_eq!(
             result.unwrap_err().to_string(),
-            "OpmDocument:parsing of model failed: 1:2: Unexpected missing field named `opm_file_version` in `OpmDocument`"
+            "OpmDocument:parsing of OPM header failed: 1:2: Unexpected missing field named `opm_file_version` in `OpmHeader`"
         );
-        assert!(
-            OpmDocument::from_file(&PathBuf::from("./files_for_testing/opm/opticscenery.opm"))
-                .is_ok()
-        );
+        OpmDocument::from_file(&PathBuf::from("./files_for_testing/opm/opticscenery.opm"))
+            .expect("opticscenery.opm must load cleanly in v0 format");
     }
 
     #[test]
@@ -452,44 +463,30 @@ mod tests {
         let ron_data = r#"#![enable(unwrap_variant_newtypes)]
 (
     opm_file_version: 0,
-    scenery: {
-        "node_type": "group",
-        "name": "test",
-        "uuid": "84d4007c-514e-44ca-8b63-bfa86bee265f",
-        "graph": (
+    scenery: (
+        node_type: "group",
+        name: "test",
+        uuid: "84d4007c-514e-44ca-8b63-bfa86bee265f",
+        graph: (
             nodes: [
-                {
-                    "node_type": "dummy",
-                    "name": "valid_dummy_1",
-                    "uuid": "26e56527-c7f9-4e9c-9cda-0e0fa96e39bd",
-                },
-                {
-                    "node_type": "unknown_future_node",
-                    "name": "invalid_node",
-                    "uuid": "c52398ba-1742-4d86-82e1-8e75874d91ba",
-                },
-                {
-                    "node_type": "dummy",
-                    "name": "valid_dummy_2",
-                    "uuid": "54e2d453-9632-4b9d-b9c7-48491526f198",
-                },
+                (
+                    node_type: "dummy",
+                    name: "valid_dummy_1",
+                    uuid: "26e56527-c7f9-4e9c-9cda-0e0fa96e39bd",
+                ),
+                (
+                    node_type: "unknown_future_node",
+                    name: "invalid_node",
+                    uuid: "c52398ba-1742-4d86-82e1-8e75874d91ba",
+                ),
+                (
+                    node_type: "dummy",
+                    name: "valid_dummy_2",
+                    uuid: "54e2d453-9632-4b9d-b9c7-48491526f198",
+                ),
             ],
             edges: [],
         ),
-    },
-    global: (
-        ambient_material: {
-            "schema_version": 1,
-            "id": "6c30ef98-7380-4477-bc91-a5a1a407fec7",
-            "version": 0,
-            "name": "Custom Material",
-            "optical": (
-                refractive_index: Const(
-                    refractive_index: 1.0,
-                ),
-                absorption: r#None,
-            ),
-        },
     ),
 )"#;
 
@@ -517,17 +514,17 @@ mod tests {
         let ron_data = r#"#![enable(unwrap_variant_newtypes)]
 (
     opm_file_version: 0,
-    scenery: {
-        "node_type": "group",
-        "name": "test",
-        "uuid": "0e0e825e-5f4c-4e0a-b6ce-6c25b608f4aa",
-        "graph": (
+    scenery: (
+        node_type: "group",
+        name: "test",
+        uuid: "0e0e825e-5f4c-4e0a-b6ce-6c25b608f4aa",
+        graph: (
             nodes: [
-                {
-                    "node_type": "dummy",
-                    "name": "dummy_1",
-                    "uuid": "ecb719a2-2e21-44d0-b0b9-1e4a813e964e",
-                },
+                (
+                    node_type: "dummy",
+                    name: "dummy_1",
+                    uuid: "ecb719a2-2e21-44d0-b0b9-1e4a813e964e",
+                ),
             ],
             edges: [
                 (
@@ -539,20 +536,6 @@ mod tests {
                 ),
             ],
         ),
-    },
-    global: (
-        ambient_material: {
-            "schema_version": 1,
-            "id": "6c30ef98-7380-4477-bc91-a5a1a407fec7",
-            "version": 0,
-            "name": "Custom Material",
-            "optical": (
-                refractive_index: Const(
-                    refractive_index: 1.0,
-                ),
-                absorption: r#None,
-            ),
-        },
     ),
 )"#;
 
@@ -580,50 +563,36 @@ mod tests {
         let ron_data = r#"#![enable(unwrap_variant_newtypes)]
 (
     opm_file_version: 0,
-    scenery: {
-        "node_type": "group",
-        "name": "test",
-        "uuid": "84d4007c-514e-44ca-8b63-bfa86bee265f",
-        "graph": (
+    scenery: (
+        node_type: "group",
+        name: "test",
+        uuid: "84d4007c-514e-44ca-8b63-bfa86bee265f",
+        graph: (
             nodes: [
-                {
-                    "node_type": "group",
-                    "name": "nested group",
-                    "uuid": "3f7e3f9e-6b1a-4b1a-8c1a-9e6b1a4b1a8c",
-                    "graph": (
+                (
+                    node_type: "group",
+                    name: "nested group",
+                    uuid: "3f7e3f9e-6b1a-4b1a-8c1a-9e6b1a4b1a8c",
+                    graph: (
                         nodes: [
-                            {
-                                "node_type": "dummy",
-                                "name": "d1",
-                                "uuid": "26e56527-c7f9-4e9c-9cda-0e0fa96e39bd",
-                            },
+                            (
+                                node_type: "dummy",
+                                name: "d1",
+                                uuid: "26e56527-c7f9-4e9c-9cda-0e0fa96e39bd",
+                            ),
                         ],
                         edges: [],
-                        input_map: ({
+                        input_map: {
                             "input_1": ("26e56527-c7f9-4e9c-9cda-0e0fa96e39bd", "input_1"),
-                        }),
-                        output_map: ({
+                        },
+                        output_map: {
                             "output_1": ("26e56527-c7f9-4e9c-9cda-0e0fa96e39bd", "output_1"),
-                        }),
+                        },
                     ),
-                },
+                ),
             ],
             edges: [],
         ),
-    },
-    global: (
-        ambient_material: {
-            "schema_version": 1,
-            "id": "6c30ef98-7380-4477-bc91-a5a1a407fec7",
-            "version": 0,
-            "name": "Custom Material",
-            "optical": (
-                refractive_index: Const(
-                    refractive_index: 1.0,
-                ),
-                absorption: r#None,
-            ),
-        },
     ),
 )"#;
 
@@ -688,41 +657,27 @@ mod tests {
         let ron_data = r#"#![enable(unwrap_variant_newtypes)]
 (
     opm_file_version: 0,
-    scenery: {
-        "node_type": "group",
-        "name": "test",
-        "uuid": "131024b9-f447-476d-ace2-b2c027ba0ef3",
-        "props": {
+    scenery: (
+        node_type: "group",
+        name: "test",
+        uuid: "131024b9-f447-476d-ace2-b2c027ba0ef3",
+        props: {
             "expand view": Bool(false),
         },
-        "graph": (
+        graph: (
             nodes: [
-                {
-                    "node_type": "paraxial surface",
-                    "name": "paraxial surface",
-                    "uuid": "74e7f1d3-2315-4479-9649-21afb3a18e3a",
-                    "props": {
+                (
+                    node_type: "paraxial surface",
+                    name: "paraxial surface",
+                    uuid: "74e7f1d3-2315-4479-9649-21afb3a18e3a",
+                    props: {
                         "focal length": ength(0.01),
                     },
-                    "gui_position": Some(-65.0, -40.17220926998195),
-                },
+                    gui_position: Some(-65.0, -40.17220926998195),
+                ),
             ],
             edges: [],
         ),
-    },
-    global: (
-         ambient_material: {
-            "schema_version": 1,
-            "id": "6c30ef98-7380-4477-bc91-a5a1a407fec7",
-            "version": 0,
-            "name": "Vaccumm",
-            "optical": (
-                refractive_index: Const(
-                    refractive_index: 1.0,
-                ),
-                absorption: r#None,
-            ),
-        },
     ),
 )"#;
 
@@ -800,35 +755,35 @@ mod tests {
         let ron_data = r#"#![enable(unwrap_variant_newtypes)]
 (
     opm_file_version: 0,
-    scenery: {
-        "node_type": "group",
-        "name": "test",
-        "uuid": "91574253-61bc-4841-a61f-2f00de581ee9",
-        "props": {
+    scenery: (
+        node_type: "group",
+        name: "test",
+        uuid: "91574253-61bc-4841-a61f-2f00de581ee9",
+        props: {
             "expand view": Bool(false),
         },
-        "graph": (
+        graph: (
             nodes: [
-                {
-                    "node_type": "source port",
-                    "name": "source port",
-                    "uuid": "b5502058-f129-4823-a726-4219f6abcc2e",
-                    "isometry": Some(
+                (
+                    node_type: "source port",
+                    name: "source port",
+                    uuid: "b5502058-f129-4823-a726-4219f6abcc2e",
+                    isometry: Some(
                         transform: (),
                     ),
-                    "gui_position": Some(290.0, 81.32779073001805),
-                },
+                    gui_position: Some(290.0, 81.32779073001805),
+                ),
             ],
             edges: [],
         ),
-    },
+    ),
 )"#;
 
         let doc = OpmDocument::from_string(ron_data)?;
         assert_eq!(
             doc.scenery().nodes().len(),
             1,
-            "SourcePort with transform: () must be loaded successfully without being skipped"
+            "SourcePort with unknown legacy fields must be loaded successfully without being skipped"
         );
 
         let node_ref = &doc.scenery().nodes()[0];
@@ -845,19 +800,19 @@ mod tests {
         let ron_data = r#"#![enable(unwrap_variant_newtypes)]
 (
     opm_file_version: 0,
-    scenery: {
-        "node_type": "group",
-        "name": "test",
-        "uuid": "a0d4fdf0-75c4-470d-a69e-8e55619fcf8a",
-        "props": {
+    scenery: (
+        node_type: "group",
+        name: "test",
+        uuid: "a0d4fdf0-75c4-470d-a69e-8e55619fcf8a",
+        props: {
             "expand view": Bool(false),
         },
-        "graph": (
+        graph: (
             nodes: [
-                {
-                    "node_type": "paraxial surface",
-                    "name": "paraxial surface",
-                    "ports": (
+                (
+                    node_type: "paraxial surface",
+                    name: "paraxial surface",
+                    ports: (
                         inputs: {
                             "input_1": (
                                 aperture: (
@@ -872,15 +827,15 @@ mod tests {
                             "output_1": (),
                         },
                     ),
-                    "uuid": "5de2825b-9c2a-40bd-a87f-2f7a11d8be82",
-                    "props": {
+                    uuid: "5de2825b-9c2a-40bd-a87f-2f7a11d8be82",
+                    props: {
                         "focal length": Length(0.01),
                     },
-                },
+                ),
             ],
             edges: [],
         ),
-    },
+    ),
 )"#;
 
         testing_logger::setup();
@@ -889,7 +844,7 @@ mod tests {
         assert_eq!(
             doc.scenery().nodes().len(),
             1,
-            "Node with asymmetric ports must be successfully loaded and not skipped"
+            "Node with legacy ports field must be successfully loaded and not skipped"
         );
 
         let node_ref = &doc.scenery().nodes()[0];

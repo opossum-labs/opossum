@@ -113,7 +113,7 @@
                         lidt: 10000.0,
                         props: {
                             "ray transparency": F64(0.4),
-                            "view_direction": Vec3((1.0, 0.0, 0.0)),
+                            "view direction": Vec3((1.0, 0.0, 0.0)),
                         },
                         inverted: false,
                         gui_position: Some((446.0, 216.5)),

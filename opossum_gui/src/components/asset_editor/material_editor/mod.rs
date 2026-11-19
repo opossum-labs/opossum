@@ -62,7 +62,7 @@ pub fn OptionalPropertyInput(
     #[props(default = false)] readonly: bool,
 ) -> Element {
     // Show empty string if the property is None
-    let val_str = value.map(|v| v.to_string()).unwrap_or_default();
+    let val_str = value.map_or_default(|v| v.to_string());
 
     let on_save = move |s: String| {
         let trimmed = s.trim();

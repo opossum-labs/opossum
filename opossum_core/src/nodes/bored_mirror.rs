@@ -99,7 +99,7 @@ impl Default for BoredMirror {
                 Validator::AndValidator {
                     validators: vec![Validator::NumericIsNotNaN, Validator::NumericIsNotZero],
                 },
-                Proptype::Curvature(millimeter!(f64::INFINITY)),
+                Proptype::RadiusOfCurvature(millimeter!(f64::INFINITY)),
             )
             .unwrap();
         node_attr
@@ -166,14 +166,14 @@ impl BoredMirror {
     /// the face is curved too tightly to reach the edge of the mirror.
     pub fn with_curvature(mut self, curvature: Length) -> OpmResult<Self> {
         self.node_attr
-            .set_property("curvature", Proptype::Curvature(curvature))?;
+            .set_property("curvature", Proptype::RadiusOfCurvature(curvature))?;
         self.update_surfaces()?;
         Ok(self)
     }
 }
 impl OpticNode for BoredMirror {
     fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
-        let (Ok(Proptype::Curvature(curvature)), Ok(Proptype::Length(center_thickness))) = (
+        let (Ok(Proptype::RadiusOfCurvature(curvature)), Ok(Proptype::Length(center_thickness))) = (
             self.node_attr.get_property("curvature"),
             self.node_attr.get_property("center thickness"),
         ) else {

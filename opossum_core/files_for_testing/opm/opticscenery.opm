@@ -1,41 +1,53 @@
 #![enable(unwrap_variant_newtypes)]
 (
     opm_file_version: 0,
-    scenery: {
-        "node_type": "group",
-        "name": "OpticScenery demo",
-        "uuid": "0dd8913e-b6c1-46c1-ad0b-da1a67b750e3",
-        "props": {
+    scenery: (
+        node_type: "group",
+        name: "OpticScenery demo",
+        uuid: "42f7895a-230c-400e-b65d-bace2eadca7d",
+        props: {
             "expand view": Bool(false),
         },
-        "graph": (
+        graph: (
             nodes: [
-                {
-                    "node_type": "dummy",
-                    "name": "dummy1",
-                    "uuid": "4cc84761-86d8-4fc3-af22-7b57191cbf16",
-                },
-                {
-                    "node_type": "dummy",
-                    "name": "dummy2",
-                    "uuid": "7e59ad6d-6ffb-41c0-96e0-18c5a3359ed7",
-                },
+                (
+                    node_type: "dummy",
+                    name: "dummy1",
+                    uuid: "16e1790e-bfc6-4357-9431-2da835b15b5e",
+                    props: {
+                        "optic shape": OpticShape(Open),
+                        "surface": SurfaceConfig(
+                            coating: IdealAR,
+                        ),
+                    },
+                ),
+                (
+                    node_type: "dummy",
+                    name: "dummy2",
+                    uuid: "f8b3d359-a465-4eaa-bc45-5879372aa942",
+                    props: {
+                        "optic shape": OpticShape(Open),
+                        "surface": SurfaceConfig(
+                            coating: IdealAR,
+                        ),
+                    },
+                ),
             ],
             edges: [
                 (
-                    src_id: "4cc84761-86d8-4fc3-af22-7b57191cbf16",
+                    src_id: "16e1790e-bfc6-4357-9431-2da835b15b5e",
                     src_port: "output_1",
-                    target_id: "7e59ad6d-6ffb-41c0-96e0-18c5a3359ed7",
+                    target_id: "f8b3d359-a465-4eaa-bc45-5879372aa942",
                     target_port: "input_1",
                     distance: 0.0,
                 ),
             ],
         ),
-    },
+    ),
     analyzers: {
-        "3b5bef41-1024-4965-8c0d-15929f748e56": (
+        "cdf6680a-a027-4561-ac87-a781c647dc47": (
             analyzer_type: RayTrace(
-                min_energy_per_ray: 0.000000000001,
+                min_energy_per_ray: 1e-12,
                 max_number_of_bounces: 1000,
                 max_number_of_refractions: 1000,
                 missed_surface_strategy: Stop,

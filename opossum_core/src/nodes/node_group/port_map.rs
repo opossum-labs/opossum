@@ -147,7 +147,6 @@ impl PortMap {
         self.len() == 0
     }
     /// Returns an iterator of this [`PortMap`]
-    #[must_use]
     pub fn iter(&self) -> std::collections::btree_map::Iter<'_, String, (Uuid, String)> {
         self.0.iter()
     }

@@ -242,10 +242,10 @@ pub trait Splitter: OpticNode {
                 &AnalyzerType::GhostFocus(config.clone()),
             )?;
             if let Some(LightData::Geometric(rays)) = out1_data {
-                light_data_out1.push(rays.clone());
+                light_data_out1.push(rays);
             }
             if let Some(LightData::Geometric(rays)) = out2_data {
-                light_data_out2.push(rays.clone());
+                light_data_out2.push(rays);
             }
         }
         for rays in &mut rays2_bundle {
@@ -255,10 +255,10 @@ pub trait Splitter: OpticNode {
                 &AnalyzerType::GhostFocus(config.clone()),
             )?;
             if let Some(LightData::Geometric(rays)) = out1_data {
-                light_data_out1.push(rays.clone());
+                light_data_out1.push(rays);
             }
             if let Some(LightData::Geometric(rays)) = out2_data {
-                light_data_out2.push(rays.clone());
+                light_data_out2.push(rays);
             }
         }
         let Some(surf) = self.get_optic_surface_mut(&in1_port) else {

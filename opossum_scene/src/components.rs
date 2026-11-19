@@ -432,7 +432,7 @@ mod test {
         let before = served_geometry_of(&document, mirror)?;
 
         document.scenery_mut().with_node_attr_mut(mirror, |attr| {
-            attr.set_property("curvature", Proptype::Curvature(millimeter!(100.0)))
+            attr.set_property("curvature", Proptype::RadiusOfCurvature(millimeter!(100.0)))
         })??;
 
         assert_ne!(
