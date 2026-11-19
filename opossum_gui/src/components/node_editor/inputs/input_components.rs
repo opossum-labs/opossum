@@ -118,6 +118,7 @@ pub fn FlushableTextInput(
                     if e.key() == Key::Enter {
                         perform_save();
                     }
+                    e.prevent_default();
                 },
             }
             label { class: label_class, r#for: id,
@@ -643,6 +644,9 @@ pub fn UnitInput(
                 value: val_str,
                 readonly,
                 onchange: move |e: Event<FormData>| on_input_submission.call(e.data.value()),
+                onkeydown: move |e: Event<KeyboardData>| {
+                    e.stop_propagation();
+                },
             }
         }
     }
