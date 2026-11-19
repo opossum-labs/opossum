@@ -9,6 +9,7 @@ use uom::si::{
     energy::joule,
     f64::{Energy, Length, Ratio},
     length::{meter, nanometer},
+    ratio::ratio,
 };
 
 use crate::{
@@ -689,7 +690,8 @@ impl Ray {
     ///
     /// Unlike [`filter_energy`](Ray::filter_energy), which attenuates by a transmission and can
     /// therefore only ever remove energy, this takes any non-negative factor: it is what an active
-    /// medium needs, where a ray leaves with more energy than it entered with.
+    /// medium needs, where a ray leaves with more energy than it entered with. The fluence its
+    /// helper rays carry is scaled by the same factor.
     ///
     /// # Arguments
     ///
@@ -707,6 +709,7 @@ impl Ray {
                 "energy scaling factor must be finite and non-negative but is {factor}"
             )));
         }
+        self.change_helper_fluence_by_factor(Ratio::new::<ratio>(factor))?;
         self.e *= factor;
         Ok(())
     }

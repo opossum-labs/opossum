@@ -173,6 +173,7 @@ impl TryFrom<f64> for FilterTypeBuilder {
 mod test {
     use super::*;
     use crate::{
+        J_per_cm2,
         analyzers::propagation_strategy::MissedSurfaceStrategy,
         apertures::{CircleShape, Outline},
         geometry::{Geometry, SurfaceGeometry},
@@ -180,6 +181,8 @@ mod test {
         light::{Rays, rays::ReflectedPart},
         millimeter, nanometer,
     };
+    use approx::assert_abs_diff_eq;
+    use uom::si::radiant_exposure::joule_per_square_centimeter;
     /// A ray that hits a filter keeps its direction and wavelength and is attenuated as a single ray
     /// would be (see [`Ray::filter_energy`]). A ray that misses it keeps its energy.
     #[test]
@@ -209,6 +212,35 @@ mod test {
         assert_eq!(hit.wavelength(), alone.wavelength());
         assert_eq!(hit.energy(), alone.energy());
         assert_eq!(missed.energy(), joule!(1.0));
+        Ok(())
+    }
+    /// A filter transmitting half the energy halves the fluence the helper rays of a ray carry.
+    #[test]
+    fn a_half_filter_halves_the_fluence() -> OpmResult<()> {
+        let mut rays = Rays::from(Ray::new_collimated_w_fluence_helper(
+            millimeter!(0.0, 0.0, -10.0),
+            nanometer!(1054.0),
+            joule!(1.0),
+            J_per_cm2!(1.0),
+        )?);
+        let filter = FilterType::Constant(FilterConst::new(percent!(50.0))?);
+        Geometry::plane(None).interact_with_rays(
+            SurfaceGeometry::FACE,
+            &mut rays,
+            &filter,
+            ReflectedPart::Ghost,
+            MissedSurfaceStrategy::Stop,
+        )?;
+        let fluence = rays
+            .iter()
+            .next()
+            .and_then(Ray::helper_ray_fluence)
+            .ok_or_else(|| OpossumError::Other("the ray lost its helper rays".into()))?;
+        assert_abs_diff_eq!(
+            fluence.get::<joule_per_square_centimeter>(),
+            0.5,
+            epsilon = 1e-9
+        );
         Ok(())
     }
     #[test]
