@@ -141,7 +141,7 @@ mod test {
         mirror.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
         let radius = 100.0_f64;
         mirror.set_property(
-            "curvature",
+            "radius of curvature",
             Proptype::RadiusOfCurvature(millimeter!(radius)),
         )?;
         let mesh = surface_mesh(&mirror, 32)?;

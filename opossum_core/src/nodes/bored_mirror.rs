@@ -94,7 +94,7 @@ impl Default for BoredMirror {
         let mut node_attr = NodeAttr::new("bored mirror");
         node_attr
             .create_property_with_validator(
-                "curvature",
+                "radius of curvature",
                 "radius of curvature of the mirrored front face",
                 Validator::AndValidator {
                     validators: vec![Validator::NumericIsNotNaN, Validator::NumericIsNotZero],
@@ -165,8 +165,10 @@ impl BoredMirror {
     /// This function will return an error if the given radius of curvature is zero or NaN, or if
     /// the face is curved too tightly to reach the edge of the mirror.
     pub fn with_curvature(mut self, curvature: Length) -> OpmResult<Self> {
-        self.node_attr
-            .set_property("curvature", Proptype::RadiusOfCurvature(curvature))?;
+        self.node_attr.set_property(
+            "radius of curvature",
+            Proptype::RadiusOfCurvature(curvature),
+        )?;
         self.update_surfaces()?;
         Ok(self)
     }
@@ -174,7 +176,7 @@ impl BoredMirror {
 impl OpticNode for BoredMirror {
     fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         let (Ok(Proptype::RadiusOfCurvature(curvature)), Ok(Proptype::Length(center_thickness))) = (
-            self.node_attr.get_property("curvature"),
+            self.node_attr.get_property("radius of curvature"),
             self.node_attr.get_property("center thickness"),
         ) else {
             return Err(OpossumError::Analysis(

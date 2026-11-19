@@ -244,7 +244,7 @@
                     ),
                     "uuid": "a766a7b5-a080-43bc-958a-396ed91da345",
                     "props": {
-                        "curvature": Curvature(inf),
+                        "radius of curvature": Curvature(inf),
                     },
                 },
             ],

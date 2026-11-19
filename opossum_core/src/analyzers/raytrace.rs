@@ -1,7 +1,8 @@
 #![warn(missing_docs)]
 //! Analyzer for sequential ray tracing
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
+use super::AnalyzerRegistration;
 use super::{Analyzer, AnalyzerType};
 use crate::{
     analyzers::propagation_strategy::{MissedSurfaceStrategy, PropagationStrategy},
@@ -12,14 +13,14 @@ use crate::{
     material::Material,
     nodes::NodeGroup,
     picojoule,
+    properties::proptype::AssetRef,
     reporting::analysis_report::AnalysisReport,
     utils::geom_transformation::Isometry,
 };
 use log::info;
 use serde::{Deserialize, Serialize};
+use uom::si::f64::Energy;
 use uuid::Uuid;
-
-use super::AnalyzerRegistration;
 
 inventory::submit! {
     AnalyzerRegistration::new(
@@ -27,9 +28,18 @@ inventory::submit! {
         |at| if let AnalyzerType::RayTrace(config) = at { Some(Box::new(RayTracingAnalyzer::new(config.clone()))) } else { None }
     )
 }
-use uom::si::f64::Energy;
 
-#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
+fn default_ambient_material() -> AssetRef<Material> {
+    AssetRef::Inline(Material::vacuum())
+}
+
+const fn is_default_vacuum(asset: &AssetRef<Material>) -> bool {
+    match asset {
+        AssetRef::Inline(mat) => mat.id().is_nil(),
+        AssetRef::Id(id) => id.is_nil(),
+    }
+}
+
 /// Configuration data for a rays tracing analysis.
 ///
 /// The config contains the following info
@@ -37,24 +47,23 @@ use uom::si::f64::Energy;
 ///  - maximum number of bounces (reflections) / ray
 ///  - maximum number of refractions / ray
 ///  - map of `SourcePort` nodes to their respective light definition
+#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub struct RayTraceConfig {
     min_energy_per_ray: Energy,
     max_number_of_bounces: usize,
     max_number_of_refractions: usize,
     missed_surface_strategy: MissedSurfaceStrategy,
-    source_map: HashMap<Uuid, RayDataBuilder>,
-    ambient_material: Material,
-    /// The operating point of the run currently being performed - see [`ActiveScenario`]. Not part
-    /// of the configuration a user edits and not written to file.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    source_map: BTreeMap<Uuid, RayDataBuilder>,
+    #[serde(
+        default = "default_ambient_material",
+        skip_serializing_if = "is_default_vacuum"
+    )]
+    ambient_material: AssetRef<Material>,
     #[serde(skip)]
     active_pump_scenario: ActiveScenario,
-    /// `true` when this config drives [`AnalysisRayTrace::calc_node_positions`]: the medium has
-    /// not been prepared yet and gain models must skip amplification. Not saved to file.
     #[serde(skip)]
     positioning_run: bool,
-    /// When set, [`NodeGroup`] instances keep the ray bundles that exit through unconnected,
-    /// unmapped output ports (see [`NodeGroup::ray_ends`]). Used only by visualization on
-    /// throwaway copies; not saved to disk.
     #[serde(skip)]
     collect_ray_ends: bool,
 }
@@ -71,8 +80,8 @@ impl Default for RayTraceConfig {
             max_number_of_bounces: 1000,
             max_number_of_refractions: 1000,
             missed_surface_strategy: MissedSurfaceStrategy::Stop,
-            source_map: HashMap::new(),
-            ambient_material: Material::vacuum(),
+            source_map: BTreeMap::new(),
+            ambient_material: AssetRef::Inline(Material::vacuum()),
             active_pump_scenario: ActiveScenario::default(),
             positioning_run: false,
             collect_ray_ends: false,
@@ -138,7 +147,7 @@ impl RayTraceConfig {
     }
     /// Returns the ray data builders of all sources, keyed by the UUID of their source port.
     #[must_use]
-    pub const fn source_map(&self) -> &HashMap<Uuid, RayDataBuilder> {
+    pub const fn source_map(&self) -> &BTreeMap<Uuid, RayDataBuilder> {
         &self.source_map
     }
     /// Returns a reference to the ray data builder mapped to the given source UUID, if any.
@@ -176,17 +185,29 @@ impl RayTraceConfig {
     /// Sets the entire source map of this [`RayTraceConfig`].
     ///
     /// This will overwrite any existing mappings. Use with care.
-    pub fn set_source_map(&mut self, source_map: HashMap<Uuid, RayDataBuilder>) {
+    pub fn set_source_map(&mut self, source_map: BTreeMap<Uuid, RayDataBuilder>) {
         self.source_map = source_map;
     }
-    /// Returns a reference to the ambient material of this analysis
+    /// Returns a reference to the ambient material of this analysis.
     #[must_use]
-    pub const fn ambient_material(&self) -> &Material {
+    pub fn ambient_material(&self) -> &Material {
+        self.ambient_material.unwrap_inline()
+    }
+
+    /// Sets the ambient material for this analysis.
+    pub fn set_ambient_material(&mut self, material: Material) {
+        self.ambient_material = AssetRef::Inline(material);
+    }
+
+    /// Returns a reference to the raw [`AssetRef`] for serialization/resolution.
+    #[must_use]
+    pub const fn ambient_material_ref(&self) -> &AssetRef<Material> {
         &self.ambient_material
     }
-    /// Sets the ambient material for this analysis
-    pub fn set_ambient_material(&mut self, material: Material) {
-        self.ambient_material = material;
+
+    /// Sets the raw [`AssetRef`] for serialization/resolution.
+    pub fn set_ambient_material_ref(&mut self, asset: AssetRef<Material>) {
+        self.ambient_material = asset;
     }
     /// Mark this config as driving the geometry-positioning run.
     ///
@@ -232,7 +253,7 @@ impl RayTraceConfig {
             missed_surface_strategy: MissedSurfaceStrategy::Stop,
             source_map: self.source_map.clone(),
             active_pump_scenario: ActiveScenario::default(),
-            ambient_material: self.ambient_material().clone(),
+            ambient_material: self.ambient_material_ref().clone(),
             positioning_run: true,
             collect_ray_ends: false,
         }
@@ -461,7 +482,7 @@ mod test {
     #[test]
     fn a_ray_trace_stops_at_a_component_changed_into_no_valid_shape() -> OpmResult<()> {
         let (mut scenery, source, _) = scenery_with_a_mirror_changed_behind_its_back(
-            "curvature",
+            "radius of curvature",
             Proptype::RadiusOfCurvature(millimeter!(-10.0)),
         )?;
         let mut config = RayTraceConfig::default();
@@ -518,7 +539,7 @@ mod test {
     fn config_debug() {
         assert_eq!(
             format!("{:?}", RayTraceConfig::default()),
-            "RayTraceConfig { min_energy_per_ray: 1e-12 m^2 kg^1 s^-2, max_number_of_bounces: 1000, max_number_of_refractions: 1000, missed_surface_strategy: Stop, source_map: {}, ambient_material: Material { header: AssetHeader { schema_version: 1, id: 00000000-0000-0000-0000-000000000000, version: 0, name: \"vacuum\", manufacturer: None, description: None }, optical: OpticalProperties { refractive_index: Const(RefrIndexConst { refractive_index: Validated { value: 1.0, validator: AndValidator { v1: AllFinite, v2: StaticInRange { _marker: PhantomData<(f64, opossum_core::refractive_index::refr_index_const::RefIndBounds)> }, _marker: PhantomData<f64> } } }), absorption: None }, thermal: None, mechanical: None }, active_pump_scenario: ActiveScenario(None), positioning_run: false, collect_ray_ends: false }"
+            "RayTraceConfig { min_energy_per_ray: 1e-12 m^2 kg^1 s^-2, max_number_of_bounces: 1000, max_number_of_refractions: 1000, missed_surface_strategy: Stop, source_map: {}, ambient_material: Inline(Material { header: AssetHeader { schema_version: 1, id: 00000000-0000-0000-0000-000000000000, version: 0, name: \"vacuum\", manufacturer: None, description: None }, optical: OpticalProperties { refractive_index: Const(RefrIndexConst { refractive_index: Validated { value: 1.0, validator: AndValidator { v1: AllFinite, v2: StaticInRange { _marker: PhantomData<(f64, opossum_core::refractive_index::refr_index_const::RefIndBounds)> }, _marker: PhantomData<f64> } } }), absorption: None }, thermal: None, mechanical: None }), active_pump_scenario: ActiveScenario(None), positioning_run: false, collect_ray_ends: false }"
         );
     }
     #[test]

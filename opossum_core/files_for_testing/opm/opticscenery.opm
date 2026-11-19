@@ -4,7 +4,7 @@
     scenery: (
         node_type: "group",
         name: "OpticScenery demo",
-        uuid: "42f7895a-230c-400e-b65d-bace2eadca7d",
+        uuid: "a5d77c49-c034-4d74-ab75-a3ec62a0629e",
         props: {
             "expand view": Bool(false),
         },
@@ -13,7 +13,7 @@
                 (
                     node_type: "dummy",
                     name: "dummy1",
-                    uuid: "16e1790e-bfc6-4357-9431-2da835b15b5e",
+                    uuid: "b2c380cd-77cc-4e31-967b-fef4a6492db7",
                     props: {
                         "optic shape": OpticShape(Open),
                         "surface": SurfaceConfig(
@@ -24,7 +24,7 @@
                 (
                     node_type: "dummy",
                     name: "dummy2",
-                    uuid: "f8b3d359-a465-4eaa-bc45-5879372aa942",
+                    uuid: "64d1f55d-4b04-48cf-9d1c-42adc0e5a7c1",
                     props: {
                         "optic shape": OpticShape(Open),
                         "surface": SurfaceConfig(
@@ -35,9 +35,9 @@
             ],
             edges: [
                 (
-                    src_id: "16e1790e-bfc6-4357-9431-2da835b15b5e",
+                    src_id: "b2c380cd-77cc-4e31-967b-fef4a6492db7",
                     src_port: "output_1",
-                    target_id: "f8b3d359-a465-4eaa-bc45-5879372aa942",
+                    target_id: "64d1f55d-4b04-48cf-9d1c-42adc0e5a7c1",
                     target_port: "input_1",
                     distance: 0.0,
                 ),
@@ -45,24 +45,12 @@
         ),
     ),
     analyzers: {
-        "cdf6680a-a027-4561-ac87-a781c647dc47": (
+        "4bc00574-5e0b-4f27-83c4-a3125c907d06": (
             analyzer_type: RayTrace(
                 min_energy_per_ray: 1e-12,
                 max_number_of_bounces: 1000,
                 max_number_of_refractions: 1000,
                 missed_surface_strategy: Stop,
-                source_map: {},
-                ambient_material: {
-                    "schema_version": 1,
-                    "id": "00000000-0000-0000-0000-000000000000",
-                    "version": 0,
-                    "name": "vacuum",
-                    "optical": (
-                        refractive_index: Const(
-                            refractive_index: 1.0,
-                        ),
-                    ),
-                },
             ),
         ),
     },

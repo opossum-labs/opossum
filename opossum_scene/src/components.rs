@@ -425,14 +425,17 @@ mod test {
             .scenery()
             .collect_all_nodes_recursive()
             .into_iter()
-            .find(|node| node.properties().get("curvature").is_ok())
+            .find(|node| node.properties().get("radius of curvature").is_ok())
             .expect("the model has a mirror")
             .node_attr()
             .uuid();
         let before = served_geometry_of(&document, mirror)?;
 
         document.scenery_mut().with_node_attr_mut(mirror, |attr| {
-            attr.set_property("curvature", Proptype::RadiusOfCurvature(millimeter!(100.0)))
+            attr.set_property(
+                "radius of curvature",
+                Proptype::RadiusOfCurvature(millimeter!(100.0)),
+            )
         })??;
 
         assert_ne!(

@@ -128,6 +128,11 @@ impl AnalyzerInfo {
             AnalyzerType::GhostFocus(_) => AnalyzerKind::GhostFocus,
         }
     }
+
+    /// Returns a mutable reference to the analyzer type of this [`AnalyzerInfo`].
+    pub const fn analyzer_type_mut(&mut self) -> &mut AnalyzerType {
+        &mut self.analyzer_type
+    }
 }
 #[cfg(test)]
 mod tests {
