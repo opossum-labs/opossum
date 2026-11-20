@@ -11,10 +11,12 @@ use crate::{
     joule,
     light::Spectrum,
     nanometer,
+    types::SiScalarSchema,
     utils::default_from_name::DefaultFromName,
     validated, validated_type, validated_vec, validated_vec_type,
 };
 use opm_macros_lib::EnsureValidated;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, path::PathBuf};
 use strum::EnumIter;
@@ -28,7 +30,7 @@ use uom::{
 };
 
 /// Builder for the generation of energy spectra.
-#[derive(Clone, Serialize, Deserialize, PartialEq, EnumIter, EnsureValidated)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, EnumIter, EnsureValidated, JsonSchema)]
 pub enum EnergyDataBuilder {
     /// Build a spectrum from raw data.
     Raw(Spectrum),
@@ -63,8 +65,9 @@ struct NonValidatedSpectrumFile {
 }
 
 /// Struct to store a path to read a spectrum from file
-#[derive(Clone, Serialize, PartialEq, EnsureValidated, Debug, Eq)]
+#[derive(Clone, Serialize, PartialEq, EnsureValidated, Debug, Eq, JsonSchema)]
 pub struct SpectrumFile {
+    #[schemars(with = "PathBuf")]
     f_path: validated_type!(PathBuf, PathValid),
 }
 
@@ -175,13 +178,15 @@ impl From<SpectrumFile> for EnergyDataBuilder {
 }
 
 /// A struct that contains laser line information for the [`EnergyDataBuilder`] variant `LaserLines`
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnsureValidated)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnsureValidated, JsonSchema)]
 pub struct EnergyLaserLines {
+    #[schemars(with = "Vec<(f64, f64)>")]
     lines: validated_vec_type!(
         Vec<(Length, Energy)>,
         AllPositive && XNormal && YFinite,
         AllNotEmpty && YNotAllZero
     ),
+    #[schemars(with = "SiScalarSchema")]
     spectral_resolution: validated_type!(Length, AllNormal && AllPositive),
 }
 

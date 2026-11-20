@@ -4,6 +4,7 @@ use crate::{
     num_per_m, validated, validated_type,
 };
 use opm_macros_lib::EnsureValidated;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::LinearNumberDensity;
 
@@ -14,8 +15,9 @@ impl Default for ValidatedLBConst {
     }
 }
 
-#[derive(Default, Clone, Serialize, Deserialize, Debug, PartialEq, Copy, EnsureValidated)]
+#[derive(Default, Clone, Serialize, Deserialize, Debug, PartialEq, Copy, EnsureValidated, JsonSchema)]
 pub struct AbsLBConst {
+    #[schemars(with = "f64")]
     absorption_coefficient: ValidatedLBConst,
 }
 

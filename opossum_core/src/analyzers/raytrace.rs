@@ -18,6 +18,7 @@ use crate::{
     utils::geom_transformation::Isometry,
 };
 use log::info;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Energy;
 use uuid::Uuid;
@@ -47,8 +48,9 @@ const fn is_default_vacuum(asset: &AssetRef<Material>) -> bool {
 ///  - maximum number of bounces (reflections) / ray
 ///  - maximum number of refractions / ray
 ///  - map of `SourcePort` nodes to their respective light definition
-#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
+#[derive(PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct RayTraceConfig {
+    #[schemars(with = "f64")]
     min_energy_per_ray: Energy,
     max_number_of_bounces: usize,
     max_number_of_refractions: usize,

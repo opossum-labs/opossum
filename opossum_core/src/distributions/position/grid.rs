@@ -11,11 +11,12 @@ use crate::{
 use nalgebra::{Point2, Point3};
 use num_traits::Zero;
 use opm_macros_lib::EnsureValidated;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 /// Rectangular, evenly-sized grid distribution
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Copy, EnsureValidated)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Copy, EnsureValidated, JsonSchema)]
 pub struct Grid {
     nr_of_points: validated_type!(Point2<usize>, AllNotZero),
     side_length: validated_type!(Point2<Length>, NotAllZero && AllFinite && AllPositive),

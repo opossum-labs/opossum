@@ -8,6 +8,7 @@ use crate::{
 use nalgebra::{Point2, Point3, point};
 use num_traits::Zero;
 use opm_macros_lib::EnsureValidated;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sobol::{Sobol, params::JoeKuoD6};
 use uom::si::f64::Length;
@@ -15,7 +16,7 @@ use uom::si::f64::Length;
 /// Rectangluar, low-discrepancy quasirandom distribution
 ///
 /// For further details see [here](https://en.wikipedia.org/wiki/Sobol_sequence)
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy, EnsureValidated)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy, EnsureValidated, JsonSchema)]
 pub struct SobolDist {
     nr_of_points: validated_type!(usize, AllNotZero),
     side_length: validated_type!(Point2<Length>, NotAllZero && AllFinite && AllPositive),

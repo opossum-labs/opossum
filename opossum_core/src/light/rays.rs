@@ -1,7 +1,5 @@
 #![warn(missing_docs)]
 //! Module for handling bundles of [`Ray`]s
-use crate::distributions::spectral::laser_lines::MIN_WAVELENGTH_DIFF_NM;
-use crate::geometry::Rim;
 use crate::{
     J_per_cm2, centimeter,
     coatings::SplittingConfig,
@@ -11,9 +9,10 @@ use crate::{
         energy::EnergyDistribution,
         fluence::FluenceDistribution,
         position::{Hexapolar, PositionDistribution},
-        spectral::SpectralDistribution,
+        spectral::{SpectralDistribution, laser_lines::MIN_WAVELENGTH_DIFF_NM},
     },
     error::{OpmResult, OpossumError},
+    geometry::Rim,
     joule,
     light::{Ray, Spectrum},
     meter, millimeter, nanometer,
@@ -24,6 +23,7 @@ use crate::{
     prelude::EnergyLaserLines,
     properties::Proptype,
     refractive_index::RefractiveIndexType,
+    types::SiScalarSchema,
     utils::{
         AxLims,
         filter_data::get_unique_finite_values_sorted,
@@ -43,6 +43,7 @@ use log::warn;
 use nalgebra::{
     DMatrix, DVector, Matrix2xX, MatrixXx2, MatrixXx3, Point2, Point3, Vector3, distance, vector,
 };
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, ops::Range, path::Path};
 use uom::si::f64::Ratio;
@@ -57,7 +58,7 @@ use uom::{
 };
 use uuid::Uuid;
 /// Struct containing all relevant information of a ray bundle
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, JsonSchema)]
 pub struct Rays {
     /// vector containing the individual rays
     ray_bundle: Vec<Ray>,
@@ -1358,9 +1359,10 @@ impl From<Ray> for Rays {
 /// Here, three additional rays are spawned around the original ray, creating a triangle with a defined are of the square of the ray wavelength.
 /// During propagation through the system, the area of the helper rays changes, as well as the effective energy of the rays when the original is partially reflected or refracted.
 /// As the local evolution of the small surface element is stored, the fluence between all the rays can later on easily be interpolated
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, JsonSchema)]
 pub struct FluenceRays {
     helper_rays: Rays,
+    #[schemars(with = "SiScalarSchema")]
     effective_energy: Energy,
 }
 impl FluenceRays {

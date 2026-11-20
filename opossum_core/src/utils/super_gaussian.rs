@@ -26,6 +26,7 @@ use crate::{
 };
 use nalgebra::Point2;
 use opm_macros_lib::EnsureValidated;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::{
     angle::radian,
@@ -65,7 +66,7 @@ impl TryFrom<NonValidatedSuperGaussianShape> for SuperGaussianShape {
 /// The shape of a generalized 2D super-Gaussian, without an amplitude.
 ///
 /// See the [module documentation](self) for why this is a type of its own.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, ToSchema, EnsureValidated)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, ToSchema, EnsureValidated, JsonSchema)]
 #[serde(try_from = "NonValidatedSuperGaussianShape")]
 pub struct SuperGaussianShape {
     /// center of the distribution, i.e. where its peak sits

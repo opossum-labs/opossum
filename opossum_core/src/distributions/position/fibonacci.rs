@@ -12,13 +12,14 @@ use super::PositionDistribution;
 use nalgebra::{Point2, Point3, point};
 use num_traits::{ToPrimitive, Zero};
 use opm_macros_lib::EnsureValidated;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 /// Rectangular Fibonacci distribution
 ///
 /// For further details see [here](https://en.wikipedia.org/wiki/Fibonacci_sequence)
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy, EnsureValidated)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy, EnsureValidated, JsonSchema)]
 pub struct FibonacciRectangle {
     nr_of_points: validated_type!(usize, AllNotZero),
     side_length: validated_type!(Point2<Length>, NotAllZero && AllFinite && AllPositive),
@@ -170,7 +171,7 @@ impl From<FibonacciRectangle> for super::PosDistType {
 /// Rectangular Fibbonacci distribution
 ///
 /// For further details see [here](https://en.wikipedia.org/wiki/Fibonacci_sequence)
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy, EnsureValidated)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy, EnsureValidated, JsonSchema)]
 pub struct FibonacciEllipse {
     nr_of_points: validated_type!(usize, AllNotZero),
     radius: validated_type!(Point2<Length>, NotAllZero && AllFinite && AllPositive),

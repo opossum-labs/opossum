@@ -4,8 +4,11 @@ use crate::{
     error::OpmResult,
     generic_validators::{AllFinite, AllNotZero, AllPositive},
     joule, millimeter,
-    types::validated_type_definitions::{
-        ValidatedAngle1D, ValidatedCenter2D, ValidatedGaussianPower, ValidatedSideLengths2D,
+    types::{
+        SiScalarSchema,
+        validated_type_definitions::{
+            ValidatedAngle1D, ValidatedCenter2D, ValidatedGaussianPower, ValidatedSideLengths2D,
+        },
     },
     utils::super_gaussian::SuperGaussianShape,
     validated, validated_type,
@@ -13,11 +16,13 @@ use crate::{
 use kahan::KahanSummator;
 use nalgebra::Point2;
 use opm_macros_lib::EnsureValidated;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::{Angle, Energy, Length};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy, EnsureValidated)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy, EnsureValidated, JsonSchema)]
 pub struct General2DGaussian {
+    #[schemars(with = "SiScalarSchema")]
     total_energy: validated_type!(Energy, AllNotZero && AllFinite && AllPositive),
     // The four parameters below are the shape rather than the energy, and they are typed by the
     // very same aliases [`SuperGaussianShape`] uses. That is what makes [`General2DGaussian::shape`]
@@ -26,7 +31,9 @@ pub struct General2DGaussian {
     // never reaches the file.
     mu_xy: ValidatedCenter2D,
     sigma_xy: ValidatedSideLengths2D,
+    #[schemars(with = "SiScalarSchema")]
     power: ValidatedGaussianPower,
+    #[schemars(with = "SiScalarSchema")]
     theta: ValidatedAngle1D,
     #[validate(skip)]
     rectangular: bool,

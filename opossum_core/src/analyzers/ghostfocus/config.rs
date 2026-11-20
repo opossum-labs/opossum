@@ -8,6 +8,7 @@ use crate::{
     nodes::NodeGroup,
     properties::proptype::AssetRef,
 };
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use uuid::Uuid;
@@ -23,7 +24,7 @@ const fn is_default_vacuum(asset: &AssetRef<Material>) -> bool {
     }
 }
 
-#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
+#[derive(PartialEq, Debug, Clone, Serialize, Deserialize, JsonSchema)]
 /// Configuration for performing a ghost focus analysis
 pub struct GhostFocusConfig {
     max_bounces: usize,

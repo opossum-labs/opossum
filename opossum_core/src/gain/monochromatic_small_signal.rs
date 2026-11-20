@@ -36,6 +36,7 @@ use crate::{
     reciprocal_centimeter, validated, validated_type,
 };
 use opm_macros_lib::EnsureValidated;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::ReciprocalLength;
 use utoipa::ToSchema;
@@ -56,10 +57,11 @@ impl Default for ValidatedGainCoefficient {
 /// Parameters of an unsaturated gain that follows the path through the medium.
 ///
 /// See the [module documentation](self) for what the model does and what it deliberately does not.
-#[derive(Serialize, Deserialize, ToSchema, Debug, Clone, Copy, PartialEq, EnsureValidated)]
+#[derive(Serialize, Deserialize, ToSchema, Debug, Clone, Copy, PartialEq, EnsureValidated, JsonSchema)]
 #[serde(try_from = "NonValidatedMonochromaticSmallSignalGain")]
 pub struct MonochromaticSmallSignalGain {
     #[schema(value_type = f64)]
+    #[schemars(with = "f64")]
     peak_gain_coefficient: ValidatedGainCoefficient,
 }
 
@@ -68,8 +70,9 @@ pub struct MonochromaticSmallSignalGain {
 /// It lets the value read from an `.opm` file run through the very same validation as one set
 /// through the setter, so a hand-edited file cannot smuggle in a non-finite coefficient. Same
 /// pattern as [`ConstGain`](super::ConstGain).
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 struct NonValidatedMonochromaticSmallSignalGain {
+    #[schemars(with = "f64")]
     peak_gain_coefficient: ReciprocalLength,
 }
 impl TryFrom<NonValidatedMonochromaticSmallSignalGain> for MonochromaticSmallSignalGain {

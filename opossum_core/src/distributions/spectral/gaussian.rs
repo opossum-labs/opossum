@@ -1,3 +1,4 @@
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
@@ -13,7 +14,7 @@ use crate::{
 use kahan::KahanSummator;
 use opm_macros_lib::EnsureValidated;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, EnsureValidated)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, EnsureValidated, JsonSchema)]
 pub struct Gaussian {
     wvl_range: validated_type!((Length, Length), SecondLarger && AllPositive && AllNormal),
     num_points: validated_type!(usize, AllNotZero),

@@ -9,12 +9,14 @@ use crate::{
 use nalgebra::{Point2, Point3, point};
 use num_traits::Zero;
 use opm_macros_lib::EnsureValidated;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 /// Rectangular, uniform random distribution
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy, EnsureValidated)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy, EnsureValidated, JsonSchema)]
 pub struct Random {
+    #[schemars(with = "usize")]
     nr_of_points: validated_type!(usize, AllNotZero),
     side_length: validated_type!(Point2<Length>, NotAllZero && AllFinite && AllPositive),
 }

@@ -11,11 +11,12 @@ use super::PositionDistribution;
 use nalgebra::{Point3, Vector3};
 use num_traits::{ToPrimitive, Zero};
 use opm_macros_lib::EnsureValidated;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 /// Circular, hexapolar distribution
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy, EnsureValidated)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy, EnsureValidated, JsonSchema)]
 pub struct HexagonalTiling {
     #[validate(skip)]
     nr_of_hex_along_radius: u8,
