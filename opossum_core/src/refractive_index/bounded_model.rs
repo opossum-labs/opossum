@@ -2,6 +2,7 @@
 
 use std::ops::Range;
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
@@ -26,7 +27,7 @@ pub trait DispersionFormula:
 }
 
 /// A generic wrapper that adds wavelength range validation to any [`DispersionFormula`].
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, JsonSchema)]
 pub struct BoundedFormula<T> {
     /// The coefficients/parameters of the dispersion formula.
     pub coefficients: T,

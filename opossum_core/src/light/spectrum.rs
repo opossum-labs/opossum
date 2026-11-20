@@ -13,6 +13,7 @@ use crate::{
 use kahan::KahanSummator;
 use log::warn;
 use opm_macros_lib::EnsureValidated;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{
     f64::consts::PI,
@@ -29,7 +30,7 @@ use uom::{fmt::DisplayStyle::Abbreviation, si::energy::joule};
 ///
 /// This structure handles an array of values over a given wavelength range. Although the interface
 /// is still limited, the structure is prepared for handling also non-equidistant wavelength slots.  
-#[derive(Clone, Serialize, Deserialize, PartialEq, EnsureValidated)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, EnsureValidated, JsonSchema)]
 pub struct Spectrum {
     data: validated_vec_type!(
         Vec<(f64, f64)>,

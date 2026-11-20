@@ -1,5 +1,6 @@
 //! Module for handling the refractive index of an optical material.
 #![warn(missing_docs)]
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use strum::EnumIter;
@@ -26,7 +27,7 @@ use crate::{
 };
 
 /// Available models for the calculation of refractive index
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, EnumIter)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, EnumIter, JsonSchema)]
 pub enum RefractiveIndexType {
     /// Trivial model returning a wavelength-independant constant
     Const(RefrIndexConst),

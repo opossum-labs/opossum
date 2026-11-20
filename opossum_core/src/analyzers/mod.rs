@@ -20,6 +20,7 @@ pub use energy::EnergyConfig;
 pub use ghostfocus::GhostFocusConfig;
 pub use raytrace::RayTraceConfig;
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use utoipa::ToSchema;
@@ -38,7 +39,7 @@ pub enum AnalyzerKind {
 /// Type of analysis to be performed.
 ///
 /// While the individual analyzers are implemented as traits, this enum is necessary for serialization / desrialization.
-#[derive(PartialEq, Debug, Serialize, Deserialize, Clone, ToSchema)]
+#[derive(PartialEq, Debug, Serialize, Deserialize, Clone, ToSchema, JsonSchema)]
 pub enum AnalyzerType {
     /// Simple energy flow analysis of an optical spectrum.
     ///

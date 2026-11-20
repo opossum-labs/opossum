@@ -1,9 +1,10 @@
 use super::variable::{FiniteDifferenceMethod, FreeVariable};
 use crate::error::{OpmResult, OpossumError};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Supported numerical optimization algorithms and their solver-specific hyperparameters.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub enum OptimizationAlgorithm {
     /// Damped Least Squares (Levenberg-Marquardt) local non-linear least-squares solver.
     Dls {

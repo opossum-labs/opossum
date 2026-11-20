@@ -1,11 +1,12 @@
 //! Optical properties module for materials
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::{absorption::absorption_model::AbsorptionModel, refractive_index::RefractiveIndexType};
 
 /// Primary optical properties required for optical simulation.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct OpticalProperties {
     /// Refractive index calculation model.
     pub refractive_index: RefractiveIndexType,

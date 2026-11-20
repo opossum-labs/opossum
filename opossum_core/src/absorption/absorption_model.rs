@@ -2,6 +2,7 @@
 
 use std::{f64::consts::PI, fmt::Display};
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;
 use uom::si::{
@@ -21,7 +22,7 @@ use crate::{
 };
 
 /// Defines the absorption model for an optical material.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, EnumIter)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, EnumIter, JsonSchema)]
 pub enum AbsorptionModel {
     /// No absorption (perfectly transparent material).
     #[default]

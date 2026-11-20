@@ -1,8 +1,9 @@
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt::{self, Display, Formatter};
 use uuid::Uuid;
 /// Unique address identifying a tunable variable in the optical model.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 pub enum ParameterAddress {
     /// A scalar property located on a node (e.g., radius of curvature, thickness, tilt) in SI base units.
     NodeProperty {
@@ -52,7 +53,7 @@ impl Display for ParameterAddress {
     }
 }
 /// Unique address identifying an observable output metric produced by a detector during analysis.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct ObservableAddress {
     /// Unique ID of the analyzer producing the evaluation.
     pub analyzer_id: Uuid,
@@ -71,7 +72,7 @@ impl Display for ObservableAddress {
     }
 }
 /// Unified source for scalar quantities evaluated by optimization operands.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 pub enum MetricSource {
     /// A physics metric recorded by a detector during analysis.
     Observable(ObservableAddress),

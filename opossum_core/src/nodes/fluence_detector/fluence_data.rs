@@ -11,6 +11,7 @@ use crate::{
     utils::{griddata::linspace, to_f64},
 };
 use nalgebra::{DMatrix, DVector};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::{
     f64::{Energy, Length},
@@ -23,7 +24,7 @@ impl From<FluenceData> for Proptype {
     }
 }
 /// Struct to hold the fluence map information of a beam
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct FluenceData {
     /// peak fluence of the beam
     peak: Fluence,

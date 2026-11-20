@@ -4,6 +4,7 @@
 //! Provides orthogonal basis evaluation and least-squares decomposition via SVD.
 
 use nalgebra::{DMatrix, DVector, Point2};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::{f64::Length, length::millimeter};
 
@@ -38,7 +39,7 @@ pub trait Basis2D: Send + Sync {
 }
 
 /// A single decomposed mode with its label, fitted amplitude, and piston flag.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct DecomposedMode {
     /// Display label for reporting and UI (e.g. "Z4 (Defocus)").
     pub label: String,
@@ -49,7 +50,7 @@ pub struct DecomposedMode {
 }
 
 /// Generic result of any 2D wavefront polynomial decomposition.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct DecompositionResult {
     /// Basis family name.
     pub basis_name: String,
@@ -61,7 +62,7 @@ pub struct DecompositionResult {
     pub metadata: Vec<(String, String)>,
 }
 /// Bundled decomposition result including the reference wavelength.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct WavefrontDecomposition {
     /// Generic basis decomposition outcome.
     pub decomposition: DecompositionResult,

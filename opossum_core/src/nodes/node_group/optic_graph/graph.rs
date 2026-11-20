@@ -1,6 +1,7 @@
 use super::{super::port_map::PortMap, serialization::SerializableGraph};
 use crate::{core_optics::OpticRef, light::LightFlow, nodes::NodeGroup, prelude::PortType};
 use petgraph::graph::{DiGraph, NodeIndex};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use uom::si::f64::Length;
@@ -40,7 +41,7 @@ impl ConnectionInfo {
 }
 
 /// Data structure representing an optical graph
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(try_from = "SerializableGraph", into = "SerializableGraph")]
 pub struct OpticGraph {
     pub(crate) g: DiGraph<OpticRef, LightFlow>, // pub(crate) makes it visible across the crate

@@ -2,11 +2,12 @@
 //! Spot diagram data structures and plotting routines.
 
 use crate::{error::OpmResult, light::Rays, utils::geom_transformation::Isometry};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 /// A single spectral series containing 2D spot coordinates at a specific wavelength.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, JsonSchema)]
 pub struct WavelengthSpotSeries {
     /// Nominal wavelength for this spectral bin.
     pub wavelength: Length,
@@ -23,7 +24,7 @@ impl WavelengthSpotSeries {
 }
 
 /// Compact 2D spot diagram data binned by wavelength.
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, JsonSchema)]
 pub struct SpotDiagramData {
     /// Spectral series containing ray spots.
     pub series: Vec<WavelengthSpotSeries>,

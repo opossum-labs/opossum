@@ -1,3 +1,4 @@
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -5,7 +6,7 @@ use uuid::Uuid;
 pub const CURRENT_SCHEMA_VERSION: u32 = 1;
 
 /// Common metadata header shared by all registry assets (Materials, Coatings, Components, Light Sources, etc.).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct AssetHeader {
     /// Format schema version for compatibility checks.
     pub schema_version: u32,

@@ -9,6 +9,7 @@ pub mod thermal;
 
 pub use mechanical::MechanicalProperties;
 pub use optical::OpticalProperties;
+use schemars::JsonSchema;
 pub use thermal::ThermalProperties;
 
 use serde::{Deserialize, Serialize};
@@ -47,7 +48,7 @@ pub fn default_reference_wavelength() -> Length {
 }
 
 /// Represents a complete material embedded in an OPOSSUM scenery or stored in the registry.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Material {
     /// Shared metadata header (UUID, versioning, name, vendor).
     pub header: AssetHeader,

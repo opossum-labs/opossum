@@ -1,5 +1,6 @@
 use crate::analyzers::{AnalyzerKind, AnalyzerType};
 use nalgebra::Point2;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 use utoipa::ToSchema;
@@ -7,7 +8,7 @@ use uuid::Uuid;
 /// Configuration metadata for an analyzer attached to an [`OpmDocument`](super::OpmDocument),
 /// combining its [`AnalyzerType`] with optional UI layout coordinates, display name, and
 /// associated pump scenarios.
-#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema, JsonSchema)]
 pub struct AnalyzerInfo {
     analyzer_type: AnalyzerType,
     #[serde(default, skip_serializing_if = "Option::is_none")]

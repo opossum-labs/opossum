@@ -1,10 +1,11 @@
 //! Mechanical properties module for materials
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::{MassDensity, Pressure};
 
 /// Optional mechanical properties of a material.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema)]
 pub struct MechanicalProperties {
     /// Mass density
     #[serde(default)]

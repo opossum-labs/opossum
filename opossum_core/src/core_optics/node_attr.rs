@@ -5,6 +5,7 @@
 //! These attributes are shared across different types of optical nodes in the system.
 
 use nalgebra::Point2;
+use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use uom::si::f64::Length;
 use uuid::Uuid;
@@ -26,7 +27,7 @@ where
 }
 
 /// Defines the 3D positioning strategy of an optical node.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, JsonSchema)]
 pub enum NodePositioning {
     /// Fixed, user-defined absolute position in 3D space.
     Absolute(Isometry),
@@ -143,7 +144,7 @@ impl<'de> Deserialize<'de> for NodePositioning {
 ///
 /// `NodeAttr` encapsulates metadata and configuration for an optical node, including its type,
 /// name, ports, unique identifier, properties, geometric placement, alignment, and GUI position.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct NodeAttr {
     /// The type of the node (e.g., "lens", "mirror").
     node_type: String,

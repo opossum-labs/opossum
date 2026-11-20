@@ -12,6 +12,7 @@ use crate::{
     hectopascal, validated, validated_type,
 };
 use opm_macros_lib::EnsureValidated;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::{
     f64::{Length, Pressure, ThermodynamicTemperature},
@@ -137,7 +138,7 @@ type ValidatedTemperature = validated_type!(
 );
 
 /// Refractive index model for air using the Edlén formula.
-#[derive(Clone, Deserialize, Serialize, Debug, PartialEq, EnsureValidated)]
+#[derive(Clone, Deserialize, Serialize, Debug, PartialEq, EnsureValidated, JsonSchema)]
 pub struct RefrIndexAir {
     temperature: ValidatedTemperature,
     pressure: ValidatedPressure,

@@ -3,13 +3,14 @@ use crate::{
     error::{OpmResult, OpossumError},
     properties::validator::Validator,
 };
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::mem;
 
 /// (optical) Property
 ///
 /// A property consists of the actual value (stored as [`Proptype`]), a description and optionally a validator.
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, JsonSchema)]
 #[serde(transparent)]
 pub struct Property {
     prop: Proptype,

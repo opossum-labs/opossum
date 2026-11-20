@@ -34,6 +34,7 @@ use crate::{
 };
 use nalgebra::{Vector2, Vector3};
 use num_traits::Float;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::{
     Dimension, Quantity, Unit, Units,
@@ -44,7 +45,7 @@ use uuid::Uuid;
 
 /// Wrapper for registry assets that can hold either the full inline data
 /// or a lightweight UUID reference for serialization.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema)]
 #[serde(untagged)]
 pub enum AssetRef<T> {
     /// Full in-memory asset struct.
@@ -114,7 +115,7 @@ impl From<AssetRef<Material>> for Proptype {
 }
 
 // #[non_exhaustive]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema)]
 /// The type of the [`Property`](crate::properties::Property).
 pub enum Proptype {
     /// A string property

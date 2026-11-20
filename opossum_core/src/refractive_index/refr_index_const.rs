@@ -2,6 +2,7 @@
 //!
 //! This model simply returns a wavelength independant constant value.
 use opm_macros_lib::EnsureValidated;
+use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use utoipa::ToSchema;
@@ -51,7 +52,7 @@ impl Default for ValidatedRefIndConst {
 
 /// Constant refractive index model
 #[derive(
-    Default, Clone, Serialize, Deserialize, ToSchema, Debug, PartialEq, Copy, EnsureValidated,
+    Default, Clone, Serialize, Deserialize, ToSchema, Debug, PartialEq, Copy, EnsureValidated, JsonSchema
 )]
 pub struct RefrIndexConst {
     refractive_index: ValidatedRefIndConst,

@@ -23,6 +23,7 @@ pub use analyzer_info::AnalyzerInfo;
 use indexmap::IndexMap;
 pub use optimization::OptimizationConfig;
 pub use positioning_run::PositioningRun;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap};
 use uuid::Uuid;
@@ -34,12 +35,18 @@ pub type MetricStoreKey = (Uuid, Uuid, String);
 pub type MetricStore = HashMap<MetricStoreKey, f64>;
 /// Map for storing analyzer-specific vector detector metrics (e.g., per-ray OPDs).
 pub type VectorMetricStore = HashMap<MetricStoreKey, Vec<f64>>;
+
 /// The main structure of an OPOSSUM model.
 ///
 /// It contains the [`NodeGroup`] representing the optical model, a list of analyzers,
 /// optional pump scenarios, embedded materials, and an optional optimization configuration.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[schemars(
+    title = "OPOSSUM Model Document v1",
+    deny_unknown_fields
+)]
 pub struct OpmDocument {
+    /// File format version. MUST be `1` for this specification.
     pub(crate) opm_file_version: u32,
     #[serde(default)]
     pub(crate) scenery: NodeGroup,
