@@ -587,7 +587,6 @@ mod test {
                 OperandMode::Equal,
                 f64::INFINITY,
             ))
-            .with_target_cost(f64::INFINITY)
             .with_algorithm(OptimizationAlgorithm::nelder_mead().with_max_iterations(1));
 
         // In JSON, Infinity or NaN is serialized to `null`, which causes deserialization
@@ -599,9 +598,8 @@ mod test {
         let ron_payload =
             ron::to_string(&config).expect("RON serialization must support Infinity/NaN");
         assert!(ron_payload.contains("inf"));
-        let deserialized_ron: OptimizationConfig =
+        let _deserialized_ron: OptimizationConfig =
             ron::from_str(&ron_payload).expect("RON deserialization must succeed");
-        assert_eq!(deserialized_ron.target_cost, f64::INFINITY);
 
         let req = test::TestRequest::post()
             .uri("/start")
@@ -629,9 +627,7 @@ mod test {
             src_port: "output_1".into(),
         };
 
-        let config = OptimizationConfig::new()
-            .with_variable(FreeVariable::new(dist_addr))
-            .with_target_cost(1e-5);
+        let config = OptimizationConfig::new().with_variable(FreeVariable::new(dist_addr));
 
         let ron_payload = ron::to_string(&config).unwrap();
 

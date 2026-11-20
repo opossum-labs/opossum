@@ -1,20 +1,100 @@
 use super::address::ParameterAddress;
 use crate::error::{OpmResult, OpossumError};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de::Visitor};
+use std::fmt;
 use uom::si::{f64::Length, length::meter};
+
 /// Default relative step factor $\delta_{\text{rel}}$ used for finite-difference gradient estimation.
 pub const DEFAULT_DELTA_REL: f64 = 1e-4;
 /// Default minimum absolute step size $\delta_{\text{abs,min}}$ used when a parameter value is near zero.
 pub const DEFAULT_DELTA_ABS_MIN: f64 = 1e-7;
+
+struct BoundVisitor {
+    default_infinite: f64,
+}
+
+impl<'de> Visitor<'de> for BoundVisitor {
+    type Value = f64;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("a floating-point bound or null for infinity")
+    }
+
+    fn visit_f64<E>(self, v: f64) -> Result<Self::Value, E> {
+        Ok(v)
+    }
+
+    #[allow(clippy::cast_precision_loss)]
+    fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E> {
+        Ok(v as f64)
+    }
+
+    #[allow(clippy::cast_precision_loss)]
+    fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E> {
+        Ok(v as f64)
+    }
+
+    fn visit_none<E>(self) -> Result<Self::Value, E> {
+        Ok(self.default_infinite)
+    }
+
+    fn visit_unit<E>(self) -> Result<Self::Value, E> {
+        Ok(self.default_infinite)
+    }
+
+    fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_any(self)
+    }
+}
+
+fn deserialize_lower_bound<'de, D>(deserializer: D) -> Result<f64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    deserializer.deserialize_any(BoundVisitor {
+        default_infinite: f64::NEG_INFINITY,
+    })
+}
+
+fn deserialize_upper_bound<'de, D>(deserializer: D) -> Result<f64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    deserializer.deserialize_any(BoundVisitor {
+        default_infinite: f64::INFINITY,
+    })
+}
+
 /// Closed interval `[min, max]` defining box constraints on a parameter in SI base units.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct BoxBounds {
-    /// Lower bound (inclusive) in SI base units.
+    /// Lower bound (inclusive) in SI base units (may be `f64::NEG_INFINITY`).
+    #[serde(deserialize_with = "deserialize_lower_bound")]
     pub min: f64,
-    /// Upper bound (inclusive) in SI base units.
+    /// Upper bound (inclusive) in SI base units (may be `f64::INFINITY`).
+    #[serde(deserialize_with = "deserialize_upper_bound")]
     pub max: f64,
 }
+
+impl Default for BoxBounds {
+    fn default() -> Self {
+        Self::unbounded()
+    }
+}
+
 impl BoxBounds {
+    /// Creates unbounded constraints `[-inf, +inf]`.
+    #[must_use]
+    pub const fn unbounded() -> Self {
+        Self {
+            min: f64::NEG_INFINITY,
+            max: f64::INFINITY,
+        }
+    }
+
     /// Creates a new [`BoxBounds`] in raw SI base units.
     ///
     /// # Errors
@@ -31,6 +111,7 @@ impl BoxBounds {
         }
         Ok(Self { min, max })
     }
+
     /// Creates a new [`BoxBounds`] from typed [`Length`] quantities, converting them to meters.
     ///
     /// # Errors
@@ -39,16 +120,35 @@ impl BoxBounds {
     pub fn from_lengths(min: Length, max: Length) -> OpmResult<Self> {
         Self::new(min.get::<meter>(), max.get::<meter>())
     }
+
+    /// Returns `true` if both `min` and `max` are finite numbers.
+    #[must_use]
+    pub const fn is_finite(&self) -> bool {
+        self.min.is_finite() && self.max.is_finite()
+    }
+
+    /// Returns the interval width `max - min` if both bounds are finite, or `None` otherwise.
+    #[must_use]
+    pub const fn finite_span(&self) -> Option<f64> {
+        if self.is_finite() {
+            Some(self.max - self.min)
+        } else {
+            None
+        }
+    }
+
     /// Returns `true` if `value` lies within `[self.min, self.max]`.
     #[must_use]
     pub fn contains(&self, value: f64) -> bool {
         value >= self.min && value <= self.max
     }
+
     /// Clamps `value` to the closed interval `[self.min, self.max]`.
     #[must_use]
     pub const fn clamp(&self, value: f64) -> f64 {
         value.clamp(self.min, self.max)
     }
+
     /// Computes a quadratic penalty for values outside `[self.min, self.max]`, or `0.0` if inside.
     #[must_use]
     pub fn penalty(&self, value: f64) -> f64 {
@@ -63,35 +163,40 @@ impl BoxBounds {
         }
     }
 }
+
 /// A free parameter directly manipulated by the numerical solver.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FreeVariable {
     /// Address of the optical property or connection distance being varied.
     pub address: ParameterAddress,
-    /// Optional lower and upper box constraints in SI base units.
-    pub bounds: Option<BoxBounds>,
+    /// Lower and upper box constraints in SI base units (defaults to `[-inf, +inf]`).
+    #[serde(default)]
+    pub bounds: BoxBounds,
     /// Relative step size factor for finite-difference derivatives (defaults to [`DEFAULT_DELTA_REL`]).
     pub delta_rel: f64,
     /// Minimum absolute step size floor for finite-difference derivatives (defaults to [`DEFAULT_DELTA_ABS_MIN`]).
     pub delta_abs_min: f64,
 }
+
 impl FreeVariable {
-    /// Creates a new [`FreeVariable`] targeting a specific [`ParameterAddress`] with default step settings.
+    /// Creates a new unbounded [`FreeVariable`] targeting a specific [`ParameterAddress`] with default step settings.
     #[must_use]
     pub const fn new(address: ParameterAddress) -> Self {
         Self {
             address,
-            bounds: None,
+            bounds: BoxBounds::unbounded(),
             delta_rel: DEFAULT_DELTA_REL,
             delta_abs_min: DEFAULT_DELTA_ABS_MIN,
         }
     }
+
     /// Sets the [`BoxBounds`] constraining this variable.
     #[must_use]
     pub const fn with_bounds(mut self, bounds: BoxBounds) -> Self {
-        self.bounds = Some(bounds);
+        self.bounds = bounds;
         self
     }
+
     /// Sets lower and upper [`BoxBounds`] from typed [`Length`] quantities.
     ///
     /// # Errors
@@ -101,6 +206,7 @@ impl FreeVariable {
         let bounds = BoxBounds::from_lengths(min, max)?;
         Ok(self.with_bounds(bounds))
     }
+
     /// Configures the relative and minimum absolute finite-difference step parameters.
     #[must_use]
     pub const fn with_step_config(mut self, delta_rel: f64, delta_abs_min: f64) -> Self {
@@ -108,6 +214,7 @@ impl FreeVariable {
         self.delta_abs_min = delta_abs_min;
         self
     }
+
     /// Computes the adaptive finite-difference step size $h = \max(\delta_{\text{abs,min}}, \delta_{\text{rel}} \cdot |x|)$.
     #[must_use]
     pub fn finite_difference_step(&self, current_val: f64) -> f64 {
@@ -115,6 +222,7 @@ impl FreeVariable {
         self.delta_abs_min.max(rel_step)
     }
 }
+
 /// Method used to approximate numerical gradients via finite differences.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum FiniteDifferenceMethod {

@@ -112,11 +112,9 @@ impl MeritFunction {
     pub fn evaluate(&self, x: &[f64]) -> f64 {
         let mut total_cost = 0.0;
         for (var, &val) in self.free_variables.iter().zip(x.iter()) {
-            if let Some(bounds) = &var.bounds {
-                let violation = bounds.penalty(val);
-                if violation > 0.0 {
-                    total_cost = self.bounds_penalty_weight.mul_add(violation, total_cost);
-                }
+            let violation = var.bounds.penalty(val);
+            if violation > 0.0 {
+                total_cost = self.bounds_penalty_weight.mul_add(violation, total_cost);
             }
         }
 
@@ -216,15 +214,14 @@ impl MeritFunction {
         // 1. Box bounds penalty residuals
         let mut bound_residuals = Vec::with_capacity(n_vars);
         for (var, &val) in self.free_variables.iter().zip(x.iter()) {
-            let res = var.bounds.as_ref().map_or(0.0, |bounds| {
-                if val < bounds.min {
-                    (bounds.min - val) * self.bounds_penalty_weight.sqrt()
-                } else if val > bounds.max {
-                    (val - bounds.max) * self.bounds_penalty_weight.sqrt()
-                } else {
-                    0.0
-                }
-            });
+            let bounds = var.bounds;
+            let res = if val < bounds.min {
+                (bounds.min - val) * self.bounds_penalty_weight.sqrt()
+            } else if val > bounds.max {
+                (val - bounds.max) * self.bounds_penalty_weight.sqrt()
+            } else {
+                0.0
+            };
             bound_residuals.push(res);
         }
 
@@ -279,8 +276,8 @@ impl MeritFunction {
                 // Determine step size based on parameter bounds or fallback scale
                 let span = var
                     .bounds
-                    .as_ref()
-                    .map_or_else(|| (x[j].abs() * 0.1).max(1e-3), |b| b.max - b.min);
+                    .finite_span()
+                    .unwrap_or_else(|| (x[j].abs() * 0.1).max(1e-3));
 
                 // 0.01% of total range is optimal for raytracing stability
                 let h = (span * 1e-4).clamp(1e-7, 1e-3);
@@ -350,16 +347,13 @@ impl Anneal for MeritFunction {
         let var = &self.free_variables[idx];
 
         // 2. Base range of the selected parameter
-        let total_span = var.bounds.as_ref().map_or_else(
-            || {
-                if param[idx].abs() > 1e-7 {
-                    param[idx].abs() * 0.5
-                } else {
-                    1e-2
-                }
-            },
-            |bounds| bounds.max - bounds.min,
-        );
+        let total_span = var.bounds.finite_span().unwrap_or_else(|| {
+            if param[idx].abs() > 1e-7 {
+                param[idx].abs() * 0.5
+            } else {
+                1e-2
+            }
+        });
 
         // 3. Temperature-dependent step contraction
         // We assume an initial temperature reference or normalize temp.
@@ -371,14 +365,8 @@ impl Anneal for MeritFunction {
         let max_step = total_span * 0.2 * temp_scale;
         let offset = rng.random_range(-1.0..=1.0) * max_step;
 
-        let mut candidate = param[idx] + offset;
-
         // 5. Strictly enforce box bounds
-        if let Some(bounds) = &var.bounds {
-            candidate = bounds.clamp(candidate);
-        }
-
-        next_param[idx] = candidate;
+        next_param[idx] = var.bounds.clamp(param[idx] + offset);
         Ok(next_param)
     }
 }

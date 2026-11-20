@@ -193,7 +193,7 @@ impl OptimizationAlgorithm {
         for (i, var) in free_vars.iter().enumerate() {
             let mut vertex = base_vertex.clone();
             let current = vertex[i];
-            let step = var.bounds.as_ref().map_or_else(
+            let step = var.bounds.finite_span().map_or_else(
                 || {
                     if current.abs() > 1e-7 {
                         current.abs() * 0.05
@@ -201,12 +201,10 @@ impl OptimizationAlgorithm {
                         1e-3
                     }
                 },
-                |bounds| (bounds.max - bounds.min) * 0.05,
+                |span| span * 0.05,
             );
             let mut candidate = current + step;
-            if let Some(bounds) = &var.bounds
-                && candidate > bounds.max
-            {
+            if candidate > var.bounds.max {
                 candidate = current - step;
             }
             vertex[i] = candidate;

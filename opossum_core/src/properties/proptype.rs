@@ -45,6 +45,7 @@ use uuid::Uuid;
 /// Wrapper for registry assets that can hold either the full inline data
 /// or a lightweight UUID reference for serialization.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(untagged)]
 pub enum AssetRef<T> {
     /// Full in-memory asset struct.
     Inline(T),

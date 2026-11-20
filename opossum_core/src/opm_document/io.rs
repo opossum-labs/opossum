@@ -242,11 +242,11 @@ impl OpmDocument {
         doc_to_serialize.prepare_materials_for_serialization()?;
 
         let config = PrettyConfig::new()
-            .extensions(Extensions::UNWRAP_VARIANT_NEWTYPES)
+            .extensions(Extensions::UNWRAP_VARIANT_NEWTYPES | Extensions::IMPLICIT_SOME)
             .new_line("\n");
 
         ron::ser::to_string_pretty(&doc_to_serialize, config).map_err(|e| {
-            OpossumError::OpticScenery(format!("serialization of OpmDocument failed: {e}"))
+            OpossumError::OpmDocument(format!("serialization of OpmDocument failed: {e}"))
         })
     }
 }
@@ -475,7 +475,6 @@ mod tests {
 
         assert!(ron_str.contains("embedded_materials:"));
         assert!(ron_str.contains("N-BK7 Shared"));
-        assert!(ron_str.contains("Id("));
 
         let reloaded_doc = OpmDocument::from_string(&ron_str)?;
         assert_eq!(reloaded_doc.embedded_materials.len(), 1);
@@ -786,8 +785,6 @@ mod tests {
 
         assert!(ron_str.contains("embedded_materials:"));
         assert!(ron_str.contains("Fused Silica Nested"));
-        assert!(ron_str.contains("Id("));
-        assert!(!ron_str.contains("Inline("));
 
         let reloaded_doc = OpmDocument::from_string(&ron_str)?;
         assert_eq!(reloaded_doc.embedded_materials.len(), 1);

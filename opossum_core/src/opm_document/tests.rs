@@ -716,8 +716,7 @@ fn opm_document_optimization_config_roundtrip() -> OpmResult<()> {
         .with_variable(var)
         .with_coupling(coupling)
         .with_operand(operand)
-        .with_algorithm(OptimizationAlgorithm::dls())
-        .with_target_cost(1e-6);
+        .with_algorithm(OptimizationAlgorithm::dls());
 
     doc.set_optimization_config(Some(config.clone()));
 

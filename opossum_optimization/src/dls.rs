@@ -61,8 +61,8 @@ impl DampedLeastSquares {
             .iter()
             .map(|var| {
                 var.bounds
-                    .as_ref()
-                    .map_or(1.0, |bounds| (bounds.max - bounds.min).abs().max(1e-4))
+                    .finite_span()
+                    .map_or(1.0, |span| span.abs().max(1e-4))
             })
             .collect()
     }

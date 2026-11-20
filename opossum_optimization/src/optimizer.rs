@@ -23,6 +23,9 @@ use opossum_core::{
     },
 };
 
+/// Internal merit cost threshold for early solver termination.
+const DEFAULT_TARGET_COST: f64 = 1e-8;
+
 /// Internal container holding the raw numerical output of an executed solver.
 struct SolverOutcome {
     best_params: Vec<f64>,
@@ -51,7 +54,7 @@ impl<'a> OpticOptimizer<'a> {
             couplings: Vec::new(),
             operands: Vec::new(),
             algorithm: OptimizationAlgorithm::default(),
-            target_cost: 1e-8,
+            target_cost: DEFAULT_TARGET_COST,
         }
     }
 
@@ -60,9 +63,7 @@ impl<'a> OpticOptimizer<'a> {
     /// # Errors
     /// Returns an error if the configuration contains invalid parameter addresses.
     pub fn from_config(doc: &'a mut OpmDocument, config: OptimizationConfig) -> OpmResult<Self> {
-        let mut optimizer = Self::new(doc)
-            .with_algorithm(config.algorithm)
-            .with_target_cost(config.target_cost);
+        let mut optimizer = Self::new(doc).with_algorithm(config.algorithm);
 
         for var in config.free_variables {
             optimizer = optimizer.add_variable(var)?;

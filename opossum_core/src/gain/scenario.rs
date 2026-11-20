@@ -346,7 +346,7 @@ mod test {
         assert_eq!(scenario.gain_model(node_id), model);
         assert_eq!(
             scenario.amplifiers().collect::<Vec<_>>(),
-            vec![(node_id, PumpConfig::new(model, PumpSource::None))]
+            vec![(node_id, PumpConfig::new(model, PumpSource::Unpumped))]
         );
         Ok(())
     }
@@ -398,7 +398,7 @@ mod test {
         assert_eq!(scenario.amplifiers().count(), 1);
 
         // Only once nothing is left of it does the node leave the operating point.
-        scenario.set_pump_source(node_id, PumpSource::None);
+        scenario.set_pump_source(node_id, PumpSource::Unpumped);
         assert_eq!(scenario.config(node_id), PumpConfig::default());
         assert_eq!(scenario.amplifiers().count(), 0);
         Ok(())
@@ -408,7 +408,7 @@ mod test {
         let scenario = PumpScenario::new("cold");
         let config = scenario.config(Uuid::new_v4());
         assert_eq!(config.gain_model(), GainModel::None);
-        assert_eq!(config.pump(), PumpSource::None);
+        assert_eq!(config.pump(), PumpSource::Unpumped);
         assert!(!config.is_active());
     }
     #[test]

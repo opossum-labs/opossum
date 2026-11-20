@@ -628,7 +628,7 @@ mod test {
                 .pump_scenario(scenario_id)
                 .unwrap()
                 .pump_source(node_id),
-            PumpSource::None
+            PumpSource::Unpumped
         );
     }
 

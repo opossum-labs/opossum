@@ -28,8 +28,6 @@ pub struct OptimizationModel {
     pub operands: Vec<UiOperandRow>,
     /// Solver algorithm and termination settings.
     pub algorithm: OptimizationAlgorithm,
-    /// Target cost threshold for early stopping.
-    pub target_cost: f64,
     /// Selected scope filter (`None` = entire setup, `Some(uuid)` = specific `NodeGroup`).
     pub scope_group_id: Option<Uuid>,
     /// Validation issues identified during pre-flight analysis.
@@ -43,7 +41,6 @@ impl Default for OptimizationModel {
             variable_rows: Vec::new(),
             operands: Vec::new(),
             algorithm: OptimizationAlgorithm::lbfgs(),
-            target_cost: 1e-12,
             scope_group_id: None,
             validation_issues: Vec::new(),
         }
@@ -54,15 +51,11 @@ impl OptimizationModel {
     /// Loads a persisted [`OptimizationConfig`] into the reactive UI model.
     pub fn apply_config(&mut self, config: &OptimizationConfig) {
         self.algorithm = config.algorithm.clone();
-        self.target_cost = config.target_cost;
         self.variable_rows.clear();
         self.operands.clear();
 
         for var in &config.free_variables {
-            let (min_b, max_b) = var.bounds.map_or((None, None), |b| {
-                UiVariableRow::ui_bounds_from_box_bounds(&var.address, b)
-            });
-
+            let (min_b, max_b) = UiVariableRow::ui_bounds_from_box_bounds(&var.address, var.bounds);
             let (default_node_name, default_prop_name) = match &var.address {
                 ParameterAddress::NodeProperty { property_name, .. } => {
                     ("Node".to_string(), property_name.clone())
@@ -404,7 +397,6 @@ impl OptimizationModel {
             couplings,
             operands: active_operands,
             algorithm: self.algorithm.clone(),
-            target_cost: self.target_cost,
         })
     }
 
@@ -692,8 +684,7 @@ mod tests {
         let config = OptimizationConfig::new()
             .with_variable(var)
             .with_operand(operand)
-            .with_algorithm(OptimizationAlgorithm::dls())
-            .with_target_cost(1e-6);
+            .with_algorithm(OptimizationAlgorithm::dls());
 
         let mut schema = ModelOptimizationSchema {
             saved_config: Some(config),
@@ -723,6 +714,5 @@ mod tests {
         assert_eq!(model.operands.len(), 1);
         assert!(model.operands[0].is_enabled);
         assert!(matches!(model.algorithm, OptimizationAlgorithm::Dls { .. }));
-        assert_eq!(model.target_cost, 1e-6);
     }
 }
