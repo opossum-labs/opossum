@@ -22,6 +22,10 @@ pub struct GhostFocusConfig {
     /// of the configuration a user edits and not written to file.
     #[serde(skip)]
     active_pump_scenario: ActiveScenario,
+    /// Whether the sources span ray tubes, because a fluence map of the run follows them. Set by
+    /// the analysis for its run; not saved to file.
+    #[serde(skip)]
+    ray_tubes: bool,
 }
 
 impl GhostFocusConfig {
@@ -43,11 +47,10 @@ impl GhostFocusConfig {
     pub const fn set_fluence_estimator(&mut self, fluence_estimator: FluenceEstimator) {
         self.fluence_estimator = fluence_estimator;
     }
-    /// Whether the sources of this analysis span ray tubes: its fluence maps, on every surface,
-    /// follow them where its estimator does (see [`FluenceEstimator::needs_ray_tubes`]).
-    #[must_use]
-    pub const fn needs_ray_tubes(&self) -> bool {
-        self.fluence_estimator.needs_ray_tubes()
+    /// Sets whether the sources of the run span ray tubes (see
+    /// [`RayMesh`](crate::light::RayMesh)).
+    pub const fn set_ray_tubes(&mut self, ray_tubes: bool) {
+        self.ray_tubes = ray_tubes;
     }
     /// Maps an ray data builder to the given source UUID
     ///
@@ -111,6 +114,7 @@ impl Default for GhostFocusConfig {
             source_map: HashMap::new(),
             ambient_material: Material::vacuum(),
             active_pump_scenario: ActiveScenario::default(),
+            ray_tubes: false,
         }
     }
 }
@@ -121,6 +125,10 @@ impl PropagationStrategy for GhostFocusConfig {
 
     fn pump_config(&self, node_id: Uuid) -> PumpConfig {
         self.active_pump_scenario.config(node_id)
+    }
+    /// Set for the run by the analysis (see [`GhostFocusConfig::set_ray_tubes`]).
+    fn needs_ray_tubes(&self) -> bool {
+        self.ray_tubes
     }
     fn on_surface_interaction(
         &self,

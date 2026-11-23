@@ -135,14 +135,20 @@ impl Analyzer for GhostFocusAnalyzer {
         // components exactly where this analysis does.
         let raytrace_config = AnalyzerType::GhostFocus(self.config.clone()).positioning_config();
         AnalysisRayTrace::calc_node_positions(scenery, LightResult::default(), &raytrace_config)?;
+        // Every surface follows the tubes where the estimator of the analysis does, a detector
+        // where its own does.
+        let mut config = self.config.clone();
+        config.set_ray_tubes(
+            config.fluence_estimator().needs_ray_tubes() || scenery.needs_ray_tubes(),
+        );
         scenery.reset_data();
-        scenery.prepare_volume(self.config())?;
+        scenery.prepare_volume(&config)?;
         info!(
             "Performing ghost focus analysis of scenery{scenery_name} up to {} ray bounces.",
-            self.config.max_bounces()
+            config.max_bounces()
         );
         scenery.clear_edges();
-        for bounce in 0..=self.config.max_bounces() {
+        for bounce in 0..=config.max_bounces() {
             let mut ray_collection = Vec::<Rays>::new();
             if bounce % 2 == 0 {
                 scenery.set_inverted(false)?;
@@ -154,7 +160,7 @@ impl Analyzer for GhostFocusAnalyzer {
             AnalysisGhostFocus::analyze(
                 scenery,
                 LightRays::default(),
-                self.config(),
+                &config,
                 &mut ray_collection,
                 bounce,
             )?;
@@ -220,14 +226,14 @@ mod test_ghost_focus_analyzer {
     use crate::{
         analyzers::Analyzer,
         coatings::CoatingConstantR,
-        core_optics::optic_node::Alignable,
+        core_optics::{hit_map::fluence_estimator::FluenceEstimator, optic_node::Alignable},
         degree,
         geometry::Extruded,
         joule,
-        light::LightResult,
+        light::{LightData, LightResult},
         millimeter,
         nodes::{
-            FluenceDetector, Lens, NodeGroup, SourcePort, SpotDiagram, ThinMirror,
+            EnergyMeter, FluenceDetector, Lens, NodeGroup, SourcePort, SpotDiagram, ThinMirror,
             round_collimated_ray_builder,
             test_helper::helper::{
                 rays_recorded_by_meter, scenery_with_a_mirror_shrunk_behind_its_back,
@@ -235,6 +241,65 @@ mod test_ghost_focus_analyzer {
         },
         percent,
     };
+    /// A fluence detector computes its map with its own estimator: a Voronoi detector gets the
+    /// ray tubes it follows also when the analysis estimates with KDE.
+    #[test]
+    fn a_voronoi_detector_gets_its_tubes_whatever_the_analysis_estimates_with() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let detector = scenery.add_node(FluenceDetector::default())?;
+        scenery.connect_nodes(source, "output_1", detector, "input_1", millimeter!(50.0))?;
+        let mut config = GhostFocusConfig::default();
+        config.set_fluence_estimator(FluenceEstimator::KDE);
+        config.set_max_bounces(0);
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(5.0), joule!(1.0), 5)?,
+        );
+        GhostFocusAnalyzer::new(config).analyze(&mut scenery)?;
+        let map = scenery
+            .node(detector)?
+            .as_any()
+            .downcast_ref::<FluenceDetector>()
+            .map(FluenceDetector::calc_fluence_data);
+        assert!(matches!(map, Some(Ok(Some(_)))), "{map:?}");
+        Ok(())
+    }
+    /// An analysis estimating with KDE spans no ray tubes for a model whose fluence maps do not
+    /// follow them either.
+    #[test]
+    fn a_kde_analysis_of_a_kde_model_spans_no_tubes() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let mut detector = FluenceDetector::default();
+        detector
+            .node_attr_mut()
+            .set_property("fluence estimator", FluenceEstimator::KDE.into())?;
+        let detector = scenery.add_node(detector)?;
+        let meter = scenery.add_node(EnergyMeter::default())?;
+        scenery.connect_nodes(source, "output_1", detector, "input_1", millimeter!(50.0))?;
+        scenery.connect_nodes(detector, "output_1", meter, "input_1", millimeter!(50.0))?;
+        let mut config = GhostFocusConfig::default();
+        config.set_fluence_estimator(FluenceEstimator::KDE);
+        config.set_max_bounces(0);
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(5.0), joule!(1.0), 5)?,
+        );
+        GhostFocusAnalyzer::new(config).analyze(&mut scenery)?;
+        let node = scenery.node(meter)?;
+        let Some(LightData::GhostFocus(bundles)) = node
+            .as_any()
+            .downcast_ref::<EnergyMeter>()
+            .and_then(EnergyMeter::light_data)
+        else {
+            panic!("the meter received no rays");
+        };
+        let rays = bundles.iter().flat_map(Rays::iter).collect::<Vec<_>>();
+        assert!(!rays.is_empty());
+        assert!(rays.iter().all(|ray| ray.source().is_none()));
+        Ok(())
+    }
     /// A ghost focus analysis with the Voronoi estimator estimates the peak fluence of every
     /// bundle on every surface, the ghosts a lens sends back included.
     #[test]

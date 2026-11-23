@@ -30,6 +30,7 @@ use crate::{
 use fluence_estimator::FluenceEstimator;
 use log::warn;
 use nalgebra::DMatrix;
+use ray_tubes::draw_map;
 use rays_hit_map::{HitPoint, HitPoints, RaysHitMap};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, ops::Range};
@@ -232,11 +233,9 @@ impl HitMap {
     }
     /// Calculate a fluence map ([`FluenceData`]) of this [`HitMap`] using the "Voronoi" method
     ///
-    /// This method tries to combine the fluence of data of all stored [`RaysHitMap`]s and return a single [`FluenceData`]
-    ///
-    /// # Note
-    /// The resulting fluence map may be inaccurate for the combination of large beams with small beams, since, currently, the method relies solely on interpolation.
-    /// This is problematic if one of the beam sizes is in the order of one pixel of the matrix or even below.
+    /// The ray tubes of all stored [`RaysHitMap`]s are drawn into one map, which covers all of
+    /// them (see [`RaysHitMap::calc_fluence_with_voronoi`]). A bundle whose hits are fluences
+    /// rather than energies is left out, with a warning.
     ///
     /// # Attributes
     /// -`nr_of_points`: tuple containing the number of (columns, rows) of the matrix on which the data should be calculated
@@ -244,31 +243,33 @@ impl HitMap {
     /// # Errors
     /// This function errors if
     /// - The hit point type is neither energy nor fluence
+    /// - the hits of a bundle do not all stand in the ray tubes of their source
     pub fn calc_combined_fluence_with_voronoi(
         &self,
         nr_of_points: (usize, usize),
     ) -> OpmResult<FluenceData> {
         let hit_point_opt = &self.get_first_hitpoints();
         if let Some(HitPoints::Energy(_)) = hit_point_opt {
-            let (ax_1_range, ax_2_range) = self.get_bounding_box();
-            let mut fluence_matrix =
-                DMatrix::from_element(nr_of_points.1, nr_of_points.0, J_per_cm2!(0.));
-
-            for bounced_hit_map in &self.hit_map {
-                for rays_hit_map in bounced_hit_map.hit_map.values() {
-                    let fl_data = rays_hit_map.calc_fluence_with_voronoi(
-                        nr_of_points,
-                        Some(&ax_1_range),
-                        Some(&ax_2_range),
-                    )?;
-                    fluence_matrix += fl_data.interp_distribution();
+            let mut sheets = Vec::new();
+            for rays_hit_map in self
+                .hit_map
+                .iter()
+                .flat_map(|bounced| bounced.hit_map.values())
+            {
+                if let HitPoints::Energy(_) = rays_hit_map.hit_map() {
+                    sheets.extend(rays_hit_map.voronoi_sheets()?);
+                } else {
+                    warn!(
+                        "a bundle whose hits are fluences is left out of the Voronoi map of this surface"
+                    );
                 }
             }
-
-            Ok(FluenceData::new(
-                fluence_matrix,
-                ax_1_range,
-                ax_2_range,
+            Ok(draw_map(
+                &sheets,
+                nr_of_points,
+                None,
+                None,
+                self.get_bounding_box(),
                 FluenceEstimator::Voronoi,
             ))
         } else if let Some(HitPoints::Fluence(_)) = hit_point_opt {

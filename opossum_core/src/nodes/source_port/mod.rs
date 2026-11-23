@@ -1,9 +1,11 @@
 use std::fmt::Display;
 
 use crate::{
+    analyzers::propagation_strategy::PropagationStrategy,
     core_optics::{NodeAttr, OpticNodeExt, SurfacePorts, node_attr::NodePositioning},
     error::OpmResult,
     geometry::{Geometry, SurfaceGeometry},
+    light::{Rays, lightdata::ray_data_builder::RayDataBuilder},
     nodes::NodeRegistration,
     prelude::{Isometry, OpticNode},
 };
@@ -64,6 +66,30 @@ impl SourcePort {
             warn!("{self} has no light in this analysis, so it sends out none");
         }
         light
+    }
+    /// Builds the rays this source sends out into an analysis: spanning the ray tubes the
+    /// analysis needs, in its ambient medium, placed at the output of the source.
+    ///
+    /// # Arguments
+    ///
+    /// * `builder` - the light the analysis defines for this source.
+    /// * `strategy` - the analysis.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the rays cannot be built, triangulated or given the
+    /// ambient refractive index, or if the source is not placed.
+    fn sent_out_rays(
+        &self,
+        builder: &RayDataBuilder,
+        strategy: &dyn PropagationStrategy,
+    ) -> OpmResult<Rays> {
+        let mut rays = builder.build()?;
+        if strategy.needs_ray_tubes() {
+            rays.attach_mesh()?;
+        }
+        rays.set_refractive_index(&strategy.ambient_refractive_index())?;
+        Ok(rays.transformed_by_iso(&self.effective_surface_iso("output_1")?))
     }
 }
 

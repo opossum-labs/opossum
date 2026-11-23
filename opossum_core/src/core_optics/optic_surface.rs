@@ -173,19 +173,17 @@ impl OpticSurface {
         estimator: &FluenceEstimator,
     ) -> OpmResult<()> {
         if let Some(rays_hit_map) = self.get_rays_hit_map(rays.bounce_lvl(), rays.uuid()) {
-            if let Ok(peak_fluence) = rays_hit_map.get_max_fluence(estimator) {
-                if peak_fluence > self.lidt {
-                    self.add_critical_fluence(
-                        rays.uuid(),
-                        rays.ray_history_len(),
-                        peak_fluence,
-                        rays.bounce_lvl(),
-                    );
-                }
-            } else {
-                warn!(
-                    "Could not estimate maximum fluence of ray bundle! Ray bundle will be ignored during calculation"
-                );
+            match rays_hit_map.get_max_fluence(estimator) {
+                Ok(peak_fluence) if peak_fluence > self.lidt => self.add_critical_fluence(
+                    rays.uuid(),
+                    rays.ray_history_len(),
+                    peak_fluence,
+                    rays.bounce_lvl(),
+                ),
+                Ok(_) => {}
+                Err(error) => warn!(
+                    "Could not estimate maximum fluence of ray bundle! Ray bundle will be ignored during calculation: {error}"
+                ),
             }
         }
         Ok(())

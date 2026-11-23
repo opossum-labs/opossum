@@ -97,6 +97,10 @@ pub trait PropagationStrategy {
         false
     }
 
+    /// Whether the sources of this analysis span ray tubes, because a fluence map of the run
+    /// follows them (see [`RayMesh`](crate::light::RayMesh)).
+    fn needs_ray_tubes(&self) -> bool;
+
     /// Hook executed immediately after a ray bundle interacts with a surface.
     /// Allows the analyzer to perform specific tasks, like evaluating fluence, storing caching
     /// data (e.g., for `GhostFocus`) or invalidating rays below an energy threshold.

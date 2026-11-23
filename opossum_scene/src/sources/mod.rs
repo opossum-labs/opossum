@@ -100,7 +100,8 @@ pub fn traced_rays(
         .collect::<OpmResult<_>>()?;
     config.set_source_map(coarse_sources);
     let mut scenery = positioned.clone();
-    RayTracingAnalyzer::new(config).trace_positioned(&mut scenery)?;
+    // Drawn light shows no fluence map, so its sources span no ray tubes.
+    RayTracingAnalyzer::new(config).trace_positioned(&mut scenery, false)?;
     Ok(scenery.take_ray_ends())
 }
 

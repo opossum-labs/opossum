@@ -11,9 +11,14 @@ use spade::{
     DelaunayTriangulation, Triangulation,
     handles::{FaceHandle, InnerTag, VertexHandle},
 };
+use uom::si::f64::Length;
 
+use super::fluence_estimator::FluenceEstimator;
 use crate::{
+    J_per_m2,
     light::ray_mesh::RayVertex,
+    meter,
+    nodes::fluence_detector::fluence_data::FluenceData,
     utils::{to_f64, try_f64_to_usize},
 };
 
@@ -59,22 +64,25 @@ impl<'a> ArrivedSheet<'a> {
     fn arrival(&self, vertex: VertexHandle<'_, RayVertex>) -> Option<Arrival> {
         self.arrivals.get(vertex.index()).copied().flatten()
     }
+    /// Returns where the three corners of the given tube arrived, if all of them did.
+    fn positions(&self, tube: Tube<'_>) -> Option<[Point2<f64>; 3]> {
+        let [Some(a), Some(b), Some(c)] = tube
+            .vertices()
+            .map(|v| self.arrival(v).map(|arrival| arrival.position))
+        else {
+            return None;
+        };
+        Some([a, b, c])
+    }
     /// Returns whether all three corners of the given tube arrived.
     fn alive(&self, tube: Tube<'_>) -> bool {
-        tube.vertices().iter().all(|v| self.arrival(*v).is_some())
+        self.positions(tube).is_some()
     }
-    /// Returns the tubes of this sheet whose corners all arrived.
-    fn alive_tubes(&self) -> impl Iterator<Item = Tube<'a>> + '_ {
-        self.sheet.inner_faces().filter(|tube| self.alive(*tube))
-    }
-    /// Returns the area the given tube covers on the surface, signed: negative where the tube
-    /// arrived turned over, as behind a focus.
-    fn area_on_surface(&self, tube: Tube<'_>) -> f64 {
-        let [a, b, c] = tube.vertices().map(|v| self.arrival(v).map(|a| a.position));
-        match (a, b, c) {
-            (Some(a), Some(b), Some(c)) => signed_area([a, b, c]),
-            _ => 0.0,
-        }
+    /// Returns the tubes of this sheet whose corners all arrived, with where they arrived.
+    fn alive_tubes(&self) -> impl Iterator<Item = (Tube<'a>, [Point2<f64>; 3])> + '_ {
+        self.sheet
+            .inner_faces()
+            .filter_map(|tube| self.positions(tube).map(|points| (tube, points)))
     }
     /// Returns the fluence, in J/m², each corner of this sheet shows from the energy it brought.
     ///
@@ -89,8 +97,8 @@ impl<'a> ArrivedSheet<'a> {
     pub fn fluences_from_energies(&self) -> Vec<Option<f64>> {
         let mut at_source = vec![0.0; self.arrivals.len()];
         let mut on_surface = vec![0.0; self.arrivals.len()];
-        for tube in self.alive_tubes() {
-            let (source, surface) = (tube.area() / 3.0, self.area_on_surface(tube).abs() / 3.0);
+        for (tube, points) in self.alive_tubes() {
+            let (source, surface) = (tube.area() / 3.0, signed_area(points).abs() / 3.0);
             for corner in tube.vertices() {
                 if let (Some(s), Some(d)) = (
                     at_source.get_mut(corner.index()),
@@ -112,62 +120,147 @@ impl<'a> ArrivedSheet<'a> {
             })
             .collect()
     }
-    /// Draws the alive tubes of this sheet onto the given grid, each linearly between the values
-    /// of its corners, with a margin of half a tube height at each edge no alive tube continues.
+    /// Hands each triangle this sheet covers the surface with to `draw`: its alive tubes, each
+    /// with the values of its corners, and at each edge no alive tube continues a margin of half
+    /// a tube height, carrying the values of the edge across.
     ///
     /// # Arguments
     ///
     /// * `values` - the value of each corner, indexed like the vertices of the sheet.
-    /// * `grid` - the grid to add the tubes to.
-    pub fn draw(&self, values: &[Option<f64>], grid: &mut FluenceGrid) {
+    /// * `draw` - what to do with each triangle.
+    pub fn for_each_triangle(&self, values: &[Option<f64>], mut draw: impl FnMut(Triangle)) {
         let value_of = |v: VertexHandle<'_, RayVertex>| values.get(v.index()).copied().flatten();
-        for tube in self.alive_tubes() {
-            let corners = tube.vertices();
-            let (Some(points), Some(tube_values)) = (
-                corners
-                    .iter()
-                    .map(|v| self.arrival(*v).map(|a| a.position))
-                    .collect::<Option<Vec<_>>>(),
-                corners
-                    .iter()
-                    .map(|v| value_of(*v))
-                    .collect::<Option<Vec<_>>>(),
-            ) else {
+        for (tube, points) in self.alive_tubes() {
+            let [Some(fa), Some(fb), Some(fc)] = tube.vertices().map(value_of) else {
                 continue;
             };
-            let (Ok(points), Ok(tube_values)) = (
-                <[Point2<f64>; 3]>::try_from(points),
-                <[f64; 3]>::try_from(tube_values),
-            ) else {
-                continue;
-            };
-            grid.add_triangle(points, tube_values);
-            let height_area = signed_area(points).abs();
+            draw((points, [fa, fb, fc]));
+            let area = signed_area(points).abs();
             for edge in tube.adjacent_edges() {
-                let continued = edge
+                if edge
                     .rev()
                     .face()
                     .as_inner()
-                    .is_some_and(|next| self.alive(next));
-                if continued {
+                    .is_some_and(|next| self.alive(next))
+                {
                     continue;
                 }
-                let (from, to) = (edge.from(), edge.to());
-                let third = corners
-                    .iter()
-                    .find(|v| v.index() != from.index() && v.index() != to.index());
+                let third = edge.opposite_vertex().and_then(|v| self.arrival(v));
                 if let (Some(a), Some(b), Some(c), Some(fa), Some(fb)) = (
-                    self.arrival(from),
-                    self.arrival(to),
-                    third.and_then(|v| self.arrival(*v)),
-                    value_of(from),
-                    value_of(to),
+                    self.arrival(edge.from()),
+                    self.arrival(edge.to()),
+                    third,
+                    value_of(edge.from()),
+                    value_of(edge.to()),
                 ) {
-                    grid.add_margin([a.position, b.position], c.position, height_area, [fa, fb]);
+                    margin_triangles([a.position, b.position], c.position, area, [fa, fb])
+                        .into_iter()
+                        .flatten()
+                        .for_each(&mut draw);
                 }
             }
         }
     }
+    /// Returns the smallest box around everything this sheet draws with the given values, as its
+    /// lower and upper corner, `None` if it draws nothing.
+    ///
+    /// # Arguments
+    ///
+    /// * `values` - the value of each corner, indexed like the vertices of the sheet.
+    pub fn extent(&self, values: &[Option<f64>]) -> Option<(Point2<f64>, Point2<f64>)> {
+        let mut extent: Option<(Point2<f64>, Point2<f64>)> = None;
+        self.for_each_triangle(values, |(corners, _)| {
+            for corner in corners {
+                extent = Some(extent.map_or((corner, corner), |(lower, upper)| {
+                    (lower.inf(&corner), upper.sup(&corner))
+                }));
+            }
+        });
+        extent
+    }
+}
+/// A triangle to draw: its corners on the surface and the values there.
+pub type Triangle = ([Point2<f64>; 3], [f64; 3]);
+/// Returns the margin beyond an edge of a tube: a strip of half the tube height, running out from
+/// the edge on the side away from the third corner, as two triangles carrying the values of the
+/// edge across; `None` for an edge of no length.
+///
+/// # Arguments
+///
+/// * `edge` - the two corners of the edge.
+/// * `third` - the third corner of the tube.
+/// * `tube_area` - the area of the tube on the surface.
+/// * `values` - the values at the two corners of the edge.
+fn margin_triangles(
+    [a, b]: [Point2<f64>; 2],
+    third: Point2<f64>,
+    tube_area: f64,
+    [fa, fb]: [f64; 2],
+) -> Option<[Triangle; 2]> {
+    let along = b - a;
+    let length = along.norm();
+    if length <= 0.0 {
+        return None;
+    }
+    let mut outward = Vector2::new(along.y, -along.x) / length;
+    if outward.dot(&(third - a)) > 0.0 {
+        outward = -outward;
+    }
+    let across = outward * (tube_area / length);
+    let (a_out, b_out) = (a + across, b + across);
+    Some([
+        ([a, b, b_out], [fa, fb, fb]),
+        ([a, b_out, a_out], [fa, fb, fa]),
+    ])
+}
+/// Draws sheets of ray tubes, each with the values of its corners, into one fluence map.
+///
+/// # Arguments
+///
+/// * `sheets` - the sheets, each with the fluence (in J/m²) at each of its corners.
+/// * `nr_of_points` - the number of points of the map along x and y.
+/// * `x`, `y` - the ranges the map covers; if `None`, it covers all the sheets draw.
+/// * `otherwise` - the ranges the map covers if none are given and the sheets draw nothing.
+/// * `estimator` - the estimator the map stands for.
+pub fn draw_map(
+    sheets: &[(ArrivedSheet<'_>, Vec<Option<f64>>)],
+    nr_of_points: (usize, usize),
+    x: Option<&Range<Length>>,
+    y: Option<&Range<Length>>,
+    otherwise: (Range<Length>, Range<Length>),
+    estimator: FluenceEstimator,
+) -> FluenceData {
+    let drawn = sheets
+        .iter()
+        .filter_map(|(sheet, values)| sheet.extent(values))
+        .reduce(|(lower, upper), (l, u)| (lower.inf(&l), upper.sup(&u)));
+    let (x, y) = match (x, y, drawn) {
+        (Some(x), Some(y), _) => (x.clone(), y.clone()),
+        (x, y, Some((lower, upper))) => (
+            x.cloned().unwrap_or(meter!(lower.x)..meter!(upper.x)),
+            y.cloned().unwrap_or(meter!(lower.y)..meter!(upper.y)),
+        ),
+        (x, y, None) => (
+            x.cloned().unwrap_or(otherwise.0),
+            y.cloned().unwrap_or(otherwise.1),
+        ),
+    };
+    let mut grid = FluenceGrid::new(
+        &(x.start.value..x.end.value),
+        &(y.start.value..y.end.value),
+        nr_of_points,
+    );
+    for (sheet, values) in sheets {
+        sheet.for_each_triangle(values, |(corners, values)| {
+            grid.add_triangle(corners, values)
+        });
+    }
+    FluenceData::new(
+        grid.values.map(|fluence| J_per_m2!(fluence)),
+        x,
+        y,
+        estimator,
+    )
 }
 /// The signed area of a triangle: positive if its corners run counterclockwise.
 fn signed_area([a, b, c]: [Point2<f64>; 3]) -> f64 {
@@ -294,12 +387,6 @@ impl FluenceGrid {
             values: DMatrix::zeros(nr_of_points.1, nr_of_points.0),
         }
     }
-    /// Returns the values of this grid, with a row per point along y and a column per point
-    /// along x.
-    #[must_use]
-    pub fn into_values(self) -> DMatrix<f64> {
-        self.values
-    }
     /// Adds a triangle to the grid, linearly between the values at its corners.
     ///
     /// A point on an edge two triangles share is added once only: it belongs to the triangle for
@@ -336,36 +423,6 @@ impl FluenceGrid {
                 }
             }
         }
-    }
-    /// Adds the margin beyond an edge of a tube: a strip of half the tube height, running out from
-    /// the edge on the side away from the third corner, with the values of the edge carried across.
-    ///
-    /// # Arguments
-    ///
-    /// * `edge` - the two corners of the edge.
-    /// * `third` - the third corner of the tube.
-    /// * `tube_area` - the area of the tube on the surface.
-    /// * `values` - the values at the two corners of the edge.
-    fn add_margin(
-        &mut self,
-        [a, b]: [Point2<f64>; 2],
-        third: Point2<f64>,
-        tube_area: f64,
-        [fa, fb]: [f64; 2],
-    ) {
-        let along = b - a;
-        let length = along.norm();
-        if length <= 0.0 {
-            return;
-        }
-        let mut outward = Vector2::new(along.y, -along.x) / length;
-        if outward.dot(&(third - a)) > 0.0 {
-            outward = -outward;
-        }
-        let across = outward * (tube_area / length);
-        let (a_out, b_out) = (a + across, b + across);
-        self.add_triangle([a, b, b_out], [fa, fb, fb]);
-        self.add_triangle([a, b_out, a_out], [fa, fb, fa]);
     }
 }
 /// How far the given point lies left of the edge from `a` to `b`, times the length of the edge.
@@ -413,7 +470,7 @@ mod test {
         );
         grid.add_triangle([a, b, c], [1.0; 3]);
         grid.add_triangle([a, c, d], [1.0; 3]);
-        let values = grid.into_values();
+        let values = grid.values;
         assert_relative_eq!(values.iter().sum::<f64>(), 4.0);
         assert!(values.iter().all(|v| *v <= 1.0), "{values}");
         assert_relative_eq!(values[(2, 2)], 1.0);
@@ -435,7 +492,7 @@ mod test {
                 grid.add_triangle([c, d, a], [1.0; 3]);
             }
         }
-        assert!(grid.into_values().iter().all(|v| (*v - 1.0).abs() < 1e-12));
+        assert!(grid.values.iter().all(|v| (*v - 1.0).abs() < 1e-12));
     }
     /// Inside a triangle the value runs linearly between its corners, whichever way they run.
     #[test]
@@ -453,7 +510,7 @@ mod test {
                 values.swap(1, 2);
             }
             grid.add_triangle(corners, values);
-            let values = grid.into_values();
+            let values = grid.values;
             // the value is x + 2 y + 7.5: 7.5 at the origin, 8.5 one step along x
             assert_relative_eq!(values[(2, 2)], 7.5, epsilon = 1e-12);
             assert_relative_eq!(values[(2, 3)], 8.5, epsilon = 1e-12);
@@ -471,8 +528,13 @@ mod test {
             Point2::new(4.0, 0.0),
             Point2::new(0.0, 4.0),
         );
-        grid.add_margin([a, b], third, 8.0, [1.0, 3.0]);
-        let values = grid.into_values();
+        for (corners, values) in margin_triangles([a, b], third, 8.0, [1.0, 3.0])
+            .into_iter()
+            .flatten()
+        {
+            grid.add_triangle(corners, values);
+        }
+        let values = grid.values;
         // row 3 lies at y = -1 within the margin, row 1 at y = -3 beyond it
         assert_relative_eq!(values[(3, 1)], 1.5, epsilon = 1e-12);
         assert_relative_eq!(values[(3, 2)], 2.0, epsilon = 1e-12);

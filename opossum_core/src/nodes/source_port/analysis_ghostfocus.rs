@@ -1,6 +1,6 @@
 use crate::{
     analyzers::ghostfocus::AnalysisGhostFocus,
-    core_optics::{NodeAttrExt, OpticNodeExt, node_attr::HasNodeAttr},
+    core_optics::{NodeAttrExt, node_attr::HasNodeAttr},
     error::OpmResult,
     light::{LightRays, Rays},
     nodes::SourcePort,
@@ -22,16 +22,7 @@ impl AnalysisGhostFocus for SourcePort {
         } else if bounce_lvl == 0 {
             // First pass: generate initial rays from RayDataBuilder in GhostFocusConfig
             match self.light_or_warn(config.get_source(&self.node_attr().uuid())) {
-                Some(ray_data_builder) => {
-                    let mut rays = ray_data_builder.clone().build()?;
-                    if config.needs_ray_tubes() {
-                        rays.attach_mesh()?;
-                    }
-                    // Set ambient refractive index for initial ghost focus rays
-                    rays.set_refractive_index(config.ambient_material().refractive_index_type())?;
-                    let iso = self.effective_surface_iso("output_1")?;
-                    vec![rays.transformed_by_iso(&iso)]
-                }
+                Some(ray_data_builder) => vec![self.sent_out_rays(ray_data_builder, config)?],
                 None => Vec::new(),
             }
         } else {
@@ -49,7 +40,7 @@ impl AnalysisGhostFocus for SourcePort {
 mod test {
     use super::*;
     use crate::{
-        core_optics::{OpticNode, hit_map::fluence_estimator::FluenceEstimator},
+        core_optics::OpticNode,
         joule,
         light::{Ray, lightdata::ray_data_builder::RayDataBuilder},
         millimeter, nanometer,
@@ -57,26 +48,21 @@ mod test {
         prelude::RayDataSource,
     };
 
-    /// A source spans ray tubes for a ghost focus analysis whose fluence maps follow them, and
-    /// only then. Raw rays span them too.
+    /// A source spans ray tubes where its ghost focus analysis needs them, and only there. Raw
+    /// rays span them too.
     #[test]
-    fn a_source_spans_ray_tubes_where_the_fluence_maps_follow_them() -> OpmResult<()> {
+    fn a_source_spans_ray_tubes_where_its_analysis_needs_them() -> OpmResult<()> {
         let raw = RayDataBuilder::from(RayDataSource::Raw(
             round_collimated_ray_builder(millimeter!(1.0), joule!(1.0), 1)?.build()?,
         ));
-        for (estimator, spanned) in [
-            (FluenceEstimator::Voronoi, true),
-            (FluenceEstimator::HelperRays, true),
-            (FluenceEstimator::KDE, false),
-            (FluenceEstimator::Binning, false),
-        ] {
+        for spanned in [true, false] {
             for builder in [
                 round_collimated_ray_builder(millimeter!(1.0), joule!(1.0), 1)?,
                 raw.clone(),
             ] {
                 let mut node = SourcePort::default();
                 let mut config = GhostFocusConfig::default();
-                config.set_fluence_estimator(estimator);
+                config.set_ray_tubes(spanned);
                 config.map_source(node.node_attr().uuid(), builder);
                 let output = AnalysisGhostFocus::analyze(
                     &mut node,
@@ -86,12 +72,12 @@ mod test {
                     0,
                 )?;
                 let rays = output.get("output_1").expect("port mapping exists");
-                assert_eq!(rays.len(), 1, "{estimator}");
+                assert_eq!(rays.len(), 1, "{spanned}");
                 assert!(
                     rays.iter()
                         .flat_map(Rays::iter)
                         .all(|ray| ray.source().is_some() == spanned),
-                    "{estimator}"
+                    "{spanned}"
                 );
             }
         }

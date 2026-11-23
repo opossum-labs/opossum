@@ -218,14 +218,6 @@ impl RayTraceConfig {
     pub const fn collect_ray_ends(&self) -> bool {
         self.collect_ray_ends
     }
-    /// Whether the sources of this run span ray tubes (see [`RayMesh`](crate::light::RayMesh)).
-    ///
-    /// Only the analysis sets it, for a model with a node that follows them in a fluence map
-    /// (see [`OpticNode::needs_ray_tubes`]). Positioning and drawing the light never span them.
-    #[must_use]
-    pub const fn needs_ray_tubes(&self) -> bool {
-        self.ray_tubes
-    }
     /// Return a config suitable for the geometry-positioning run.
     ///
     /// Copies the source map and scalar settings from `self` but drops the `active_pump_scenario`
@@ -266,6 +258,10 @@ impl PropagationStrategy for RayTraceConfig {
     fn is_positioning_run(&self) -> bool {
         self.positioning_run
     }
+    /// Set for the run by [`RayTracingAnalyzer::trace_positioned`]; positioning never spans them.
+    fn needs_ray_tubes(&self) -> bool {
+        self.ray_tubes
+    }
     fn on_surface_interaction(
         &self,
         _surf: &mut OpticSurface,
@@ -302,14 +298,21 @@ impl RayTracingAnalyzer {
     /// # Arguments
     ///
     /// - `scenery`: the positioned scenery to trace, which keeps the light it receives
+    /// - `ray_tubes`: whether the sources span ray tubes (see [`RayMesh`](crate::light::RayMesh)):
+    ///   [`OpticNode::needs_ray_tubes`] of the scenery for an analysis, `false` where no fluence
+    ///   map is read, as when the light is drawn
     ///
     /// # Errors
     ///
     /// This function returns an error if a node cannot prepare its medium or the trace fails.
-    pub fn trace_positioned(&self, scenery: &mut NodeGroup) -> OpmResult<()> {
+    pub fn trace_positioned(&self, scenery: &mut NodeGroup, ray_tubes: bool) -> OpmResult<()> {
+        let config = RayTraceConfig {
+            ray_tubes,
+            ..self.config.clone()
+        };
         scenery.reset_data();
-        scenery.prepare_volume(&self.config)?;
-        AnalysisRayTrace::analyze(scenery, LightResult::default(), &self.config)?;
+        scenery.prepare_volume(&config)?;
+        AnalysisRayTrace::analyze(scenery, LightResult::default(), &config)?;
         Ok(())
     }
 }
@@ -333,9 +336,8 @@ impl Analyzer for RayTracingAnalyzer {
             &self.config.for_positioning(),
         )?;
         info!("Performing ray tracing analysis of scenery{scenery_name}.");
-        let mut config = self.config.clone();
-        config.ray_tubes = scenery.needs_ray_tubes();
-        Self::new(config).trace_positioned(scenery)
+        let ray_tubes = scenery.needs_ray_tubes();
+        self.trace_positioned(scenery, ray_tubes)
     }
     fn report(&self, scenery: &NodeGroup) -> OpmResult<AnalysisReport> {
         let mut report = scenery.toplevel_report(super::AnalyzerKind::RayTrace)?;
@@ -473,7 +475,7 @@ mod test {
                 .ok_or_else(|| OpossumError::Other("no light left the dummy".into()))
         };
 
-        analyzer.trace_positioned(&mut scenery)?;
+        analyzer.trace_positioned(&mut scenery, false)?;
         assert_relative_eq!(end_of(&mut scenery)?, 0.05, epsilon = 1e-9);
 
         analyzer.analyze(&mut scenery)?;

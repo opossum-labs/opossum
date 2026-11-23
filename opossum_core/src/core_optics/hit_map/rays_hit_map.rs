@@ -2,7 +2,7 @@
 //!
 //! This module also conatins the routines for genearating a fluence map using different estimator strategies.
 use crate::{
-    J_per_cm2, J_per_m2, centimeter,
+    J_per_cm2, centimeter,
     error::{OpmResult, OpossumError},
     kde::Kde,
     light::{RayMesh, RaySource, ray_mesh::RayVertex},
@@ -32,7 +32,7 @@ use uom::si::{
 
 use super::{
     fluence_estimator::FluenceEstimator,
-    ray_tubes::{Arrival, ArrivedSheet, FluenceGrid},
+    ray_tubes::{Arrival, ArrivedSheet, draw_map},
 };
 
 /// Trait to ensure that a generic physical quantity can be validated
@@ -461,8 +461,8 @@ impl RaysHitMap {
     ///
     /// # Attributes
     /// -`nr_of_points`: tuple containing the number of (columns, rows) of the matrix on which the data should be calculated
-    /// -`ax_1_range`: optional range of the axis 1 the map covers, the extent of the hits if `None`
-    /// -`ax_2_range`: optional range of the axis 2 the map covers, the extent of the hits if `None`
+    /// -`ax_1_range`: optional range of the axis 1 the map covers, all the tubes draw if `None`
+    /// -`ax_2_range`: optional range of the axis 2 the map covers, all the tubes draw if `None`
     ///
     /// # Errors
     /// This function errors if the hits do not all stand in the ray tubes of their sources.
@@ -473,25 +473,14 @@ impl RaysHitMap {
         ax_2_range: Option<&Range<Length>>,
     ) -> OpmResult<FluenceData> {
         match &self.hit_points {
-            HitPoints::Energy(hit_points) => {
-                let x_range = ax_1_range.cloned().unwrap_or(self.x_lims.0..self.x_lims.1);
-                let y_range = ax_2_range.cloned().unwrap_or(self.y_lims.0..self.y_lims.1);
-                let mut grid = FluenceGrid::new(
-                    &(x_range.start.value..x_range.end.value),
-                    &(y_range.start.value..y_range.end.value),
-                    nr_of_points,
-                );
-                let energy_of = |hit: usize| hit_points.get(hit).map(|p| p.value.get::<joule>());
-                for sheet in self.arrived_sheets(energy_of)? {
-                    sheet.draw(&sheet.fluences_from_energies(), &mut grid);
-                }
-                Ok(FluenceData::new(
-                    grid.into_values().map(|fluence| J_per_m2!(fluence)),
-                    x_range,
-                    y_range,
-                    FluenceEstimator::Voronoi,
-                ))
-            }
+            HitPoints::Energy(_) => Ok(draw_map(
+                &self.voronoi_sheets()?,
+                nr_of_points,
+                ax_1_range,
+                ax_2_range,
+                self.hit_ranges(),
+                FluenceEstimator::Voronoi,
+            )),
             HitPoints::Fluence(_) => {
                 warn!(
                     "Unexpected type of HitPoints for Voronoi estimator! Changing to helper-ray estimator!"
@@ -500,11 +489,41 @@ impl RaysHitMap {
             }
         }
     }
+    /// Returns the sheets of ray tubes the hits of this map stand in, each with the fluence, in
+    /// J/m², its corners show from the energies they brought (see
+    /// [`ArrivedSheet::fluences_from_energies`]).
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the hits are fluences rather than energies, or if they
+    /// do not all stand in ray tubes.
+    pub(super) fn voronoi_sheets(&self) -> OpmResult<Vec<(ArrivedSheet<'_>, Vec<Option<f64>>)>> {
+        let HitPoints::Energy(hit_points) = &self.hit_points else {
+            return Err(OpossumError::Analysis(
+                "a Voronoi map needs the energies of the hits".into(),
+            ));
+        };
+        let energy_of = |hit: usize| hit_points.get(hit).map(|p| p.value.get::<joule>());
+        Ok(self
+            .arrived_sheets(energy_of)?
+            .into_iter()
+            .map(|sheet| {
+                let fluences = sheet.fluences_from_energies();
+                (sheet, fluences)
+            })
+            .collect())
+    }
+    /// Returns the ranges along x and y the hits of this map cover.
+    pub(super) fn hit_ranges(&self) -> (Range<Length>, Range<Length>) {
+        (self.x_lims.0..self.x_lims.1, self.y_lims.0..self.y_lims.1)
+    }
     /// Returns the sheets of ray tubes the hits of this map stand in, each with the corners that
     /// arrived here.
     ///
     /// A corner arrived if all its rays hit here. It arrived where its first ray hit and brought
-    /// what all its rays brought together.
+    /// what all its rays brought together. A ray that hits again, as both arms of an
+    /// interferometer do where they meet, arrives in another copy of its sheet: the k-th hit of
+    /// each ray belongs to the k-th copy.
     ///
     /// # Arguments
     ///
@@ -525,31 +544,40 @@ impl RaysHitMap {
         let positions = self.hit_points.positions();
         let mut sheets = Vec::new();
         for (slot, mesh) in (0..).zip(&self.meshes) {
-            let mut hit_of_ray = vec![None; mesh.nr_of_rays()];
+            let mut copies: Vec<Vec<Option<usize>>> = Vec::new();
+            let mut hits_of_ray = vec![0_usize; mesh.nr_of_rays()];
             for (hit, (hit_slot, ray)) in self.vertices.iter().enumerate() {
-                if *hit_slot == slot
-                    && let Some(entry) = hit_of_ray.get_mut(*ray as usize)
-                {
-                    entry.get_or_insert(hit);
+                let ray = *ray as usize;
+                let Some(count) = hits_of_ray.get_mut(ray).filter(|_| *hit_slot == slot) else {
+                    continue;
+                };
+                if copies.len() <= *count {
+                    copies.push(vec![None; mesh.nr_of_rays()]);
                 }
+                if let Some(entry) = copies.get_mut(*count).and_then(|copy| copy.get_mut(ray)) {
+                    *entry = Some(hit);
+                }
+                *count += 1;
             }
-            let arrival_of = |corner: &RayVertex| {
-                let hits = corner
-                    .rays()
-                    .iter()
-                    .map(|ray| hit_of_ray.get(*ray as usize).copied().flatten())
-                    .collect::<Option<Vec<usize>>>()?;
-                let position = positions.get(*hits.first()?)?;
-                Some(Arrival {
-                    position: Point2::new(position.x.value, position.y.value),
-                    value: hits.iter().map(|hit| value_of(*hit)).sum::<Option<f64>>()?,
-                })
-            };
-            sheets.extend(
-                mesh.sheets()
-                    .iter()
-                    .map(|sheet| ArrivedSheet::new(sheet, &arrival_of)),
-            );
+            for hit_of_ray in &copies {
+                let arrival_of = |corner: &RayVertex| {
+                    let hits = corner
+                        .rays()
+                        .iter()
+                        .map(|ray| hit_of_ray.get(*ray as usize).copied().flatten())
+                        .collect::<Option<Vec<usize>>>()?;
+                    let position = positions.get(*hits.first()?)?;
+                    Some(Arrival {
+                        position: Point2::new(position.x.value, position.y.value),
+                        value: hits.iter().map(|hit| value_of(*hit)).sum::<Option<f64>>()?,
+                    })
+                };
+                sheets.extend(
+                    mesh.sheets()
+                        .iter()
+                        .map(|sheet| ArrivedSheet::new(sheet, &arrival_of)),
+                );
+            }
         }
         Ok(sheets)
     }
@@ -1340,6 +1368,46 @@ mod test_ray_tubes {
         assert!(map.vertices.is_empty());
         let error = map_of(&map, 6.0).expect_err("no tubes");
         assert!(error.to_string().contains("span no ray tubes"), "{error}");
+        Ok(())
+    }
+    /// A bundle that arrives twice, as both arms of a Mach-Zehnder interferometer do at its
+    /// output, adds up: the second arrival of each ray is a second copy of its sheet.
+    #[test]
+    fn a_bundle_arriving_twice_adds_up() -> OpmResult<()> {
+        let rays = bundle_in_tubes(10)?;
+        let mut map = hits_of(&rays, 1.0, 0.0)?;
+        for ray in rays.iter() {
+            map.add_hit_point(
+                HitPoint::Energy(EnergyHitPoint::new(ray.position(), ray.energy())?),
+                ray.source(),
+            )?;
+        }
+        let map = map_of(&map, 6.0)?;
+        assert_relative_eq!(
+            fluence_near(&map, 2.0, 1.0)?,
+            2.0 * flat_top_fluence(10),
+            max_relative = 0.03
+        );
+        assert_relative_eq!(energy_of(&map), 2.0, max_relative = 0.03);
+        Ok(())
+    }
+    /// Without a given range a map reaches as far as the light it draws: the margins beyond the
+    /// outermost rays included, so it holds all of the energy.
+    #[test]
+    fn a_map_reaches_as_far_as_its_light() -> OpmResult<()> {
+        let hits = hits_of(&bundle_in_tubes(10)?, 1.0, 0.0)?;
+        let map = hits.calc_fluence_with_voronoi((121, 121), None, None)?;
+        assert!(
+            map.x_range().end.get::<millimeter>() > 5.2,
+            "{:?}",
+            map.x_range()
+        );
+        assert!(
+            map.y_range().start.get::<millimeter>() < -5.2,
+            "{:?}",
+            map.y_range()
+        );
+        assert_relative_eq!(energy_of(&map), 1.0, max_relative = 0.03);
         Ok(())
     }
     /// One hit outside the tubes ends them for the whole map.

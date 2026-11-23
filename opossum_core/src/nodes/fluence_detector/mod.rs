@@ -103,14 +103,27 @@ impl FluenceDetector {
     /// Calculates the current [`FluenceData`] based on the hit map of the detector surface.
     ///
     /// Evaluates the hit map recorded during ray tracing using the currently configured [`FluenceEstimator`].
-    #[must_use]
-    pub fn calc_fluence_data(&self) -> Option<FluenceData> {
-        let hit_map = self
+    ///
+    /// # Returns
+    ///
+    /// The map, or `None` if no light reached the detector.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the estimator cannot compute the map, e.g. a Voronoi map
+    /// of rays that span no ray tubes.
+    pub fn calc_fluence_data(&self) -> OpmResult<Option<FluenceData>> {
+        let Some(hit_map) = self
             .get_optic_surface("input_1")
             .map(OpticSurface::hit_map)
-            .filter(|hit_map| !hit_map.is_empty())?;
-        let estimator = self.estimator()?;
-        hit_map.calc_fluence_map((95, 83), &estimator).ok()
+            .filter(|hit_map| !hit_map.is_empty())
+        else {
+            return Ok(None);
+        };
+        let Some(estimator) = self.estimator() else {
+            return Ok(None);
+        };
+        hit_map.calc_fluence_map((95, 83), &estimator).map(Some)
     }
     /// Returns the estimator this detector computes its fluence map with, Voronoi if its property
     /// holds none, or `None` if it has no such property.
@@ -160,7 +173,8 @@ impl OpticNode for FluenceDetector {
 
         let mut props = Properties::default();
 
-        if let Some(fluence_data) = self.calc_fluence_data() {
+        let map = self.calc_fluence_data();
+        if let Ok(Some(fluence_data)) = map {
             // Einheitliche kanonische Eigenschaftsnamen
             props.create(
                 "Fluence",
@@ -192,14 +206,12 @@ impl OpticNode for FluenceDetector {
                 )?;
             }
         } else {
-            warn!(
-                "Could not calculate fluence map; surface hit map is empty or calculation failed."
-            );
-            props.create(
-                "Warning",
-                "warning during analysis",
-                "Could not calculate the fluence map with the defined estimator. Please try another one.".into(),
-            )?;
+            let reason = match map {
+                Err(error) => format!("Could not calculate the fluence map: {error}"),
+                Ok(_) => "No light reached the detector, so it shows no fluence map.".into(),
+            };
+            warn!("Node '{}' ({}): {reason}", self.name(), self.node_type());
+            props.create("Warning", "warning during analysis", reason.into())?;
         }
 
         Ok(NodeReportResult::Report(NodeReport::new(
@@ -235,7 +247,7 @@ impl OpticNode for FluenceDetector {
     }
 
     fn read_observable(&self, metric_name: &str) -> Option<f64> {
-        let fluence_data = self.calc_fluence_data()?;
+        let fluence_data = self.calc_fluence_data().ok().flatten()?;
         let lower = metric_name.to_lowercase();
         match lower.as_str() {
             // SI-Basiseinheit: J / m² (1 J/cm² = 10.000 J/m²)
@@ -361,6 +373,50 @@ mod test {
         assert_eq!(metrics[1].dimension, MetricDimension::Energy);
     }
 
+    /// A detector that no light reached says so in its report, rather than blaming its estimator.
+    #[test]
+    fn the_report_says_when_no_light_arrived() -> OpmResult<()> {
+        let NodeReportResult::Report(report) =
+            FluenceDetector::default().node_report("test_uuid", AnalyzerKind::RayTrace)?
+        else {
+            panic!("Expected report");
+        };
+        let Proptype::String(warning) = report.properties().get("Warning")? else {
+            panic!("Expected a warning");
+        };
+        assert!(warning.contains("No light reached"), "{warning}");
+        Ok(())
+    }
+    /// A map that cannot be computed says why in the report: rays that span no ray tubes leave a
+    /// Voronoi detector without a map.
+    #[test]
+    fn the_report_says_why_the_map_failed() -> OpmResult<()> {
+        use crate::{
+            analyzers::RayTraceConfig, distributions::position::Hexapolar, joule, light::Rays,
+            millimeter,
+        };
+        let mut detector = FluenceDetector::default();
+        detector.set_positioning(crate::core_optics::node_attr::NodePositioning::Absolute(
+            crate::utils::geom_transformation::Isometry::identity(),
+        ))?;
+        let rays = Rays::new_uniform_collimated(
+            nanometer!(1053.0),
+            joule!(1.0),
+            &Hexapolar::new(millimeter!(5.0), 2)?,
+        )?;
+        let input = LightResult::from([("input_1".into(), LightData::Geometric(rays))]);
+        AnalysisRayTrace::analyze(&mut detector, input, &RayTraceConfig::default())?;
+        let NodeReportResult::Report(report) =
+            detector.node_report("test_uuid", AnalyzerKind::RayTrace)?
+        else {
+            panic!("Expected report");
+        };
+        let Proptype::String(warning) = report.properties().get("Warning")? else {
+            panic!("Expected a warning");
+        };
+        assert!(warning.contains("span no ray tubes"), "{warning}");
+        Ok(())
+    }
     #[test]
     fn report_contains_estimator_property() -> OpmResult<()> {
         use crate::{
@@ -468,7 +524,8 @@ mod test {
             .node(detector)?
             .as_any()
             .downcast_ref::<FluenceDetector>()
-            .and_then(FluenceDetector::calc_fluence_data)
+            .ok_or_else(|| crate::error::OpossumError::Other("no fluence detector".into()))?
+            .calc_fluence_data()?
             .ok_or_else(|| crate::error::OpossumError::Other("the detector has no map".into()))
     }
     /// The value of the given map nearest to the given point of the detector, in J/cm².
