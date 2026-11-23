@@ -360,7 +360,6 @@ impl Geometry {
         missed: MissedSurfaceStrategy,
     ) -> OpmResult<Rays> {
         let coating = Box::<dyn Coating>::try_from(self.surface_of_mut(face)?.coating())?;
-        let acts_at = |hit: &SurfaceHit| hit.on_material() || effect.acts_in_bores();
         let uuid = rays.uuid();
         let mut valid_rays_found = false;
         let mut rays_missed = false;
@@ -376,52 +375,13 @@ impl Geometry {
                 part.record_stop(ray, &mut reflected_rays);
                 continue;
             };
-            if !acts_at(&surface_hit) {
+            if !surface_hit.is_acted_on_by(effect) {
                 continue;
             }
-            let mut helper_reflections = Vec::new();
-            let (mut helper_lost, mut helper_alone) = (false, false);
-            for helper in ray.helper_rays_mut().into_iter().flat_map(Rays::iter_mut) {
-                let reflection = match self.intersect(face, helper) {
-                    Some(hit) if acts_at(&hit) => {
-                        let (reflection, _) = effect.act_at(helper, &hit, coating.as_ref())?;
-                        helper_alone |= reflection.is_none();
-                        reflection
-                    }
-                    Some(_) => {
-                        helper_lost = true;
-                        None
-                    }
-                    None => {
-                        missed.apply_to(helper);
-                        helper_lost = true;
-                        None
-                    }
-                };
-                helper_reflections.push(reflection);
-            }
-            // A helper ray that did not reach the surface tears the triangle on it already.
-            if helper_lost {
-                ray.drop_helper_rays();
-            }
+            let helpers =
+                self.interact_with_helper_rays(face, ray, effect, coating.as_ref(), missed)?;
             let (mut reflected, hit_point) = effect.act_at(ray, &surface_hit, coating.as_ref())?;
-            // A helper ray sent back alone has no part going on with the ray.
-            let torn_behind = helper_alone && reflected.is_some();
-            if torn_behind {
-                ray.drop_helper_rays();
-            }
-            helpers_split_up |= helper_lost || torn_behind;
-            // On total reflection, the ray itself is the part going back.
-            let going_back = reflected.as_mut().unwrap_or(&mut *ray);
-            let going_back_helpers = going_back
-                .helper_rays_mut()
-                .into_iter()
-                .flat_map(Rays::iter_mut);
-            for (helper, reflection) in going_back_helpers.zip(helper_reflections) {
-                if let Some(reflection) = reflection {
-                    *helper = reflection;
-                }
-            }
+            helpers_split_up |= helpers.hand_over(ray, reflected.as_mut());
             if let Some(mut reflected) = reflected {
                 part.record_split(ray, &mut reflected);
                 reflected_rays.add_ray(reflected);
@@ -450,6 +410,62 @@ impl Geometry {
         }
         part.link_bundles(rays, &mut reflected_rays);
         Ok(reflected_rays)
+    }
+    /// Let the surface of one face of this component act on the helper rays of a ray, each at its
+    /// own hit, before it acts on the ray itself (see [`Geometry::interact_with_rays`]).
+    ///
+    /// A helper ray that misses the face follows the missed surface strategy, and one in a bore
+    /// passes untouched. If one of them did not reach the surface, the triangle is torn on it
+    /// already: the ray drops its helper rays (see [`Ray::drop_helper_rays`]).
+    ///
+    /// # Arguments
+    ///
+    /// * `face` - the number of the face.
+    /// * `ray` - the ray whose helper rays meet the surface.
+    /// * `effect` - what the surface does to a ray that hits it.
+    /// * `coating` - the coating of the surface.
+    /// * `missed` - what happens to a helper ray that misses the surface.
+    ///
+    /// # Returns
+    ///
+    /// What the surface did to the helper rays, to hand them over to the parts of the ray once the
+    /// surface has acted on it (see [`HelperRaysAtSurface::hand_over`]).
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the effect fails for a helper ray.
+    fn interact_with_helper_rays(
+        &self,
+        face: FaceIndex,
+        ray: &mut Ray,
+        effect: &dyn SurfaceEffect,
+        coating: &dyn Coating,
+        missed: MissedSurfaceStrategy,
+    ) -> OpmResult<HelperRaysAtSurface> {
+        let mut helpers = HelperRaysAtSurface::default();
+        for helper in ray.helper_rays_mut().into_iter().flat_map(Rays::iter_mut) {
+            let reflection = match self.intersect(face, helper) {
+                Some(hit) if hit.is_acted_on_by(effect) => {
+                    let (reflection, _) = effect.act_at(helper, &hit, coating)?;
+                    helpers.sent_back_alone |= reflection.is_none();
+                    reflection
+                }
+                Some(_) => {
+                    helpers.lost = true;
+                    None
+                }
+                None => {
+                    missed.apply_to(helper);
+                    helpers.lost = true;
+                    None
+                }
+            };
+            helpers.reflections.push(reflection);
+        }
+        if helpers.lost {
+            ray.drop_helper_rays();
+        }
+        Ok(helpers)
     }
     /// Let the surface of one face of this component act on the bundles of an analysis (see
     /// [`Geometry::interact`](crate::geometry::Geometry)).
@@ -496,6 +512,53 @@ impl Geometry {
         }
         bundles.extend_from_slice(self.surface_of_mut(face)?.get_rays_cache(backward));
         Ok(())
+    }
+}
+
+/// What a surface did to the helper rays of a ray before acting on the ray itself (see
+/// [`Geometry::interact_with_helper_rays`]).
+#[derive(Default)]
+struct HelperRaysAtSurface {
+    /// The part each helper ray sent back, if any, in the order of the helper rays.
+    reflections: Vec<Option<Ray>>,
+    /// Whether a helper ray did not reach the surface: it missed it or passed a bore.
+    lost: bool,
+    /// Whether the surface sent a helper ray back alone, as on total reflection.
+    sent_back_alone: bool,
+}
+
+impl HelperRaysAtSurface {
+    /// Hand the helper rays over to the parts of their ray, once the surface has acted on it.
+    ///
+    /// The part going back, which on total reflection is the ray itself, takes the reflected
+    /// helper rays. If the ray was split while the surface sent a helper ray back alone, the
+    /// transmitted part has no triangle left: the ray drops its helper rays (see
+    /// [`Ray::drop_helper_rays`]).
+    ///
+    /// # Arguments
+    ///
+    /// * `ray` - the ray, after the surface acted on it.
+    /// * `reflected` - the part the surface sent back, if any.
+    ///
+    /// # Returns
+    ///
+    /// Whether the helper rays split up at the surface, so that a part lost them.
+    fn hand_over(self, ray: &mut Ray, reflected: Option<&mut Ray>) -> bool {
+        let torn_behind = self.sent_back_alone && reflected.is_some();
+        if torn_behind {
+            ray.drop_helper_rays();
+        }
+        let going_back = reflected.unwrap_or(ray);
+        let going_back_helpers = going_back
+            .helper_rays_mut()
+            .into_iter()
+            .flat_map(Rays::iter_mut);
+        for (helper, reflection) in going_back_helpers.zip(self.reflections) {
+            if let Some(reflection) = reflection {
+                *helper = reflection;
+            }
+        }
+        self.lost || torn_behind
     }
 }
 
@@ -549,6 +612,11 @@ impl SurfaceHit {
     #[must_use]
     pub const fn recorded(&self) -> bool {
         self.recorded
+    }
+    /// Return whether the given effect acts at this hit: on the material, or in a bore if the
+    /// effect acts there as well (see [`SurfaceEffect::acts_in_bores`]).
+    fn is_acted_on_by(&self, effect: &dyn SurfaceEffect) -> bool {
+        self.on_material || effect.acts_in_bores()
     }
 }
 
