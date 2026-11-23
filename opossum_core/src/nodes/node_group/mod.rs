@@ -860,6 +860,14 @@ impl OpticNode for NodeGroup {
         Ok(())
     }
 
+    /// A group follows the ray tubes if one of its nodes does.
+    fn needs_ray_tubes(&self) -> bool {
+        self.graph
+            .g
+            .node_weights()
+            .any(|node| node.needs_ray_tubes())
+    }
+
     fn reset_data(&mut self) {
         for node in self.graph.g.node_weights_mut() {
             node.reset_data();
@@ -903,6 +911,18 @@ mod test {
     };
     use num_traits::Zero;
 
+    /// A group follows the ray tubes if a node in it does, however deep the node sits.
+    #[test]
+    fn a_group_follows_the_ray_tubes_of_a_node_inside_it() -> OpmResult<()> {
+        let mut inner = NodeGroup::default();
+        inner.add_node(crate::nodes::FluenceDetector::default())?;
+        let mut outer = NodeGroup::default();
+        outer.add_node(Dummy::default())?;
+        assert!(!outer.needs_ray_tubes());
+        outer.add_node(inner)?;
+        assert!(outer.needs_ray_tubes());
+        Ok(())
+    }
     #[test]
     fn default() -> OpmResult<()> {
         let node = NodeGroup::default();

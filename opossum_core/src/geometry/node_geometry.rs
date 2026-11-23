@@ -1386,6 +1386,44 @@ mod test {
             MissedSurfaceStrategy::Stop,
         )
     }
+    /// Both parts of a ray split at a surface keep its place in the ray tubes of its source,
+    /// whichever part the node intends.
+    #[test]
+    fn both_parts_of_a_split_ray_keep_its_source() -> OpmResult<()> {
+        for part in [
+            ReflectedPart::Ghost,
+            ReflectedPart::Main,
+            ReflectedPart::Branch,
+        ] {
+            let mut rays = Rays::new_uniform_collimated(
+                nanometer!(1000.0),
+                joule!(1.0),
+                &Hexapolar::new(millimeter!(1.0), 1)?,
+            )?
+            .transformed_by_iso(&Isometry::new_along_z(millimeter!(-10.0))?);
+            rays.attach_mesh()?;
+            let sources = rays
+                .iter()
+                .map(|ray| ray.source().cloned())
+                .collect::<Vec<_>>();
+            let mut plane = coated(Geometry::plane(None), twenty_percent()?)?;
+            let reflected = plane.interact_with_rays(
+                FaceIndex::new(0),
+                &mut rays,
+                &Refraction(Some(&refr_index_vaccuum())),
+                part,
+                MissedSurfaceStrategy::Stop,
+            )?;
+            for parts in [&rays, &reflected] {
+                let kept = parts
+                    .iter()
+                    .map(|ray| ray.source().cloned())
+                    .collect::<Vec<_>>();
+                assert_eq!(kept, sources, "{part:?}");
+            }
+        }
+        Ok(())
+    }
     #[test]
     fn refraction_of_an_empty_bundle() -> OpmResult<()> {
         let mut rays = Rays::default();

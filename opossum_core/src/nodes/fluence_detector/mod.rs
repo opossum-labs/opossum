@@ -113,14 +113,19 @@ impl FluenceDetector {
         let mut consolidated_hit_map = hit_map.clone();
         consolidated_hit_map.consolidate();
 
-        let estimator = match self.node_attr.get_property("fluence estimator").ok()? {
-            Proptype::FluenceEstimator(est) => *est,
-            _ => FluenceEstimator::Voronoi,
-        };
+        let estimator = self.estimator()?;
 
         consolidated_hit_map
             .calc_fluence_map((95, 83), &estimator)
             .ok()
+    }
+    /// Returns the estimator this detector computes its fluence map with, Voronoi if its property
+    /// holds none, or `None` if it has no such property.
+    fn estimator(&self) -> Option<FluenceEstimator> {
+        match self.node_attr.get_property("fluence estimator").ok()? {
+            Proptype::FluenceEstimator(est) => Some(*est),
+            _ => Some(FluenceEstimator::Voronoi),
+        }
     }
 }
 
@@ -134,6 +139,11 @@ impl OpticNode for FluenceDetector {
 
     fn set_apodization_warning(&mut self, apodized: bool) {
         self.apodization_warning = apodized;
+    }
+
+    fn needs_ray_tubes(&self) -> bool {
+        self.estimator()
+            .is_some_and(FluenceEstimator::needs_ray_tubes)
     }
 
     fn surface_ports(&self) -> SurfacePorts {

@@ -30,6 +30,14 @@ impl Display for FluenceEstimator {
     }
 }
 impl DefaultFromName for FluenceEstimator {}
+impl FluenceEstimator {
+    /// Whether a fluence map of this estimator follows the ray tubes of the sources (see
+    /// [`RayMesh`](crate::light::RayMesh)).
+    #[must_use]
+    pub const fn needs_ray_tubes(self) -> bool {
+        matches!(self, Self::Voronoi | Self::HelperRays)
+    }
+}
 
 #[cfg(test)]
 mod test {
@@ -40,6 +48,14 @@ mod test {
         assert_eq!(format!("{}", FluenceEstimator::Voronoi), "Voronoi");
         assert_eq!(format!("{}", FluenceEstimator::KDE), "KDE");
         assert_eq!(format!("{}", FluenceEstimator::Binning), "Binning");
+    }
+    /// The maps of Voronoi and helper rays follow the ray tubes; KDE and binning do not.
+    #[test]
+    fn only_voronoi_and_helper_rays_follow_ray_tubes() {
+        assert!(FluenceEstimator::Voronoi.needs_ray_tubes());
+        assert!(FluenceEstimator::HelperRays.needs_ray_tubes());
+        assert!(!FluenceEstimator::KDE.needs_ray_tubes());
+        assert!(!FluenceEstimator::Binning.needs_ray_tubes());
     }
     #[test]
     fn from() {

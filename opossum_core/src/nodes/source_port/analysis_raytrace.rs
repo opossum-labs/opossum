@@ -31,6 +31,9 @@ impl AnalysisRayTrace for SourcePort {
             return Ok(LightResult::default());
         };
         let mut rays = ray_data_builder.clone().build()?;
+        if config.needs_ray_tubes() {
+            rays.attach_mesh()?;
+        }
 
         // Apply the ambient refractive index to all newly created rays
         rays.set_refractive_index(&config.ambient_refractive_index())?;

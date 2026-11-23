@@ -15,7 +15,7 @@ use crate::{
     },
     error::{OpmResult, OpossumError},
     joule,
-    light::{Ray, Spectrum},
+    light::{Ray, RayMesh, RaySource, Spectrum},
     meter, millimeter, nanometer,
     nodes::{
         fluence_detector::{Fluence, fluence_data::FluenceData},
@@ -44,7 +44,7 @@ use nalgebra::{
     DMatrix, DVector, Matrix2xX, MatrixXx2, MatrixXx3, Point2, Point3, Vector3, distance, vector,
 };
 use serde::{Deserialize, Serialize};
-use std::{fmt::Display, ops::Range, path::Path};
+use std::{fmt::Display, ops::Range, path::Path, sync::Arc};
 use uom::si::f64::Ratio;
 use uom::{
     num_traits::Zero,
@@ -944,6 +944,21 @@ impl Rays {
     /// Panics if the resulting ray bundle exceeds `isize::MAX` bytes.
     pub fn add_rays(&mut self, rays: &mut Self) {
         self.ray_bundle.append(&mut rays.ray_bundle);
+    }
+    /// Gives every ray of this bundle its place in the ray tubes the bundle spans (see
+    /// [`RayMesh`]).
+    ///
+    /// The bundle is triangulated as it is now, so this is called where a source sends it out.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the bundle cannot be triangulated (see [`RayMesh::new`]).
+    pub fn attach_mesh(&mut self) -> OpmResult<()> {
+        let mesh = Arc::new(RayMesh::new(self)?);
+        for (index, ray) in (0..).zip(self.ray_bundle.iter_mut()) {
+            ray.set_source(RaySource::new(Arc::clone(&mesh), index));
+        }
+        Ok(())
     }
     /// Scale the energy of all `valid` [`Ray`]s of this bundle by a given factor.
     ///

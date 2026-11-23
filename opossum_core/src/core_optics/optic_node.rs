@@ -63,6 +63,13 @@ pub trait OpticNode: VisualNode + HasNodeAttr + OpticNodeAny {
     /// Overridden by detector nodes to capture passing light data for reports.
     fn set_light_data(&mut self, _ld: Option<LightData>) {}
 
+    /// Whether this node computes a fluence map that follows the ray tubes of the sources (see
+    /// [`RayMesh`](crate::light::RayMesh)). A ray tracing analysis has its sources span them only
+    /// for a model with such a node.
+    fn needs_ray_tubes(&self) -> bool {
+        false
+    }
+
     /// Sets the 3D positioning strategy of this optical node and updates optical surfaces.
     ///
     /// # Errors

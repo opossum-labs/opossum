@@ -24,6 +24,9 @@ impl AnalysisGhostFocus for SourcePort {
             match self.light_or_warn(config.get_source(&self.node_attr().uuid())) {
                 Some(ray_data_builder) => {
                     let mut rays = ray_data_builder.clone().build()?;
+                    if config.needs_ray_tubes() {
+                        rays.attach_mesh()?;
+                    }
                     // Set ambient refractive index for initial ghost focus rays
                     rays.set_refractive_index(config.ambient_material().refractive_index_type())?;
                     let iso = self.effective_surface_iso("output_1")?;
@@ -45,7 +48,55 @@ impl AnalysisGhostFocus for SourcePort {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{core_optics::OpticNode, joule, light::Ray, millimeter, nanometer};
+    use crate::{
+        core_optics::{OpticNode, hit_map::fluence_estimator::FluenceEstimator},
+        joule,
+        light::{Ray, lightdata::ray_data_builder::RayDataBuilder},
+        millimeter, nanometer,
+        nodes::round_collimated_ray_builder,
+        prelude::RayDataSource,
+    };
+
+    /// A source spans ray tubes for a ghost focus analysis whose fluence maps follow them, and
+    /// only then. Raw rays span them too.
+    #[test]
+    fn a_source_spans_ray_tubes_where_the_fluence_maps_follow_them() -> OpmResult<()> {
+        let raw = RayDataBuilder::from(RayDataSource::Raw(
+            round_collimated_ray_builder(millimeter!(1.0), joule!(1.0), 1)?.build()?,
+        ));
+        for (estimator, spanned) in [
+            (FluenceEstimator::Voronoi, true),
+            (FluenceEstimator::HelperRays, true),
+            (FluenceEstimator::KDE, false),
+            (FluenceEstimator::Binning, false),
+        ] {
+            for builder in [
+                round_collimated_ray_builder(millimeter!(1.0), joule!(1.0), 1)?,
+                raw.clone(),
+            ] {
+                let mut node = SourcePort::default();
+                let mut config = GhostFocusConfig::default();
+                config.set_fluence_estimator(estimator);
+                config.map_source(node.node_attr().uuid(), builder);
+                let output = AnalysisGhostFocus::analyze(
+                    &mut node,
+                    LightRays::default(),
+                    &config,
+                    &mut Vec::new(),
+                    0,
+                )?;
+                let rays = output.get("output_1").expect("port mapping exists");
+                assert_eq!(rays.len(), 1, "{estimator}");
+                assert!(
+                    rays.iter()
+                        .flat_map(Rays::iter)
+                        .all(|ray| ray.source().is_some() == spanned),
+                    "{estimator}"
+                );
+            }
+        }
+        Ok(())
+    }
 
     /// A source the analysis defines no light for sends out none, and says so.
     #[test]

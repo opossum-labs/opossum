@@ -163,8 +163,8 @@ mod test {
         },
         millimeter, nanometer,
         nodes::{
-            Dummy, EnergyMeter, Lens, NodeGroup, ReflectiveGrating, SourcePort, ThinMirror,
-            round_collimated_ray_builder,
+            Dummy, EnergyMeter, FluenceDetector, Lens, NodeGroup, ReflectiveGrating, SourcePort,
+            ThinMirror, round_collimated_ray_builder,
         },
     };
     use uom::{num_traits::Zero, si::length::millimeter};
@@ -266,6 +266,29 @@ mod test {
             })
             .fold(Length::zero(), Length::max);
         assert_relative_eq!(outermost.get::<millimeter>(), 5.0, epsilon = 1e-9);
+        Ok(())
+    }
+
+    /// Drawing the light spans no ray tubes, even for a model whose fluence detector follows them
+    /// in its analysis: the 3D view draws no fluence map.
+    #[test]
+    fn the_drawn_light_spans_no_ray_tubes() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let detector = scenery.add_node(FluenceDetector::default())?;
+        scenery.connect_nodes(source, "output_1", detector, "input_1", millimeter!(50.0))?;
+        let mut document = OpmDocument::new(scenery);
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(1.0), joule!(1.0), 2)?,
+        );
+        document.add_analyzer(AnalyzerType::RayTrace(config));
+
+        let ends = light_of(&document, 100, SpectrumDrawing::Dealt)?;
+
+        assert_eq!(ends.len(), 1, "the light leaves the open detector");
+        assert!(ends[0].iter().all(|ray| ray.source().is_none()));
         Ok(())
     }
 

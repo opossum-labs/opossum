@@ -1563,15 +1563,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "delaunator"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e1ee323c1275374f7e612d3724d12707079fb6a2117349fe144def656f5a880"
-dependencies = [
- "robust",
-]
-
-[[package]]
 name = "deranged"
 version = "0.5.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5856,7 +5847,6 @@ dependencies = [
  "assert_matches",
  "chrono",
  "criterion",
- "delaunator",
  "earcutr",
  "fastrand",
  "image 0.25.10",

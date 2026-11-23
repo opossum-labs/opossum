@@ -43,6 +43,12 @@ impl GhostFocusConfig {
     pub const fn set_fluence_estimator(&mut self, fluence_estimator: FluenceEstimator) {
         self.fluence_estimator = fluence_estimator;
     }
+    /// Whether the sources of this analysis span ray tubes: its fluence maps, on every surface,
+    /// follow them where its estimator does (see [`FluenceEstimator::needs_ray_tubes`]).
+    #[must_use]
+    pub const fn needs_ray_tubes(&self) -> bool {
+        self.fluence_estimator.needs_ray_tubes()
+    }
     /// Maps an ray data builder to the given source UUID
     ///
     /// If a builder was already mapped this function returns `true`. A new mapping

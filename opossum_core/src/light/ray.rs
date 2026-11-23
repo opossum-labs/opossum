@@ -18,7 +18,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     geometry::SurfaceHit,
     joule,
-    light::{FluenceRays, Rays},
+    light::{FluenceRays, RaySource, Rays},
     meter,
     nodes::{FilterType, fluence_detector::Fluence},
     percent,
@@ -59,6 +59,10 @@ pub struct Ray {
     ///
     /// This is currently a workaround until a new separate helper ray struct is available.
     is_helper: bool,
+    /// Where this ray stands in the ray tubes of its source, if a fluence map follows them (see
+    /// [`RayMesh`](crate::light::RayMesh)). Not written to file.
+    #[serde(skip)]
+    source: Option<RaySource>,
 }
 impl Ray {
     /// Creates a new [`Ray`] with the specified position, direction, wavelength, and energy.
@@ -100,7 +104,18 @@ impl Ray {
             valid: true,
             helper_rays: None,
             is_helper: false,
+            source: None,
         })
+    }
+
+    /// Returns where this [`Ray`] stands in the ray tubes of its source, if its source spans them.
+    #[must_use]
+    pub const fn source(&self) -> Option<&RaySource> {
+        self.source.as_ref()
+    }
+    /// Sets where this [`Ray`] stands in the ray tubes of its source.
+    pub(crate) fn set_source(&mut self, source: RaySource) {
+        self.source = Some(source);
     }
 
     /// Marks the ray as a helper ray if `is_helper` is true.

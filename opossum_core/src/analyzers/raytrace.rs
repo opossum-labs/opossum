@@ -57,6 +57,10 @@ pub struct RayTraceConfig {
     /// throwaway copies; not saved to disk.
     #[serde(skip)]
     collect_ray_ends: bool,
+    /// Whether the sources span ray tubes, because a node of the model follows them in a fluence
+    /// map. Set by the analysis for its run; not saved to file.
+    #[serde(skip)]
+    ray_tubes: bool,
 }
 impl Default for RayTraceConfig {
     /// Create a default config for a ray tracing analysis with the following parameters:
@@ -76,6 +80,7 @@ impl Default for RayTraceConfig {
             active_pump_scenario: ActiveScenario::default(),
             positioning_run: false,
             collect_ray_ends: false,
+            ray_tubes: false,
         }
     }
 }
@@ -213,6 +218,14 @@ impl RayTraceConfig {
     pub const fn collect_ray_ends(&self) -> bool {
         self.collect_ray_ends
     }
+    /// Whether the sources of this run span ray tubes (see [`RayMesh`](crate::light::RayMesh)).
+    ///
+    /// Only the analysis sets it, for a model with a node that follows them in a fluence map
+    /// (see [`OpticNode::needs_ray_tubes`]). Positioning and drawing the light never span them.
+    #[must_use]
+    pub const fn needs_ray_tubes(&self) -> bool {
+        self.ray_tubes
+    }
     /// Return a config suitable for the geometry-positioning run.
     ///
     /// Copies the source map and scalar settings from `self` but drops the `active_pump_scenario`
@@ -235,6 +248,7 @@ impl RayTraceConfig {
             ambient_material: self.ambient_material().clone(),
             positioning_run: true,
             collect_ray_ends: false,
+            ray_tubes: false,
         }
     }
 }
@@ -319,7 +333,9 @@ impl Analyzer for RayTracingAnalyzer {
             &self.config.for_positioning(),
         )?;
         info!("Performing ray tracing analysis of scenery{scenery_name}.");
-        self.trace_positioned(scenery)
+        let mut config = self.config.clone();
+        config.ray_tubes = scenery.needs_ray_tubes();
+        Self::new(config).trace_positioned(scenery)
     }
     fn report(&self, scenery: &NodeGroup) -> OpmResult<AnalysisReport> {
         let mut report = scenery.toplevel_report(super::AnalyzerKind::RayTrace)?;
@@ -388,9 +404,13 @@ pub trait AnalysisRayTrace: OpticNode {
 mod test {
     use super::*;
     use crate::{
-        joule, millimeter,
+        core_optics::hit_map::fluence_estimator::FluenceEstimator,
+        joule,
+        light::LightData,
+        millimeter,
         nodes::{
-            Dummy, ParaxialSurface, SourcePort, round_collimated_ray_builder,
+            Dummy, EnergyMeter, FluenceDetector, ParaxialSurface, SourcePort,
+            round_collimated_ray_builder,
             test_helper::helper::{
                 rays_recorded_by_meter, scenery_with_a_mirror_changed_behind_its_back,
                 scenery_with_a_mirror_shrunk_behind_its_back,
@@ -493,6 +513,70 @@ mod test {
         );
         assert!(positioning.is_positioning_run());
     }
+    /// The positioning run sends out the optical axis alone, so its sources span no ray tubes even
+    /// where the run it precedes has them span some.
+    #[test]
+    fn the_positioning_run_spans_no_ray_tubes() {
+        let mut rt_conf = RayTraceConfig::default();
+        rt_conf.ray_tubes = true;
+        assert!(rt_conf.needs_ray_tubes());
+        assert!(!rt_conf.for_positioning().needs_ray_tubes());
+    }
+    /// Whether the rays a meter behind a source receives stand in ray tubes, with a fluence
+    /// detector of the given estimator between them, or with none.
+    fn rays_reach_the_meter_in_tubes(estimator: Option<FluenceEstimator>) -> OpmResult<bool> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let meter = scenery.add_node(EnergyMeter::default())?;
+        if let Some(estimator) = estimator {
+            let mut detector = FluenceDetector::default();
+            detector
+                .node_attr_mut()
+                .set_property("fluence estimator", estimator.into())?;
+            let detector = scenery.add_node(detector)?;
+            scenery.connect_nodes(source, "output_1", detector, "input_1", millimeter!(10.0))?;
+            scenery.connect_nodes(detector, "output_1", meter, "input_1", millimeter!(10.0))?;
+        } else {
+            scenery.connect_nodes(source, "output_1", meter, "input_1", millimeter!(10.0))?;
+        }
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(1.0), joule!(1.0), 1)?,
+        );
+        RayTracingAnalyzer::new(config).analyze(&mut scenery)?;
+        let node = scenery.node(meter)?;
+        let Some(LightData::Geometric(rays)) = node
+            .as_any()
+            .downcast_ref::<EnergyMeter>()
+            .and_then(EnergyMeter::light_data)
+        else {
+            return Err(OpossumError::Other("the meter received no rays".into()));
+        };
+        let in_tubes = rays.iter().all(|ray| ray.source().is_some());
+        assert_eq!(
+            in_tubes,
+            rays.iter().any(|ray| ray.source().is_some()),
+            "all rays or none stand in tubes"
+        );
+        Ok(in_tubes)
+    }
+    /// The sources of a ray trace span ray tubes for a model with a fluence map that follows them,
+    /// and only then.
+    #[test]
+    fn sources_span_ray_tubes_only_for_a_fluence_map_that_follows_them() -> OpmResult<()> {
+        assert!(rays_reach_the_meter_in_tubes(Some(
+            FluenceEstimator::Voronoi
+        ))?);
+        assert!(rays_reach_the_meter_in_tubes(Some(
+            FluenceEstimator::HelperRays
+        ))?);
+        assert!(!rays_reach_the_meter_in_tubes(Some(
+            FluenceEstimator::Binning
+        ))?);
+        assert!(!rays_reach_the_meter_in_tubes(None)?);
+        Ok(())
+    }
     #[test]
     fn config_set_min_energy() {
         let mut rt_conf = RayTraceConfig::default();
@@ -523,7 +607,7 @@ mod test {
     fn config_debug() {
         assert_eq!(
             format!("{:?}", RayTraceConfig::default()),
-            "RayTraceConfig { min_energy_per_ray: 1e-12 m^2 kg^1 s^-2, max_number_of_bounces: 1000, max_number_of_refractions: 1000, missed_surface_strategy: Stop, source_map: {}, ambient_material: Material { header: AssetHeader { schema_version: 1, id: 00000000-0000-0000-0000-000000000000, version: 0, name: \"vacuum\", manufacturer: None, description: None }, optical: OpticalProperties { refractive_index: Const(RefrIndexConst { refractive_index: Validated { value: 1.0, validator: AndValidator { v1: AllFinite, v2: StaticInRange { _marker: PhantomData<(f64, opossum_core::refractive_index::refr_index_const::RefIndBounds)> }, _marker: PhantomData<f64> } } }), absorption: None }, thermal: None, mechanical: None }, active_pump_scenario: ActiveScenario(None), positioning_run: false, collect_ray_ends: false }"
+            "RayTraceConfig { min_energy_per_ray: 1e-12 m^2 kg^1 s^-2, max_number_of_bounces: 1000, max_number_of_refractions: 1000, missed_surface_strategy: Stop, source_map: {}, ambient_material: Material { header: AssetHeader { schema_version: 1, id: 00000000-0000-0000-0000-000000000000, version: 0, name: \"vacuum\", manufacturer: None, description: None }, optical: OpticalProperties { refractive_index: Const(RefrIndexConst { refractive_index: Validated { value: 1.0, validator: AndValidator { v1: AllFinite, v2: StaticInRange { _marker: PhantomData<(f64, opossum_core::refractive_index::refr_index_const::RefIndBounds)> }, _marker: PhantomData<f64> } } }), absorption: None }, thermal: None, mechanical: None }, active_pump_scenario: ActiveScenario(None), positioning_run: false, collect_ray_ends: false, ray_tubes: false }"
         );
     }
     #[test]
