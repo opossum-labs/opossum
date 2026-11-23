@@ -168,6 +168,16 @@ impl Ray {
             .as_mut()
             .map(super::rays::FluenceRays::rays_mut)
     }
+    /// Drops the helper rays of this [`Ray`], once their triangle has torn apart.
+    ///
+    /// The fluence of the ray is no longer defined then (see [`Ray::helper_ray_fluence`]). The ray
+    /// stays one that carried helper rays, so a surface records no hit for it any more, neither a
+    /// fluence nor an energy (see [`Ray::refract_at`]).
+    pub fn drop_helper_rays(&mut self) {
+        if let Some(helpers) = self.helper_rays_mut() {
+            *helpers = Rays::default();
+        }
+    }
 
     /// Create a new collimated ray.
     ///

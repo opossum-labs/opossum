@@ -391,11 +391,10 @@ mod test {
         }
         Ok(())
     }
-    /// Where a missed ray passes the lens unchanged, so does a missed helper ray: a ray 0.5 µm inside
-    /// the 12.5 mm optic shape has one helper ray 0.38 µm beyond it, which is not deflected, while
-    /// the ray and its other two helper rays are focused.
+    /// A ray 0.5 µm inside the 12.5 mm optic shape has one helper ray 0.38 µm beyond it: the ray is
+    /// focused, but its triangle tore at the edge, so it drops its helper rays.
     #[test]
-    fn a_helper_ray_beyond_the_optic_shape_passes_undeflected() -> OpmResult<()> {
+    fn a_ray_on_the_edge_of_the_optic_shape_drops_its_helper_rays() -> OpmResult<()> {
         let mut node = placed_at_origin::<ParaxialSurface>()?;
         node.set_property(OPTIC_SHAPE, default_optic_shape().into())?;
         node.update_surfaces()?;
@@ -412,21 +411,16 @@ mod test {
             &mut Vec::new(),
             0,
         )?;
-        let mut ray = output
+        let ray = output
             .get("output_1")
             .and_then(|bundles| bundles.first())
             .and_then(|bundle| bundle.iter().next())
-            .cloned()
             .expect("the ray at the output port");
         assert_ne!(ray.direction(), Vector3::z(), "the ray inside is focused");
-        let helpers = ray
-            .helper_rays_mut()
-            .expect("the ray keeps its helper rays");
-        let deflected: Vec<bool> = helpers
-            .iter()
-            .map(|helper| helper.direction() != Vector3::z())
-            .collect();
-        assert_eq!(deflected, [false, true, true]);
+        assert!(
+            ray.helper_ray_fluence().is_none(),
+            "the ray drops its helper rays"
+        );
         Ok(())
     }
     #[test]
