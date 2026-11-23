@@ -16,7 +16,7 @@ fn criterion_kde(c: &mut Criterion) {
     let mut hit_map = RaysHitMap::default();
     for p in points {
         let hit_point = HitPoint::Energy(EnergyHitPoint::new(p, weight).unwrap());
-        hit_map.add_hit_point(hit_point).unwrap();
+        hit_map.add_hit_point(hit_point, None).unwrap();
     }
     c.bench_function("kde", |b| {
         b.iter(|| hit_map.calc_fluence_map((30, 30), &FluenceEstimator::KDE, None, None));
@@ -30,7 +30,7 @@ fn criterion_binning(c: &mut Criterion) {
     let mut hit_map = RaysHitMap::default();
     for p in points {
         let hit_point = HitPoint::Energy(EnergyHitPoint::new(p, weight).unwrap());
-        hit_map.add_hit_point(hit_point).unwrap();
+        hit_map.add_hit_point(hit_point, None).unwrap();
     }
     c.bench_function("binning", |b| {
         b.iter(|| hit_map.calc_fluence_map((30, 30), &FluenceEstimator::Binning, None, None));

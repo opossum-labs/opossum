@@ -2,27 +2,27 @@
 //!
 //! This module also conatins the routines for genearating a fluence map using different estimator strategies.
 use crate::{
-    J_per_cm2, centimeter,
+    J_per_cm2, J_per_m2, centimeter,
     error::{OpmResult, OpossumError},
     kde::Kde,
+    light::{RayMesh, RaySource, ray_mesh::RayVertex},
     meter, micrometer,
     nodes::fluence_detector::{Fluence, fluence_data::FluenceData},
     utils::{
         AxLims,
         griddata::{
-            VoronoiedData, calc_closed_poly_area, create_voronoi_cells,
-            grid_interpolate_3d_triangulated_scatter_data, linspace,
+            VoronoiedData, create_voronoi_cells, grid_interpolate_3d_triangulated_scatter_data,
+            linspace,
         },
         to_f64, try_f64_to_usize,
     },
 };
-use approx::relative_eq;
 use itertools::Itertools;
 use libm::modf;
 use log::warn;
 use nalgebra::{DMatrix, DVector, MatrixXx2, Point2, Point3};
 use serde::{Deserialize, Serialize};
-use std::ops::Range;
+use std::{ops::Range, sync::Arc};
 use uom::si::{
     energy::joule,
     f64::{Area, Energy, Length},
@@ -30,7 +30,10 @@ use uom::si::{
     radiant_exposure::joule_per_square_centimeter,
 };
 
-use super::fluence_estimator::FluenceEstimator;
+use super::{
+    fluence_estimator::FluenceEstimator,
+    ray_tubes::{Arrival, ArrivedSheet, FluenceGrid},
+};
 
 /// Trait to ensure that a generic physical quantity can be validated
 /// for being finite and positive.
@@ -163,6 +166,14 @@ pub struct RaysHitMap {
     hit_points: HitPoints,
     x_lims: (Length, Length),
     y_lims: (Length, Length),
+    /// The ray tubes the hits stand in, in the order they first hit (see [`RayMesh`]). Not
+    /// written to file.
+    #[serde(skip)]
+    meshes: Vec<Arc<RayMesh>>,
+    /// For each hit, the slot of its mesh in `meshes` and the index of its ray there. It holds an
+    /// entry for every hit or none at all, the latter as soon as a hit stands in no ray tubes.
+    #[serde(skip)]
+    vertices: Vec<(u32, u32)>,
 }
 impl RaysHitMap {
     /// Creates a new [`RaysHitMap`]
@@ -206,13 +217,59 @@ impl RaysHitMap {
             hit_points,
             x_lims: (xmin, xmax),
             y_lims: (ymin, ymax),
+            meshes: Vec::new(),
+            vertices: Vec::new(),
         }
     }
     /// Add intersection point (with energy/fluence) to this [`RaysHitMap`].
     ///
+    /// # Arguments
+    ///
+    /// * `hit_point` - where the ray hit and what it brought.
+    /// * `source` - where the ray stands in the ray tubes of its source, if it does. The map
+    ///   follows the tubes only while every one of its hits stands in them.
+    ///
     /// # Errors
-    /// This function errors if the hitpoint that should be added does not match the already stored hit point type.
-    pub fn add_hit_point(&mut self, hit_point: HitPoint) -> OpmResult<()> {
+    /// This function errors if the hitpoint that should be added does not match the already stored
+    /// hit point type, or if the hits stand in more than `u32::MAX` meshes.
+    pub fn add_hit_point(
+        &mut self,
+        hit_point: HitPoint,
+        source: Option<&RaySource>,
+    ) -> OpmResult<()> {
+        let in_tubes = self.follows_tubes() || self.hit_points.is_empty();
+        self.push_hit_point(hit_point)?;
+        match source {
+            Some(source) if in_tubes => {
+                let slot = match self
+                    .meshes
+                    .iter()
+                    .position(|mesh| Arc::ptr_eq(mesh, source.mesh()))
+                {
+                    Some(slot) => slot,
+                    None => {
+                        self.meshes.push(Arc::clone(source.mesh()));
+                        self.meshes.len() - 1
+                    }
+                };
+                let slot = u32::try_from(slot).map_err(|_| {
+                    OpossumError::Analysis("too many ray meshes on one surface".into())
+                })?;
+                self.vertices.push((slot, source.index()));
+            }
+            _ => {
+                self.meshes.clear();
+                self.vertices.clear();
+            }
+        }
+        Ok(())
+    }
+    /// Returns whether every hit of this map stands in the ray tubes of its source.
+    fn follows_tubes(&self) -> bool {
+        !self.hit_points.is_empty() && self.vertices.len() == self.hit_points.len()
+    }
+    /// Add an intersection point to the hit points of this map and widen its limits.
+    fn push_hit_point(&mut self, hit_point: HitPoint) -> OpmResult<()> {
         match hit_point {
             HitPoint::Energy(energy_hit_point) => {
                 if let HitPoints::Energy(v) = &mut self.hit_points {
@@ -274,9 +331,13 @@ impl RaysHitMap {
 
     /// Merge this [`RaysHitMap`] with another [`RaysHitMap`].
     ///
+    /// The merged map follows no ray tubes: it is made for the estimators that need none.
+    ///
     /// # Errors
     /// This function errors if the hit-point type of the respective [`RaysHitMap`] does not match
     pub fn merge(&mut self, other_map: &Self) -> OpmResult<()> {
+        self.meshes.clear();
+        self.vertices.clear();
         match &mut self.hit_points {
             HitPoints::Energy(mut_vec) => match &other_map.hit_points {
                 HitPoints::Energy(vec) => {
@@ -304,110 +365,6 @@ impl RaysHitMap {
             },
         }
         Ok(())
-    }
-    /// Consolidates the hitmap by merging hit points that share the same spatial position.
-    ///
-    /// This method sorts the internal vector and merges adjacent points using `relative_eq!`.
-    /// It must be called after all rays have been traced and before any fluence estimation
-    /// (e.g., Voronoi) is performed to ensure valid geometries and optimal performance.
-    pub fn consolidate(&mut self) {
-        match &mut self.hit_points {
-            HitPoints::Energy(vec) => {
-                if vec.len() < 2 {
-                    return;
-                }
-                // Sort points primarily by X, then Y, then Z to group close points together
-                vec.sort_by(|a, b| {
-                    a.position
-                        .x
-                        .value
-                        .partial_cmp(&b.position.x.value)
-                        .unwrap_or(core::cmp::Ordering::Equal)
-                        .then(
-                            a.position
-                                .y
-                                .value
-                                .partial_cmp(&b.position.y.value)
-                                .unwrap_or(core::cmp::Ordering::Equal),
-                        )
-                        .then(
-                            a.position
-                                .z
-                                .value
-                                .partial_cmp(&b.position.z.value)
-                                .unwrap_or(core::cmp::Ordering::Equal),
-                        )
-                });
-
-                let mut deduped = Vec::with_capacity(vec.len());
-                let mut current = vec[0].clone();
-
-                for hp in vec.iter().skip(1) {
-                    // Check if the current point is close enough to be merged
-                    if relative_eq!(current.position.x.value, hp.position.x.value)
-                        && relative_eq!(current.position.y.value, hp.position.y.value)
-                        && relative_eq!(current.position.z.value, hp.position.z.value)
-                    {
-                        // Merge energies
-                        current.value += hp.value;
-                    } else {
-                        // Keep point and move to the next
-                        deduped.push(current);
-                        current = hp.clone();
-                    }
-                }
-                deduped.push(current);
-                *vec = deduped;
-            }
-            HitPoints::Fluence(vec) => {
-                if vec.len() < 2 {
-                    return;
-                }
-
-                // Sort points primarily by X, then Y, then Z to group close points together
-                vec.sort_by(|a, b| {
-                    a.position
-                        .x
-                        .value
-                        .partial_cmp(&b.position.x.value)
-                        .unwrap_or(core::cmp::Ordering::Equal)
-                        .then(
-                            a.position
-                                .y
-                                .value
-                                .partial_cmp(&b.position.y.value)
-                                .unwrap_or(core::cmp::Ordering::Equal),
-                        )
-                        .then(
-                            a.position
-                                .z
-                                .value
-                                .partial_cmp(&b.position.z.value)
-                                .unwrap_or(core::cmp::Ordering::Equal),
-                        )
-                });
-
-                let mut deduped = Vec::with_capacity(vec.len());
-                let mut current = vec[0].clone();
-
-                for hp in vec.iter().skip(1) {
-                    // Check if the current point is close enough to be merged
-                    if relative_eq!(current.position.x.value, hp.position.x.value)
-                        && relative_eq!(current.position.y.value, hp.position.y.value)
-                        && relative_eq!(current.position.z.value, hp.position.z.value)
-                    {
-                        // Merge fluences
-                        current.value += hp.value;
-                    } else {
-                        // Keep point and move to the next
-                        deduped.push(current);
-                        current = hp.clone();
-                    }
-                }
-                deduped.push(current);
-                *vec = deduped;
-            }
-        }
     }
     /// Calculate a fluence map ([`FluenceData`]) of this [`RaysHitMap`] using the "Binning" method
     ///
@@ -496,133 +453,105 @@ impl RaysHitMap {
 
     /// Calculate a fluence map ([`FluenceData`]) of this [`RaysHitMap`] using the "Voronoi" method
     ///
+    /// The map follows the ray tubes the hits stand in (see [`RayMesh`]). Each corner shows the
+    /// energy of its rays spread over the Voronoi cell it stands for at its source, magnified as
+    /// much as its tubes grew on the way; between the corners the map runs linearly. Only the
+    /// tubes whose corners all arrived here are drawn, so the map stays dark where light was cut
+    /// away, as in the hole behind a bored mirror.
+    ///
     /// # Attributes
     /// -`nr_of_points`: tuple containing the number of (columns, rows) of the matrix on which the data should be calculated
-    /// -`ax_1_range_opt`: optional range of the axis 1 on which the data should be interpolated
-    /// -`ax_2_range_opt`: optional range of the axis 2 on which the data should be interpolated    
+    /// -`ax_1_range`: optional range of the axis 1 the map covers, the extent of the hits if `None`
+    /// -`ax_2_range`: optional range of the axis 2 the map covers, the extent of the hits if `None`
     ///
     /// # Errors
-    /// This function errors if
-    /// - there are too few data points for voronoi cell creation (less than three)
-    /// - the voronoi diagram generation fails
-    /// - no axes ranges are provided and the data is not sufficient to provide valid ranges
-    /// - the interpolation step fails
-    #[allow(clippy::too_many_lines)]
+    /// This function errors if the hits do not all stand in the ray tubes of their sources.
     pub fn calc_fluence_with_voronoi(
         &self,
         nr_of_points: (usize, usize),
         ax_1_range: Option<&Range<Length>>,
         ax_2_range: Option<&Range<Length>>,
     ) -> OpmResult<FluenceData> {
-        if let HitPoints::Energy(hit_points) = &self.hit_points {
-            let mut pos_in_cm = MatrixXx2::<f64>::zeros(hit_points.len());
-            let mut energy = DVector::<f64>::zeros(hit_points.len());
-            if hit_points.len() < 3 {
-                return Err(OpossumError::Other(
-                    "Too few points (<3) on hitmap to calculate fluence!".into(),
-                ));
-            }
-            for (row, p) in hit_points.iter().enumerate() {
-                pos_in_cm[(row, 0)] = p.position.x.get::<length::centimeter>();
-                pos_in_cm[(row, 1)] = p.position.y.get::<length::centimeter>();
-                energy[row] = p.value.get::<joule>();
-            }
-            let (voronoi, _beam_area) = create_voronoi_cells(&pos_in_cm).map_err(|e| {
-                OpossumError::Other(format!(
-                    "Voronoi diagram for fluence estimation could not be created!: {e}"
+        match &self.hit_points {
+            HitPoints::Energy(hit_points) => {
+                let x_range = ax_1_range.cloned().unwrap_or(self.x_lims.0..self.x_lims.1);
+                let y_range = ax_2_range.cloned().unwrap_or(self.y_lims.0..self.y_lims.1);
+                let mut grid = FluenceGrid::new(
+                    &(x_range.start.value..x_range.end.value),
+                    &(y_range.start.value..y_range.end.value),
+                    nr_of_points,
+                );
+                let energy_of = |hit: usize| hit_points.get(hit).map(|p| p.value.get::<joule>());
+                for sheet in self.arrived_sheets(energy_of)? {
+                    sheet.draw(&sheet.fluences_from_energies(), &mut grid);
+                }
+                Ok(FluenceData::new(
+                    grid.into_values().map(|fluence| J_per_m2!(fluence)),
+                    x_range,
+                    y_range,
+                    FluenceEstimator::Voronoi,
                 ))
-            })?;
-            //get the voronoi cells
-            let v_cells = voronoi.cells();
-            let mut fluence_scatter = DVector::from_element(voronoi.sites.len(), f64::NAN);
-            let mut max_fluence_val = 0.;
-            for (i, v_cell) in v_cells.iter().enumerate() {
-                let v_neighbours = v_cell
-                    .points()
-                    .iter()
-                    .map(|p| Point2::new(p.x, p.y))
-                    .collect::<Vec<Point2<f64>>>();
-                if v_neighbours.len() >= 3 {
-                    let poly_area = calc_closed_poly_area(&v_neighbours)?;
-                    fluence_scatter[i] = energy[i] / poly_area;
-                    if max_fluence_val < fluence_scatter[i] || i == 0 {
-                        max_fluence_val = fluence_scatter[i];
-                    }
-                } else {
-                    warn!(
-                        "polygon could not be created. number of neighbors {}",
-                        v_neighbours.len()
-                    );
+            }
+            HitPoints::Fluence(_) => {
+                warn!(
+                    "Unexpected type of HitPoints for Voronoi estimator! Changing to helper-ray estimator!"
+                );
+                self.calc_fluence_with_helper_rays(nr_of_points, ax_1_range, ax_2_range)
+            }
+        }
+    }
+    /// Returns the sheets of ray tubes the hits of this map stand in, each with the corners that
+    /// arrived here.
+    ///
+    /// A corner arrived if all its rays hit here. It arrived where its first ray hit and brought
+    /// what all its rays brought together.
+    ///
+    /// # Arguments
+    ///
+    /// * `value_of` - what the hit with the given index brought: its energy or its fluence.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the hits do not all stand in ray tubes.
+    fn arrived_sheets(
+        &self,
+        value_of: impl Fn(usize) -> Option<f64>,
+    ) -> OpmResult<Vec<ArrivedSheet<'_>>> {
+        if !self.follows_tubes() {
+            return Err(OpossumError::Analysis(
+                "the rays on this surface span no ray tubes, which a Voronoi or helper ray map follows".into(),
+            ));
+        }
+        let positions = self.hit_points.positions();
+        let mut sheets = Vec::new();
+        for (slot, mesh) in (0..).zip(&self.meshes) {
+            let mut hit_of_ray = vec![None; mesh.nr_of_rays()];
+            for (hit, (hit_slot, ray)) in self.vertices.iter().enumerate() {
+                if *hit_slot == slot
+                    && let Some(entry) = hit_of_ray.get_mut(*ray as usize)
+                {
+                    entry.get_or_insert(hit);
                 }
             }
-            let (co_ax1, ax_1_range) = if let Some(range) = ax_1_range {
-                (
-                    linspace(
-                        range.start.get::<length::centimeter>(),
-                        range.end.get::<length::centimeter>(),
-                        nr_of_points.0,
-                    )?,
-                    range.clone(),
-                )
-            } else {
-                let proj_ax1_lim =
-                    AxLims::finite_from_dvector(&pos_in_cm.column(0)).ok_or_else(|| {
-                        OpossumError::Other(
-                            "cannot construct voronoi cells with non-finite axes bounds!".into(),
-                        )
-                    })?;
-                (
-                    linspace(proj_ax1_lim.min, proj_ax1_lim.max, nr_of_points.0)?,
-                    centimeter!(proj_ax1_lim.min)..centimeter!(proj_ax1_lim.max),
-                )
+            let arrival_of = |corner: &RayVertex| {
+                let hits = corner
+                    .rays()
+                    .iter()
+                    .map(|ray| hit_of_ray.get(*ray as usize).copied().flatten())
+                    .collect::<Option<Vec<usize>>>()?;
+                let position = positions.get(*hits.first()?)?;
+                Some(Arrival {
+                    position: Point2::new(position.x.value, position.y.value),
+                    value: hits.iter().map(|hit| value_of(*hit)).sum::<Option<f64>>()?,
+                })
             };
-            let (co_ax2, ax_2_range) = if let Some(range) = ax_2_range {
-                (
-                    linspace(
-                        range.start.get::<length::centimeter>(),
-                        range.end.get::<length::centimeter>(),
-                        nr_of_points.1,
-                    )?,
-                    range.clone(),
-                )
-            } else {
-                let proj_ax2_lim =
-                    AxLims::finite_from_dvector(&pos_in_cm.column(1)).ok_or_else(|| {
-                        OpossumError::Other(
-                            "cannot construct voronoi cells with non-finite axes bounds!".into(),
-                        )
-                    })?;
-                (
-                    linspace(proj_ax2_lim.min, proj_ax2_lim.max, nr_of_points.1)?,
-                    centimeter!(proj_ax2_lim.min)..centimeter!(proj_ax2_lim.max),
-                )
-            };
-            let voronied_data =
-                VoronoiedData::combine_data_with_voronoi_diagram(voronoi, fluence_scatter)?;
-
-            //currently only interpolation. voronoid data for plotting must still be implemented
-            let (interp_fluence, _) =
-                grid_interpolate_3d_triangulated_scatter_data(&voronied_data, &co_ax1, &co_ax2)?;
-            let fluence_matrix = DMatrix::from_iterator(
-                co_ax2.len(),
-                co_ax1.len(),
-                interp_fluence.iter().map(|val| J_per_cm2!(*val)),
+            sheets.extend(
+                mesh.sheets()
+                    .iter()
+                    .map(|sheet| ArrivedSheet::new(sheet, &arrival_of)),
             );
-            let fluence_data = FluenceData::new(
-                fluence_matrix,
-                ax_1_range,
-                ax_2_range,
-                FluenceEstimator::Voronoi,
-            );
-            Ok(fluence_data)
-        } else if let HitPoints::Fluence(_) = &self.hit_points {
-            warn!(
-                "Unexpected type of HitPoints for Voronoi estimator! Changing to helper-ray estimator!"
-            );
-            self.calc_fluence_with_helper_rays(nr_of_points, ax_1_range, ax_2_range)
-        } else {
-            Err(OpossumError::Analysis("wrong hit point type for to calculate fluence with voronoi cells! Must be an Energyhitpoint!".into()))
         }
+        Ok(sheets)
     }
     fn calc_2d_bounding_box(&self, margin: Length) -> OpmResult<(Length, Length, Length, Length)> {
         if let HitPoints::Energy(hit_points) = &self.hit_points {
@@ -1104,7 +1033,7 @@ mod test_rays_hit_map {
         let mut rhm = RaysHitMap::default();
         assert_eq!(rhm.hit_points.len(), 0);
         let hp = EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?;
-        rhm.add_hit_point(HitPoint::Energy(hp))?;
+        rhm.add_hit_point(HitPoint::Energy(hp), None)?;
         assert_eq!(rhm.hit_points.len(), 1);
         Ok(())
     }
@@ -1113,7 +1042,7 @@ mod test_rays_hit_map {
         let mut rhm = RaysHitMap::default();
         assert_eq!(rhm.hit_points.len(), 0);
         let hp = FluenceHitPoint::new(meter!(0.0, 0.0, 0.0), J_per_cm2!(1.0))?;
-        assert!(rhm.add_hit_point(HitPoint::Fluence(hp)).is_err());
+        assert!(rhm.add_hit_point(HitPoint::Fluence(hp), None).is_err());
         Ok(())
     }
     #[test]
@@ -1151,50 +1080,50 @@ mod test_rays_hit_map {
         let mut rhm = RaysHitMap::default();
         assert!(rhm.calc_2d_bounding_box(meter!(0.0)).is_err());
 
-        rhm.add_hit_point(HitPoint::Energy(EnergyHitPoint::new(
-            meter!(0.0, 0.0, 0.0),
-            joule!(1.0),
-        )?))?;
+        rhm.add_hit_point(
+            HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?),
+            None,
+        )?;
         assert_eq!(
             rhm.calc_2d_bounding_box(meter!(0.0))?,
             (meter!(0.0), meter!(0.0), meter!(0.0), meter!(0.0))
         );
-        rhm.add_hit_point(HitPoint::Energy(EnergyHitPoint::new(
-            meter!(-1.0, 1.0, 0.0),
-            joule!(1.0),
-        )?))?;
+        rhm.add_hit_point(
+            HitPoint::Energy(EnergyHitPoint::new(meter!(-1.0, 1.0, 0.0), joule!(1.0))?),
+            None,
+        )?;
         assert_eq!(
             rhm.calc_2d_bounding_box(meter!(0.0))?,
             (meter!(-1.0), meter!(0.0), meter!(1.0), meter!(0.0))
         );
-        rhm.add_hit_point(HitPoint::Energy(EnergyHitPoint::new(
-            meter!(-1.0, 1.0, 0.0),
-            joule!(1.0),
-        )?))?;
+        rhm.add_hit_point(
+            HitPoint::Energy(EnergyHitPoint::new(meter!(-1.0, 1.0, 0.0), joule!(1.0))?),
+            None,
+        )?;
         assert_eq!(
             rhm.calc_2d_bounding_box(meter!(0.5))?,
             (meter!(-1.5), meter!(0.5), meter!(1.5), meter!(-0.5))
         );
-        rhm.add_hit_point(HitPoint::Energy(EnergyHitPoint::new(
-            meter!(-1.0, -1.0, 0.0),
-            joule!(1.0),
-        )?))?;
+        rhm.add_hit_point(
+            HitPoint::Energy(EnergyHitPoint::new(meter!(-1.0, -1.0, 0.0), joule!(1.0))?),
+            None,
+        )?;
         assert_eq!(
             rhm.calc_2d_bounding_box(meter!(0.5))?,
             (meter!(-1.5), meter!(0.5), meter!(1.5), meter!(-1.5))
         );
-        rhm.add_hit_point(HitPoint::Energy(EnergyHitPoint::new(
-            meter!(-1.0, 2.0, 0.0),
-            joule!(1.0),
-        )?))?;
+        rhm.add_hit_point(
+            HitPoint::Energy(EnergyHitPoint::new(meter!(-1.0, 2.0, 0.0), joule!(1.0))?),
+            None,
+        )?;
         assert_eq!(
             rhm.calc_2d_bounding_box(meter!(0.5))?,
             (meter!(-1.5), meter!(0.5), meter!(2.5), meter!(-1.5))
         );
-        rhm.add_hit_point(HitPoint::Energy(EnergyHitPoint::new(
-            meter!(1.0, 2.0, 0.0),
-            joule!(1.0),
-        )?))?;
+        rhm.add_hit_point(
+            HitPoint::Energy(EnergyHitPoint::new(meter!(1.0, 2.0, 0.0), joule!(1.0))?),
+            None,
+        )?;
         assert_eq!(
             rhm.calc_2d_bounding_box(meter!(0.5))?,
             (meter!(-1.5), meter!(1.5), meter!(2.5), meter!(-1.5))
@@ -1283,7 +1212,7 @@ mod test_rays_hit_map {
             HitPoints::Energy(_) => (),
             HitPoints::Fluence(fluence_hit_points) => {
                 for hp in fluence_hit_points {
-                    let _ = scene.add_to_hitmap(HitPoint::Fluence(hp), 0, id);
+                    let _ = scene.add_to_hitmap(HitPoint::Fluence(hp), 0, id, None);
                 }
             }
         }
@@ -1312,73 +1241,228 @@ mod test_rays_hit_map {
         let mat = res.interp_distribution();
         assert!(mat[(0, 0)] < mat[(2, 2)]);
     }
-    #[test]
-    fn consolidate_energy() -> OpmResult<()> {
-        // Create hitmap with 3 identical points and 1 distinct point
-        let mut rhm = RaysHitMap::new(HitPoints::Energy(vec![
-            EnergyHitPoint::new(meter!(1.0, 2.0, 3.0), joule!(1.0))?,
-            EnergyHitPoint::new(meter!(1.0, 2.0, 3.0), joule!(2.0))?,
-            EnergyHitPoint::new(meter!(1.0, 2.0, 3.0), joule!(3.0))?,
-            EnergyHitPoint::new(meter!(5.0, 5.0, 5.0), joule!(4.0))?,
-        ]));
+}
+#[cfg(test)]
+mod test_ray_tubes {
+    use super::RaysHitMap;
+    use crate::{
+        core_optics::hit_map::rays_hit_map::{EnergyHitPoint, HitPoint},
+        distributions::position::{Grid, Hexapolar},
+        error::OpmResult,
+        joule,
+        light::Rays,
+        millimeter, nanometer,
+        nodes::fluence_detector::fluence_data::FluenceData,
+        utils::to_f64,
+    };
+    use approx::assert_relative_eq;
+    use nalgebra::{Point2, Point3};
+    use uom::si::{
+        energy::joule, f64::Length, length::millimeter,
+        radiant_exposure::joule_per_square_centimeter,
+    };
 
-        assert_eq!(rhm.hit_points.len(), 4, "Initial length should be 4");
-
-        rhm.consolidate();
-
-        assert_eq!(rhm.hit_points.len(), 2, "Consolidated length should be 2");
-
-        if let HitPoints::Energy(vec) = &rhm.hit_points {
-            assert_eq!(vec[0].position.x, meter!(1.0));
-            assert_eq!(
-                vec[0].value,
-                joule!(6.0),
-                "Energies 1+2+3 should be summed up to 6 J"
-            );
-
-            assert_eq!(vec[1].position.x, meter!(5.0));
-            assert_eq!(
-                vec[1].value,
-                joule!(4.0),
-                "Distinct point should retain its energy"
-            );
-        } else {
-            panic!("Expected Energy hit points!");
+    /// A collimated bundle of 1 J along z, from `rings` hexapolar rings 10 mm across, spanning its
+    /// ray tubes.
+    fn bundle_in_tubes(rings: u8) -> OpmResult<Rays> {
+        let mut rays = Rays::new_uniform_collimated(
+            nanometer!(1000.0),
+            joule!(1.0),
+            &Hexapolar::new(millimeter!(5.0), rings)?,
+        )?;
+        rays.attach_mesh()?;
+        Ok(rays)
+    }
+    /// The fluence in J/cm² of a flat-top beam of 1 J in `rings` hexapolar rings 10 mm across: the
+    /// outermost ring stands for the light up to half a ring spacing beyond the beam radius.
+    fn flat_top_fluence(rings: u8) -> f64 {
+        let reach = 0.5 * (1.0 + 0.5 / f64::from(rings));
+        1.0 / (std::f64::consts::PI * reach * reach)
+    }
+    /// The hits of the given rays where they start, `scale` times as far from the axis, leaving
+    /// out the rays that start closer to the axis than `hole` (in mm).
+    fn hits_of(rays: &Rays, scale: f64, hole: f64) -> OpmResult<RaysHitMap> {
+        let mut map = RaysHitMap::default();
+        for ray in rays.iter() {
+            let p = ray.position();
+            if p.x.get::<millimeter>().hypot(p.y.get::<millimeter>()) < hole {
+                continue;
+            }
+            let at = Point3::new(p.x * scale, p.y * scale, p.z);
+            map.add_hit_point(
+                HitPoint::Energy(EnergyHitPoint::new(at, ray.energy())?),
+                ray.source(),
+            )?;
         }
-        Ok(())
+        Ok(map)
+    }
+    /// The Voronoi map of the given hits on a grid of 121 × 121 points `half_width` mm around the
+    /// axis.
+    fn map_of(hits: &RaysHitMap, half_width: f64) -> OpmResult<FluenceData> {
+        let range = millimeter!(-half_width)..millimeter!(half_width);
+        hits.calc_fluence_with_voronoi((121, 121), Some(&range), Some(&range))
+    }
+    /// The value of the given map at the point nearest to `(x, y)` in mm, in J/cm².
+    fn fluence_near(map: &FluenceData, x: f64, y: f64) -> OpmResult<f64> {
+        let (xs, ys, values) = map.get_fluence_distribution()?;
+        let nearest = |axis: &nalgebra::DVector<Length>, at: f64| {
+            axis.iter()
+                .map(|c| (c.get::<millimeter>() - at).abs())
+                .enumerate()
+                .min_by(|(_, a), (_, b)| a.total_cmp(b))
+                .map_or(0, |(index, _)| index)
+        };
+        Ok(values[(nearest(&ys, y), nearest(&xs, x))].get::<joule_per_square_centimeter>())
+    }
+    /// The energy of the given map, in J: its values summed over the area of its grid cells.
+    fn energy_of(map: &FluenceData) -> f64 {
+        let (columns, rows) = (to_f64(map.len_x() - 1), to_f64(map.len_y() - 1));
+        let width = (map.x_range().end - map.x_range().start).value / columns;
+        let height = (map.y_range().end - map.y_range().start).value / rows;
+        map.interp_distribution()
+            .iter()
+            .map(|f| f.value)
+            .sum::<f64>()
+            * width
+            * height
     }
 
+    /// Hits of rays that span no tubes leave the map without them, and a Voronoi map says it
+    /// needs them.
     #[test]
-    fn consolidate_fluence_with_float_inaccuracy() -> OpmResult<()> {
-        // Create hitmap with 2 nearly identical points (float inaccuracy) and 1 distinct point
-        let mut rhm = RaysHitMap::new(HitPoints::Fluence(vec![
-            FluenceHitPoint::new(meter!(1.0, 2.0, 3.0), J_per_cm2!(1.5))?,
-            FluenceHitPoint::new(meter!(1.0, 2.0, 3.0 + f64::EPSILON), J_per_cm2!(2.5))?,
-            FluenceHitPoint::new(meter!(5.0, 5.0, 5.0), J_per_cm2!(4.0))?,
-        ]));
-
-        assert_eq!(rhm.hit_points.len(), 3, "Initial length should be 3");
-
-        rhm.consolidate();
-
-        assert_eq!(rhm.hit_points.len(), 2, "Consolidated length should be 2");
-
-        if let HitPoints::Fluence(vec) = &rhm.hit_points {
-            assert_eq!(vec[0].position.x, meter!(1.0));
-            assert_eq!(
-                vec[0].value,
-                J_per_cm2!(4.0),
-                "Fluences 1.5+2.5 should be summed up to 4.0 J/cm²"
+    fn hits_without_tubes_leave_no_voronoi_map() -> OpmResult<()> {
+        let rays = Rays::new_uniform_collimated(
+            nanometer!(1000.0),
+            joule!(1.0),
+            &Hexapolar::new(millimeter!(5.0), 3)?,
+        )?;
+        let map = hits_of(&rays, 1.0, 0.0)?;
+        assert!(map.vertices.is_empty());
+        let error = map_of(&map, 6.0).expect_err("no tubes");
+        assert!(error.to_string().contains("span no ray tubes"), "{error}");
+        Ok(())
+    }
+    /// One hit outside the tubes ends them for the whole map.
+    #[test]
+    fn a_hit_outside_the_tubes_ends_them() -> OpmResult<()> {
+        let mut map = hits_of(&bundle_in_tubes(3)?, 1.0, 0.0)?;
+        assert!(map.follows_tubes());
+        map.add_hit_point(
+            HitPoint::Energy(EnergyHitPoint::new(
+                millimeter!(0.0, 0.0, 0.0),
+                joule!(1.0),
+            )?),
+            None,
+        )?;
+        assert!(!map.follows_tubes());
+        assert!(map.vertices.is_empty() && map.meshes.is_empty());
+        Ok(())
+    }
+    /// Hits of two meshes keep them apart, and a merged map follows no tubes.
+    #[test]
+    fn hits_of_two_meshes_keep_them_apart() -> OpmResult<()> {
+        let (first, second) = (bundle_in_tubes(1)?, bundle_in_tubes(1)?);
+        let mut map = hits_of(&first, 1.0, 0.0)?;
+        for ray in second.iter() {
+            map.add_hit_point(
+                HitPoint::Energy(EnergyHitPoint::new(ray.position(), ray.energy())?),
+                ray.source(),
+            )?;
+        }
+        assert_eq!(map.meshes.len(), 2);
+        let slots = map
+            .vertices
+            .iter()
+            .map(|(slot, _)| *slot)
+            .collect::<Vec<_>>();
+        assert_eq!(slots, [[0; 7], [1; 7]].concat());
+        map.merge(&hits_of(&first, 1.0, 0.0)?)?;
+        assert!(!map.follows_tubes());
+        Ok(())
+    }
+    /// A flat-top beam shows its fluence all over the map, which holds all of its energy. Its
+    /// center is left out: the ray there stands for less area than the others, and the same
+    /// energy shows there as a fifth more fluence.
+    #[test]
+    fn a_flat_top_shows_its_fluence_and_holds_its_energy() -> OpmResult<()> {
+        let map = map_of(&hits_of(&bundle_in_tubes(10)?, 1.0, 0.0)?, 6.0)?;
+        for (x, y) in [(2.0, 1.0), (-3.0, 2.5), (1.0, -4.0), (0.0, 3.5)] {
+            assert_relative_eq!(
+                fluence_near(&map, x, y)?,
+                flat_top_fluence(10),
+                max_relative = 0.03
             );
-
-            assert_eq!(vec[1].position.x, meter!(5.0));
-            assert_eq!(
-                vec[1].value,
-                J_per_cm2!(4.0),
-                "Distinct point should retain its fluence"
+        }
+        assert_relative_eq!(energy_of(&map), 1.0, max_relative = 0.03);
+        Ok(())
+    }
+    /// A beam twice as wide spreads its energy over four times the area.
+    #[test]
+    fn a_magnified_beam_shows_a_quarter_of_the_fluence() -> OpmResult<()> {
+        let map = map_of(&hits_of(&bundle_in_tubes(10)?, 2.0, 0.0)?, 12.0)?;
+        for (x, y) in [(4.0, 2.0), (-6.0, 5.0), (0.0, -7.0)] {
+            assert_relative_eq!(
+                fluence_near(&map, x, y)?,
+                flat_top_fluence(10) / 4.0,
+                max_relative = 0.03
             );
-        } else {
-            panic!("Expected Fluence hit points!");
+        }
+        assert_relative_eq!(energy_of(&map), 1.0, max_relative = 0.03);
+        Ok(())
+    }
+    /// Light cut away in the middle leaves the map dark there, and right next to the cut it shows
+    /// the full fluence: the map holds the energy that is left.
+    #[test]
+    fn a_hole_in_the_beam_stays_dark() -> OpmResult<()> {
+        let rays = bundle_in_tubes(10)?;
+        let hits = hits_of(&rays, 1.0, 2.2)?;
+        let map = map_of(&hits, 6.0)?;
+        assert!(fluence_near(&map, 0.0, 0.0)?.abs() < 1e-12);
+        assert!(fluence_near(&map, 1.5, 0.0)?.abs() < 1e-12);
+        assert_relative_eq!(
+            fluence_near(&map, 2.75, 0.0)?,
+            flat_top_fluence(10),
+            max_relative = 0.05
+        );
+        assert_relative_eq!(
+            fluence_near(&map, 0.0, -2.75)?,
+            flat_top_fluence(10),
+            max_relative = 0.05
+        );
+        let left = rays
+            .iter()
+            .filter(|ray| {
+                let p = ray.position();
+                p.x.get::<millimeter>().hypot(p.y.get::<millimeter>()) >= 2.2
+            })
+            .map(|ray| ray.energy().get::<joule>())
+            .sum::<f64>();
+        assert_relative_eq!(energy_of(&map), left, max_relative = 0.03);
+        Ok(())
+    }
+    /// The rays of a square grid show an even fluence, however the squares between them are cut
+    /// into tubes.
+    #[test]
+    fn a_square_grid_shows_an_even_fluence() -> OpmResult<()> {
+        let mut rays = Rays::new_uniform_collimated(
+            nanometer!(1000.0),
+            joule!(1.0),
+            &Grid::new(millimeter!(10.0, 10.0), Point2::new(11, 11))?,
+        )?;
+        rays.attach_mesh()?;
+        let hits = hits_of(&rays, 1.0, 0.0)?;
+        // the points of the map lie on the rays, 1 mm apart
+        let range = millimeter!(-5.0)..millimeter!(5.0);
+        let map = hits.calc_fluence_with_voronoi((11, 11), Some(&range), Some(&range))?;
+        let per_ray = 1.0 / 121.0 / 0.01;
+        for row in 1..10 {
+            for column in 1..10 {
+                assert_relative_eq!(
+                    map.interp_distribution()[(row, column)].get::<joule_per_square_centimeter>(),
+                    per_ray,
+                    max_relative = 1e-9
+                );
+            }
         }
         Ok(())
     }

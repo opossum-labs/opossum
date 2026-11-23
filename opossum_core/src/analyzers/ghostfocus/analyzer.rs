@@ -227,13 +227,45 @@ mod test_ghost_focus_analyzer {
         light::LightResult,
         millimeter,
         nodes::{
-            Lens, NodeGroup, SourcePort, SpotDiagram, ThinMirror, round_collimated_ray_builder,
+            FluenceDetector, Lens, NodeGroup, SourcePort, SpotDiagram, ThinMirror,
+            round_collimated_ray_builder,
             test_helper::helper::{
                 rays_recorded_by_meter, scenery_with_a_mirror_shrunk_behind_its_back,
             },
         },
         percent,
     };
+    /// A ghost focus analysis with the Voronoi estimator estimates the peak fluence of every
+    /// bundle on every surface, the ghosts a lens sends back included.
+    #[test]
+    fn a_ghost_focus_analysis_estimates_every_peak_fluence() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let mut lens = Lens::default();
+        for face in [Extruded::FRONT, Extruded::REAR] {
+            lens.set_coating(face, &CoatingConstantR::new(percent!(20.0))?.into())?;
+        }
+        let lens = scenery.add_node(lens)?;
+        let detector = scenery.add_node(FluenceDetector::default())?;
+        scenery.connect_nodes(source, "output_1", lens, "input_1", millimeter!(50.0))?;
+        scenery.connect_nodes(lens, "output_1", detector, "input_1", millimeter!(50.0))?;
+        let mut config = GhostFocusConfig::default();
+        config.set_max_bounces(1);
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(5.0), joule!(1.0), 5)?,
+        );
+        testing_logger::setup();
+        GhostFocusAnalyzer::new(config).analyze(&mut scenery)?;
+        testing_logger::validate(|logs| {
+            let failed = logs
+                .iter()
+                .filter(|log| log.body.contains("Could not estimate maximum fluence"))
+                .count();
+            assert_eq!(failed, 0, "{failed} peak fluences could not be estimated");
+        });
+        Ok(())
+    }
     /// A ghost focus analysis rebuilds the surfaces first, so it sees a component as its
     /// properties state it now, also when a property was changed without the node rebuilding its
     /// surfaces: a mirror shrunk to a radius of 5 mm reflects only the ray on its axis.

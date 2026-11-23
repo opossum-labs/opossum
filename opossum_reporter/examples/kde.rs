@@ -17,7 +17,7 @@ fn main() -> OpmResult<()> {
     let mut hit_map = RaysHitMap::default();
     for p in points {
         let hit_point = HitPoint::Energy(EnergyHitPoint::new(p, weight)?);
-        hit_map.add_hit_point(hit_point)?;
+        hit_map.add_hit_point(hit_point, None)?;
     }
     let fluence_data = hit_map.calc_fluence_map((100, 100), &FluenceEstimator::KDE, None, None)?;
     fluence_data.to_plot(

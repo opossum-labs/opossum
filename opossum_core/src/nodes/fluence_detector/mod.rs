@@ -100,7 +100,7 @@ impl FluenceDetector {
         fld
     }
 
-    /// Calculates the current [`FluenceData`] based on the consolidated hit map of the detector surface.
+    /// Calculates the current [`FluenceData`] based on the hit map of the detector surface.
     ///
     /// Evaluates the hit map recorded during ray tracing using the currently configured [`FluenceEstimator`].
     #[must_use]
@@ -109,15 +109,8 @@ impl FluenceDetector {
             .get_optic_surface("input_1")
             .map(OpticSurface::hit_map)
             .filter(|hit_map| !hit_map.is_empty())?;
-
-        let mut consolidated_hit_map = hit_map.clone();
-        consolidated_hit_map.consolidate();
-
         let estimator = self.estimator()?;
-
-        consolidated_hit_map
-            .calc_fluence_map((95, 83), &estimator)
-            .ok()
+        hit_map.calc_fluence_map((95, 83), &estimator).ok()
     }
     /// Returns the estimator this detector computes its fluence map with, Voronoi if its property
     /// holds none, or `None` if it has no such property.
@@ -265,6 +258,7 @@ mod test {
         analyzers::energy::EnergyConfig,
         core_optics::PortType,
         light::{LightData, LightResult, spectrum_helper::create_he_ne_spec},
+        nanometer,
         nodes::test_helper::helper::*,
     };
     #[test]
@@ -379,12 +373,13 @@ mod test {
             crate::utils::geom_transformation::Isometry::identity(),
         ))?;
 
-        // Hexapolar grid with at least 2 rings (19 rays) ensures Voronoi cells can be formed
-        let rays = Rays::new_uniform_collimated(
+        // 19 rays in 2 hexapolar rings, spanning the ray tubes a source spans for a Voronoi map
+        let mut rays = Rays::new_uniform_collimated(
             nanometer!(1053.0),
             joule!(1.0),
             &Hexapolar::new(millimeter!(5.0), 2)?,
         )?;
+        rays.attach_mesh()?;
 
         let mut input = LightResult::default();
         input.insert("input_1".into(), LightData::Geometric(rays));
@@ -419,6 +414,128 @@ mod test {
         );
 
         assert_eq!(detector.read_observable("unknown"), None);
+        Ok(())
+    }
+
+    /// The radius of the flat-top beam of [`map_of_a_flat_top`], in mm.
+    const BEAM_RADIUS: f64 = 10.0;
+    /// The number of hexapolar rings of the beam of [`map_of_a_flat_top`].
+    const BEAM_RINGS: u8 = 15;
+    /// The fluence of the flat-top beam of [`map_of_a_flat_top`], in J/cm²: 1 J spread evenly
+    /// over its rays, each ring standing for an annulus one ring spacing wide, so the outermost
+    /// ring reaches half a spacing beyond the beam radius.
+    fn flat_top_fluence() -> f64 {
+        let reach = (BEAM_RADIUS + BEAM_RADIUS / f64::from(BEAM_RINGS) / 2.0) / 10.0;
+        1.0 / (std::f64::consts::PI * reach * reach)
+    }
+    /// Traces a collimated flat-top beam of 1 J at the given laser lines into a fluence detector
+    /// 150 mm from the source and returns the Voronoi map the detector computes. With
+    /// `bored_mirror`, a default bored mirror 100 mm from the source reflects the beam back onto
+    /// the detector 50 mm in front of it.
+    fn map_of_a_flat_top(
+        lines: Vec<(uom::si::f64::Length, f64)>,
+        bored_mirror: bool,
+    ) -> OpmResult<FluenceData> {
+        use crate::{
+            analyzers::{Analyzer, RayTraceConfig, raytrace::RayTracingAnalyzer},
+            distributions::{energy::UniformDist, position::Hexapolar, spectral::LaserLines},
+            joule, millimeter,
+            nodes::{BoredMirror, NodeGroup, SourcePort},
+            prelude::{CollimatedSrc, RayDataSource},
+        };
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let detector = scenery.add_node(FluenceDetector::default())?;
+        if bored_mirror {
+            let mirror = scenery.add_node(BoredMirror::default())?;
+            scenery.connect_nodes(source, "output_1", mirror, "mirror", millimeter!(100.0))?;
+            scenery.connect_nodes(mirror, "in_front", detector, "input_1", millimeter!(50.0))?;
+        } else {
+            scenery.connect_nodes(source, "output_1", detector, "input_1", millimeter!(150.0))?;
+        }
+        let mut config = RayTraceConfig::default();
+        config.map_source(
+            source,
+            RayDataSource::Collimated(CollimatedSrc::new(
+                Hexapolar::new(millimeter!(BEAM_RADIUS), BEAM_RINGS)?.into(),
+                UniformDist::new(joule!(1.0))?.into(),
+                LaserLines::new(lines)?.into(),
+            ))
+            .into(),
+        );
+        RayTracingAnalyzer::new(config).analyze(&mut scenery)?;
+        scenery
+            .node(detector)?
+            .as_any()
+            .downcast_ref::<FluenceDetector>()
+            .and_then(FluenceDetector::calc_fluence_data)
+            .ok_or_else(|| crate::error::OpossumError::Other("the detector has no map".into()))
+    }
+    /// The value of the given map nearest to the given point of the detector, in J/cm².
+    fn fluence_near(map: &FluenceData, x_mm: f64, y_mm: f64) -> OpmResult<f64> {
+        use uom::si::{length::millimeter, radiant_exposure::joule_per_square_centimeter};
+        let (x, y, values) = map.get_fluence_distribution()?;
+        let nearest = |axis: &nalgebra::DVector<uom::si::f64::Length>, at: f64| {
+            axis.iter()
+                .enumerate()
+                .min_by(|(_, a), (_, b)| {
+                    (a.get::<millimeter>() - at)
+                        .abs()
+                        .total_cmp(&(b.get::<millimeter>() - at).abs())
+                })
+                .map_or(0, |(index, _)| index)
+        };
+        Ok(values[(nearest(&y, y_mm), nearest(&x, x_mm))].get::<joule_per_square_centimeter>())
+    }
+    /// A flat-top beam shows its fluence across the map.
+    #[test]
+    fn a_flat_top_beam_shows_its_fluence() -> OpmResult<()> {
+        let map = map_of_a_flat_top(vec![(nanometer!(1000.0), 1.0)], false)?;
+        for (x, y) in [(5.0, 0.0), (0.0, 5.0), (-3.0, -3.0), (7.0, -4.0)] {
+            approx::assert_relative_eq!(
+                fluence_near(&map, x, y)?,
+                flat_top_fluence(),
+                max_relative = 0.03
+            );
+        }
+        Ok(())
+    }
+    /// Two laser lines that run the same way draw the same map as one line of the same energy.
+    #[test]
+    fn two_lines_running_alike_draw_the_map_of_one() -> OpmResult<()> {
+        let one = map_of_a_flat_top(vec![(nanometer!(1000.0), 1.0)], false)?;
+        let two = map_of_a_flat_top(
+            vec![(nanometer!(1000.0), 1.0), (nanometer!(1064.0), 1.0)],
+            false,
+        )?;
+        assert_eq!(one.shape(), two.shape());
+        for (a, b) in one
+            .interp_distribution()
+            .iter()
+            .zip(two.interp_distribution())
+        {
+            if !(a.is_nan() && b.is_nan()) {
+                approx::assert_relative_eq!(a.value, b.value, max_relative = 1e-9, epsilon = 1e-9);
+            }
+        }
+        Ok(())
+    }
+    /// The light a bored mirror reflects is a ring: the map stays dark in its hole and shows the
+    /// full fluence right next to the edge of the bore.
+    #[test]
+    fn the_hole_behind_a_bored_mirror_stays_dark() -> OpmResult<()> {
+        let map = map_of_a_flat_top(vec![(nanometer!(1000.0), 1.0)], true)?;
+        let (center, next_to_the_bore, further_out) = (
+            fluence_near(&map, 0.0, 0.0)?,
+            fluence_near(&map, 3.0, 0.0)?,
+            fluence_near(&map, 0.0, -6.0)?,
+        );
+        assert!(
+            center < 0.01 * flat_top_fluence(),
+            "the hole shows {center} J/cm²"
+        );
+        approx::assert_relative_eq!(next_to_the_bore, flat_top_fluence(), max_relative = 0.05);
+        approx::assert_relative_eq!(further_out, flat_top_fluence(), max_relative = 0.03);
         Ok(())
     }
 }

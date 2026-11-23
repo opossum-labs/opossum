@@ -14,7 +14,7 @@ use crate::{
     },
     error::{OpmResult, OpossumError},
     geometry::Face,
-    light::Rays,
+    light::{RaySource, Rays},
     nodes::fluence_detector::Fluence,
     utils::geom_transformation::Isometry,
 };
@@ -137,6 +137,13 @@ impl OpticSurface {
     }
     /// Add intersection point (with energy) to hit map.
     ///
+    /// # Arguments
+    ///
+    /// * `hit_point` - where the ray hit and what it brought.
+    /// * `bounce` - the number of bounces of the ray.
+    /// * `rays_uuid` - the bundle of the ray.
+    /// * `source` - where the ray stands in the ray tubes of its source, if it does.
+    ///
     /// # Errors
     /// This function errors if adding the hit point to the hit map fails
     pub fn add_to_hit_map(
@@ -144,8 +151,10 @@ impl OpticSurface {
         hit_point: HitPoint,
         bounce: usize,
         rays_uuid: Uuid,
+        source: Option<&RaySource>,
     ) -> OpmResult<()> {
-        self.hit_map.add_to_hitmap(hit_point, bounce, rays_uuid)
+        self.hit_map
+            .add_to_hitmap(hit_point, bounce, rays_uuid, source)
     }
     /// Reset hit map of this [`OpticSurface`].
     pub fn reset_hit_map(&mut self) {

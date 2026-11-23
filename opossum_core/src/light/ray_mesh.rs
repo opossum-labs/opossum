@@ -42,6 +42,8 @@ impl HasPosition for RayVertex {
 /// The ray tubes of a bundle of rays: one triangulation per sheet of the bundle.
 pub struct RayMesh {
     sheets: Vec<DelaunayTriangulation<RayVertex>>,
+    /// The number of rays of the bundle the mesh was built from.
+    nr_of_rays: usize,
 }
 impl RayMesh {
     /// Triangulates the sheets of the given bundle.
@@ -97,12 +99,20 @@ impl RayMesh {
                 sheets.push(Self::side_by_side(&side_by_side)?);
             }
         }
-        Ok(Self { sheets })
+        Ok(Self {
+            sheets,
+            nr_of_rays: rays.nr_of_rays(false),
+        })
     }
     /// Returns the triangulations of the sheets of this mesh, whose inner faces are its ray tubes.
     #[must_use]
     pub fn sheets(&self) -> &[DelaunayTriangulation<RayVertex>] {
         &self.sheets
+    }
+    /// Returns the number of rays of the bundle this mesh was built from.
+    #[must_use]
+    pub const fn nr_of_rays(&self) -> usize {
+        self.nr_of_rays
     }
     /// Triangulates rays side by side by where they start, seen along their mean direction.
     fn side_by_side(rays: &[(u32, &Ray)]) -> OpmResult<DelaunayTriangulation<RayVertex>> {
@@ -199,7 +209,8 @@ impl PartialEq for RayMesh {
                 .map(|face| face.vertices().map(|v| v.index()))
                 .collect::<Vec<_>>()
         };
-        self.sheets.len() == other.sheets.len()
+        self.nr_of_rays == other.nr_of_rays
+            && self.sheets.len() == other.sheets.len()
             && self
                 .sheets
                 .iter()
@@ -240,6 +251,16 @@ impl RaySource {
     #[must_use]
     pub const fn new(mesh: Arc<RayMesh>, index: u32) -> Self {
         Self { mesh, index }
+    }
+    /// Returns the ray tubes of the bundle the ray was sent out in.
+    #[must_use]
+    pub const fn mesh(&self) -> &Arc<RayMesh> {
+        &self.mesh
+    }
+    /// Returns the index of the ray in the bundle its mesh was built from.
+    #[must_use]
+    pub const fn index(&self) -> u32 {
+        self.index
     }
 }
 impl PartialEq for RaySource {

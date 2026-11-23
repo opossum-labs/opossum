@@ -390,12 +390,12 @@ impl Geometry {
                 part.record_stop(ray, &mut reflected_rays);
             }
             if let Some(hit_point) = hit_point {
-                hit_points.push((hit_point, ray.number_of_bounces()));
+                hit_points.push((hit_point, ray.number_of_bounces(), ray.source().cloned()));
             }
         }
         let surface = self.surface_of_mut(face)?;
-        for (hit_point, bounces) in hit_points {
-            surface.add_to_hit_map(hit_point, bounces, uuid)?;
+        for (hit_point, bounces, source) in hit_points {
+            surface.add_to_hit_map(hit_point, bounces, uuid, source.as_ref())?;
         }
         if rays_missed {
             warn!("rays totally reflected or missed a surface");
