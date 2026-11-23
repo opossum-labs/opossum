@@ -7,6 +7,7 @@ use crate::{
     micrometer,
     prelude::EnergyLaserLines,
     properties::Proptype,
+    types::schema_helper_types::Tuple2Schema,
     utils::{to_f64, try_f64_to_usize},
     validated, validated_type, validated_vec, validated_vec_type,
 };
@@ -23,8 +24,14 @@ use std::{
     ops::Range,
     path::Path,
 };
-use uom::si::{f64::Length, length::micrometer, length::nanometer};
-use uom::{fmt::DisplayStyle::Abbreviation, si::energy::joule};
+use uom::{
+    fmt::DisplayStyle::Abbreviation,
+    si::{
+        energy::joule,
+        f64::Length,
+        length::{micrometer, nanometer},
+    },
+};
 
 /// Structure for handling spectral data.
 ///
@@ -32,6 +39,7 @@ use uom::{fmt::DisplayStyle::Abbreviation, si::energy::joule};
 /// is still limited, the structure is prepared for handling also non-equidistant wavelength slots.  
 #[derive(Clone, Serialize, Deserialize, PartialEq, EnsureValidated, JsonSchema)]
 pub struct Spectrum {
+    #[schemars(with = "Tuple2Schema")]
     data: validated_vec_type!(
         Vec<(f64, f64)>,
         AllPositive && XNormal && YFinite,

@@ -5,6 +5,7 @@ use crate::{
     error::OpmResult,
     generic_validators::{AllFinite, AllNotZero, AllPositive, NotAllZero},
     millimeter,
+    types::schema_helper_types::Point2Schema,
     utils::to_f64,
     validated, validated_type,
 };
@@ -18,7 +19,9 @@ use uom::si::f64::Length;
 /// Rectangular, evenly-sized grid distribution
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Copy, EnsureValidated, JsonSchema)]
 pub struct Grid {
+    #[schemars(with = "usize")]
     nr_of_points: validated_type!(Point2<usize>, AllNotZero),
+    #[schemars(with = "Point2Schema")]
     side_length: validated_type!(Point2<Length>, NotAllZero && AllFinite && AllPositive),
 }
 

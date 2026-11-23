@@ -8,6 +8,7 @@ use crate::{
     error::OpmResult,
     joule,
     properties::Proptype,
+    types::{SiScalarSchema, schema_helper_types::Vector2Schema},
     utils::{griddata::linspace, to_f64},
 };
 use nalgebra::{DMatrix, DVector};
@@ -27,12 +28,16 @@ impl From<FluenceData> for Proptype {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct FluenceData {
     /// peak fluence of the beam
+    #[schemars(with = "SiScalarSchema")]
     peak: Fluence,
     /// 2d fluence distribution of the beam.
+    #[schemars(with = "Vector2Schema")]
     interp_distribution: DMatrix<Fluence>,
     /// x coordinates of the fluence distribution
+    #[schemars(with = "Range<SiScalarSchema>")]
     x_range: Range<Length>,
     /// y coordinates of the fluence distribution
+    #[schemars(with = "Range<SiScalarSchema>")]
     y_range: Range<Length>,
     /// the estimator which has been used to calculate this fluence
     estimator: FluenceEstimator,

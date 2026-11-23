@@ -1,4 +1,7 @@
-use crate::analyzers::{AnalyzerKind, AnalyzerType};
+use crate::{
+    analyzers::{AnalyzerKind, AnalyzerType},
+    types::SiScalarSchema,
+};
 use nalgebra::Point2;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -22,6 +25,7 @@ pub struct AnalyzerInfo {
     /// This value is not serialized since it takes its value from the local settings of the OPOSSUM installation.
     #[serde(default, skip_serializing)]
     #[schema(value_type = Option<Object>)]
+    #[schemars(with = "Option<SiScalarSchema>")]
     default_wavelength: Option<Length>,
 }
 impl AnalyzerInfo {

@@ -9,7 +9,9 @@ use crate::{
     degree_celsius,
     error::{OpmResult, OpossumError},
     generic_validators::{AllFinite, StaticBounds, StaticInRange},
-    hectopascal, validated, validated_type,
+    hectopascal,
+    types::SiScalarSchema,
+    validated, validated_type,
 };
 use opm_macros_lib::EnsureValidated;
 use schemars::JsonSchema;
@@ -140,8 +142,11 @@ type ValidatedTemperature = validated_type!(
 /// Refractive index model for air using the Edlén formula.
 #[derive(Clone, Deserialize, Serialize, Debug, PartialEq, EnsureValidated, JsonSchema)]
 pub struct RefrIndexAir {
+    #[schemars(with = "SiScalarSchema")]
     temperature: ValidatedTemperature,
+    #[schemars(with = "SiScalarSchema")]
     pressure: ValidatedPressure,
+    #[schemars(with = "SiScalarSchema")]
     humidity: ValidatedRelativeHumidity,
 
     // --- Cache Fields (Excluded from serialization) ---

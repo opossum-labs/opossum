@@ -1,5 +1,6 @@
 //! Mechanical properties module for materials
 
+use crate::types::SiScalarSchema;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::{MassDensity, Pressure};
@@ -9,10 +10,12 @@ use uom::si::f64::{MassDensity, Pressure};
 pub struct MechanicalProperties {
     /// Mass density
     #[serde(default)]
+    #[schemars(with = "Option<SiScalarSchema>")]
     pub density: Option<MassDensity>,
 
     /// Young's modulus
     #[serde(default)]
+    #[schemars(with = "Option<SiScalarSchema>")]
     pub youngs_modulus: Option<Pressure>,
 }
 

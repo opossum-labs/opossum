@@ -67,6 +67,7 @@ assert_matches = "1"
 testing_logger = "0.1"
 criterion = { version = "0.8.0", features = ["html_reports"] }
 tempfile.workspace = true
+trybuild = "1.0"
 
 [[example]]
 name = "hhts"

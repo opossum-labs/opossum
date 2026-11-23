@@ -2,13 +2,14 @@
 //! Circular and square, fibbonacci distribution
 use std::f64::consts::PI;
 
+use super::PositionDistribution;
 use crate::{
     error::OpmResult,
     generic_validators::{AllFinite, AllNotZero, AllPositive, NotAllZero},
-    millimeter, validated, validated_type,
+    millimeter,
+    types::schema_helper_types::Point2Schema,
+    validated, validated_type,
 };
-
-use super::PositionDistribution;
 use nalgebra::{Point2, Point3, point};
 use num_traits::{ToPrimitive, Zero};
 use opm_macros_lib::EnsureValidated;
@@ -21,7 +22,9 @@ use uom::si::f64::Length;
 /// For further details see [here](https://en.wikipedia.org/wiki/Fibonacci_sequence)
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy, EnsureValidated, JsonSchema)]
 pub struct FibonacciRectangle {
+    #[schemars(with = "usize")]
     nr_of_points: validated_type!(usize, AllNotZero),
+    #[schemars(with = "Point2Schema")]
     side_length: validated_type!(Point2<Length>, NotAllZero && AllFinite && AllPositive),
 }
 impl FibonacciRectangle {
@@ -173,7 +176,9 @@ impl From<FibonacciRectangle> for super::PosDistType {
 /// For further details see [here](https://en.wikipedia.org/wiki/Fibonacci_sequence)
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy, EnsureValidated, JsonSchema)]
 pub struct FibonacciEllipse {
+    #[schemars(with = "usize")]
     nr_of_points: validated_type!(usize, AllNotZero),
+    #[schemars(with = "Point2Schema")]
     radius: validated_type!(Point2<Length>, NotAllZero && AllFinite && AllPositive),
 }
 impl FibonacciEllipse {

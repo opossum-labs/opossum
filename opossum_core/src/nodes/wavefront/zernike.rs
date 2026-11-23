@@ -10,9 +10,9 @@ use uom::si::{f64::Length, length::millimeter};
 
 use crate::{
     error::{OpmResult, OpossumError},
+    types::SiScalarSchema,
     utils::to_f64,
 };
-
 /// Trait defining a 2D basis function set for wavefront expansions.
 pub trait Basis2D: Send + Sync {
     /// Family name of the basis system (e.g. "Zernike (Noll)").
@@ -67,6 +67,7 @@ pub struct WavefrontDecomposition {
     /// Generic basis decomposition outcome.
     pub decomposition: DecompositionResult,
     /// Reference wavelength of the decomposed wavefront map.
+    #[schemars(with = "SiScalarSchema")]
     pub wavelength: Length,
 }
 

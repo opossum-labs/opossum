@@ -14,11 +14,15 @@
 //! [`SuperGaussianShape::value_at`] answers 1 on the axis and falls off from there. Whoever asks
 //! decides what that 1 is worth.
 
+use crate::types::SiScalarSchema;
 use crate::{
     error::OpmResult,
     millimeter,
-    types::validated_type_definitions::{
-        ValidatedAngle1D, ValidatedCenter2D, ValidatedGaussianPower, ValidatedSideLengths2D,
+    types::{
+        schema_helper_types::Point2Schema,
+        validated_type_definitions::{
+            ValidatedAngle1D, ValidatedCenter2D, ValidatedGaussianPower, ValidatedSideLengths2D,
+        },
     },
     utils::math_distribution_functions::{
         general_2d_super_gaussian_point_elliptical, general_2d_super_gaussian_point_rectangular,
@@ -41,11 +45,15 @@ use utoipa::ToSchema;
 /// fields are held in are `#[serde(transparent)]`, so deserializing straight into them wraps
 /// whatever the file says without ever looking at it, and a standard deviation of zero would then
 /// divide by zero on the first evaluation.
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 struct NonValidatedSuperGaussianShape {
+    #[schemars(with = "Point2Schema")]
     mu_xy: Point2<Length>,
+    #[schemars(with = "Point2Schema")]
     sigma_xy: Point2<Length>,
+    #[schemars(with = "f64")]
     power: f64,
+    #[schemars(with = "SiScalarSchema")]
     theta: Angle,
     rectangular: bool,
 }
@@ -66,20 +74,26 @@ impl TryFrom<NonValidatedSuperGaussianShape> for SuperGaussianShape {
 /// The shape of a generalized 2D super-Gaussian, without an amplitude.
 ///
 /// See the [module documentation](self) for why this is a type of its own.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, ToSchema, EnsureValidated, JsonSchema)]
+#[derive(
+    Debug, Clone, Copy, Serialize, Deserialize, PartialEq, ToSchema, EnsureValidated, JsonSchema,
+)]
 #[serde(try_from = "NonValidatedSuperGaussianShape")]
 pub struct SuperGaussianShape {
     /// center of the distribution, i.e. where its peak sits
     #[schema(value_type = Object)]
+    #[schemars(with = "Point2Schema")]
     mu_xy: ValidatedCenter2D,
     /// standard deviation along each axis; unequal values make the distribution elliptical
     #[schema(value_type = Object)]
+    #[schemars(with = "Point2Schema")]
     sigma_xy: ValidatedSideLengths2D,
     /// steepness of the flanks: 1 is an ordinary Gaussian, larger values are super-Gaussians
     #[schema(value_type = f64)]
+    #[schemars(with = "f64")]
     power: ValidatedGaussianPower,
     /// rotation of the distribution in the transversal plane, counter-clockwise for positive values
     #[schema(value_type = f64)]
+    #[schemars(with = "SiScalarSchema")]
     theta: ValidatedAngle1D,
     /// whether the flanks are shaped rectangularly rather than elliptically; the two coincide for a
     /// power of 1

@@ -2,6 +2,7 @@
 #![warn(missing_docs)]
 
 use nalgebra::{MatrixXx2, MatrixXx3, Vector3};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::{f64::Length, length::millimeter};
 
@@ -127,7 +128,7 @@ impl RayPositionHistorySpectrum {
 }
 
 /// Struct that holds the history of ray positions across all spectral bins for report generation.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct RayPositionHistories {
     /// Ray position histories grouped per spectral component.
     pub rays_pos_history: Vec<RayPositionHistorySpectrum>,

@@ -51,13 +51,16 @@ pub struct OpmDocument {
     #[serde(default)]
     pub(crate) scenery: NodeGroup,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    #[schemars(with = "HashMap<Uuid, AnalyzerInfo>")]
     pub(crate) analyzers: IndexMap<Uuid, AnalyzerInfo>,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    #[schemars(with = "HashMap<Uuid, PumpScenario>")]
     pub(crate) pump_scenarios: IndexMap<Uuid, PumpScenario>,
     /// Nodes marked as amplifier candidates, independent of any [`PumpScenario`].
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub(crate) amplifier_nodes: BTreeSet<Uuid>,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    #[schemars(with = "HashMap<Uuid, Material>")]
     pub(crate) embedded_materials: IndexMap<Uuid, Material>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) optimization_config: Option<OptimizationConfig>,

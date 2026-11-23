@@ -5,6 +5,7 @@ use crate::error::OpmResult;
 use crate::light::Spectrum;
 use crate::prelude::FilterTypeBuilder;
 use crate::utils::default_from_name::DefaultFromName;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;
 
@@ -17,7 +18,7 @@ use super::edge::EdgeFilter;
 /// - An [`EdgeFilter`] instance for edge-type filters.
 /// - A [`BandFilter`] instance for band-pass filters.
 /// - A file path for loading a filter from external data.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, JsonSchema)]
 pub enum SpectralFilterBuilder {
     /// Builds a filter from an [`EdgeFilter`] definition.
     EdgeFilter(EdgeFilter),

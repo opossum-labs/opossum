@@ -18,7 +18,3 @@ proc-macro = true
 quote = "1"
 syn = { version = "2", features = ["full", "extra-traits"] }
 proc-macro2 = "1"
-
-[dev-dependencies]
-trybuild = "1.0"
-opossum_core = { workspace=true }

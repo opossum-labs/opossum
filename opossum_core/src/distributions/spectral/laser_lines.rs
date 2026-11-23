@@ -2,8 +2,10 @@ use crate::{
     error::OpmResult,
     generic_validators::{AllNotEmpty, AllPositive, XNormal, YFinite, YNotAllZero},
     nanometer, validated_vec, validated_vec_type,
+    types::schema_helper_types::Vector2Schema
 };
 use opm_macros_lib::EnsureValidated;
+use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use uom::si::f64::Length;
 
@@ -12,11 +14,12 @@ use super::SpectralDistribution;
 /// The minimum difference between two wavelengths to be considered distinct (in nanometers).
 pub const MIN_WAVELENGTH_DIFF_NM: f64 = 1e-6;
 
-#[derive(Debug, Clone, PartialEq, EnsureValidated)]
+#[derive(Debug, Clone, PartialEq, EnsureValidated, JsonSchema)]
 /// A struct representing a collection of laser lines with their respective wavelengths and relative intensities.
 ///
 /// Note: Laser lines must have unique wavelengths. Wavelengths are considered equal if their difference is less than [`MIN_WAVELENGTH_DIFF_NM`] nm.
 pub struct LaserLines {
+    #[schemars(with = "Vector2Schema")]
     lines: validated_vec_type!(
         Vec<(Length, f64)>,
         XNormal && YFinite && AllPositive,

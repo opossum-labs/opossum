@@ -38,7 +38,6 @@ impl StaticBounds<f64> for RefIndBounds {
 pub fn refr_index_vaccuum() -> RefractiveIndexType {
     RefractiveIndexType::Const(RefrIndexConst::new(1.0).unwrap())
 }
-
 type ValidatedRefIndConst = validated_type!(f64, AllFinite && StaticInRange::<f64, RefIndBounds>);
 impl Default for ValidatedRefIndConst {
     fn default() -> Self {
@@ -52,9 +51,19 @@ impl Default for ValidatedRefIndConst {
 
 /// Constant refractive index model
 #[derive(
-    Default, Clone, Serialize, Deserialize, ToSchema, Debug, PartialEq, Copy, EnsureValidated, JsonSchema
+    Default,
+    Clone,
+    Serialize,
+    Deserialize,
+    ToSchema,
+    Debug,
+    PartialEq,
+    Copy,
+    EnsureValidated,
+    JsonSchema,
 )]
 pub struct RefrIndexConst {
+    #[schemars(with = "f64")]
     refractive_index: ValidatedRefIndConst,
 }
 

@@ -1,7 +1,9 @@
 #![warn(missing_docs)]
 //! Spot diagram data structures and plotting routines.
 
-use crate::{error::OpmResult, light::Rays, utils::geom_transformation::Isometry};
+use crate::{
+    error::OpmResult, light::Rays, types::SiScalarSchema, utils::geom_transformation::Isometry,
+};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
@@ -10,8 +12,10 @@ use uom::si::f64::Length;
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, JsonSchema)]
 pub struct WavelengthSpotSeries {
     /// Nominal wavelength for this spectral bin.
+    #[schemars(with = "SiScalarSchema")]
     pub wavelength: Length,
     /// 2D positions (x, y) of ray hits on the detector surface.
+    #[schemars(with = "Vec<(SiScalarSchema, SiScalarSchema)>")]
     pub spots: Vec<(Length, Length)>,
 }
 

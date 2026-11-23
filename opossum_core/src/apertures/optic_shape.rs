@@ -18,6 +18,7 @@ use crate::{
 };
 use nalgebra::{Point2, Point3, Rotation3, Vector3};
 use num_traits::Zero;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{f64::consts::TAU, fmt::Display};
 use strum::EnumIter;
@@ -617,7 +618,7 @@ fn distance_to_segment(point: Point2<f64>, from: Point2<f64>, to: Point2<f64>) -
 }
 
 /// The value of a node's optic shape: how far the component reaches transversally.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub enum OpticShape {
     /// Unbounded, which only an idealization, a detector or a dummy may be.
     Open,

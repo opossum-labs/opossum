@@ -6,6 +6,7 @@ use crate::{
     joule, millimeter,
     types::{
         SiScalarSchema,
+        schema_helper_types::Point2Schema,
         validated_type_definitions::{
             ValidatedAngle1D, ValidatedCenter2D, ValidatedGaussianPower, ValidatedSideLengths2D,
         },
@@ -29,7 +30,9 @@ pub struct General2DGaussian {
     // infallible: there is one definition of what a valid center, width, power and rotation is, not
     // one per user of it. `Validated` is `#[serde(transparent)]`, so which validator guards a field
     // never reaches the file.
+    #[schemars(with = "Point2Schema")]
     mu_xy: ValidatedCenter2D,
+    #[schemars(with = "Point2Schema")]
     sigma_xy: ValidatedSideLengths2D,
     #[schemars(with = "SiScalarSchema")]
     power: ValidatedGaussianPower,

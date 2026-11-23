@@ -4,6 +4,7 @@ use crate::{
     error::OpmResult,
     generic_validators::{AllFinite, AllNotZero, AllPositive, NotAllZero},
     millimeter, validated, validated_type,
+    types::schema_helper_types::Point2Schema,
 };
 use nalgebra::{Point2, Point3, point};
 use num_traits::Zero;
@@ -18,7 +19,9 @@ use uom::si::f64::Length;
 /// For further details see [here](https://en.wikipedia.org/wiki/Sobol_sequence)
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy, EnsureValidated, JsonSchema)]
 pub struct SobolDist {
+    #[schemars(with = "usize")]
     nr_of_points: validated_type!(usize, AllNotZero),
+    #[schemars(with = "Point2Schema")]
     side_length: validated_type!(Point2<Length>, NotAllZero && AllFinite && AllPositive),
 }
 

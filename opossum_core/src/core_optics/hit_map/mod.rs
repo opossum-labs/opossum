@@ -29,6 +29,7 @@ use fluence_estimator::FluenceEstimator;
 use log::warn;
 use nalgebra::DMatrix;
 use rays_hit_map::{HitPoint, HitPoints, RaysHitMap};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, ops::Range};
 use uom::si::f64::Length;
@@ -85,7 +86,7 @@ impl BouncedHitMap {
 
 /// Data structure for storing intersection points (and energies) of [`Rays`](crate::light::rays::Rays) hitting an
 /// [`OpticSurface`](crate::core_optics::optic_surface::OpticSurface).
-#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema)]
 pub struct HitMap {
     /// Stores the hitpoints of the rays on this surface, separated by their bounce level and the individual ray bundle
     hit_map: Vec<BouncedHitMap>,

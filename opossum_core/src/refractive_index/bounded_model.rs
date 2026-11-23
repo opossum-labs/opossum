@@ -1,14 +1,15 @@
 //! Generic bounded refractive index model implementation.
 
-use std::ops::Range;
-
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::ops::Range;
 use uom::si::f64::Length;
 
-use crate::error::{OpmResult, OpossumError};
-
 use super::RefractiveIndex;
+use crate::{
+    error::{OpmResult, OpossumError},
+    types::schema_helper_types::Tuple2Schema,
+};
 
 /// Trait for the core mathematical dispersion formula.
 ///
@@ -32,6 +33,7 @@ pub struct BoundedFormula<T> {
     /// The coefficients/parameters of the dispersion formula.
     pub coefficients: T,
     /// The valid wavelength range.
+    #[schemars(with = "Tuple2Schema")]
     pub wvl_range: Range<Length>,
 }
 

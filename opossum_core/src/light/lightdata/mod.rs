@@ -6,6 +6,7 @@ pub mod light_data_builder;
 pub mod ray_data_builder;
 pub mod ray_data_source;
 use crate::{joule, light::Rays, light::Spectrum};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use uom::{fmt::DisplayStyle::Abbreviation, si::energy::joule};
@@ -16,7 +17,7 @@ use uom::{fmt::DisplayStyle::Abbreviation, si::energy::joule};
 /// For example, an energy analysis ([`LightData::Energy`]) only
 /// contains a [`Spectrum`] information, while a geometric analysis ([`LightData::Geometric`]) constains a set of optical
 /// ray data.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema)]
 pub enum LightData {
     /// data type used for energy analysis.
     Energy(Spectrum),

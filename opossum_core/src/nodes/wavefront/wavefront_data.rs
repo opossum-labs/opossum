@@ -3,6 +3,7 @@ use crate::{
     light::Rays,
     millimeter, nanometer,
     nodes::wavefront::zernike::{Basis2D, DecompositionResult, fit_wavefront_points},
+    types::SiScalarSchema,
     utils::{geom_transformation::Isometry, to_f64},
 };
 use approx::relative_eq;
@@ -121,6 +122,7 @@ impl WaveFrontData {
 /// - `wf_map`: the wavefront map
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct WaveFrontMap {
+    #[schemars(with = "SiScalarSchema")]
     wavelength: Length,
     ptv: f64,
     rms: f64,

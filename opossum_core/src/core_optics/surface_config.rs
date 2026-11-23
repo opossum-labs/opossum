@@ -4,6 +4,7 @@
 //!
 //! A node keeps one [`SurfaceConfig`] per face of its geometry as a property, named after the face
 //! (see [`GeometryKind::face_name`](crate::geometry::GeometryKind::face_name)).
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -33,7 +34,7 @@ const fn is_default_lidt(lidt: &ValidatedLidt) -> bool {
 /// The default is an ideal antireflective coating and an infinite LIDT. The coating is always
 /// written: an empty entry would not read back through the fault-tolerant
 /// [`Properties`](crate::properties::Properties) reader.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct SurfaceConfig {
     #[serde(default)]
     coating: CoatingType,

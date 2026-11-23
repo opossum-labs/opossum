@@ -1,13 +1,14 @@
 //! Circular, hexapolar distribution
 use std::f64::consts::PI;
 
+use super::PositionDistribution;
 use crate::{
     error::OpmResult,
     generic_validators::{AllFinite, AllPositive},
-    meter, millimeter, validated, validated_type,
+    meter, millimeter,
+    types::SiScalarSchema,
+    validated, validated_type,
 };
-
-use super::PositionDistribution;
 use nalgebra::{Point3, Vector3};
 use num_traits::{ToPrimitive, Zero};
 use opm_macros_lib::EnsureValidated;
@@ -20,6 +21,7 @@ use uom::si::f64::Length;
 pub struct HexagonalTiling {
     #[validate(skip)]
     nr_of_hex_along_radius: u8,
+    #[schemars(with = "SiScalarSchema")]
     radius: validated_type!(Length, AllPositive && AllFinite),
 }
 impl HexagonalTiling {

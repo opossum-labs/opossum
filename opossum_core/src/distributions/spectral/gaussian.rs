@@ -3,23 +3,28 @@ use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 use super::SpectralDistribution;
-use crate::error::OpmResult;
-use crate::utils::griddata::linspace;
-use crate::utils::math_distribution_functions::gaussian;
-use crate::validated;
 use crate::{
+    error::OpmResult,
     generic_validators::{AllNormal, AllNotZero, AllPositive, SecondLarger},
-    meter, nanometer, validated_type,
+    meter, nanometer,
+    types::{SiScalarSchema, schema_helper_types::Tuple2Schema},
+    utils::{griddata::linspace, math_distribution_functions::gaussian},
+    validated, validated_type,
 };
 use kahan::KahanSummator;
 use opm_macros_lib::EnsureValidated;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, EnsureValidated, JsonSchema)]
 pub struct Gaussian {
+    #[schemars(with = "Tuple2Schema")]
     wvl_range: validated_type!((Length, Length), SecondLarger && AllPositive && AllNormal),
+    #[schemars(with = "usize")]
     num_points: validated_type!(usize, AllNotZero),
+    #[schemars(with = "SiScalarSchema")]
     mu: validated_type!(Length, AllPositive && AllNormal),
+    #[schemars(with = "SiScalarSchema")]
     fwhm: validated_type!(Length, AllPositive && AllNormal),
+    #[schemars(with = "f64")]
     power: validated_type!(f64, AllPositive && AllNormal),
 }
 

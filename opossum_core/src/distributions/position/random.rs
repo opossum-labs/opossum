@@ -4,7 +4,9 @@ use super::PositionDistribution;
 use crate::{
     error::OpmResult,
     generic_validators::{AllFinite, AllNotZero, AllPositive, NotAllZero},
-    millimeter, validated, validated_type,
+    millimeter,
+    types::schema_helper_types::Point2Schema,
+    validated, validated_type,
 };
 use nalgebra::{Point2, Point3, point};
 use num_traits::Zero;
@@ -18,6 +20,7 @@ use uom::si::f64::Length;
 pub struct Random {
     #[schemars(with = "usize")]
     nr_of_points: validated_type!(usize, AllNotZero),
+    #[schemars(with = "Point2Schema")]
     side_length: validated_type!(Point2<Length>, NotAllZero && AllFinite && AllPositive),
 }
 

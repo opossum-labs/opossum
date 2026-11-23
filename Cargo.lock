@@ -5777,11 +5777,9 @@ dependencies = [
 name = "opm_macros_lib"
 version = "0.8.1"
 dependencies = [
- "opossum_core",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
- "trybuild",
 ]
 
 [[package]]
@@ -5873,6 +5871,7 @@ dependencies = [
  "strum_macros",
  "tempfile",
  "testing_logger",
+ "trybuild",
  "uom",
  "utoipa",
  "uuid",

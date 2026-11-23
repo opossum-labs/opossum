@@ -27,6 +27,7 @@ use crate::{
     },
     refractive_index::RefractiveIndexType,
     reporting::node_report::NodeReport,
+    types::{SiScalarSchema, Vector3Schema, schema_helper_types::Vector2Schema},
     utils::{
         geom_transformation::Isometry,
         unit_format::{get_exponent_for_base_unit_in_e3_steps, get_prefix_for_base_unit},
@@ -158,32 +159,42 @@ pub enum Proptype {
     /// A (nested set) of Properties
     NodeReport(NodeReport),
     /// linear density in `1/length_unit`
+    #[schemars(with = "SiScalarSchema")]
     LinearDensity(LinearDensity),
     /// Fluence in Units of J/cm²
+    #[schemars(with = "SiScalarSchema")]
     Fluence(Fluence),
     /// Unit of Wavelength
+    #[schemars(with = "(f64, SiScalarSchema)")]
     WfLambda(f64, Length),
     /// a geometrical length
+    #[schemars(with = "SiScalarSchema")]
     Length(Length),
     /// a radius of curvature (e.g. for lens surfaces), This value usually is never zero ban can be `+/-Inf`.
+    #[schemars(with = "SiScalarSchema")]
     RadiusOfCurvature(Length),
     /// an optional length parameter. used, e.g., for the alignment wavelength of the source
+    #[schemars(with = "Option<SiScalarSchema>")]
     LengthOption(Option<Length>),
     /// an energy value
+    #[schemars(with = "SiScalarSchema")]
     Energy(Energy),
     /// a (2D) geometric angle (e.g. component tilt)
+    #[schemars(with = "SiScalarSchema")]
     Angle(Angle),
     /// an optical refractive index model
     RefractiveIndex(RefractiveIndexType),
     /// a (node) location / orientation
     Isometry(Option<Isometry>),
     /// Three dimensional Vector
+    #[schemars(with = "Vector3Schema")]
     Vec3(Vector3<f64>),
     /// a hit map (position of rays hitting a given surface)
     HitMap(HitMap),
     /// 2D spot diagram data resolved by wavelength
     SpotDiagram(SpotDiagramData),
     /// 2-dimenstional vector
+    #[schemars(with = "Vector2Schema")]
     Vec2(Vector2<f64>),
     /// [`LightData`] build configuration
     LightDataBuilder(LightDataBuilder),

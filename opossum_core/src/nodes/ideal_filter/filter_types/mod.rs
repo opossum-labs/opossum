@@ -6,6 +6,7 @@ mod spectral_builder;
 pub use band::{BandFilter, BandFilterType};
 pub use edge::{EdgeFilter, EdgeFilterType};
 use opm_macros_lib::EnsureValidated;
+use schemars::JsonSchema;
 pub use spectral_builder::SpectralFilterBuilder;
 use uom::si::f64::Ratio;
 
@@ -22,6 +23,7 @@ use crate::{
     geometry::SurfaceHit,
     light::{Ray, Spectrum},
     percent,
+    types::SiScalarSchema,
     utils::default_from_name::DefaultFromName,
     validated, validated_type,
 };
@@ -58,9 +60,10 @@ impl Default for ValidatedTransmission {
 }
 
 /// Config data for a constant filter type.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, EnsureValidated)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, EnsureValidated, JsonSchema)]
 pub struct FilterConst {
     /// the constant transmission value of the filter. Must be between 0.0 and 1.0
+    #[schemars(with = "SiScalarSchema")]
     transmission: ValidatedTransmission,
 }
 impl FilterConst {
@@ -83,7 +86,7 @@ impl FilterConst {
     }
 }
 /// Config data builder for an [`IdealFilter`](crate::nodes::IdealFilter).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, JsonSchema)]
 pub enum FilterTypeBuilder {
     /// a fixed (wavelength-independant) transmission value. Must be between 0.0 and 1.0
     Constant(FilterConst),

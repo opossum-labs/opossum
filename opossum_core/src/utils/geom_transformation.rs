@@ -8,6 +8,7 @@ use crate::{
     meter,
     properties::Proptype,
     radian,
+    types::Vector3Schema,
 };
 use approx::relative_eq;
 use nalgebra::{Isometry3, MatrixXx2, MatrixXx3, Point3, Rotation3, Translation3, Vector3, vector};
@@ -24,7 +25,9 @@ use uom::si::{
 /// Struct to store the isometric transformation matrix and its inverse.
 #[derive(Debug, Clone, Default, PartialEq, Copy, JsonSchema)]
 pub struct Isometry {
+    #[schemars(with = "Vector3Schema")]
     transform: Isometry3<f64>,
+    #[schemars(with = "Vector3Schema")]
     inverse: Isometry3<f64>,
 }
 

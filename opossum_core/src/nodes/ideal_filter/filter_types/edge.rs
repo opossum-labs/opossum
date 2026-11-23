@@ -2,6 +2,7 @@ use std::{fmt::Display, ops::Range, str::FromStr};
 
 use log::warn;
 use num_traits::Zero;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;
 use uom::si::f64::Length;
@@ -12,9 +13,9 @@ use crate::{
     micrometer, nanometer,
     nodes::ideal_filter::filter_types::math::interpolate_transition,
     prelude::SpectralFilterBuilder,
+    types::SiScalarSchema,
     utils::default_from_name::DefaultFromName,
 };
-
 /// Represents an optical edge filter with defined characteristics.
 ///
 /// This struct stores the edge filter type, the edge wavelength,
@@ -23,13 +24,14 @@ use crate::{
 ///
 /// # Note
 /// The edge wavelength is included in a short-pass and excluded ind the long-pass filter
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema)]
 pub struct EdgeFilter {
     /// The type of edge filter (long‑pass or short‑pass).
     filter_type: EdgeFilterType,
 
     /// The cut-on / cut-off (edge) wavelength of the filter.
     /// The edge wavelength is included in a short-pass and excluded ind the long-pass filter
+    #[schemars(with = "SiScalarSchema")]
     edge_wavelength: Length,
 
     /// Minimum and maximum values of this filters' transmission
@@ -38,12 +40,15 @@ pub struct EdgeFilter {
     ///
     /// If `Some`, this specifies the width of a gradual transition;
     /// if `None`, the filter is assumed to have a sharp edge.
+    #[schemars(with = "Option<SiScalarSchema>")]
     smooth_step_width: Option<Length>,
 
     /// The wavelength range over which the filter is defined.
+    #[schemars(with = "Range<SiScalarSchema>")]
     range: Range<Length>,
 
     /// The wavelength resolution associated with the filter's data.
+    #[schemars(with = "Option<SiScalarSchema>")]
     resolution: Length,
 }
 impl Default for EdgeFilter {
@@ -491,7 +496,7 @@ impl From<EdgeFilter> for Spectrum {
 ///
 /// - `LongPass`: Allows wavelengths longer than the specified edge wavelength to pass.
 /// - `ShortPass`: Allows wavelengths shorter than the specified edge wavelength to pass.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, Eq, Copy, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, Eq, Copy, Default, JsonSchema)]
 pub enum EdgeFilterType {
     /// Passes wavelengths longer than the edge wavelength.
     LongPass,

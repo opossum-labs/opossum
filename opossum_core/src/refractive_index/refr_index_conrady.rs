@@ -2,6 +2,7 @@
 use std::ops::Range;
 
 use num_traits::Pow;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::{f64::Length, length::micrometer};
 
@@ -16,7 +17,7 @@ use super::{
 };
 
 /// Coefficients for the Conrady dispersion formula.
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, JsonSchema)]
 pub struct ConradyCoefficients {
     /// Base refractive index n0
     pub n0: f64,
