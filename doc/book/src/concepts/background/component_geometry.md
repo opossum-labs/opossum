@@ -231,12 +231,22 @@ every valid ray:
 
 1. The geometry answers where the ray hits the face (`Geometry::intersect`, which returns a `SurfaceHit`). A ray that
    misses follows the missed-surface strategy.
-2. At a hit, the *surface effect* acts on the ray (`SurfaceEffect::act_at`): it moves the ray to the hit, lets it
-   continue as the transmitted part and returns a reflected part, if any. The effect calls the physics of a single
-   ray, which needs nothing geometric any more.
-3. The effect acts on the helper rays of the ray as well, each where it hits the face; a helper ray that misses
-   follows the missed-surface strategy like any ray.
+2. At a hit, the effect acts first on the helper rays of the ray, each where it hits the face; a helper ray that
+   misses follows the missed-surface strategy like any ray. So the triangle they span lies on the face when the ray
+   records its fluence there (`Ray::helper_ray_fluence`): a beam meeting a face at 60° records half its fluence on
+   it.
+3. Then the *surface effect* acts on the ray (`SurfaceEffect::act_at`): it moves the ray to the hit, lets it continue
+   as the transmitted part and returns a reflected part, if any. The effect calls the physics of a single ray, which
+   needs nothing geometric any more. The part going back, which on total reflection is the ray itself, takes the
+   reflected helper rays along.
 4. Once every ray is answered, the optic surface of the face records the hits in its hit map.
+
+Every change of a ray's energy changes the fluence of its helper rays by the same ratio, whether by the coating, a
+filter, absorption or gain (`Ray::scale_energy`). If the helper rays of a ray do not all go its way at a surface, their
+triangle is torn. That happens when one of them misses the face, passes a bore, or is totally reflected alone while
+the ray is split. The ray then drops its helper rays (`Ray::drop_helper_rays`) and records no fluence from there on.
+At an edge or a bore it already records none on that surface, since the triangle never lay whole on it. Where only a
+lone total reflection tore it, the reflected part keeps its helper rays. A warning says that a ray lost its fluence.
 
 What a surface does is one effect per kind of surface. Each lives next to the type that defines it, so a new one does
 not touch the loop:
@@ -572,7 +582,7 @@ in `opossum_backend/src/document.rs` answers "not found" for a node that is not 
 | Beam splitter | One plane, face 0, under four port names: its surface ports put `input_1` and `input_2` and the outputs `out1_trans1_refl2` and `out2_trans2_refl1` all on `SurfaceGeometry::FACE`, so all four share the one optic surface, and declare that face splitting, so its `surface` takes only a `Separator`. Its analysis (`Splitter` in `nodes/splitter.rs`) takes the ports in the order its surface ports declare them and splits with `Refraction(None)` and `ReflectedPart::Branch`, so the coating of its `surface` is the split (by default a `Separator` of 50 %). Its positioning splits the axis with `SplittingConfig::Ratio(0.5)` as the effect, whatever the coating. The second input enters mirrored on the plane (`axis_entrance_frame`). |
 | Bored mirror | `Geometry::singlet` with a flat rear face: an `Extruded` plate whose outline has a bore. Its surface ports put the inputs `mirror` and `through_bore` on the front and the rear face and the outputs `behind` and `in_front` on the rear and the front face, and declare no face splitting. Ray tracing, positioning and ghost focus are those of the beam splitter (`Splitter`), with the bore deciding what passes, except that the axis enters `through_bore` along the bore (see [Bores](#bores)). Its energy analysis is an error. |
 | Detectors | `Geometry::detector` gives the extent window. A window is no edge: the face reaches everywhere, so all light passes. `SurfaceHit::recorded` decides which hit points are recorded, and `record_within_window` cuts the recorded light to the window of the geometry. With an open optic shape there is no window, and everything is recorded. |
-| Ideal filter, paraxial surface | `Geometry::plane`. Their effects (`FilterType`, `ParaxialLens`) attenuate or deflect at the hit, so a ray or helper ray that misses is neither. The paraxial surface may be unbounded. |
+| Ideal filter, paraxial surface | `Geometry::plane`. Their effects (`FilterType`, `ParaxialLens`) attenuate or deflect at the hit, so a ray that misses is neither; a helper ray that misses tears the triangle of its ray (see [Surface effects](#surface-effects)). The paraxial surface may be unbounded. |
 | Grating | `Geometry::plane`. Its effect, `Diffraction`, sends the whole energy into one order, and the diffracted part is the intended beam (`ReflectedPart::Main`), like the reflection of a mirror. |
 | Source, dummy, ray propagation visualizer | `Geometry::plane`. Source and visualizer are unbounded. A dummy is bounded only if it is given an optic shape, and then acts as an iris. None of them has an appearance, so none is drawn. A source declares only `output_1`. |
 | Group, reference | `create_geometry()` returns `None`, the surface ports are `SurfacePorts::NONE`, and `update_surfaces` does nothing. The nodes inside a group have their own geometry. A reference is traced through the node it refers to. |
