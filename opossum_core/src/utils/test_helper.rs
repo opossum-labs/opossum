@@ -116,24 +116,35 @@ pub mod helper {
         let reach = radius * (1.0 + 0.5 / f64::from(rings)) / 10.0;
         1.0 / (std::f64::consts::PI * reach * reach)
     }
+    /// The point of the given map nearest to `(x, y)`, in mm: where it lies, in mm, and its
+    /// value, in J/cm².
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the axes of the map cannot be built.
+    pub fn point_near(map: &FluenceData, x: f64, y: f64) -> OpmResult<(f64, f64, f64)> {
+        let (xs, ys, values) = map.get_fluence_distribution()?;
+        let nearest = |axis: &DVector<Length>, at: f64| {
+            axis.iter()
+                .map(|c| c.get::<millimeter>())
+                .enumerate()
+                .min_by(|(_, a), (_, b)| (*a - at).abs().total_cmp(&(*b - at).abs()))
+                .ok_or_else(|| OpossumError::Other("the map is empty".into()))
+        };
+        let ((column, x), (row, y)) = (nearest(&xs, x)?, nearest(&ys, y)?);
+        let value = values
+            .get((row, column))
+            .map(|fluence| fluence.get::<joule_per_square_centimeter>())
+            .ok_or_else(|| OpossumError::Other("the map is empty".into()))?;
+        Ok((x, y, value))
+    }
     /// The value of the given map at the point nearest to `(x, y)`, in mm, in J/cm².
     ///
     /// # Errors
     ///
     /// This function returns an error if the axes of the map cannot be built.
     pub fn fluence_near(map: &FluenceData, x: f64, y: f64) -> OpmResult<f64> {
-        let (xs, ys, values) = map.get_fluence_distribution()?;
-        let nearest = |axis: &DVector<Length>, at: f64| {
-            axis.iter()
-                .map(|c| (c.get::<millimeter>() - at).abs())
-                .enumerate()
-                .min_by(|(_, a), (_, b)| a.total_cmp(b))
-                .map_or(0, |(index, _)| index)
-        };
-        values
-            .get((nearest(&ys, y), nearest(&xs, x)))
-            .map(|fluence| fluence.get::<joule_per_square_centimeter>())
-            .ok_or_else(|| OpossumError::Other("the map is empty".into()))
+        Ok(point_near(map, x, y)?.2)
     }
     /// The energy of the given map, in J: its values summed over the cells between its points,
     /// which [`FluenceData::total_energy`] counts one too many of along each axis.

@@ -2,32 +2,23 @@
 //!
 //! This module also conatins the routines for genearating a fluence map using different estimator strategies.
 use crate::{
-    J_per_cm2, centimeter,
+    J_per_cm2,
     error::{OpmResult, OpossumError},
     kde::Kde,
     light::{RayMesh, RaySource, ray_mesh::RayVertex},
     meter, micrometer,
     nodes::fluence_detector::{Fluence, fluence_data::FluenceData},
-    utils::{
-        AxLims,
-        griddata::{
-            VoronoiedData, create_voronoi_cells, grid_interpolate_3d_triangulated_scatter_data,
-            linspace,
-        },
-        to_f64, try_f64_to_usize,
-    },
+    utils::{to_f64, try_f64_to_usize},
 };
 use itertools::Itertools;
 use libm::modf;
-use log::warn;
-use nalgebra::{DMatrix, DVector, MatrixXx2, Point2, Point3};
+use nalgebra::{DMatrix, Point2, Point3};
 use serde::{Deserialize, Serialize};
 use std::{ops::Range, sync::Arc};
 use uom::si::{
     energy::joule,
     f64::{Area, Energy, Length},
-    length,
-    radiant_exposure::joule_per_square_centimeter,
+    radiant_exposure::joule_per_square_meter,
 };
 
 use super::{
@@ -438,86 +429,77 @@ impl RaysHitMap {
                 bottom..top,
                 FluenceEstimator::Binning,
             ))
-        } else if let HitPoints::Fluence(_) = &self.hit_points {
-            warn!(
-                "Unexpected type of HitPoints for binning estimator! Changing to helper-ray estimator!"
-            );
-            self.calc_fluence_with_helper_rays(nr_of_points, ax_1_range, ax_2_range)
         } else {
-            Err(OpossumError::Analysis("wrong hit point type for to calculate fluence with binning! Must be an Energyhitpoint!".into()))
+            Err(energies_needed(FluenceEstimator::Binning))
         }
     }
 
-    /// Calculate a fluence map ([`FluenceData`]) of this [`RaysHitMap`] using the "Voronoi" method
+    /// Calculate a fluence map ([`FluenceData`]) of this [`RaysHitMap`] that follows the ray tubes
+    /// its hits stand in (see [`RayMesh`]), as the Voronoi and the helper ray estimator do.
     ///
-    /// The map follows the ray tubes the hits stand in (see [`RayMesh`]). Each corner shows the
-    /// energy of its rays spread over the Voronoi cell it stands for at its source, magnified as
-    /// much as its tubes grew on the way; between the corners the map runs linearly. Only the
-    /// tubes whose corners all arrived here are drawn, so the map stays dark where light was cut
-    /// away, as in the hole behind a bored mirror.
+    /// What a corner shows comes from what its rays brought. Plain rays bring their energy,
+    /// spread over the Voronoi cell the corner stands for at its source and magnified as much as
+    /// its tubes grew on the way; rays with helper rays bring their fluence along. Between the
+    /// corners the map runs linearly. Only the tubes whose corners all arrived here are drawn, so
+    /// the map stays dark where light was cut away, as in the hole behind a bored mirror.
     ///
     /// # Attributes
     /// -`nr_of_points`: tuple containing the number of (columns, rows) of the matrix on which the data should be calculated
     /// -`ax_1_range`: optional range of the axis 1 the map covers, all the tubes draw if `None`
     /// -`ax_2_range`: optional range of the axis 2 the map covers, all the tubes draw if `None`
+    /// -`estimator`: the estimator the map stands for
     ///
     /// # Errors
-    /// This function errors if the hits do not all stand in the ray tubes of their sources.
-    pub fn calc_fluence_with_voronoi(
+    /// This function errors if the hits do not all stand in the ray tubes of their sources, or if
+    /// no tube arrived complete.
+    pub fn calc_fluence_with_tubes(
         &self,
         nr_of_points: (usize, usize),
         ax_1_range: Option<&Range<Length>>,
         ax_2_range: Option<&Range<Length>>,
+        estimator: FluenceEstimator,
     ) -> OpmResult<FluenceData> {
-        match &self.hit_points {
-            HitPoints::Energy(_) => Ok(draw_map(
-                &self.voronoi_sheets()?,
-                nr_of_points,
-                ax_1_range,
-                ax_2_range,
-                self.hit_ranges(),
-                FluenceEstimator::Voronoi,
-            )),
-            HitPoints::Fluence(_) => {
-                warn!(
-                    "Unexpected type of HitPoints for Voronoi estimator! Changing to helper-ray estimator!"
-                );
-                self.calc_fluence_with_helper_rays(nr_of_points, ax_1_range, ax_2_range)
-            }
-        }
+        draw_map(
+            &self.tube_sheets()?,
+            nr_of_points,
+            ax_1_range,
+            ax_2_range,
+            estimator,
+        )
     }
     /// Returns the sheets of ray tubes the hits of this map stand in, each with the fluence, in
-    /// J/m², its corners show from the energies they brought (see
-    /// [`ArrivedSheet::fluences_from_energies`]).
+    /// J/m², its corners show: from the energies plain rays brought (see
+    /// [`ArrivedSheet::fluences_from_energies`]), or as rays with helper rays brought it along.
     ///
     /// # Errors
     ///
-    /// This function returns an error if the hits are fluences rather than energies, or if they
-    /// do not all stand in ray tubes.
-    pub(super) fn voronoi_sheets(&self) -> OpmResult<Vec<(ArrivedSheet<'_>, Vec<Option<f64>>)>> {
-        let HitPoints::Energy(hit_points) = &self.hit_points else {
-            return Err(OpossumError::Analysis(
-                "a Voronoi map needs the energies of the hits".into(),
-            ));
-        };
-        let energy_of = |hit: usize| {
-            hit_points.get(hit).map(|p| {
-                let at = Point2::new(p.position.x.value, p.position.y.value);
-                (at, p.value.get::<joule>())
-            })
-        };
-        Ok(self
-            .arrived_sheets(energy_of)?
-            .into_iter()
-            .map(|sheet| {
-                let fluences = sheet.fluences_from_energies();
-                (sheet, fluences)
-            })
-            .collect())
-    }
-    /// Returns the ranges along x and y the hits of this map cover.
-    pub(super) fn hit_ranges(&self) -> (Range<Length>, Range<Length>) {
-        (self.x_lims.0..self.x_lims.1, self.y_lims.0..self.y_lims.1)
+    /// This function returns an error if the hits do not all stand in ray tubes.
+    pub(super) fn tube_sheets(&self) -> OpmResult<Vec<(ArrivedSheet<'_>, Vec<Option<f64>>)>> {
+        let at = |position: &Point3<Length>| Point2::new(position.x.value, position.y.value);
+        Ok(match &self.hit_points {
+            HitPoints::Energy(hits) => self
+                .arrived_sheets(|hit| {
+                    hits.get(hit)
+                        .map(|p| (at(&p.position), p.value.get::<joule>()))
+                })?
+                .into_iter()
+                .map(|sheet| {
+                    let fluences = sheet.fluences_from_energies();
+                    (sheet, fluences)
+                })
+                .collect(),
+            HitPoints::Fluence(hits) => self
+                .arrived_sheets(|hit| {
+                    hits.get(hit)
+                        .map(|p| (at(&p.position), p.value.get::<joule_per_square_meter>()))
+                })?
+                .into_iter()
+                .map(|sheet| {
+                    let fluences = sheet.arrived_values();
+                    (sheet, fluences)
+                })
+                .collect(),
+        })
     }
     /// Returns the sheets of ray tubes the hits of this map stand in, each with the corners that
     /// arrived here.
@@ -686,132 +668,8 @@ impl RaysHitMap {
                 FluenceEstimator::KDE,
             );
             Ok(fluence_data)
-        } else if let HitPoints::Fluence(_) = &self.hit_points {
-            warn!(
-                "Unexpected type of HitPoints for kernel density estimator! Changing to helper-ray estimator!"
-            );
-            self.calc_fluence_with_helper_rays(nr_of_points, ax_1_range, ax_2_range)
         } else {
-            Err(OpossumError::Analysis("Wrong hit point type for to calculate fluence with kde! Must be an EnergyHitpoint!".into()))
-        }
-    }
-
-    /// Calculate a fluence map ([`FluenceData`]) of this [`RaysHitMap`] using the "Helper Rays" method
-    ///
-    /// # Attributes
-    /// -`nr_of_points`: tuple containing the number of (columns, rows) of the matrix on which the data should be calculated
-    /// -`ax_1_range_opt`: optional range of the axis 1 on which the data should be interpolated
-    /// -`ax_2_range_opt`: optional range of the axis 2 on which the data should be interpolated    
-    ///
-    /// # Errors
-    /// This function errors if
-    /// - there are too few data points for voronoi cell creation (less than three)
-    /// - the voronoi diagram generation fails
-    /// - no axes ranges are provided and the data is not sufficient to provide valid ranges
-    /// - the interpolation step fails
-    pub fn calc_fluence_with_helper_rays(
-        &self,
-        nr_of_points: (usize, usize),
-        ax_1_range: Option<&Range<Length>>,
-        ax_2_range: Option<&Range<Length>>,
-    ) -> OpmResult<FluenceData> {
-        if let HitPoints::Fluence(hit_points) = &self.hit_points {
-            let mut pos_in_cm = MatrixXx2::<f64>::zeros(hit_points.len());
-            let mut fluence = DVector::<f64>::zeros(hit_points.len());
-
-            if hit_points.len() < 3 {
-                return Err(OpossumError::Other(
-                    "Too few points (<3) on hitmap to calculate fluence!".into(),
-                ));
-            }
-            for (row, p) in hit_points.iter().enumerate() {
-                pos_in_cm[(row, 0)] = p.position.x.get::<length::centimeter>();
-                pos_in_cm[(row, 1)] = p.position.y.get::<length::centimeter>();
-                fluence[row] = p.value.get::<joule_per_square_centimeter>();
-            }
-
-            let (co_ax1, ax_1_range) = if let Some(range) = ax_1_range {
-                (
-                    linspace(
-                        range.start.get::<length::centimeter>(),
-                        range.end.get::<length::centimeter>(),
-                        nr_of_points.0,
-                    )?,
-                    range.clone(),
-                )
-            } else {
-                let proj_ax1_lim =
-                    AxLims::finite_from_dvector(&pos_in_cm.column(0)).ok_or_else(|| {
-                        OpossumError::Other(
-                            "cannot construct valid axis limits with non-finite axes bounds!"
-                                .into(),
-                        )
-                    })?;
-                (
-                    linspace(proj_ax1_lim.min, proj_ax1_lim.max, nr_of_points.0)?,
-                    centimeter!(proj_ax1_lim.min)..centimeter!(proj_ax1_lim.max),
-                )
-            };
-
-            let (co_ax2, ax_2_range) = if let Some(range) = ax_2_range {
-                (
-                    linspace(
-                        range.start.get::<length::centimeter>(),
-                        range.end.get::<length::centimeter>(),
-                        nr_of_points.1,
-                    )?,
-                    range.clone(),
-                )
-            } else {
-                let proj_ax2_lim =
-                    AxLims::finite_from_dvector(&pos_in_cm.column(1)).ok_or_else(|| {
-                        OpossumError::Other(
-                            "cannot construct valid axis limits with non-finite axes bounds!"
-                                .into(),
-                        )
-                    })?;
-                (
-                    linspace(proj_ax2_lim.min, proj_ax2_lim.max, nr_of_points.1)?,
-                    centimeter!(proj_ax2_lim.min)..centimeter!(proj_ax2_lim.max),
-                )
-            };
-
-            let (voronoi, _beam_area) = create_voronoi_cells(&pos_in_cm).map_err(|e| {
-                OpossumError::Other(format!(
-                    "Voronoi diagram for fluence interpolation could not be created!: {e}"
-                ))
-            })?;
-
-            let fluence =
-                fluence.insert_rows(hit_points.len(), voronoi.sites.len() - hit_points.len(), 0.);
-
-            let voronoi_fluence_scatter =
-                VoronoiedData::combine_data_with_voronoi_diagram(voronoi, fluence)?;
-
-            //currently only interpolation. voronoid data for plotting must still be implemented
-            let (interp_fluence, _) = grid_interpolate_3d_triangulated_scatter_data(
-                &voronoi_fluence_scatter,
-                &co_ax1,
-                &co_ax2,
-            )?;
-
-            Ok(FluenceData::new(
-                DMatrix::from_iterator(
-                    co_ax2.len(),
-                    co_ax1.len(),
-                    interp_fluence.iter().map(|val| J_per_cm2!(*val)),
-                ),
-                ax_1_range,
-                ax_2_range,
-                FluenceEstimator::HelperRays,
-            ))
-        } else if let HitPoints::Energy(_) = &self.hit_points {
-            warn!(
-                "Unexpected type of HitPoints for helper-ray estimator! Changing to voronoi estimator!"
-            );
-            self.calc_fluence_with_voronoi(nr_of_points, ax_1_range, ax_2_range)
-        } else {
-            Err(OpossumError::Analysis("Wrong hit point type for to calculate fluence with helper rays! Must be a FluenceHitpoint!".into()))
+            Err(energies_needed(FluenceEstimator::KDE))
         }
     }
 
@@ -835,50 +693,35 @@ impl RaysHitMap {
         ax_2_range_opt: Option<&Range<Length>>,
     ) -> OpmResult<FluenceData> {
         match estimator {
-            FluenceEstimator::Voronoi => {
-                self.calc_fluence_with_voronoi(nr_of_points, ax_1_range_opt, ax_2_range_opt)
-            }
+            FluenceEstimator::Voronoi | FluenceEstimator::HelperRays => self
+                .calc_fluence_with_tubes(nr_of_points, ax_1_range_opt, ax_2_range_opt, *estimator),
             FluenceEstimator::KDE => {
                 self.calc_fluence_with_kde(nr_of_points, ax_1_range_opt, ax_2_range_opt)
             }
             FluenceEstimator::Binning => {
                 self.calc_fluence_with_binning(nr_of_points, ax_1_range_opt, ax_2_range_opt)
             }
-            FluenceEstimator::HelperRays => {
-                self.calc_fluence_with_helper_rays(nr_of_points, ax_1_range_opt, ax_2_range_opt)
-            }
         }
     }
 
     /// Gets the maximum fluence value off this [`RaysHitMap`]
     ///
+    /// The helper ray estimator takes the largest fluence its rays brought; any other estimator,
+    /// or rays without helper rays, the peak of a fluence map of 101 × 101 points.
+    ///
     /// # Attributes
     /// -`estimator`: Reference to the [`FluenceEstimator`] that should be used toestimate the fluence value.
     ///
     /// # Errors
-    /// This function will return an error if
-    /// - `calc_fluence_map` returns an error
-    /// - if the `HitPoint` type macthes netieher energy or fluence
+    /// This function will return an error if `calc_fluence_map` returns an error.
     pub fn get_max_fluence(&self, estimator: &FluenceEstimator) -> OpmResult<Fluence> {
-        match estimator {
-            FluenceEstimator::Voronoi | FluenceEstimator::KDE | FluenceEstimator::Binning => {
-                Ok(self
-                    .calc_fluence_map((101, 101), estimator, None, None)?
-                    .peak())
-            }
-            FluenceEstimator::HelperRays => {
-                if let HitPoints::Fluence(hit_points) = &self.hit_points {
-                    Ok(hit_points
-                        .iter()
-                        .fold(J_per_cm2!(0.), |init, val| val.value.max(init)))
-                } else if let HitPoints::Energy(_) = &self.hit_points {
-                    Ok(self
-                        .calc_fluence_map((101, 101), &FluenceEstimator::Voronoi, None, None)?
-                        .peak())
-                } else {
-                    Err(OpossumError::Analysis("Undefined HitPointType! Cannot use get_max_fluence method to retrieve maximum fluence!".into()))
-                }
-            }
+        match (&self.hit_points, estimator) {
+            (HitPoints::Fluence(hit_points), FluenceEstimator::HelperRays) => Ok(hit_points
+                .iter()
+                .fold(J_per_cm2!(0.), |init, val| val.value.max(init))),
+            _ => Ok(self
+                .calc_fluence_map((101, 101), estimator, None, None)?
+                .peak()),
         }
     }
 
@@ -887,6 +730,13 @@ impl RaysHitMap {
     pub const fn hit_map(&self) -> &HitPoints {
         &self.hit_points
     }
+}
+/// The error of an estimator that spreads the energies of the hits, asked for a map of hits that
+/// brought fluences.
+fn energies_needed(estimator: FluenceEstimator) -> OpossumError {
+    OpossumError::Analysis(format!(
+        "the {estimator} estimator spreads the energies of the hits, but rays with helper rays bring fluences: use the Voronoi or the helper ray estimator"
+    ))
 }
 #[cfg(test)]
 mod test_hitpoint {
@@ -1017,25 +867,50 @@ mod test_rays_hit_map {
         J_per_cm2, centimeter,
         core_optics::hit_map::{
             HitMap,
+            fluence_estimator::FluenceEstimator,
             rays_hit_map::{EnergyHitPoint, FluenceHitPoint, HitPoint, HitPoints},
         },
+        distributions::position::Grid,
         error::OpmResult,
-        joule, meter,
+        joule,
+        light::{Ray, Rays},
+        meter, nanometer,
     };
+    use approx::assert_relative_eq;
+    use nalgebra::Point2;
+    use uom::si::{length::centimeter, radiant_exposure::joule_per_square_centimeter};
     use uuid::Uuid;
 
-    // helper function
-    fn dummy_fluence_hitpoints(n_x: usize, n_y: usize) -> HitPoints {
-        let mut pts = Vec::new();
-        for i in 0..n_y {
-            for j in 0..n_x {
-                pts.push(FluenceHitPoint {
-                    position: centimeter!(j as f64, i as f64, 0.0),
-                    value: J_per_cm2!((i * n_x + j) as f64 + 1.0),
-                });
-            }
+    /// A grid of `n_x` × `n_y` rays 1 cm apart around the axis, spanning their ray tubes.
+    fn ray_grid(n_x: usize, n_y: usize) -> OpmResult<Rays> {
+        let mut rays = Rays::new_uniform_collimated(
+            nanometer!(1000.0),
+            joule!(1.0),
+            &Grid::new(
+                centimeter!((n_x - 1) as f64, (n_y - 1) as f64),
+                Point2::new(n_x, n_y),
+            )?,
+        )?;
+        rays.attach_mesh()?;
+        Ok(rays)
+    }
+    /// The hit of the given ray where it starts, bringing 10 J/cm² on the axis, 1 J/cm² more per
+    /// cm along x and 3 J/cm² more per cm along y.
+    fn fluence_hit(ray: &Ray) -> OpmResult<HitPoint> {
+        let p = ray.position();
+        let fluence = 10.0 + p.x.get::<centimeter>() + 3.0 * p.y.get::<centimeter>();
+        Ok(HitPoint::Fluence(FluenceHitPoint::new(
+            p,
+            J_per_cm2!(fluence),
+        )?))
+    }
+    /// A map of the hits of [`fluence_hit`] of [`ray_grid`].
+    fn fluence_hit_map(n_x: usize, n_y: usize) -> OpmResult<RaysHitMap> {
+        let mut map = RaysHitMap::new(HitPoints::Fluence(vec![]));
+        for ray in ray_grid(n_x, n_y)?.iter() {
+            map.add_hit_point(fluence_hit(ray)?, ray.source())?;
         }
-        HitPoints::Fluence(pts)
+        Ok(map)
     }
     #[test]
     fn lims() -> OpmResult<()> {
@@ -1177,66 +1052,37 @@ mod test_rays_hit_map {
     }
 
     #[test]
-    fn fluence_matrix_has_expected_dimensions() {
-        let ray_map = RaysHitMap {
-            hit_points: dummy_fluence_hitpoints(4, 3),
-            ..Default::default()
-        };
-
+    fn fluence_matrix_has_expected_dimensions() -> OpmResult<()> {
         let nr_of_points = (5, 4);
-        let result = ray_map
-            .calc_fluence_with_helper_rays(nr_of_points, None, None)
-            .expect("Fluence calculation should succeed");
-
+        let result = fluence_hit_map(4, 3)?.calc_fluence_with_tubes(
+            nr_of_points,
+            None,
+            None,
+            FluenceEstimator::HelperRays,
+        )?;
         let matrix = result.interp_distribution();
-        assert_eq!(
-            matrix.ncols(),
-            nr_of_points.0,
-            "x-axis should define number of rows"
-        );
-        assert_eq!(
-            matrix.nrows(),
-            nr_of_points.1,
-            "y-axis should define number of columns"
-        );
+        assert_eq!(matrix.ncols(), nr_of_points.0);
+        assert_eq!(matrix.nrows(), nr_of_points.1);
+        Ok(())
     }
-
+    /// Two rays span no tube, so they leave no map.
     #[test]
-    fn too_few_points_should_fail() {
-        let ray_map = RaysHitMap {
-            hit_points: HitPoints::Fluence(vec![
-                FluenceHitPoint {
-                    position: centimeter!(0.0, 0.0, 0.0),
-                    value: J_per_cm2!(1.0),
-                },
-                FluenceHitPoint {
-                    position: centimeter!(1.0, 0.0, 0.0),
-                    value: J_per_cm2!(1.0),
-                },
-            ]),
-            ..Default::default()
-        };
-
-        let result = ray_map.calc_fluence_with_helper_rays((4, 4), None, None);
-        assert!(
-            result.is_err(),
-            "Less than 3 points should result in an error"
-        );
+    fn too_few_points_should_fail() -> OpmResult<()> {
+        let error = fluence_hit_map(2, 1)?
+            .calc_fluence_with_tubes((4, 4), None, None, FluenceEstimator::HelperRays)
+            .expect_err("no tube");
+        assert!(error.to_string().contains("no ray tube"), "{error}");
+        Ok(())
     }
-
     #[test]
-    fn fluence_values_are_positive_and_finite() {
-        let ray_map = RaysHitMap {
-            hit_points: dummy_fluence_hitpoints(4, 4),
-            ..Default::default()
-        };
-
-        let res = ray_map
-            .calc_fluence_with_helper_rays((6, 5), None, None)
-            .expect("Fluence calc should succeed");
-
-        let mat = res.interp_distribution();
-        for (idx, val) in mat.iter().enumerate() {
+    fn fluence_values_are_positive_and_finite() -> OpmResult<()> {
+        let res = fluence_hit_map(4, 4)?.calc_fluence_with_tubes(
+            (6, 5),
+            None,
+            None,
+            FluenceEstimator::HelperRays,
+        )?;
+        for (idx, val) in res.interp_distribution().iter().enumerate() {
             assert!(
                 val.is_finite() && val.value >= 0.0,
                 "Value at Index {} is invalid: {}",
@@ -1244,51 +1090,50 @@ mod test_rays_hit_map {
                 val.value
             );
         }
+        Ok(())
     }
-
     #[test]
-    fn combined_fluence_respects_dimensions() {
+    fn combined_fluence_respects_dimensions() -> OpmResult<()> {
         let mut scene = HitMap::default();
         let id = Uuid::new_v4();
-        match dummy_fluence_hitpoints(3, 3) {
-            HitPoints::Energy(_) => (),
-            HitPoints::Fluence(fluence_hit_points) => {
-                for hp in fluence_hit_points {
-                    let _ = scene.add_to_hitmap(HitPoint::Fluence(hp), 0, id, None);
-                }
-            }
+        for ray in ray_grid(3, 3)?.iter() {
+            scene.add_to_hitmap(fluence_hit(ray)?, 0, id, ray.source())?;
         }
-
         let nr_of_points = (10, 6);
-        let fluence_data = scene
-            .calc_combined_fluence_with_helper_rays(nr_of_points)
-            .expect("Combined fluence should succeed");
-
+        let fluence_data =
+            scene.calc_combined_fluence_with_tubes(nr_of_points, FluenceEstimator::HelperRays)?;
         let mat = fluence_data.interp_distribution();
         assert_eq!(mat.ncols(), nr_of_points.0);
         assert_eq!(mat.nrows(), nr_of_points.1);
+        Ok(())
     }
-
+    /// Between its corners a helper ray map runs linearly, so it shows a linear fluence as it is.
     #[test]
-    fn values_increase_consistently_with_position() {
-        let ray_map = RaysHitMap {
-            hit_points: dummy_fluence_hitpoints(3, 3),
-            ..Default::default()
+    fn values_increase_consistently_with_position() -> OpmResult<()> {
+        let range = centimeter!(-1.0)..centimeter!(1.0);
+        let res = fluence_hit_map(3, 3)?.calc_fluence_with_tubes(
+            (5, 5),
+            Some(&range),
+            Some(&range),
+            FluenceEstimator::HelperRays,
+        )?;
+        let at = |row, column| {
+            res.interp_distribution()[(row, column)].get::<joule_per_square_centimeter>()
         };
-
-        let res = ray_map
-            .calc_fluence_with_helper_rays((3, 3), None, None)
-            .expect("Fluence calc should succeed");
-
-        let mat = res.interp_distribution();
-        assert!(mat[(0, 0)] < mat[(2, 2)]);
+        assert_relative_eq!(at(1, 1), 8.0, max_relative = 1e-9);
+        assert_relative_eq!(at(3, 3), 12.0, max_relative = 1e-9);
+        assert_relative_eq!(at(1, 3), 9.0, max_relative = 1e-9);
+        Ok(())
     }
 }
 #[cfg(test)]
 mod test_ray_tubes {
     use super::RaysHitMap;
     use crate::{
-        core_optics::hit_map::rays_hit_map::{EnergyHitPoint, HitPoint},
+        core_optics::hit_map::{
+            fluence_estimator::FluenceEstimator,
+            rays_hit_map::{EnergyHitPoint, HitPoint},
+        },
         distributions::position::Grid,
         error::OpmResult,
         joule,
@@ -1341,7 +1186,12 @@ mod test_ray_tubes {
     /// axis.
     fn map_of(hits: &RaysHitMap, half_width: f64) -> OpmResult<FluenceData> {
         let range = millimeter!(-half_width)..millimeter!(half_width);
-        hits.calc_fluence_with_voronoi((121, 121), Some(&range), Some(&range))
+        hits.calc_fluence_with_tubes(
+            (121, 121),
+            Some(&range),
+            Some(&range),
+            FluenceEstimator::Voronoi,
+        )
     }
 
     /// Hits of rays that span no tubes leave the map without them, and a Voronoi map says it
@@ -1375,7 +1225,8 @@ mod test_ray_tubes {
     #[test]
     fn a_map_reaches_as_far_as_its_light() -> OpmResult<()> {
         let hits = hits_of(&bundle_in_tubes(10)?, 1.0, 0.0)?;
-        let map = hits.calc_fluence_with_voronoi((121, 121), None, None)?;
+        let map =
+            hits.calc_fluence_with_tubes((121, 121), None, None, FluenceEstimator::Voronoi)?;
         assert!(
             map.x_range().end.get::<millimeter>() > 5.2,
             "{:?}",
@@ -1492,7 +1343,12 @@ mod test_ray_tubes {
         let hits = hits_of(&rays, 1.0, 0.0)?;
         // the points of the map lie on the rays, 1 mm apart
         let range = millimeter!(-5.0)..millimeter!(5.0);
-        let map = hits.calc_fluence_with_voronoi((11, 11), Some(&range), Some(&range))?;
+        let map = hits.calc_fluence_with_tubes(
+            (11, 11),
+            Some(&range),
+            Some(&range),
+            FluenceEstimator::Voronoi,
+        )?;
         let per_ray = 1.0 / 121.0 / 0.01;
         for row in 1..10 {
             for column in 1..10 {

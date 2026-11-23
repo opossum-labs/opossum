@@ -20,16 +20,13 @@ mod ray_tubes;
 pub mod rays_hit_map;
 
 use crate::{
-    J_per_cm2,
-    error::{OpmResult, OpossumError},
+    error::OpmResult,
     light::RaySource,
     meter,
     nodes::fluence_detector::{Fluence, fluence_data::FluenceData},
     properties::Proptype,
 };
 use fluence_estimator::FluenceEstimator;
-use log::warn;
-use nalgebra::DMatrix;
 use ray_tubes::draw_map;
 use rays_hit_map::{HitPoint, HitPoints, RaysHitMap};
 use serde::{Deserialize, Serialize};
@@ -228,106 +225,33 @@ impl HitMap {
         }
         None
     }
-    /// Calculate a fluence map ([`FluenceData`]) of this [`HitMap`] using the "Voronoi" method
+    /// Calculate a fluence map ([`FluenceData`]) of this [`HitMap`] that follows the ray tubes of
+    /// its bundles, as the Voronoi and the helper ray estimator do.
     ///
-    /// The ray tubes of all stored [`RaysHitMap`]s are drawn into one map, which covers all of
-    /// them (see [`RaysHitMap::calc_fluence_with_voronoi`]). A bundle whose hits are fluences
-    /// rather than energies is left out, with a warning.
-    ///
-    /// # Attributes
-    /// -`nr_of_points`: tuple containing the number of (columns, rows) of the matrix on which the data should be calculated
-    ///
-    /// # Errors
-    /// This function errors if
-    /// - The hit point type is neither energy nor fluence
-    /// - the hits of a bundle do not all stand in the ray tubes of their source
-    pub fn calc_combined_fluence_with_voronoi(
-        &self,
-        nr_of_points: (usize, usize),
-    ) -> OpmResult<FluenceData> {
-        let hit_point_opt = &self.get_first_hitpoints();
-        if let Some(HitPoints::Energy(_)) = hit_point_opt {
-            let mut sheets = Vec::new();
-            for rays_hit_map in self
-                .hit_map
-                .iter()
-                .flat_map(|bounced| bounced.hit_map.values())
-            {
-                if let HitPoints::Energy(_) = rays_hit_map.hit_map() {
-                    sheets.extend(rays_hit_map.voronoi_sheets()?);
-                } else {
-                    warn!(
-                        "a bundle whose hits are fluences is left out of the Voronoi map of this surface"
-                    );
-                }
-            }
-            Ok(draw_map(
-                &sheets,
-                nr_of_points,
-                None,
-                None,
-                self.get_bounding_box(),
-                FluenceEstimator::Voronoi,
-            ))
-        } else if let Some(HitPoints::Fluence(_)) = hit_point_opt {
-            warn!(
-                "Unexpected type of HitPoints for voronoi estimator! Changing to helper-ray estimator!"
-            );
-            self.calc_combined_fluence_with_helper_rays(nr_of_points)
-        } else {
-            Err(OpossumError::Analysis("Wrong hit point type to calculate fluence with voronoi estimator! Must be an EnergyHitpoint!".into()))
-        }
-    }
-
-    /// Calculate a fluence map ([`FluenceData`]) of this [`HitMap`] using the "Helper Rays" method
-    ///
-    /// This method tries to combine the fluence of data of all stored [`RaysHitMap`]s and return a single [`FluenceData`]
-    ///
-    /// # Note
-    /// The resulting fluence map may be inaccurate for the combination of large beams with small beams, since, currently, the method relies solely on interpolation.
-    /// This is problematic if one of the beam sizes is in the order of one pixel of the matrix or even below.
+    /// The tubes of all stored [`RaysHitMap`]s are drawn into one map, which covers all of them
+    /// (see [`RaysHitMap::calc_fluence_with_tubes`]).
     ///
     /// # Attributes
     /// -`nr_of_points`: tuple containing the number of (columns, rows) of the matrix on which the data should be calculated
+    /// -`estimator`: the estimator the map stands for
     ///
     /// # Errors
-    /// This function errors if
-    /// - The hit point type is neither energy nor fluence
-    pub fn calc_combined_fluence_with_helper_rays(
+    /// This function errors if the hits of a bundle do not all stand in the ray tubes of their
+    /// source, or if no tube arrived complete.
+    pub fn calc_combined_fluence_with_tubes(
         &self,
         nr_of_points: (usize, usize),
+        estimator: FluenceEstimator,
     ) -> OpmResult<FluenceData> {
-        let hit_point_opt = &self.get_first_hitpoints();
-        if let Some(HitPoints::Fluence(_)) = hit_point_opt {
-            let (ax_1_range, ax_2_range) = self.get_bounding_box();
-            let mut fluence_matrix =
-                DMatrix::from_element(nr_of_points.1, nr_of_points.0, J_per_cm2!(0.));
-
-            for bounced_hit_map in &self.hit_map {
-                for rays_hit_map in bounced_hit_map.hit_map.values() {
-                    let fl_data = rays_hit_map.calc_fluence_with_helper_rays(
-                        nr_of_points,
-                        Some(&ax_1_range),
-                        Some(&ax_2_range),
-                    )?;
-                    fluence_matrix += fl_data.interp_distribution();
-                }
-            }
-
-            Ok(FluenceData::new(
-                fluence_matrix,
-                ax_1_range,
-                ax_2_range,
-                FluenceEstimator::HelperRays,
-            ))
-        } else if let Some(HitPoints::Energy(_)) = hit_point_opt {
-            warn!(
-                "Unexpected type of HitPoints for helper-ray estimator! Changing to voronoi estimator!"
-            );
-            self.calc_combined_fluence_with_voronoi(nr_of_points)
-        } else {
-            Err(OpossumError::Analysis("Wrong hit point type to calculate fluence with helper-ray estimator! Must be a FluenceHitpoint!".into()))
+        let mut sheets = Vec::new();
+        for rays_hit_map in self
+            .hit_map
+            .iter()
+            .flat_map(|bounced| bounced.hit_map.values())
+        {
+            sheets.extend(rays_hit_map.tube_sheets()?);
         }
+        draw_map(&sheets, nr_of_points, None, None, estimator)
     }
 
     /// Calculate a fluence map ([`FluenceData`]) of this [`HitMap`] using the "Kernel Density Estimator (KDE)" method
@@ -341,25 +265,14 @@ impl HitMap {
     /// -`nr_of_points`: tuple containing the number of (columns, rows) of the matrix on which the data should be calculated
     ///
     /// # Errors
-    /// This function errors if
-    /// - the [`RaysHitMap`]s canot be merged.
-    /// - The hit point type is neither energy nor fluence
+    /// This function errors if the [`RaysHitMap`]s cannot be merged or if
+    /// [`RaysHitMap::calc_fluence_with_kde`] fails, as it does for hits that brought fluences.
     pub fn calc_combined_fluence_with_kde(
         &self,
         nr_of_points: (usize, usize),
     ) -> OpmResult<FluenceData> {
-        let hit_point_opt = &self.get_first_hitpoints();
-        if let Some(HitPoints::Energy(_)) = hit_point_opt {
-            self.get_merged_rays_hit_map()?
-                .calc_fluence_with_kde(nr_of_points, None, None)
-        } else if let Some(HitPoints::Fluence(_)) = hit_point_opt {
-            warn!(
-                "Unexpected type of HitPoints for kernel density estimator! Changing to helper-ray estimator!"
-            );
-            self.calc_combined_fluence_with_helper_rays(nr_of_points)
-        } else {
-            Err(OpossumError::Analysis("Wrong hit point type to calculate fluence with kernel density estimator! Must be an EnergyHitpoint!".into()))
-        }
+        self.get_merged_rays_hit_map()?
+            .calc_fluence_with_kde(nr_of_points, None, None)
     }
 
     /// Calculate a fluence map ([`FluenceData`]) of this [`HitMap`] using the "Binning" method
@@ -370,25 +283,14 @@ impl HitMap {
     /// -`nr_of_points`: tuple containing the number of (columns, rows) of the matrix on which the data should be calculated
     ///
     /// # Errors
-    /// This function errors if
-    /// - the [`RaysHitMap`]s canot be merged.
-    /// - The hit point type is neither energy nor fluence
+    /// This function errors if the [`RaysHitMap`]s cannot be merged or if
+    /// [`RaysHitMap::calc_fluence_with_binning`] fails, as it does for hits that brought fluences.
     pub fn calc_combined_fluence_with_binning(
         &self,
         nr_of_points: (usize, usize),
     ) -> OpmResult<FluenceData> {
-        let hit_point_opt = &self.get_first_hitpoints();
-        if let Some(HitPoints::Energy(_)) = hit_point_opt {
-            self.get_merged_rays_hit_map()?
-                .calc_fluence_with_binning(nr_of_points, None, None)
-        } else if let Some(HitPoints::Fluence(_)) = hit_point_opt {
-            warn!(
-                "Unexpected type of HitPoints for binning estimator! Changing to helper-ray estimator!"
-            );
-            self.calc_combined_fluence_with_helper_rays(nr_of_points)
-        } else {
-            Err(OpossumError::Analysis("Wrong hit point type to calculate fluence with binning estimator! Must be an EnergyHitpoint!".into()))
-        }
+        self.get_merged_rays_hit_map()?
+            .calc_fluence_with_binning(nr_of_points, None, None)
     }
 
     /// Calculate a fluence map ([`FluenceData`]) of this [`HitMap`].
@@ -404,12 +306,11 @@ impl HitMap {
         estimator: &FluenceEstimator,
     ) -> OpmResult<FluenceData> {
         match estimator {
-            FluenceEstimator::Voronoi => self.calc_combined_fluence_with_voronoi(nr_of_points),
+            FluenceEstimator::Voronoi | FluenceEstimator::HelperRays => {
+                self.calc_combined_fluence_with_tubes(nr_of_points, *estimator)
+            }
             FluenceEstimator::KDE => self.calc_combined_fluence_with_kde(nr_of_points),
             FluenceEstimator::Binning => self.calc_combined_fluence_with_binning(nr_of_points),
-            FluenceEstimator::HelperRays => {
-                self.calc_combined_fluence_with_helper_rays(nr_of_points)
-            }
         }
     }
 }
@@ -535,10 +436,11 @@ mod test_hit_map {
             rays_hit_map::{EnergyHitPoint, FluenceHitPoint},
         },
         error::OpmResult,
-        joule, meter, nanometer,
+        joule,
+        light::Ray,
+        meter, nanometer,
         nodes::test_helper::helper::rays_along_z_from,
         properties::Proptype,
-        utils::test_helper::helper::check_logs,
     };
     use nalgebra::Point3;
     use uom::si::f64::Length;
@@ -927,21 +829,34 @@ mod test_hit_map {
         assert!(hp.is_none());
     }
 
-    /// Adds hits of 1 J at the given points, at bounce 1, of a bundle spanning the ray tubes
-    /// between them, as a source spans them for a Voronoi map.
-    fn add_bundle_in_tubes(hm: &mut HitMap, points: &[Point3<Length>]) -> OpmResult<()> {
+    /// Adds hits at the given points, at bounce 1, of a bundle spanning the ray tubes between
+    /// them, as a source spans them for a Voronoi map. `hit_of` makes the hit of each ray.
+    fn add_bundle_in_tubes(
+        hm: &mut HitMap,
+        points: &[Point3<Length>],
+        hit_of: fn(&Ray) -> OpmResult<HitPoint>,
+    ) -> OpmResult<()> {
         let mut rays = rays_along_z_from(points, nanometer!(1000.0))?;
         rays.attach_mesh()?;
         let uuid = Uuid::new_v4();
         for ray in rays.iter() {
-            hm.add_to_hitmap(
-                HitPoint::Energy(EnergyHitPoint::new(ray.position(), ray.energy())?),
-                1,
-                uuid,
-                ray.source(),
-            )?;
+            hm.add_to_hitmap(hit_of(ray)?, 1, uuid, ray.source())?;
         }
         Ok(())
+    }
+    /// The hit of a ray where it starts, bringing its energy of 1 J.
+    fn energy_hit(ray: &Ray) -> OpmResult<HitPoint> {
+        Ok(HitPoint::Energy(EnergyHitPoint::new(
+            ray.position(),
+            ray.energy(),
+        )?))
+    }
+    /// The hit of a ray with helper rays where it starts, bringing 1 J/cm².
+    fn fluence_hit(ray: &Ray) -> OpmResult<HitPoint> {
+        Ok(HitPoint::Fluence(FluenceHitPoint::new(
+            ray.position(),
+            J_per_cm2!(1.0),
+        )?))
     }
     /// The corners and the center of a square of 1 m.
     fn square_with_center() -> Vec<Point3<Length>> {
@@ -953,156 +868,72 @@ mod test_hit_map {
             meter!(0.5, -0.5, 0.0),
         ]
     }
+    /// The corners of a diamond of 1 m² and its center.
+    fn diamond_with_center() -> Vec<Point3<Length>> {
+        vec![
+            meter!(f64::sqrt(0.5), 0., 0.),
+            meter!(0., f64::sqrt(0.5), 0.),
+            meter!(-f64::sqrt(0.5), 0., 0.),
+            meter!(0., -f64::sqrt(0.5), 0.),
+            meter!(0., 0., 0.),
+        ]
+    }
     /// The center of the square stands for half of it, so its 1 J shows 2 J/m². A second bundle
     /// of the same kind adds as much again.
     #[test]
-    fn calc_combined_fluence_with_voronoi() -> OpmResult<()> {
+    fn a_combined_voronoi_map_adds_up_its_bundles() -> OpmResult<()> {
         let mut hm = HitMap::default();
-        add_bundle_in_tubes(&mut hm, &square_with_center())?;
-        let fl_data = hm.calc_combined_fluence_with_voronoi((51, 51))?;
+        add_bundle_in_tubes(&mut hm, &square_with_center(), energy_hit)?;
+        let fl_data = hm.calc_combined_fluence_with_tubes((51, 51), FluenceEstimator::Voronoi)?;
         assert_relative_eq!(fl_data.interp_distribution()[(25, 25)].value, 2.);
-
-        let pos2 = vec![
-            meter!(f64::sqrt(0.5), 0., 0.),
-            meter!(0., f64::sqrt(0.5), 0.),
-            meter!(-f64::sqrt(0.5), 0., 0.),
-            meter!(0., -f64::sqrt(0.5), 0.),
-            meter!(0., 0., 0.),
-        ];
-        add_bundle_in_tubes(&mut hm, &pos2)?;
-        let fl_data = hm.calc_combined_fluence_with_voronoi((51, 51))?;
+        add_bundle_in_tubes(&mut hm, &diamond_with_center(), energy_hit)?;
+        let fl_data = hm.calc_combined_fluence_with_tubes((51, 51), FluenceEstimator::Voronoi)?;
         assert_relative_eq!(fl_data.interp_distribution()[(25, 25)].value, 4.);
         Ok(())
     }
-
+    /// Hits that span no ray tubes leave no map.
     #[test]
-    fn calc_combined_fluence_with_voronoi_too_few_points() -> OpmResult<()> {
+    fn a_combined_map_of_hits_without_tubes_fails() -> OpmResult<()> {
         let mut hm = HitMap::default();
         let uuid = Uuid::new_v4();
-        let pos1 = vec![meter!(-0.5, -0.5, 0.0), meter!(0., 0., 0.0)];
-        for pos in &pos1 {
+        for pos in [meter!(-0.5, -0.5, 0.0), meter!(0., 0., 0.0)] {
             hm.add_to_hitmap(
-                HitPoint::Energy(EnergyHitPoint::new(*pos, joule!(1.0))?),
+                HitPoint::Energy(EnergyHitPoint::new(pos, joule!(1.0))?),
                 1,
                 uuid,
                 None,
             )?;
         }
-        assert!(hm.calc_combined_fluence_with_voronoi((50, 50)).is_err());
-        Ok(())
-    }
-
-    #[test]
-    fn calc_combined_fluence_with_voronoi_wrong_hit_point_type() -> OpmResult<()> {
-        testing_logger::setup();
-        let mut hm = HitMap::default();
-        let uuid = Uuid::new_v4();
-        let pos1 = vec![
-            meter!(-0.5, -0.5, 0.0),
-            meter!(0., 0., 0.0),
-            meter!(-0.5, 0.5, 0.0),
-            meter!(0.5, 0.5, 0.0),
-            meter!(0.5, -0.5, 0.0),
-        ];
-        for pos in &pos1 {
-            hm.add_to_hitmap(
-                HitPoint::Fluence(FluenceHitPoint::new(*pos, J_per_cm2!(1.0))?),
-                1,
-                uuid,
-                None,
-            )?;
+        for estimator in [FluenceEstimator::Voronoi, FluenceEstimator::HelperRays] {
+            assert!(
+                hm.calc_combined_fluence_with_tubes((50, 50), estimator)
+                    .is_err()
+            );
         }
-        let fl_data = hm.calc_combined_fluence_with_voronoi((51, 51))?;
-        check_logs(
-            log::Level::Warn,
-            vec![
-                "Unexpected type of HitPoints for voronoi estimator! Changing to helper-ray estimator!",
-            ],
-        );
-        assert_relative_eq!(fl_data.interp_distribution()[(25, 25)].value, 10000.);
         Ok(())
     }
-
+    /// Rays with helper rays bring their fluence along, whichever of the two tube estimators
+    /// draws them, and a second bundle adds as much again.
     #[test]
-    fn calc_combined_fluence_with_helper_rays() -> OpmResult<()> {
-        let mut hm = HitMap::default();
-        let uuid = Uuid::new_v4();
-        let pos1 = vec![
-            meter!(-0.5, -0.5, 0.0),
-            meter!(0., 0., 0.0),
-            meter!(-0.5, 0.5, 0.0),
-            meter!(0.5, 0.5, 0.0),
-            meter!(0.5, -0.5, 0.0),
-        ];
-        for pos in &pos1 {
-            hm.add_to_hitmap(
-                HitPoint::Fluence(FluenceHitPoint::new(*pos, J_per_cm2!(1.0))?),
-                1,
-                uuid,
-                None,
-            )?;
+    fn a_combined_tube_map_shows_the_fluences_helper_rays_brought() -> OpmResult<()> {
+        for estimator in [FluenceEstimator::HelperRays, FluenceEstimator::Voronoi] {
+            let mut hm = HitMap::default();
+            add_bundle_in_tubes(&mut hm, &square_with_center(), fluence_hit)?;
+            let fl_data = hm.calc_combined_fluence_with_tubes((51, 51), estimator)?;
+            assert_relative_eq!(fl_data.interp_distribution()[(25, 25)].value, 10000.);
+            add_bundle_in_tubes(&mut hm, &diamond_with_center(), fluence_hit)?;
+            let fl_data = hm.calc_combined_fluence_with_tubes((51, 51), estimator)?;
+            assert_relative_eq!(fl_data.interp_distribution()[(25, 25)].value, 20000.);
         }
-        let fl_data = hm.calc_combined_fluence_with_helper_rays((51, 51))?;
-        assert_relative_eq!(fl_data.interp_distribution()[(25, 25)].value, 10000.);
-
-        let uuid = Uuid::new_v4();
-        let pos2 = vec![
-            meter!(f64::sqrt(0.5), 0., 0.),
-            meter!(0., f64::sqrt(0.5), 0.),
-            meter!(-f64::sqrt(0.5), 0., 0.),
-            meter!(0., -f64::sqrt(0.5), 0.),
-            meter!(0., 0., 0.),
-        ];
-        for pos in &pos2 {
-            hm.add_to_hitmap(
-                HitPoint::Fluence(FluenceHitPoint::new(*pos, J_per_cm2!(1.0))?),
-                1,
-                uuid,
-                None,
-            )?;
-        }
-        let fl_data = hm.calc_combined_fluence_with_helper_rays((51, 51))?;
-        assert_relative_eq!(fl_data.interp_distribution()[(25, 25)].value, 20000.);
         Ok(())
     }
-
+    /// The helper ray estimator spreads the energies of plain rays as the Voronoi one does.
     #[test]
-    fn calc_combined_fluence_with_helper_rays_too_few_points() -> OpmResult<()> {
+    fn a_combined_helper_ray_map_of_plain_rays_spreads_their_energies() -> OpmResult<()> {
         let mut hm = HitMap::default();
-        hm.add_to_hitmap(
-            HitPoint::Fluence(FluenceHitPoint::new(
-                meter!(-0.5, -0.5, 0.0),
-                J_per_cm2!(1.0),
-            )?),
-            1,
-            Uuid::new_v4(),
-            None,
-        )?;
-        hm.add_to_hitmap(
-            HitPoint::Fluence(FluenceHitPoint::new(
-                meter!(-0.5, 0.5, 0.0),
-                J_per_cm2!(1.0),
-            )?),
-            1,
-            Uuid::new_v4(),
-            None,
-        )?;
-        assert!(hm.calc_combined_fluence_with_helper_rays((50, 50)).is_err());
-        Ok(())
-    }
-
-    #[test]
-    fn calc_combined_fluence_with_helper_rays_wrong_hit_point_type() -> OpmResult<()> {
-        testing_logger::setup();
-        let mut hm = HitMap::default();
-        add_bundle_in_tubes(&mut hm, &square_with_center())?;
-        let fl_data = hm.calc_combined_fluence_with_helper_rays((51, 51))?;
-        check_logs(
-            log::Level::Warn,
-            vec![
-                "Unexpected type of HitPoints for helper-ray estimator! Changing to voronoi estimator!",
-            ],
-        );
+        add_bundle_in_tubes(&mut hm, &square_with_center(), energy_hit)?;
+        let fl_data =
+            hm.calc_combined_fluence_with_tubes((51, 51), FluenceEstimator::HelperRays)?;
         assert_relative_eq!(fl_data.interp_distribution()[(25, 25)].value, 2.);
         Ok(())
     }
@@ -1155,34 +986,20 @@ mod test_hit_map {
         );
         Ok(())
     }
+    /// KDE spreads energies, so it refuses the fluences rays with helper rays bring.
     #[test]
     fn calc_combined_fluence_with_kde_wrong_hit_point_type() -> OpmResult<()> {
-        testing_logger::setup();
         let mut hm = HitMap::default();
-        let uuid = Uuid::new_v4();
-        let pos1 = vec![
-            meter!(-0.5, -0.5, 0.0),
-            meter!(0., 0., 0.0),
-            meter!(-0.5, 0.5, 0.0),
-            meter!(0.5, 0.5, 0.0),
-            meter!(0.5, -0.5, 0.0),
-        ];
-        for pos in &pos1 {
-            hm.add_to_hitmap(
-                HitPoint::Fluence(FluenceHitPoint::new(*pos, J_per_cm2!(1.0))?),
-                1,
-                uuid,
-                None,
-            )?;
-        }
-        let fl_data = hm.calc_combined_fluence_with_kde((51, 51))?;
-        check_logs(
-            log::Level::Warn,
-            vec![
-                "Unexpected type of HitPoints for kernel density estimator! Changing to helper-ray estimator!",
-            ],
+        add_bundle_in_tubes(&mut hm, &square_with_center(), fluence_hit)?;
+        let error = hm
+            .calc_combined_fluence_with_kde((51, 51))
+            .expect_err("fluences");
+        assert!(
+            error
+                .to_string()
+                .contains("KDE estimator spreads the energies"),
+            "{error}"
         );
-        assert_relative_eq!(fl_data.interp_distribution()[(25, 25)].value, 10000.);
         Ok(())
     }
 
@@ -1228,41 +1045,27 @@ mod test_hit_map {
         assert_relative_eq!(fl_data.interp_distribution()[(25, 25)].value, 2601.0);
         Ok(())
     }
+    /// Binning spreads energies, so it refuses the fluences rays with helper rays bring.
     #[test]
     fn calc_combined_fluence_with_binning_wrong_hit_point_type() -> OpmResult<()> {
-        testing_logger::setup();
         let mut hm = HitMap::default();
-        let uuid = Uuid::new_v4();
-        let pos1 = vec![
-            meter!(-0.5, -0.5, 0.0),
-            meter!(0., 0., 0.0),
-            meter!(-0.5, 0.5, 0.0),
-            meter!(0.5, 0.5, 0.0),
-            meter!(0.5, -0.5, 0.0),
-        ];
-        for pos in &pos1 {
-            hm.add_to_hitmap(
-                HitPoint::Fluence(FluenceHitPoint::new(*pos, J_per_cm2!(1.0))?),
-                1,
-                uuid,
-                None,
-            )?;
-        }
-        let fl_data = hm.calc_combined_fluence_with_binning((51, 51))?;
-        check_logs(
-            log::Level::Warn,
-            vec![
-                "Unexpected type of HitPoints for binning estimator! Changing to helper-ray estimator!",
-            ],
+        add_bundle_in_tubes(&mut hm, &square_with_center(), fluence_hit)?;
+        let error = hm
+            .calc_combined_fluence_with_binning((51, 51))
+            .expect_err("fluences");
+        assert!(
+            error
+                .to_string()
+                .contains("Binning estimator spreads the energies"),
+            "{error}"
         );
-        assert_relative_eq!(fl_data.interp_distribution()[(25, 25)].value, 10000.);
         Ok(())
     }
 
     #[test]
     fn calc_fluence_map() -> OpmResult<()> {
         let mut hm = HitMap::default();
-        add_bundle_in_tubes(&mut hm, &square_with_center())?;
+        add_bundle_in_tubes(&mut hm, &square_with_center(), energy_hit)?;
         assert!(
             hm.calc_fluence_map((51, 51), &FluenceEstimator::Voronoi)
                 .is_ok()

@@ -16,6 +16,7 @@ use uom::si::f64::Length;
 use super::fluence_estimator::FluenceEstimator;
 use crate::{
     J_per_m2,
+    error::{OpmResult, OpossumError},
     light::ray_mesh::RayVertex,
     meter,
     nodes::fluence_detector::fluence_data::FluenceData,
@@ -111,6 +112,14 @@ impl<'a> ArrivedSheet<'a> {
                 let (arrival, cell) = ((*arrival)?, corner.data().cell_area());
                 (surface > 0.0 && cell > 0.0).then(|| arrival.value / cell * source / surface)
             })
+            .collect()
+    }
+    /// Returns the value each corner of this sheet brought, as the fluence it shows when its
+    /// rays bring their fluence along: `None` for a corner that did not arrive.
+    pub fn arrived_values(&self) -> Vec<Option<f64>> {
+        self.arrivals
+            .iter()
+            .map(|arrival| arrival.map(|arrival| arrival.value))
             .collect()
     }
     /// Hands each triangle this sheet covers the surface with to `draw`: its alive tubes, each
@@ -213,31 +222,30 @@ fn margin_triangles(
 /// * `sheets` - the sheets, each with the fluence (in J/m²) at each of its corners.
 /// * `nr_of_points` - the number of points of the map along x and y.
 /// * `x`, `y` - the ranges the map covers; if `None`, it covers all the sheets draw.
-/// * `otherwise` - the ranges the map covers if none are given and the sheets draw nothing.
 /// * `estimator` - the estimator the map stands for.
+///
+/// # Errors
+///
+/// This function returns an error if no tube arrived complete, so that the sheets draw nothing.
 pub fn draw_map(
     sheets: &[(ArrivedSheet<'_>, Vec<Option<f64>>)],
     nr_of_points: (usize, usize),
     x: Option<&Range<Length>>,
     y: Option<&Range<Length>>,
-    otherwise: (Range<Length>, Range<Length>),
     estimator: FluenceEstimator,
-) -> FluenceData {
-    let drawn = sheets
+) -> OpmResult<FluenceData> {
+    let (lower, upper) = sheets
         .iter()
         .filter_map(|(sheet, values)| sheet.extent(values))
-        .reduce(|(lower, upper), (l, u)| (lower.inf(&l), upper.sup(&u)));
-    let (x, y) = match (x, y, drawn) {
-        (Some(x), Some(y), _) => (x.clone(), y.clone()),
-        (x, y, Some((lower, upper))) => (
-            x.cloned().unwrap_or(meter!(lower.x)..meter!(upper.x)),
-            y.cloned().unwrap_or(meter!(lower.y)..meter!(upper.y)),
-        ),
-        (x, y, None) => (
-            x.cloned().unwrap_or(otherwise.0),
-            y.cloned().unwrap_or(otherwise.1),
-        ),
-    };
+        .reduce(|(lower, upper), (l, u)| (lower.inf(&l), upper.sup(&u)))
+        .ok_or_else(|| {
+            OpossumError::Analysis(
+                "no ray tube arrived complete on this surface, so the light shows no fluence map"
+                    .into(),
+            )
+        })?;
+    let x = x.cloned().unwrap_or(meter!(lower.x)..meter!(upper.x));
+    let y = y.cloned().unwrap_or(meter!(lower.y)..meter!(upper.y));
     let mut grid = FluenceGrid::new(
         &(x.start.value..x.end.value),
         &(y.start.value..y.end.value),
@@ -248,12 +256,12 @@ pub fn draw_map(
             grid.add_triangle(corners, values)
         });
     }
-    FluenceData::new(
+    Ok(FluenceData::new(
         grid.values.map(|fluence| J_per_m2!(fluence)),
         x,
         y,
         estimator,
-    )
+    ))
 }
 /// The signed area of a triangle: positive if its corners run counterclockwise.
 fn signed_area([a, b, c]: [Point2<f64>; 3]) -> f64 {
