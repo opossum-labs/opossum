@@ -118,7 +118,7 @@ pub fn FlushableTextInput(
                     if e.key() == Key::Enter {
                         perform_save();
                     }
-                    e.prevent_default();
+                    e.stop_propagation();
                 },
             }
             label { class: label_class, r#for: id,
