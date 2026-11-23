@@ -4,11 +4,14 @@
 //! point source one sheet of directions, and every wavelength is a sheet of its own. Each sheet is
 //! triangulated once, where the source sends it out; its triangles are the ray tubes. A fluence
 //! map follows a tube only where all three of its rays arrived (see the handbook, "Fluence").
-use std::{fmt, sync::Arc};
+use std::{cmp::Ordering, fmt, sync::Arc};
 
+use itertools::Itertools;
 use log::warn;
-use nalgebra::Vector3;
-use spade::{DelaunayTriangulation, HasPosition, Point2 as SheetPoint, Triangulation};
+use nalgebra::{Point2, Vector3};
+use spade::{
+    DelaunayTriangulation, HasPosition, Point2 as SheetPoint, Triangulation, handles::VertexHandle,
+};
 
 use crate::{
     error::{OpmResult, OpossumError},
@@ -22,6 +25,8 @@ pub struct RayVertex {
     position: SheetPoint<f64>,
     /// The indices of the rays in the bundle the mesh was built from.
     rays: Vec<u32>,
+    /// The area the corner stands for at its source (see [`source_cell_area`]).
+    cell_area: f64,
 }
 impl RayVertex {
     /// Returns the indices of the rays starting at this corner, in the bundle the mesh was built
@@ -29,6 +34,13 @@ impl RayVertex {
     #[must_use]
     pub fn rays(&self) -> &[u32] {
         &self.rays
+    }
+    /// Returns the area this corner stands for at its source, in the coordinates of its sheet:
+    /// its Voronoi cell, and beyond each outer edge of the sheet half of the margin of half a tube
+    /// height there.
+    #[must_use]
+    pub const fn cell_area(&self) -> f64 {
+        self.cell_area
     }
 }
 impl HasPosition for RayVertex {
@@ -84,11 +96,10 @@ impl RayMesh {
         for wavelength in indexed.chunk_by(|(_, a), (_, b)| a.wavelength() == b.wavelength()) {
             let mut side_by_side = Vec::new();
             for start in wavelength.chunk_by(|(_, a), (_, b)| a.position() == b.position()) {
-                let direction = |ray: &Ray| ray.direction().normalize();
-                let fanned_out = start.split_first().is_some_and(|((_, first), rest)| {
-                    rest.iter()
-                        .any(|(_, ray)| direction(ray) != direction(first))
-                });
+                let fanned_out = !start
+                    .iter()
+                    .map(|(_, ray)| ray.direction().normalize())
+                    .all_equal();
                 if fanned_out {
                     sheets.push(Self::fan(start)?);
                 } else {
@@ -128,20 +139,18 @@ impl RayMesh {
     fn fan(rays: &[(u32, &Ray)]) -> OpmResult<DelaunayTriangulation<RayVertex>> {
         let axis = mean_direction(rays);
         let (u, v) = across(&axis);
-        let mut backward = false;
         let corners = rays
             .iter()
             .filter_map(|(index, ray)| {
                 let direction = ray.direction().normalize();
                 let along = direction.dot(&axis);
-                backward |= along <= 0.0;
                 (along > 0.0).then(|| {
                     let point = direction / along;
                     (SheetPoint::new(point.dot(&u), point.dot(&v)), *index)
                 })
             })
             .collect::<Vec<_>>();
-        if backward {
+        if corners.len() < rays.len() {
             warn!("a ray pointing back against the rays of its point source spans no ray tubes");
         }
         triangulate(corners)
@@ -169,45 +178,91 @@ fn across(axis: &Vector3<f64>) -> (Vector3<f64>, Vector3<f64>) {
     let v = axis.cross(&u);
     (u, v)
 }
-/// Triangulates the given corners of a sheet, each with the index of its ray. Corners at the same
-/// place become one.
+/// Triangulates the given corners of a sheet, each with the index of its ray, and gives each
+/// corner the area it stands for (see [`source_cell_area`]). Corners at the same place become one.
 fn triangulate(
     corners: impl IntoIterator<Item = (SheetPoint<f64>, u32)>,
 ) -> OpmResult<DelaunayTriangulation<RayVertex>> {
+    let order = |(a, _): &(SheetPoint<f64>, u32), (b, _): &(SheetPoint<f64>, u32)| {
+        a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y))
+    };
     let mut corners = corners.into_iter().collect::<Vec<_>>();
-    corners.sort_by(|(a, _), (b, _)| a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)));
+    corners.sort_by(order);
     let mut sheet = DelaunayTriangulation::new();
-    for same in corners
-        .chunk_by(|(a, _), (b, _)| a.x.total_cmp(&b.x).is_eq() && a.y.total_cmp(&b.y).is_eq())
-    {
+    for same in corners.chunk_by(|a, b| order(a, b) == Ordering::Equal) {
         let Some((position, _)) = same.first() else {
             continue;
         };
         let vertex = RayVertex {
             position: *position,
             rays: same.iter().map(|(_, index)| *index).collect(),
+            cell_area: 0.0,
         };
         sheet.insert(vertex).map_err(|e| {
             OpossumError::Other(format!("cannot span the ray tubes of a source: {e}"))
         })?;
     }
+    let cell_areas = sheet
+        .vertices()
+        .map(|corner| (corner.fix(), source_cell_area(corner)))
+        .collect::<Vec<_>>();
+    for (corner, area) in cell_areas {
+        sheet.vertex_data_mut(corner).cell_area = area;
+    }
     Ok(sheet)
+}
+/// The area a corner stands for at its source: its Voronoi cell, and beyond each outer edge of
+/// its sheet half of the margin of half a tube height there.
+///
+/// The Voronoi cell is summed from the tubes around the corner, each contributing the part of
+/// itself that is closer to the corner than to its other corners. That holds however the tubes of
+/// a regular grid are cut into triangles, which a third of their areas does not.
+fn source_cell_area(corner: VertexHandle<'_, RayVertex>) -> f64 {
+    let at = |v: VertexHandle<'_, RayVertex>| Point2::new(v.position().x, v.position().y);
+    corner
+        .out_edges()
+        .map(|edge| {
+            // Every tube around the corner lies left of one of its edges, every outer edge
+            // of the sheet through it is one of them.
+            let (left, right) = (edge.face().as_inner(), edge.rev().face().as_inner());
+            let inside = edge.opposite_vertex().map_or(0.0, |third| {
+                voronoi_part(at(corner), at(edge.to()), at(third))
+            });
+            let margin = match (left, right) {
+                (Some(tube), None) | (None, Some(tube)) => tube.area() / 2.0,
+                _ => 0.0,
+            };
+            inside + margin
+        })
+        .sum()
+}
+/// The part of the triangle `p q r` that lies closer to `p` than to `q` and `r`, signed: negative
+/// beyond an obtuse angle, where the parts of the neighbors make up for it.
+fn voronoi_part(p: Point2<f64>, q: Point2<f64>, r: Point2<f64>) -> f64 {
+    let twice_area = (q - p).perp(&(r - p)).abs();
+    if twice_area <= 0.0 {
+        return 0.0;
+    }
+    let (pq, pr) = ((p - q).norm_squared(), (p - r).norm_squared());
+    pq.mul_add((p - r).dot(&(q - r)), pr * (p - q).dot(&(r - q))) / (8.0 * twice_area)
 }
 impl PartialEq for RayMesh {
     /// Two meshes are equal if their sheets have the same corners, in the same places and order,
     /// and the same tubes between them.
     fn eq(&self, other: &Self) -> bool {
-        let corners = |sheet: &DelaunayTriangulation<RayVertex>| {
-            sheet
-                .vertices()
-                .map(|v| (v.position().x, v.position().y, v.data().rays.clone()))
-                .collect::<Vec<_>>()
-        };
-        let tubes = |sheet: &DelaunayTriangulation<RayVertex>| {
-            sheet
-                .inner_faces()
-                .map(|face| face.vertices().map(|v| v.index()))
-                .collect::<Vec<_>>()
+        let same_sheet = |a: &DelaunayTriangulation<RayVertex>,
+                          b: &DelaunayTriangulation<RayVertex>| {
+            a.num_vertices() == b.num_vertices()
+                && a.num_inner_faces() == b.num_inner_faces()
+                && a.vertices().zip(b.vertices()).all(|(va, vb)| {
+                    let (pa, pb) = (va.position(), vb.position());
+                    pa.x.total_cmp(&pb.x).is_eq()
+                        && pa.y.total_cmp(&pb.y).is_eq()
+                        && va.data().rays() == vb.data().rays()
+                })
+                && a.inner_faces().zip(b.inner_faces()).all(|(fa, fb)| {
+                    fa.vertices().map(|v| v.index()) == fb.vertices().map(|v| v.index())
+                })
         };
         self.nr_of_rays == other.nr_of_rays
             && self.sheets.len() == other.sheets.len()
@@ -215,9 +270,11 @@ impl PartialEq for RayMesh {
                 .sheets
                 .iter()
                 .zip(&other.sheets)
-                .all(|(a, b)| corners(a) == corners(b) && tubes(a) == tubes(b))
+                .all(|(a, b)| same_sheet(a, b))
     }
 }
+/// Positions in a mesh are finite, as spade inserts no others, so equality is reflexive.
+impl Eq for RayMesh {}
 impl fmt::Debug for RayMesh {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RayMesh")
@@ -264,10 +321,10 @@ impl RaySource {
     }
 }
 impl PartialEq for RaySource {
-    /// Two rays stand at the same place if they have the same index in equal meshes.
+    /// Two rays stand at the same place if they have the same index in equal meshes; a shared
+    /// mesh is equal without being compared.
     fn eq(&self, other: &Self) -> bool {
-        self.index == other.index
-            && (Arc::ptr_eq(&self.mesh, &other.mesh) || self.mesh == other.mesh)
+        self.index == other.index && self.mesh == other.mesh
     }
 }
 impl fmt::Debug for RaySource {
@@ -283,20 +340,17 @@ mod test {
     use super::*;
     use crate::{
         degree,
-        distributions::{energy::UniformDist, position::Hexapolar, spectral::LaserLines},
+        distributions::{
+            energy::UniformDist,
+            position::{Grid, Hexapolar},
+            spectral::LaserLines,
+        },
         joule, millimeter, nanometer,
+        nodes::test_helper::helper::rays_along_z_from,
         utils::{geom_transformation::Isometry, test_helper::helper::assert_warned},
     };
 
-    /// A collimated bundle of 1000 nm along z from a hexapolar pattern of the given rings, 5 mm
-    /// across.
-    fn hexapolar(rings: u8) -> OpmResult<Rays> {
-        Rays::new_uniform_collimated(
-            nanometer!(1000.0),
-            joule!(1.0),
-            &Hexapolar::new(millimeter!(5.0), rings)?,
-        )
-    }
+    use crate::utils::test_helper::helper::hexapolar_bundle as hexapolar;
     /// The number of triangles of any triangulation of a pattern of `rings` hexapolar rings: its
     /// 1 + 3·k·(k+1) points span 2·n − h − 2 triangles, with its 6·k outermost points on the hull.
     const fn triangles_of_hexapolar(rings: usize) -> usize {
@@ -439,14 +493,10 @@ mod test {
     /// Fewer than three rays, or rays on one line, span no tubes, and that is no error.
     #[test]
     fn a_line_of_rays_spans_no_tubes() -> OpmResult<()> {
-        let mut rays = Rays::default();
-        for y in 0..5 {
-            rays.add_ray(Ray::new_collimated(
-                millimeter!(0.0, f64::from(y), 0.0),
-                nanometer!(1000.0),
-                joule!(1.0),
-            )?);
-        }
+        let starts = (0..5)
+            .map(|y| millimeter!(0.0, f64::from(y), 0.0))
+            .collect::<Vec<_>>();
+        let rays = rays_along_z_from(&starts, nanometer!(1000.0))?;
         assert_eq!(only_sheet(&RayMesh::new(&rays)?).num_inner_faces(), 0);
         Ok(())
     }
@@ -484,6 +534,43 @@ mod test {
         let rays = hexapolar(3)?;
         assert_eq!(RayMesh::new(&rays)?, RayMesh::new(&rays)?);
         assert_ne!(RayMesh::new(&rays)?, RayMesh::new(&hexapolar(2)?)?);
+        Ok(())
+    }
+    /// A Voronoi part of a right isosceles triangle is a quarter of its square at the right angle
+    /// and an eighth at each of the other corners, so the parts make up the triangle.
+    #[test]
+    fn the_voronoi_parts_of_a_triangle_make_it_up() {
+        let (p, q, r) = (
+            Point2::new(0.0, 0.0),
+            Point2::new(1.0, 0.0),
+            Point2::new(0.0, 1.0),
+        );
+        approx::assert_relative_eq!(voronoi_part(p, q, r), 0.25);
+        approx::assert_relative_eq!(voronoi_part(q, r, p), 0.125);
+        approx::assert_relative_eq!(voronoi_part(r, p, q), 0.125);
+    }
+    /// The corners of a square grid of 1 mm stand for a square of 1 mm² each, inside and on its
+    /// edges, where the margin makes up the missing half; at a corner of the grid a quarter of
+    /// it is missing.
+    #[test]
+    fn the_corners_of_a_grid_stand_for_their_squares() -> OpmResult<()> {
+        let rays = Rays::new_uniform_collimated(
+            nanometer!(1000.0),
+            joule!(1.0),
+            &Grid::new(millimeter!(2.0, 2.0), nalgebra::Point2::new(3, 3))?,
+        )?;
+        let mesh = RayMesh::new(&rays)?;
+        let mut areas = only_sheet(&mesh)
+            .vertices()
+            .map(|v| v.data().cell_area() * 1e6)
+            .collect::<Vec<_>>();
+        areas.sort_by(f64::total_cmp);
+        for (area, expected) in areas
+            .iter()
+            .zip([0.75, 0.75, 0.75, 0.75, 1.0, 1.0, 1.0, 1.0, 1.0])
+        {
+            approx::assert_relative_eq!(*area, expected, max_relative = 1e-9);
+        }
         Ok(())
     }
     /// A ray keeps its place in the tubes when it is copied, and drops it when written to file.

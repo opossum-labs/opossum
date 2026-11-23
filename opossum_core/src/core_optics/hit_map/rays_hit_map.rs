@@ -241,17 +241,14 @@ impl RaysHitMap {
         self.push_hit_point(hit_point)?;
         match source {
             Some(source) if in_tubes => {
-                let slot = match self
+                let slot = self
                     .meshes
                     .iter()
                     .position(|mesh| Arc::ptr_eq(mesh, source.mesh()))
-                {
-                    Some(slot) => slot,
-                    None => {
+                    .unwrap_or_else(|| {
                         self.meshes.push(Arc::clone(source.mesh()));
                         self.meshes.len() - 1
-                    }
-                };
+                    });
                 let slot = u32::try_from(slot).map_err(|_| {
                     OpossumError::Analysis("too many ray meshes on one surface".into())
                 })?;
@@ -503,7 +500,12 @@ impl RaysHitMap {
                 "a Voronoi map needs the energies of the hits".into(),
             ));
         };
-        let energy_of = |hit: usize| hit_points.get(hit).map(|p| p.value.get::<joule>());
+        let energy_of = |hit: usize| {
+            hit_points.get(hit).map(|p| {
+                let at = Point2::new(p.position.x.value, p.position.y.value);
+                (at, p.value.get::<joule>())
+            })
+        };
         Ok(self
             .arrived_sheets(energy_of)?
             .into_iter()
@@ -527,50 +529,62 @@ impl RaysHitMap {
     ///
     /// # Arguments
     ///
-    /// * `value_of` - what the hit with the given index brought: its energy or its fluence.
+    /// * `hit_of` - where the hit with the given index lies on the surface, in meters, and what
+    ///   it brought: its energy or its fluence.
     ///
     /// # Errors
     ///
     /// This function returns an error if the hits do not all stand in ray tubes.
     fn arrived_sheets(
         &self,
-        value_of: impl Fn(usize) -> Option<f64>,
+        hit_of: impl Fn(usize) -> Option<(Point2<f64>, f64)>,
     ) -> OpmResult<Vec<ArrivedSheet<'_>>> {
         if !self.follows_tubes() {
             return Err(OpossumError::Analysis(
                 "the rays on this surface span no ray tubes, which a Voronoi or helper ray map follows".into(),
             ));
         }
-        let positions = self.hit_points.positions();
-        let mut sheets = Vec::new();
-        for (slot, mesh) in (0..).zip(&self.meshes) {
-            let mut copies: Vec<Vec<Option<usize>>> = Vec::new();
-            let mut hits_of_ray = vec![0_usize; mesh.nr_of_rays()];
-            for (hit, (hit_slot, ray)) in self.vertices.iter().enumerate() {
-                let ray = *ray as usize;
-                let Some(count) = hits_of_ray.get_mut(ray).filter(|_| *hit_slot == slot) else {
-                    continue;
-                };
-                if copies.len() <= *count {
-                    copies.push(vec![None; mesh.nr_of_rays()]);
-                }
-                if let Some(entry) = copies.get_mut(*count).and_then(|copy| copy.get_mut(ray)) {
-                    *entry = Some(hit);
-                }
-                *count += 1;
+        // per mesh: how often each ray hit so far, and the copies of its sheets they arrived in
+        let mut tables = self
+            .meshes
+            .iter()
+            .map(|mesh| {
+                (
+                    vec![0_usize; mesh.nr_of_rays()],
+                    Vec::<Vec<Option<usize>>>::new(),
+                )
+            })
+            .collect::<Vec<_>>();
+        for (hit, (slot, ray)) in self.vertices.iter().enumerate() {
+            let (Some((counts, copies)), ray) = (tables.get_mut(*slot as usize), *ray as usize)
+            else {
+                continue;
+            };
+            let nr_of_rays = counts.len();
+            let Some(count) = counts.get_mut(ray) else {
+                continue;
+            };
+            if copies.len() <= *count {
+                copies.push(vec![None; nr_of_rays]);
             }
-            for hit_of_ray in &copies {
+            if let Some(entry) = copies.get_mut(*count).and_then(|copy| copy.get_mut(ray)) {
+                *entry = Some(hit);
+            }
+            *count += 1;
+        }
+        let mut sheets = Vec::new();
+        for (mesh, (_, copies)) in self.meshes.iter().zip(&tables) {
+            for hit_of_ray in copies {
                 let arrival_of = |corner: &RayVertex| {
-                    let hits = corner
+                    let mut hits = corner
                         .rays()
                         .iter()
-                        .map(|ray| hit_of_ray.get(*ray as usize).copied().flatten())
-                        .collect::<Option<Vec<usize>>>()?;
-                    let position = positions.get(*hits.first()?)?;
-                    Some(Arrival {
-                        position: Point2::new(position.x.value, position.y.value),
-                        value: hits.iter().map(|hit| value_of(*hit)).sum::<Option<f64>>()?,
-                    })
+                        .map(|ray| hit_of_ray.get(*ray as usize).copied().flatten());
+                    let (position, mut value) = hit_of(hits.next()??)?;
+                    for hit in hits {
+                        value += hit_of(hit?)?.1;
+                    }
+                    Some(Arrival { position, value })
                 };
                 sheets.extend(
                     mesh.sheets()
@@ -1275,53 +1289,52 @@ mod test_ray_tubes {
     use super::RaysHitMap;
     use crate::{
         core_optics::hit_map::rays_hit_map::{EnergyHitPoint, HitPoint},
-        distributions::position::{Grid, Hexapolar},
+        distributions::position::Grid,
         error::OpmResult,
         joule,
-        light::Rays,
+        light::{Ray, Rays},
         millimeter, nanometer,
         nodes::fluence_detector::fluence_data::FluenceData,
-        utils::to_f64,
+        utils::test_helper::helper::{energy_of, fluence_near, hexapolar_bundle},
     };
     use approx::assert_relative_eq;
     use nalgebra::{Point2, Point3};
     use uom::si::{
-        energy::joule, f64::Length, length::millimeter,
-        radiant_exposure::joule_per_square_centimeter,
+        energy::joule, length::millimeter, radiant_exposure::joule_per_square_centimeter,
     };
 
-    /// A collimated bundle of 1 J along z, from `rings` hexapolar rings 10 mm across, spanning its
-    /// ray tubes.
+    /// The bundle of [`hexapolar_bundle`], 5 mm in radius, spanning its ray tubes.
     fn bundle_in_tubes(rings: u8) -> OpmResult<Rays> {
-        let mut rays = Rays::new_uniform_collimated(
-            nanometer!(1000.0),
-            joule!(1.0),
-            &Hexapolar::new(millimeter!(5.0), rings)?,
-        )?;
+        let mut rays = hexapolar_bundle(rings)?;
         rays.attach_mesh()?;
         Ok(rays)
     }
-    /// The fluence in J/cm² of a flat-top beam of 1 J in `rings` hexapolar rings 10 mm across: the
-    /// outermost ring stands for the light up to half a ring spacing beyond the beam radius.
+    /// The fluence in J/cm² of [`bundle_in_tubes`].
     fn flat_top_fluence(rings: u8) -> f64 {
-        let reach = 0.5 * (1.0 + 0.5 / f64::from(rings));
-        1.0 / (std::f64::consts::PI * reach * reach)
+        crate::utils::test_helper::helper::flat_top_fluence(5.0, rings)
     }
-    /// The hits of the given rays where they start, `scale` times as far from the axis, leaving
-    /// out the rays that start closer to the axis than `hole` (in mm).
-    fn hits_of(rays: &Rays, scale: f64, hole: f64) -> OpmResult<RaysHitMap> {
-        let mut map = RaysHitMap::default();
-        for ray in rays.iter() {
+    /// Whether the given ray starts closer to the axis than `radius` (in mm).
+    fn starts_within(ray: &Ray, radius: f64) -> bool {
+        let p = ray.position();
+        p.x.get::<millimeter>().hypot(p.y.get::<millimeter>()) < radius
+    }
+    /// Adds the hits of the given rays where they start, `scale` times as far from the axis, to
+    /// the given map, leaving out the rays that start closer to the axis than `hole` (in mm).
+    fn add_hits(map: &mut RaysHitMap, rays: &Rays, scale: f64, hole: f64) -> OpmResult<()> {
+        for ray in rays.iter().filter(|ray| !starts_within(ray, hole)) {
             let p = ray.position();
-            if p.x.get::<millimeter>().hypot(p.y.get::<millimeter>()) < hole {
-                continue;
-            }
             let at = Point3::new(p.x * scale, p.y * scale, p.z);
             map.add_hit_point(
                 HitPoint::Energy(EnergyHitPoint::new(at, ray.energy())?),
                 ray.source(),
             )?;
         }
+        Ok(())
+    }
+    /// A map of the hits of [`add_hits`].
+    fn hits_of(rays: &Rays, scale: f64, hole: f64) -> OpmResult<RaysHitMap> {
+        let mut map = RaysHitMap::default();
+        add_hits(&mut map, rays, scale, hole)?;
         Ok(map)
     }
     /// The Voronoi map of the given hits on a grid of 121 × 121 points `half_width` mm around the
@@ -1330,41 +1343,12 @@ mod test_ray_tubes {
         let range = millimeter!(-half_width)..millimeter!(half_width);
         hits.calc_fluence_with_voronoi((121, 121), Some(&range), Some(&range))
     }
-    /// The value of the given map at the point nearest to `(x, y)` in mm, in J/cm².
-    fn fluence_near(map: &FluenceData, x: f64, y: f64) -> OpmResult<f64> {
-        let (xs, ys, values) = map.get_fluence_distribution()?;
-        let nearest = |axis: &nalgebra::DVector<Length>, at: f64| {
-            axis.iter()
-                .map(|c| (c.get::<millimeter>() - at).abs())
-                .enumerate()
-                .min_by(|(_, a), (_, b)| a.total_cmp(b))
-                .map_or(0, |(index, _)| index)
-        };
-        Ok(values[(nearest(&ys, y), nearest(&xs, x))].get::<joule_per_square_centimeter>())
-    }
-    /// The energy of the given map, in J: its values summed over the area of its grid cells.
-    fn energy_of(map: &FluenceData) -> f64 {
-        let (columns, rows) = (to_f64(map.len_x() - 1), to_f64(map.len_y() - 1));
-        let width = (map.x_range().end - map.x_range().start).value / columns;
-        let height = (map.y_range().end - map.y_range().start).value / rows;
-        map.interp_distribution()
-            .iter()
-            .map(|f| f.value)
-            .sum::<f64>()
-            * width
-            * height
-    }
 
     /// Hits of rays that span no tubes leave the map without them, and a Voronoi map says it
     /// needs them.
     #[test]
     fn hits_without_tubes_leave_no_voronoi_map() -> OpmResult<()> {
-        let rays = Rays::new_uniform_collimated(
-            nanometer!(1000.0),
-            joule!(1.0),
-            &Hexapolar::new(millimeter!(5.0), 3)?,
-        )?;
-        let map = hits_of(&rays, 1.0, 0.0)?;
+        let map = hits_of(&hexapolar_bundle(3)?, 1.0, 0.0)?;
         assert!(map.vertices.is_empty());
         let error = map_of(&map, 6.0).expect_err("no tubes");
         assert!(error.to_string().contains("span no ray tubes"), "{error}");
@@ -1376,12 +1360,7 @@ mod test_ray_tubes {
     fn a_bundle_arriving_twice_adds_up() -> OpmResult<()> {
         let rays = bundle_in_tubes(10)?;
         let mut map = hits_of(&rays, 1.0, 0.0)?;
-        for ray in rays.iter() {
-            map.add_hit_point(
-                HitPoint::Energy(EnergyHitPoint::new(ray.position(), ray.energy())?),
-                ray.source(),
-            )?;
-        }
+        add_hits(&mut map, &rays, 1.0, 0.0)?;
         let map = map_of(&map, 6.0)?;
         assert_relative_eq!(
             fluence_near(&map, 2.0, 1.0)?,
@@ -1431,12 +1410,7 @@ mod test_ray_tubes {
     fn hits_of_two_meshes_keep_them_apart() -> OpmResult<()> {
         let (first, second) = (bundle_in_tubes(1)?, bundle_in_tubes(1)?);
         let mut map = hits_of(&first, 1.0, 0.0)?;
-        for ray in second.iter() {
-            map.add_hit_point(
-                HitPoint::Energy(EnergyHitPoint::new(ray.position(), ray.energy())?),
-                ray.source(),
-            )?;
-        }
+        add_hits(&mut map, &second, 1.0, 0.0)?;
         assert_eq!(map.meshes.len(), 2);
         let slots = map
             .vertices
@@ -1499,10 +1473,7 @@ mod test_ray_tubes {
         );
         let left = rays
             .iter()
-            .filter(|ray| {
-                let p = ray.position();
-                p.x.get::<millimeter>().hypot(p.y.get::<millimeter>()) >= 2.2
-            })
+            .filter(|ray| !starts_within(ray, 2.2))
             .map(|ray| ray.energy().get::<joule>())
             .sum::<f64>();
         assert_relative_eq!(energy_of(&map), left, max_relative = 0.03);

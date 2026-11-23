@@ -52,12 +52,8 @@ impl<'a> ArrivedSheet<'a> {
         sheet: &'a DelaunayTriangulation<RayVertex>,
         arrival_of: impl Fn(&RayVertex) -> Option<Arrival>,
     ) -> Self {
-        let mut arrivals = vec![None; sheet.num_vertices()];
-        for vertex in sheet.vertices() {
-            if let Some(arrival) = arrivals.get_mut(vertex.index()) {
-                *arrival = arrival_of(vertex.data());
-            }
-        }
+        // spade hands out the vertices in the order of their indices
+        let arrivals = sheet.vertices().map(|v| arrival_of(v.data())).collect();
         Self { sheet, arrivals }
     }
     /// Returns where the given corner arrived, if it did.
@@ -86,24 +82,22 @@ impl<'a> ArrivedSheet<'a> {
     }
     /// Returns the fluence, in J/m², each corner of this sheet shows from the energy it brought.
     ///
-    /// The energy of a corner spreads over the area it stands for at its source, magnified by
-    /// as much as its alive tubes grew on the way: `E / A_src · D_src / D_surface`, where `D` is a
-    /// third of the area of the alive tubes around the corner. A tube torn away counts on
-    /// neither side, so a corner at a cut shows the fluence of the light that is there.
+    /// The energy of a corner spreads over the area it stands for at its source (see
+    /// [`RayVertex::cell_area`]), magnified by as much as its alive tubes grew on the way:
+    /// `E / A_src · D_src / D_surface`, where `D` is the area of the alive tubes around the
+    /// corner. A tube torn away counts on neither side, so a corner at a cut shows the fluence of
+    /// the light that is there.
     ///
     /// # Returns
     ///
     /// One value per vertex of the sheet, `None` for a corner without an alive tube.
     pub fn fluences_from_energies(&self) -> Vec<Option<f64>> {
-        let mut at_source = vec![0.0; self.arrivals.len()];
-        let mut on_surface = vec![0.0; self.arrivals.len()];
+        // the area of the alive tubes around each corner, at the source and on the surface
+        let mut areas = vec![(0.0, 0.0); self.arrivals.len()];
         for (tube, points) in self.alive_tubes() {
-            let (source, surface) = (tube.area() / 3.0, signed_area(points).abs() / 3.0);
+            let (source, surface) = (tube.area(), signed_area(points).abs());
             for corner in tube.vertices() {
-                if let (Some(s), Some(d)) = (
-                    at_source.get_mut(corner.index()),
-                    on_surface.get_mut(corner.index()),
-                ) {
+                if let Some((s, d)) = areas.get_mut(corner.index()) {
                     *s += source;
                     *d += surface;
                 }
@@ -111,11 +105,10 @@ impl<'a> ArrivedSheet<'a> {
         }
         self.sheet
             .vertices()
-            .map(|corner| {
-                let arrival = self.arrival(corner)?;
-                let source = *at_source.get(corner.index())?;
-                let surface = *on_surface.get(corner.index())?;
-                let cell = source_cell_area(corner);
+            .zip(&self.arrivals)
+            .zip(areas)
+            .map(|((corner, arrival), (source, surface))| {
+                let (arrival, cell) = ((*arrival)?, corner.data().cell_area());
                 (surface > 0.0 && cell > 0.0).then(|| arrival.value / cell * source / surface)
             })
             .collect()
@@ -198,15 +191,15 @@ fn margin_triangles(
     [fa, fb]: [f64; 2],
 ) -> Option<[Triangle; 2]> {
     let along = b - a;
-    let length = along.norm();
-    if length <= 0.0 {
+    let length_squared = along.norm_squared();
+    if length_squared <= 0.0 {
         return None;
     }
-    let mut outward = Vector2::new(along.y, -along.x) / length;
-    if outward.dot(&(third - a)) > 0.0 {
-        outward = -outward;
+    // across the edge, as long as half the tube height: its area over the length of the edge
+    let mut across = Vector2::new(along.y, -along.x) * (tube_area / length_squared);
+    if across.dot(&(third - a)) > 0.0 {
+        across = -across;
     }
-    let across = outward * (tube_area / length);
     let (a_out, b_out) = (a + across, b + across);
     Some([
         ([a, b, b_out], [fa, fb, fb]),
@@ -264,54 +257,7 @@ pub fn draw_map(
 }
 /// The signed area of a triangle: positive if its corners run counterclockwise.
 fn signed_area([a, b, c]: [Point2<f64>; 3]) -> f64 {
-    cross(b - a, c - a) / 2.0
-}
-/// The z component of the cross product of two vectors of the plane.
-fn cross(u: Vector2<f64>, v: Vector2<f64>) -> f64 {
-    u.x.mul_add(v.y, -u.y * v.x)
-}
-/// The area a corner stands for at its source: its Voronoi cell, and beyond each outer edge of
-/// its sheet half of the margin of half a tube height there.
-///
-/// The Voronoi cell is summed from the tubes around the corner, each contributing the part of
-/// itself that is closer to the corner than to its other corners. That holds however the tubes of
-/// a regular grid are cut into triangles, which a third of their areas does not.
-fn source_cell_area(corner: VertexHandle<'_, RayVertex>) -> f64 {
-    let at = |v: VertexHandle<'_, RayVertex>| Point2::new(v.position().x, v.position().y);
-    corner
-        .out_edges()
-        .map(|edge| {
-            // Every tube around the corner lies left of one of its edges, every outer edge
-            // of the sheet through it is one of them.
-            let (left, right) = (edge.face().as_inner(), edge.rev().face().as_inner());
-            let inside = left.map_or(0.0, |tube| {
-                let mut others = tube
-                    .vertices()
-                    .into_iter()
-                    .filter(|v| v.index() != corner.index())
-                    .map(at);
-                match (others.next(), others.next()) {
-                    (Some(q), Some(r)) => voronoi_part(at(corner), q, r),
-                    _ => 0.0,
-                }
-            });
-            let margin = match (left, right) {
-                (Some(tube), None) | (None, Some(tube)) => tube.area() / 2.0,
-                _ => 0.0,
-            };
-            inside + margin
-        })
-        .sum()
-}
-/// The part of the triangle `p q r` that lies closer to `p` than to `q` and `r`, signed: negative
-/// beyond an obtuse angle, where the parts of the neighbors make up for it.
-fn voronoi_part(p: Point2<f64>, q: Point2<f64>, r: Point2<f64>) -> f64 {
-    let twice_area = cross(q - p, r - p).abs();
-    if twice_area <= 0.0 {
-        return 0.0;
-    }
-    let (pq, pr) = ((p - q).norm_squared(), (p - r).norm_squared());
-    pq.mul_add((p - r).dot(&(q - r)), pr * (p - q).dot(&(r - q))) / (8.0 * twice_area)
+    (b - a).perp(&(c - a)) / 2.0
 }
 
 /// A regular grid of points that tubes are drawn onto, the values of overlapping tubes adding up.
@@ -366,7 +312,7 @@ impl Axis {
             .floor()
             .min(to_f64(self.count - 1));
         match (try_f64_to_usize(first), try_f64_to_usize(last)) {
-            (Some(first), Some(last)) if first <= last && first < self.count => first..last + 1,
+            (Some(first), Some(last)) if first <= last => first..last + 1,
             _ => 0..0,
         }
     }
@@ -393,33 +339,30 @@ impl FluenceGrid {
     /// which the edge is a top or left one.
     fn add_triangle(&mut self, mut corners: [Point2<f64>; 3], mut values: [f64; 3]) {
         let twice_area = 2.0 * signed_area(corners);
-        if twice_area.partial_cmp(&0.0) != Some(Ordering::Greater) {
-            if twice_area.partial_cmp(&0.0) != Some(Ordering::Less) {
-                return;
+        match twice_area.partial_cmp(&0.0) {
+            Some(Ordering::Greater) => {}
+            Some(Ordering::Less) => {
+                corners.swap(1, 2);
+                values.swap(1, 2);
             }
-            corners.swap(1, 2);
-            values.swap(1, 2);
+            _ => return,
         }
-        let twice_area = twice_area.abs();
+        let per_area = twice_area.abs().recip();
         let [p0, p1, p2] = corners;
-        let (min_x, max_x) = (p0.x.min(p1.x).min(p2.x), p0.x.max(p1.x).max(p2.x));
-        let (min_y, max_y) = (p0.y.min(p1.y).min(p2.y), p0.y.max(p1.y).max(p2.y));
-        for column in self.x.within(min_x, max_x) {
-            for row in self.y.within(min_y, max_y) {
+        // each edge lies opposite the corner of the same index
+        let edges = [(p1, p2), (p2, p0), (p0, p1)];
+        let top_left = edges.map(|(a, b)| is_top_left(b - a));
+        let (lower, upper) = (p0.inf(&p1).inf(&p2), p0.sup(&p1).sup(&p2));
+        for column in self.x.within(lower.x, upper.x) {
+            for row in self.y.within(lower.y, upper.y) {
                 let point = Point2::new(self.x.at(column), self.y.at(row));
-                let weights = [(p1, p2), (p2, p0), (p0, p1)].map(|(a, b)| edge_weight(a, b, point));
-                let covered =
-                    weights
-                        .iter()
-                        .zip([(p1, p2), (p2, p0), (p0, p1)])
-                        .all(|(w, (a, b))| match w.partial_cmp(&0.0) {
-                            Some(Ordering::Greater) => true,
-                            Some(Ordering::Equal) => is_top_left(b - a),
-                            _ => false,
-                        });
+                let weights = edges.map(|(a, b)| edge_weight(a, b, point));
+                let covered = weights
+                    .iter()
+                    .zip(top_left)
+                    .all(|(w, top_left)| *w > 0.0 || (top_left && *w >= 0.0));
                 if covered && let Some(cell) = self.values.get_mut((row, column)) {
-                    *cell +=
-                        weights.iter().zip(values).map(|(w, v)| w * v).sum::<f64>() / twice_area;
+                    *cell += weights.iter().zip(values).map(|(w, v)| w * v).sum::<f64>() * per_area;
                 }
             }
         }
@@ -432,9 +375,9 @@ impl FluenceGrid {
 fn edge_weight(a: Point2<f64>, b: Point2<f64>, point: Point2<f64>) -> f64 {
     let a_first = a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)) != Ordering::Greater;
     if a_first {
-        cross(b - a, point - a)
+        (b - a).perp(&(point - a))
     } else {
-        -cross(a - b, point - b)
+        -(a - b).perp(&(point - b))
     }
 }
 /// Whether an edge running along the given direction, of a triangle running counterclockwise, is
@@ -539,18 +482,5 @@ mod test {
         assert_relative_eq!(values[(3, 1)], 1.5, epsilon = 1e-12);
         assert_relative_eq!(values[(3, 2)], 2.0, epsilon = 1e-12);
         assert!(values.row(1).iter().all(|v| *v == 0.0), "{values}");
-    }
-    /// A Voronoi part of a right isosceles triangle is a quarter of its square at the right angle
-    /// and an eighth at each of the other corners, so the parts make up the triangle.
-    #[test]
-    fn the_voronoi_parts_of_a_triangle_make_it_up() {
-        let (p, q, r) = (
-            Point2::new(0.0, 0.0),
-            Point2::new(1.0, 0.0),
-            Point2::new(0.0, 1.0),
-        );
-        assert_relative_eq!(voronoi_part(p, q, r), 0.25);
-        assert_relative_eq!(voronoi_part(q, r, p), 0.125);
-        assert_relative_eq!(voronoi_part(r, p, q), 0.125);
     }
 }

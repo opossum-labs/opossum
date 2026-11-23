@@ -230,13 +230,13 @@ mod test_ghost_focus_analyzer {
         degree,
         geometry::Extruded,
         joule,
-        light::{LightData, LightResult},
+        light::LightResult,
         millimeter,
         nodes::{
             EnergyMeter, FluenceDetector, Lens, NodeGroup, SourcePort, SpotDiagram, ThinMirror,
             round_collimated_ray_builder,
             test_helper::helper::{
-                rays_recorded_by_meter, scenery_with_a_mirror_shrunk_behind_its_back,
+                rays_at_meter, rays_recorded_by_meter, scenery_with_a_mirror_shrunk_behind_its_back,
             },
         },
         percent,
@@ -287,15 +287,7 @@ mod test_ghost_focus_analyzer {
             round_collimated_ray_builder(millimeter!(5.0), joule!(1.0), 5)?,
         );
         GhostFocusAnalyzer::new(config).analyze(&mut scenery)?;
-        let node = scenery.node(meter)?;
-        let Some(LightData::GhostFocus(bundles)) = node
-            .as_any()
-            .downcast_ref::<EnergyMeter>()
-            .and_then(EnergyMeter::light_data)
-        else {
-            panic!("the meter received no rays");
-        };
-        let rays = bundles.iter().flat_map(Rays::iter).collect::<Vec<_>>();
+        let rays = rays_at_meter(&scenery, meter)?;
         assert!(!rays.is_empty());
         assert!(rays.iter().all(|ray| ray.source().is_none()));
         Ok(())

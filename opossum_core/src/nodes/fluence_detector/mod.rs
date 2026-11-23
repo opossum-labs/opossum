@@ -272,6 +272,7 @@ mod test {
         light::{LightData, LightResult, spectrum_helper::create_he_ne_spec},
         nanometer,
         nodes::test_helper::helper::*,
+        utils::test_helper::helper::fluence_near,
     };
     #[test]
     fn default() {
@@ -477,12 +478,9 @@ mod test {
     const BEAM_RADIUS: f64 = 10.0;
     /// The number of hexapolar rings of the beam of [`map_of_a_flat_top`].
     const BEAM_RINGS: u8 = 15;
-    /// The fluence of the flat-top beam of [`map_of_a_flat_top`], in J/cm²: 1 J spread evenly
-    /// over its rays, each ring standing for an annulus one ring spacing wide, so the outermost
-    /// ring reaches half a spacing beyond the beam radius.
+    /// The fluence of the flat-top beam of [`map_of_a_flat_top`], in J/cm².
     fn flat_top_fluence() -> f64 {
-        let reach = (BEAM_RADIUS + BEAM_RADIUS / f64::from(BEAM_RINGS) / 2.0) / 10.0;
-        1.0 / (std::f64::consts::PI * reach * reach)
+        crate::utils::test_helper::helper::flat_top_fluence(BEAM_RADIUS, BEAM_RINGS)
     }
     /// Traces a collimated flat-top beam of 1 J at the given laser lines into a fluence detector
     /// 150 mm from the source and returns the Voronoi map the detector computes. With
@@ -527,22 +525,6 @@ mod test {
             .ok_or_else(|| crate::error::OpossumError::Other("no fluence detector".into()))?
             .calc_fluence_data()?
             .ok_or_else(|| crate::error::OpossumError::Other("the detector has no map".into()))
-    }
-    /// The value of the given map nearest to the given point of the detector, in J/cm².
-    fn fluence_near(map: &FluenceData, x_mm: f64, y_mm: f64) -> OpmResult<f64> {
-        use uom::si::{length::millimeter, radiant_exposure::joule_per_square_centimeter};
-        let (x, y, values) = map.get_fluence_distribution()?;
-        let nearest = |axis: &nalgebra::DVector<uom::si::f64::Length>, at: f64| {
-            axis.iter()
-                .enumerate()
-                .min_by(|(_, a), (_, b)| {
-                    (a.get::<millimeter>() - at)
-                        .abs()
-                        .total_cmp(&(b.get::<millimeter>() - at).abs())
-                })
-                .map_or(0, |(index, _)| index)
-        };
-        Ok(values[(nearest(&y, y_mm), nearest(&x, x_mm))].get::<joule_per_square_centimeter>())
     }
     /// A flat-top beam shows its fluence across the map.
     #[test]

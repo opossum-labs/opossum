@@ -407,14 +407,13 @@ mod test {
     use super::*;
     use crate::{
         core_optics::hit_map::fluence_estimator::FluenceEstimator,
-        joule,
-        light::LightData,
-        millimeter,
+        joule, millimeter,
         nodes::{
             Dummy, EnergyMeter, FluenceDetector, ParaxialSurface, SourcePort,
             round_collimated_ray_builder,
             test_helper::helper::{
-                rays_recorded_by_meter, scenery_with_a_mirror_changed_behind_its_back,
+                rays_at_meter, rays_recorded_by_meter,
+                scenery_with_a_mirror_changed_behind_its_back,
                 scenery_with_a_mirror_shrunk_behind_its_back,
             },
         },
@@ -547,14 +546,7 @@ mod test {
             round_collimated_ray_builder(millimeter!(1.0), joule!(1.0), 1)?,
         );
         RayTracingAnalyzer::new(config).analyze(&mut scenery)?;
-        let node = scenery.node(meter)?;
-        let Some(LightData::Geometric(rays)) = node
-            .as_any()
-            .downcast_ref::<EnergyMeter>()
-            .and_then(EnergyMeter::light_data)
-        else {
-            return Err(OpossumError::Other("the meter received no rays".into()));
-        };
+        let rays = rays_at_meter(&scenery, meter)?;
         let in_tubes = rays.iter().all(|ray| ray.source().is_some());
         assert_eq!(
             in_tubes,

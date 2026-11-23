@@ -59,17 +59,14 @@ impl BouncedHitMap {
         uuid: Uuid,
         source: Option<&RaySource>,
     ) -> OpmResult<()> {
-        if let Some(rays_hit_map) = self.hit_map.get_mut(&uuid) {
-            rays_hit_map.add_hit_point(hit_point, source)?;
-        } else {
-            let mut rhm = RaysHitMap::new(match hit_point {
-                HitPoint::Energy(_) => HitPoints::Energy(vec![]),
-                HitPoint::Fluence(_) => HitPoints::Fluence(vec![]),
-            });
-            rhm.add_hit_point(hit_point, source)?;
-            self.hit_map.insert(uuid, rhm);
-        }
-        Ok(())
+        let kind = match hit_point {
+            HitPoint::Energy(_) => HitPoints::Energy(vec![]),
+            HitPoint::Fluence(_) => HitPoints::Fluence(vec![]),
+        };
+        self.hit_map
+            .entry(uuid)
+            .or_insert_with(|| RaysHitMap::new(kind))
+            .add_hit_point(hit_point, source)
     }
     /// Returns a reference to the internal map of [`RaysHitMap`]s.
     #[must_use]
@@ -538,9 +535,8 @@ mod test_hit_map {
             rays_hit_map::{EnergyHitPoint, FluenceHitPoint},
         },
         error::OpmResult,
-        joule,
-        light::{Ray, Rays},
-        meter, nanometer,
+        joule, meter, nanometer,
+        nodes::test_helper::helper::rays_along_z_from,
         properties::Proptype,
         utils::test_helper::helper::check_logs,
     };
@@ -934,14 +930,7 @@ mod test_hit_map {
     /// Adds hits of 1 J at the given points, at bounce 1, of a bundle spanning the ray tubes
     /// between them, as a source spans them for a Voronoi map.
     fn add_bundle_in_tubes(hm: &mut HitMap, points: &[Point3<Length>]) -> OpmResult<()> {
-        let mut rays = Rays::default();
-        for point in points {
-            rays.add_ray(Ray::new_collimated(
-                *point,
-                nanometer!(1000.0),
-                joule!(1.0),
-            )?);
-        }
+        let mut rays = rays_along_z_from(points, nanometer!(1000.0))?;
         rays.attach_mesh()?;
         let uuid = Uuid::new_v4();
         for ray in rays.iter() {
