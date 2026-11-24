@@ -385,7 +385,8 @@ pub trait AnalysisRayTrace: OpticNode {
     /// enters along local +z through the local origin, so `L` is the identity and `F = W`. A node
     /// whose inputs do not share that convention overrides this — see
     /// [`BeamSplitter`](crate::nodes::BeamSplitter), whose second input arrives mirrored on the
-    /// splitting plane.
+    /// splitting plane, and [`BoredMirror`](crate::nodes::BoredMirror), whose rear input arrives
+    /// along its bore.
     ///
     /// # Arguments
     ///
@@ -394,9 +395,13 @@ pub trait AnalysisRayTrace: OpticNode {
     /// # Returns
     ///
     /// The local entrance frame; the identity for every ordinary node.
-    fn axis_entrance_frame(&self, port_name: &str) -> Isometry {
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the node cannot tell where the axis enters the port.
+    fn axis_entrance_frame(&self, port_name: &str) -> OpmResult<Isometry> {
         let _ = port_name;
-        Isometry::identity()
+        Ok(Isometry::identity())
     }
 }
 

@@ -414,8 +414,8 @@ mod test {
     }
     /// A tilted bore has to lie within the edge where it meets either face, not only where it
     /// crosses the plane of the outline: one 9 mm off the axis of a plate of 12.5 mm, tilted by 30°
-    /// about y, lies within the edge on the front face but reaches 6 mm · tan 30° = 3.464 mm further
-    /// out on the rear face, 6 mm deep, beyond the edge.
+    /// towards −x, lies within the edge on the front face but reaches 6 mm · tan 30° = 3.464 mm
+    /// further out on the rear face, 6 mm deep, beyond the edge.
     #[test]
     fn a_tilted_bore_that_leaves_the_edge_on_the_rear_face_is_refused() -> OpmResult<()> {
         let (front, rear) = plate_faces(millimeter!(6.0))?;
@@ -427,7 +427,7 @@ mod test {
                     millimeter!(-9.0, 0.0),
                     Angle::zero(),
                 )
-                .with_tilt(Angle::zero(), degree!(30.0)),
+                .with_tilt(Angle::zero(), degree!(-30.0)),
             ),
         )?;
         let error = body_between(front, rear, outline, Isometry::identity())

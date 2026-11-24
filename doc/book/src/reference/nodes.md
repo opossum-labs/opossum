@@ -122,16 +122,18 @@ why. A notch cut into the edge cannot be stated.
 
 **Tilted bore.** A bore runs through the component like a drilled hole: its shape is the cross section across the
 axis of the bore, and its offset is where that axis crosses the plane of the edge. Untilted, the bore runs along the
-axis of the component. `Tilt x` and `Tilt y` tilt it about the x and the y axis of the component, in the same way as
-`Roll` and `Pitch` of the alignment turn a node: a bore tilted by the roll and the pitch of its node runs along the
-beam arriving at the node. A tilt of 90° or more is refused, and the bore has to lie within the edge on every face it
-passes. Light that enters the bore but runs into its wall is lost (see [Bored mirror](nodes/bored_mirror.md)).
+axis of the component. `Tilt angle` leans it towards `Tilt direction`, a direction in the plane of the edge: 0° leans
+it towards x, 90° towards y, and a negative angle leans it the other way. An angle of 0 leaves the bore upright,
+whatever the direction. A bore through a component turned by a `Roll` of r runs along the beam arriving at the node
+with a direction of 90° and an angle of r; through one turned by a `Pitch` of p, with a direction of 180° and an angle
+of p. An angle of 90° or more is refused, and the bore has to lie within the edge on every face it passes. Light that
+enters the bore but runs into its wall is lost (see [Bored mirror](nodes/bored_mirror.md)).
 
 In the node editor, choosing another kind of edge starts a fresh edge of that kind and keeps the bore; if the bore
 does not fit into the fresh edge, the edge stays as it was and the log says why. Corners of a polygon can always be
-added or deleted, even while it does not enclose an area yet. While the edge breaks a rule, a note below it says why
-and nothing is saved; the edge is saved as soon as it is valid again. While the bore being drafted breaks a rule, the
-label of "Update bore" turns red and the button does nothing; hovering over it says why.
+added or deleted, even while it does not enclose an area yet. The fields of the edge and of the bore are applied like
+every other field, on Enter or when they lose focus. While the edge or the bore breaks a rule, a note below the edge
+says why and nothing is saved; both are saved as soon as they are valid again.
 
 The default depends on the kind of component:
 

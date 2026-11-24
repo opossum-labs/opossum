@@ -130,14 +130,8 @@ mod test {
         let source = scenery.add_node(SourcePort::default())?;
         let mirror = scenery.add_node(BoredMirror::default())?;
         let detector = scenery.add_node(EnergyMeter::default())?;
-        scenery.connect_nodes(source, "output_1", mirror, "input_1", millimeter!(50.0))?;
-        scenery.connect_nodes(
-            mirror,
-            "out2_trans2_refl1",
-            detector,
-            "input_1",
-            millimeter!(50.0),
-        )?;
+        scenery.connect_nodes(source, "output_1", mirror, "mirror", millimeter!(50.0))?;
+        scenery.connect_nodes(mirror, "in_front", detector, "input_1", millimeter!(50.0))?;
         let mut document = traced(scenery, source);
 
         document

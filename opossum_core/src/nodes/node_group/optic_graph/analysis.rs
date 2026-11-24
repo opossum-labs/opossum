@@ -485,7 +485,7 @@ impl OpticGraph {
                 ));
             };
             let world_frame = ray.to_isometry()?;
-            let entrance_frame = self.axis_entrance_frame_of(node_id, &port_name);
+            let entrance_frame = self.axis_entrance_frame_of(node_id, &port_name)?;
             if let Some(placed_iso) = self.g[idx].positioning().effective_position().copied() {
                 let expected_entrance = placed_iso.append(&entrance_frame);
                 if let Some(mismatch) = expected_entrance.axis_mismatch(
@@ -554,9 +554,17 @@ impl OpticGraph {
     /// [`AnalysisRayTrace::axis_entrance_frame`]). It is the identity for ordinary single-input
     /// nodes. For a reference proxy the referenced target answers, since the proxy has no geometry
     /// of its own. Returns the identity if the node cannot be found.
-    pub(super) fn axis_entrance_frame_of(&mut self, node_id: Uuid, port_name: &str) -> Isometry {
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the node cannot tell where the axis enters the port.
+    pub(super) fn axis_entrance_frame_of(
+        &mut self,
+        node_id: Uuid,
+        port_name: &str,
+    ) -> OpmResult<Isometry> {
         let Some(idx) = self.node_idx_by_uuid(node_id) else {
-            return Isometry::identity();
+            return Ok(Isometry::identity());
         };
         if let Some(target_uuid) = self.g[idx].referenced_node_id()
             && let Ok(target) = self.reference_target_mut(target_uuid)

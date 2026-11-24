@@ -1,7 +1,11 @@
+use nalgebra::{Rotation3, Vector3};
+
 use crate::{
     analyzers::{RayTraceConfig, raytrace::AnalysisRayTrace},
+    core_optics::PortType,
     error::OpmResult,
     light::LightResult,
+    meter,
     nodes::splitter::Splitter,
     utils::geom_transformation::Isometry,
 };
@@ -23,8 +27,33 @@ impl AnalysisRayTrace for BeamSplitter {
     ) -> OpmResult<LightResult> {
         self.split_axis(incoming_data, config)
     }
-    fn axis_entrance_frame(&self, port_name: &str) -> Isometry {
-        self.second_input_frame(port_name)
+    /// Return the local frame the optical axis enters the given input port from (see
+    /// [`AnalysisRayTrace::axis_entrance_frame`]).
+    ///
+    /// The first input keeps the identity frame: its axis enters along local +z through the
+    /// local origin. The second input arrives from the direction of the beam that leaves the
+    /// second output, i.e. mirrored on the splitting plane, so its frame is the mirror image of
+    /// the identity frame. See `doc/book` (geometry: beam combiners) for the convention.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the splitter does not have two inputs.
+    fn axis_entrance_frame(&self, port_name: &str) -> OpmResult<Isometry> {
+        if port_name != self.port_pair(PortType::Input)?.1 {
+            return Ok(Isometry::identity());
+        }
+        // Splitting plane in node-local coordinates: unit normal `n` = alignment applied to +z,
+        // through the alignment's translation `t`. The second input's axis is the +z axis mirrored
+        // on that plane: entry point `q` (origin mirrored) and direction `d` (+z mirrored).
+        let alignment = (*self.node_attr.alignment()).unwrap_or_else(Isometry::identity);
+        let n = alignment.transform_vector_f64(&Vector3::z());
+        let t = alignment.translation();
+        let t_vec = Vector3::new(t.x.value, t.y.value, t.z.value);
+        let q = 2.0 * n.dot(&t_vec) * n;
+        let d = Vector3::z() - 2.0 * Vector3::z().dot(&n) * n;
+        let up = Rotation3::rotation_between(&Vector3::z(), &d)
+            .map_or_else(Vector3::y, |rot| rot * Vector3::y());
+        Ok(Isometry::new_from_view(meter!(q.x, q.y, q.z), d, up))
     }
 }
 
@@ -408,20 +437,21 @@ mod test {
         Ok(())
     }
     /// The world image of local +z under an entrance frame, for asserting its direction.
-    fn entrance_dir(node: &BeamSplitter, port: &str) -> Vector3<f64> {
-        node.axis_entrance_frame(port)
-            .transform_vector_f64(&Vector3::z())
+    fn entrance_dir(node: &BeamSplitter, port: &str) -> OpmResult<Vector3<f64>> {
+        Ok(node
+            .axis_entrance_frame(port)?
+            .transform_vector_f64(&Vector3::z()))
     }
     #[test]
     fn axis_entrance_frame_first_input_is_identity() -> OpmResult<()> {
         let node = tilted_beam_splitter()?;
-        assert_eq!(node.axis_entrance_frame("input_1"), Isometry::identity());
+        assert_eq!(node.axis_entrance_frame("input_1")?, Isometry::identity());
         Ok(())
     }
     #[test]
     fn axis_entrance_frame_second_input_tilted() -> OpmResult<()> {
         let node = tilted_beam_splitter()?;
-        let frame = node.axis_entrance_frame("input_2");
+        let frame = node.axis_entrance_frame("input_2")?;
         // 45° about y mirrors +z onto −x; the plane runs through the origin, so no decenter.
         assert_abs_diff_eq!(
             frame.transform_vector_f64(&Vector3::z()),
@@ -441,7 +471,7 @@ mod test {
         let node = BeamSplitter::new("bs", &SplittingConfigBuilder::FixedRatio(0.5))?;
         // No tilt mirrors +z straight back onto −z.
         assert_abs_diff_eq!(
-            entrance_dir(&node, "input_2"),
+            entrance_dir(&node, "input_2")?,
             -Vector3::z(),
             epsilon = 1e-12
         );
@@ -451,10 +481,10 @@ mod test {
     fn axis_entrance_frame_second_input_decentered() -> OpmResult<()> {
         let mut node = BeamSplitter::new("bs", &SplittingConfigBuilder::FixedRatio(0.5))?;
         node.set_alignment(millimeter!(0., 0., 10.), degree!(0., 0., 0.))?;
-        let frame = node.axis_entrance_frame("input_2");
+        let frame = node.axis_entrance_frame("input_2")?;
         // The plane sits 10 mm along +z; the origin mirrored on it lands at 20 mm, direction −z.
         assert_abs_diff_eq!(
-            entrance_dir(&node, "input_2"),
+            entrance_dir(&node, "input_2")?,
             -Vector3::z(),
             epsilon = 1e-12
         );
@@ -472,12 +502,12 @@ mod test {
         node.set_inverted(true)?;
         // When inverted, the second input is out2_trans2_refl1; the other ports keep the identity.
         assert_abs_diff_eq!(
-            entrance_dir(&node, "out2_trans2_refl1"),
+            entrance_dir(&node, "out2_trans2_refl1")?,
             -Vector3::x(),
             epsilon = 1e-12
         );
         assert_eq!(
-            node.axis_entrance_frame("out1_trans1_refl2"),
+            node.axis_entrance_frame("out1_trans1_refl2")?,
             Isometry::identity()
         );
         Ok(())
