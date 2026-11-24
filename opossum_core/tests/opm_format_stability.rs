@@ -110,7 +110,7 @@ fn build_comprehensive_v1_document() -> opossum_core::error::OpmResult<OpmDocume
     scenery.connect_nodes(fluence, "output_1", energy, "input_1", millimeter!(10.0))?;
     scenery.connect_nodes(energy, "output_1", spectro, "input_1", millimeter!(10.0))?;
     scenery.connect_nodes(spectro, "output_1", vis, "input_1", millimeter!(10.0))?;
-    scenery.connect_nodes(bs, "out2_trans2_refl1", bored, "input_1", millimeter!(30.0))?;
+    scenery.connect_nodes(bs, "out2_trans2_refl1", bored, "mirror", millimeter!(30.0))?;
 
     let mut doc = OpmDocument::new(scenery);
 

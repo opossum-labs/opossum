@@ -125,7 +125,7 @@ impl OutlineShape {
 /// The bore is a prism: its shape is the cross-section across the axis of the bore, as a drill
 /// leaves it, and it runs along that axis through the whole component. Its center is where the
 /// axis of the bore crosses the plane of the outline. Untilted, it runs along the axis of the
-/// component.
+/// component (see [`Bore::with_tilt`]).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Bore {
     shape: OutlineShape,
@@ -163,18 +163,21 @@ impl Bore {
     }
     /// Tilt this [`Bore`] against the axis of the component.
     ///
-    /// The angles turn the bore about the x and the y axis as the alignment of a node turns the
-    /// node, but the other way round: a bore tilted by the angles a node is aligned by runs along
-    /// the axis the light arrives on. Whether the tilt is less than 90° is checked when the bore is
-    /// put into an [`Outline`].
+    /// The axis of the bore leans by `angle` towards `direction`: a direction of 0° leans it
+    /// towards +x, one of 90° towards +y, and a negative angle leans it the other way. The
+    /// cross-section turns along by the least turn that carries the axis of the component onto
+    /// that of the bore, so an angle of 0 leaves the bore upright in any direction. Through a
+    /// mirror turned by a roll of r, a bore tilted by r towards 90° runs along the arriving beam;
+    /// through one turned by a pitch of p, a bore tilted by p towards 180°. Whether the angle is
+    /// less than 90° is checked when the bore is put into an [`Outline`].
     ///
     /// # Arguments
     ///
-    /// * `about_x` - how far the bore is tilted about the x axis.
-    /// * `about_y` - how far the bore is tilted about the y axis.
+    /// * `direction` - the direction in the plane of the outline the bore leans towards.
+    /// * `angle` - how far the bore leans towards it.
     #[must_use]
-    pub const fn with_tilt(mut self, about_x: Angle, about_y: Angle) -> Self {
-        self.tilt = (about_x, about_y);
+    pub const fn with_tilt(mut self, direction: Angle, angle: Angle) -> Self {
+        self.tilt = (direction, angle);
         self
     }
     /// Returns the shape of this [`Bore`].
@@ -192,26 +195,28 @@ impl Bore {
     pub const fn rotation(&self) -> Angle {
         self.rotation
     }
-    /// Returns how far this [`Bore`] is tilted about the x and the y axis (see [`Bore::with_tilt`]).
+    /// Returns the direction this [`Bore`] leans towards and how far it leans (see
+    /// [`Bore::with_tilt`]).
     #[must_use]
     pub const fn tilt(&self) -> (Angle, Angle) {
         self.tilt
     }
-    /// The tilt of this bore as a turn, which turns the axis of the bore onto the axis of the
-    /// component.
+    /// The tilt of this bore as a turn, which carries the axis of the component onto the axis of
+    /// the bore: about the line in the plane of the outline square to the tilt direction.
     fn tilting(&self) -> Rotation3<f64> {
-        Rotation3::from_euler_angles(self.tilt.0.value, self.tilt.1.value, 0.0)
+        let (direction, angle) = self.tilt;
+        let towards = Rotation3::from_axis_angle(&Vector3::z_axis(), direction.value);
+        towards * Rotation3::from_axis_angle(&Vector3::y_axis(), angle.value) * towards.inverse()
     }
     /// The turn from the bore's own frame into the frame of the outline: about the axis of the
     /// bore by its rotation, then tilted.
     fn turn(&self) -> Rotation3<f64> {
-        self.tilting().inverse()
-            * Rotation3::from_axis_angle(&Vector3::z_axis(), self.rotation.value)
+        self.tilting() * Rotation3::from_axis_angle(&Vector3::z_axis(), self.rotation.value)
     }
     /// The direction the bore runs along, in the frame of the outline.
     #[must_use]
     pub fn axis(&self) -> Vector3<f64> {
-        self.tilting().inverse() * Vector3::z()
+        self.tilting() * Vector3::z()
     }
     /// The region of this bore as an [`Aperture`] of the given type, placed where the bore is.
     fn aperture(&self, aperture_type: ApertureType) -> OpmResult<Aperture> {
@@ -859,10 +864,46 @@ mod test {
         assert_eq!(bounds, [-0.003, 0.006, -0.004, 0.002]);
         Ok(())
     }
-    /// A bore tilted by 45° about y runs along its own axis, (−sin 45°, 0, cos 45°): its circle of
-    /// 1 mm radius is the cross-section across that axis, so it crosses the plane of the outline
+    /// A bore leans by its tilt angle towards its tilt direction: a direction of 0° leans it
+    /// towards +x, one of 90° towards +y, any other in between, and a negative angle the other way.
+    #[test]
+    fn a_bore_leans_by_its_tilt_angle_towards_its_tilt_direction() -> OpmResult<()> {
+        let (sin_45, cos_45) = 45.0_f64.to_radians().sin_cos();
+        let (sin_20, cos_20) = 20.0_f64.to_radians().sin_cos();
+        let (sin_30, cos_30) = 30.0_f64.to_radians().sin_cos();
+        for ((direction, angle), axis) in [
+            ((0.0, 45.0), Vector3::new(sin_45, 0.0, cos_45)),
+            ((90.0, 45.0), Vector3::new(0.0, sin_45, cos_45)),
+            ((0.0, -45.0), Vector3::new(-sin_45, 0.0, cos_45)),
+            (
+                (30.0, 20.0),
+                Vector3::new(sin_20 * cos_30, sin_20 * sin_30, cos_20),
+            ),
+        ] {
+            let tilted =
+                bore(circle(1.0)?, 0.0, 0.0, 0.0).with_tilt(degree!(direction), degree!(angle));
+            assert_abs_diff_eq!(tilted.axis(), axis, epsilon = 1e-15);
+        }
+        Ok(())
+    }
+    /// A bore tilted by an angle of 0 runs along the axis of the component and lies where an
+    /// untilted one lies, whatever its tilt direction.
+    #[test]
+    fn a_bore_tilted_by_no_angle_stays_upright_in_any_direction() -> OpmResult<()> {
+        let upright = bore(rectangle(2.0, 1.0)?, 1.0, -1.0, 30.0);
+        let towards = upright.clone().with_tilt(degree!(70.0), degree!(0.0));
+        assert_abs_diff_eq!(towards.axis(), Vector3::z(), epsilon = 1e-15);
+        for corner in upright.shape().corners() {
+            let (placed, expected) = (towards.placed(corner), upright.placed(corner));
+            assert_abs_diff_eq!(placed.x.value, expected.x.value, epsilon = 1e-15);
+            assert_abs_diff_eq!(placed.y.value, expected.y.value, epsilon = 1e-15);
+        }
+        Ok(())
+    }
+    /// A bore tilted by 45° towards +x runs along its own axis, (sin 45°, 0, cos 45°): its circle
+    /// of 1 mm radius is the cross-section across that axis, so it crosses the plane of the outline
     /// in an ellipse reaching 1/cos 45° = 1.414 mm along x and 1 mm along y, and 6 mm deeper its
-    /// center lies 6 mm further towards −x, the bore reaching from −7.414 mm to −4.586 mm there.
+    /// center lies 6 mm further towards +x, the bore reaching from 4.586 mm to 7.414 mm there.
     #[test]
     fn a_tilted_bore_runs_along_its_own_axis() -> OpmResult<()> {
         let tilted = Outline::new(
@@ -883,10 +924,10 @@ mod test {
             );
         }
         for (x, inside) in [
-            (-6.0, true),
-            (-4.7, true),
-            (-7.3, true),
-            (-4.4, false),
+            (6.0, true),
+            (4.7, true),
+            (7.3, true),
+            (4.4, false),
             (0.0, false),
         ] {
             assert_eq!(
@@ -897,17 +938,17 @@ mod test {
         }
         Ok(())
     }
-    /// A bore tilted by 90° or more would run along the plane of the outline or out of it again:
-    /// it is refused.
+    /// A bore tilted by 90° or more, in any direction and either way, would run along the plane of
+    /// the outline or out of it again: it is refused.
     #[test]
     fn a_bore_tilted_by_90_degrees_or_more_is_refused() -> OpmResult<()> {
-        for (about_x, about_y) in [(90.0, 0.0), (0.0, 90.0), (0.0, 120.0), (-95.0, 0.0)] {
+        for (direction, angle) in [(0.0, 90.0), (90.0, 90.0), (0.0, 120.0), (45.0, -95.0)] {
             let tilted =
-                bore(circle(1.0)?, 0.0, 0.0, 0.0).with_tilt(degree!(about_x), degree!(about_y));
+                bore(circle(1.0)?, 0.0, 0.0, 0.0).with_tilt(degree!(direction), degree!(angle));
             let error = Outline::new(rectangle(20.0, 20.0)?, Some(tilted))
                 .expect_err("a bore tilted that far was accepted")
                 .to_string();
-            assert!(error.contains("90°"), "({about_x}°, {about_y}°): {error}");
+            assert!(error.contains("90°"), "({direction}°, {angle}°): {error}");
         }
         Ok(())
     }

@@ -369,7 +369,7 @@ impl OpticGraph {
             };
             let successor_id = self.g[successor].uuid();
             let in_front = placed
-                .append(&self.axis_entrance_frame_of(successor_id, &entrance))
+                .append(&self.axis_entrance_frame_of(successor_id, &entrance)?)
                 .append(&Isometry::new_along_z(-distance)?)
                 .append(&Isometry::new_from_transform(exit.get_inv_transform()));
             self.passed_node_mut(idx)?
@@ -433,7 +433,7 @@ impl OpticGraph {
         }
         probe.set_inverted(inverted)?;
         probe.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
-        let frame = probe.axis_entrance_frame(&entrance);
+        let frame = probe.axis_entrance_frame(&entrance)?;
         let mut axis = Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), wavelength, joule!(1.0))?;
         axis.set_refractive_index(
             config

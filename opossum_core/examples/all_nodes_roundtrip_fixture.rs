@@ -151,7 +151,7 @@ fn main() -> OpmResult<()> {
         thin_mirror,
         "output_1",
         bored_mirror,
-        "input_1",
+        "mirror",
         millimeter!(50.0),
     )?;
 
