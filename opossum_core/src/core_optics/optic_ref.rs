@@ -149,6 +149,7 @@ pub(crate) struct DeserializedNode {
     #[serde(default)]
     #[schemars(with = "Option<Point2Schema>")]
     pub(crate) gui_position: Option<Point2<f64>>,
+    /// Sub-graph contained inside this node (only populated when `node_type == "group"`).
     #[serde(default)]
     pub(crate) graph: OpticGraph,
 }

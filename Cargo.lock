@@ -5864,6 +5864,7 @@ dependencies = [
  "roots",
  "schemars",
  "serde",
+ "serde_json",
  "sobol",
  "spade",
  "static_assertions",

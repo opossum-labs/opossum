@@ -23,8 +23,9 @@ pub use analyzer_info::AnalyzerInfo;
 use indexmap::IndexMap;
 pub use optimization::OptimizationConfig;
 pub use positioning_run::PositioningRun;
-use schemars::JsonSchema;
+use schemars::{JsonSchema, generate::SchemaSettings};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::{BTreeSet, HashMap};
 use uuid::Uuid;
 /// Current version of the `.opm` file format schema.
@@ -276,4 +277,40 @@ impl OpmDocument {
     pub fn set_optimization_config(&mut self, config: Option<OptimizationConfig>) {
         self.optimization_config = config;
     }
+}
+
+/// Generates the canonical JSON Schema (Draft-07) for `OpmDocument` v1 as a pretty-printed string.
+///
+/// # Errors
+/// Returns a `serde_json::Error` if the generated schema cannot be serialized.
+pub fn generate_opm_v1_schema_json() -> Result<String, serde_json::Error> {
+    let mut settings = SchemaSettings::draft07();
+    settings.inline_subschemas = false;
+
+    let generator = settings.into_generator();
+    let mut root_schema = generator.into_root_schema_for::<OpmDocument>();
+
+    // Attach a canonical URI identifier directly to the root schema object
+    root_schema.insert(
+        "$id".to_owned(),
+        Value::String(
+            "https://opossum-labs.github.io/opossum/spec/v1/opm_v1.schema.json".to_owned(),
+        ),
+    );
+
+    // Remove dynamically generated defaults (which contain random v4 UUIDs)
+    if let Some(scenery) = root_schema
+        .pointer_mut("/properties/scenery")
+        .and_then(Value::as_object_mut)
+    {
+        scenery.remove("default");
+    }
+    if let Some(graph) = root_schema
+        .pointer_mut("/definitions/OpticNode/properties/graph")
+        .and_then(Value::as_object_mut)
+    {
+        graph.remove("default");
+    }
+
+    serde_json::to_string_pretty(&root_schema)
 }

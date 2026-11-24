@@ -56,6 +56,7 @@ num-traits = "0.2"
 # mutants = "0.0.4"
 inventory = "0.3"
 indexmap = { version = "2", features = ["serde"] }
+serde_json = "1.0"
 
 [features]
 doc-images = []
