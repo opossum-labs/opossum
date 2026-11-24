@@ -13,7 +13,7 @@ use crate::{
 use nalgebra::{DMatrix, DVector};
 use serde::{Deserialize, Serialize};
 use uom::si::{
-    f64::{Energy, Length},
+    f64::{Area, Energy, Length},
     length::meter,
 };
 
@@ -155,19 +155,52 @@ impl FluenceData {
     pub fn peak(&self) -> Fluence {
         self.peak
     }
-    /// Returns the total energy of this [`FluenceData`].
+    /// Returns the total energy of this [`FluenceData`]: the fluence at each point times the area
+    /// it stands for (see [`FluenceData::point_areas`]), leaving out points without a value.
     #[must_use]
     pub fn total_energy(&self) -> Energy {
-        let dx = (self.x_range.end - self.x_range.start) / to_f64(self.len_x());
-        let dy = (self.y_range.end - self.y_range.start) / to_f64(self.len_y());
-        let area = dx * dy;
-        let mut energy = joule!(0.0);
-        for fluence in &self.interp_distribution {
-            if !fluence.is_nan() {
-                energy += area * (*fluence);
+        Self::point_areas(&self.x_range, &self.y_range, (self.len_x(), self.len_y()))
+            .zip_map(&self.interp_distribution, |area, fluence| {
+                if fluence.is_nan() {
+                    joule!(0.0)
+                } else {
+                    area * fluence
+                }
+            })
+            .iter()
+            .fold(joule!(0.0), |total, energy| total + *energy)
+    }
+    /// Returns the area each point of a map stands for, a row per point along y.
+    ///
+    /// The points of a map lie evenly from one end of each range to the other, both included. Each
+    /// stands for a cell as large as their spacing, cut at the border of the map: a point on an
+    /// edge for half of one, a point in a corner for a quarter (the trapezoid rule).
+    ///
+    /// # Arguments
+    ///
+    /// * `x`, `y` - the ranges the map covers.
+    /// * `nr_of_points` - the number of points along x and y; a single point stands for its whole
+    ///   range.
+    #[must_use]
+    pub fn point_areas(
+        x: &Range<Length>,
+        y: &Range<Length>,
+        (columns, rows): (usize, usize),
+    ) -> DMatrix<Area> {
+        let spacing = |range: &Range<Length>, points: usize| {
+            (range.end - range.start) / to_f64(points.saturating_sub(1).max(1))
+        };
+        let share = |index: usize, points: usize| {
+            if points > 1 && (index == 0 || index + 1 == points) {
+                0.5
+            } else {
+                1.0
             }
-        }
-        energy
+        };
+        let cell = spacing(x, columns) * spacing(y, rows);
+        DMatrix::from_fn(rows, columns, |row, column| {
+            cell * share(row, rows) * share(column, columns)
+        })
     }
 }
 
@@ -274,5 +307,44 @@ mod test {
             FluenceEstimator::Binning,
         );
         assert_eq!(fluence_data.total_energy(), joule!(5.0));
+    }
+    /// A point inside a map stands for a whole cell, one on an edge for half of it, one in a
+    /// corner for a quarter, and a single point along an axis for its whole range.
+    #[test]
+    fn the_points_of_a_map_stand_for_the_cells_around_them() {
+        let areas = FluenceData::point_areas(
+            &(meter!(0.0)..meter!(4.0)),
+            &(meter!(0.0)..meter!(2.0)),
+            (5, 3),
+        )
+        .map(|area| area.value);
+        assert_eq!(
+            areas,
+            dmatrix![
+                0.25, 0.5, 0.5, 0.5, 0.25;
+                0.5, 1.0, 1.0, 1.0, 0.5;
+                0.25, 0.5, 0.5, 0.5, 0.25]
+        );
+        let single = FluenceData::point_areas(
+            &(meter!(0.0)..meter!(4.0)),
+            &(meter!(0.0)..meter!(2.0)),
+            (1, 1),
+        );
+        assert_eq!(single[(0, 0)].value, 8.0);
+    }
+    /// The points of a map lie 1 m apart over 2 m: the one in the middle stands for 1 m², so its
+    /// 1 J/m² is 1 J.
+    #[test]
+    fn a_map_holds_the_fluence_of_each_point_over_the_area_it_stands_for() {
+        let fluence_data = FluenceData::new(
+            dmatrix![
+                J_per_m2!(0.0), J_per_m2!(0.0), J_per_m2!(0.0);
+                J_per_m2!(0.0), J_per_m2!(1.0), J_per_m2!(0.0);
+                J_per_m2!(0.0), J_per_m2!(0.0), J_per_m2!(0.0)],
+            meter!(0.0)..meter!(2.0),
+            meter!(0.0)..meter!(2.0),
+            FluenceEstimator::Voronoi,
+        );
+        approx::assert_relative_eq!(fluence_data.total_energy().value, 1.0);
     }
 }

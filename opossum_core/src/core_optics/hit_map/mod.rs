@@ -1003,6 +1003,9 @@ mod test_hit_map {
         Ok(())
     }
 
+    /// The 51 points of the map lie 1 m / 50 apart over the hits, so the 1 J in the middle stands
+    /// for 0.0004 m²: 2500 J/m². The second bundle reaches √2 m wide and brings another 1 J to
+    /// the middle, so 2 J over 0.0008 m² show the same.
     #[test]
     fn calc_combined_fluence_with_binning() -> OpmResult<()> {
         let mut hm = HitMap::default();
@@ -1023,7 +1026,7 @@ mod test_hit_map {
             )?;
         }
         let fl_data = hm.calc_combined_fluence_with_binning((51, 51))?;
-        assert_relative_eq!(fl_data.interp_distribution()[(25, 25)].value, 2601.0);
+        assert_relative_eq!(fl_data.interp_distribution()[(25, 25)].value, 2500.0);
 
         let uuid = Uuid::new_v4();
         let pos2 = vec![
@@ -1042,7 +1045,11 @@ mod test_hit_map {
             )?;
         }
         let fl_data = hm.calc_combined_fluence_with_binning((51, 51))?;
-        assert_relative_eq!(fl_data.interp_distribution()[(25, 25)].value, 2601.0);
+        assert_relative_eq!(
+            fl_data.interp_distribution()[(25, 25)].value,
+            2500.0,
+            max_relative = 1e-12
+        );
         Ok(())
     }
     /// Binning spreads energies, so it refuses the fluences rays with helper rays bring.

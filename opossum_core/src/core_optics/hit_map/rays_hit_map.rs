@@ -4,6 +4,7 @@
 use crate::{
     J_per_cm2,
     error::{OpmResult, OpossumError},
+    joule,
     kde::Kde,
     light::{RayMesh, RaySource, ray_mesh::RayVertex},
     meter, micrometer,
@@ -17,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use std::{ops::Range, sync::Arc};
 use uom::si::{
     energy::joule,
-    f64::{Area, Energy, Length},
+    f64::{Energy, Length},
     radiant_exposure::joule_per_square_meter,
 };
 
@@ -356,82 +357,79 @@ impl RaysHitMap {
     }
     /// Calculate a fluence map ([`FluenceData`]) of this [`RaysHitMap`] using the "Binning" method
     ///
+    /// Each hit spreads its energy over the four points of the map around it, the nearer a point
+    /// the more. Each point shows the energy it got over the area it stands for (see
+    /// [`FluenceData::point_areas`]), so the map holds the energy of the hits within it. Hits
+    /// beyond the given ranges are left out.
+    ///
     /// # Attributes
     /// -`nr_of_points`: tuple containing the number of (columns, rows) of the matrix on which the data should be calculated
-    /// -`ax_1_range_opt`: optional range of the axis 1 on which the data should be interpolated
-    /// -`ax_2_range_opt`: optional range of the axis 2 on which the data should be interpolated    
+    /// -`ax_1_range`: optional range along x the map covers, from the first to the last point; that of the hits if `None`
+    /// -`ax_2_range`: optional range along y the map covers, from the first to the last point; that of the hits if `None`
     ///
     /// # Errors
     /// This function errors if
-    /// - the [`RaysHitMap`] is empty.
-    /// - The hit point type is neither energy nor fluence
+    /// - no ranges are given and the [`RaysHitMap`] is empty.
+    /// - its hits brought fluences rather than energies.
     pub fn calc_fluence_with_binning(
         &self,
         nr_of_points: (usize, usize),
         ax_1_range: Option<&Range<Length>>,
         ax_2_range: Option<&Range<Length>>,
     ) -> OpmResult<FluenceData> {
-        if let HitPoints::Energy(hit_points) = &self.hit_points {
-            let (left, right, top, bottom) =
-                if let (Some(range_1), Some(range_2)) = (ax_1_range, ax_2_range) {
-                    (range_1.start, range_1.end, range_2.start, range_2.end)
-                } else {
-                    let min_margin = micrometer!(10.0);
-                    let (left, right, top, bottom) = self.calc_2d_bounding_box(micrometer!(0.0))?;
-                    if (left - right).abs() < min_margin || (top - bottom).abs() < min_margin {
-                        self.calc_2d_bounding_box(min_margin)?
-                    } else {
-                        (left, right, top, bottom)
-                    }
-                };
-
-            let bin_width: Length = (right - left) / to_f64(nr_of_points.0);
-            let bin_height: Length = (top - bottom) / to_f64(nr_of_points.1);
-
-            let bin_area: Area = bin_width * bin_height;
-
-            let width_step = (right - left) / (to_f64(nr_of_points.0 - 1));
-            let height_step = (top - bottom) / (to_f64(nr_of_points.1 - 1));
-
-            let mut fluence_matrix = DMatrix::<Fluence>::zeros(nr_of_points.1, nr_of_points.0);
-            for hit_point in hit_points {
-                let (fract_index_x, int_index_x) =
-                    modf((hit_point.position.x - left).value / width_step.value);
-                let (fract_index_y, int_index_y) =
-                    modf((hit_point.position.y - bottom).value / height_step.value);
-                let Some(x_index) = try_f64_to_usize(int_index_x) else {
-                    return Err(OpossumError::Analysis("cannot calculate x_index!".into()));
-                };
-                let Some(y_index) = try_f64_to_usize(int_index_y) else {
-                    return Err(OpossumError::Analysis("cannot calculate y_index!".into()));
-                };
-
-                let fluence = hit_point.value / bin_area;
-                let fluence_x = (1.0 - fract_index_x) * (1.0 - fract_index_y) * fluence;
-                let fl_next_x = fract_index_x * (1.0 - fract_index_y) * fluence;
-                let fl_next_y = (1.0 - fract_index_x) * fract_index_y * fluence;
-                let fl_xy_next = fract_index_x * fract_index_y * fluence;
-
-                fluence_matrix[(y_index, x_index)] += fluence_x;
-                if x_index < nr_of_points.0 - 1 {
-                    fluence_matrix[(y_index, x_index + 1)] += fl_next_x;
-                    if y_index < nr_of_points.1 - 1 {
-                        fluence_matrix[(y_index + 1, x_index + 1)] += fl_xy_next;
-                    }
-                }
-                if y_index < nr_of_points.1 - 1 {
-                    fluence_matrix[(y_index + 1, x_index)] += fl_next_y;
+        let HitPoints::Energy(hit_points) = &self.hit_points else {
+            return Err(energies_needed(FluenceEstimator::Binning));
+        };
+        let (x, y) = if let (Some(x), Some(y)) = (ax_1_range, ax_2_range) {
+            (x.clone(), y.clone())
+        } else {
+            let min_margin = micrometer!(10.0);
+            let (mut left, mut right, mut top, mut bottom) =
+                self.calc_2d_bounding_box(micrometer!(0.0))?;
+            if (left - right).abs() < min_margin || (top - bottom).abs() < min_margin {
+                (left, right, top, bottom) = self.calc_2d_bounding_box(min_margin)?;
+            }
+            (left..right, bottom..top)
+        };
+        let (columns, rows) = nr_of_points;
+        // where a hit lies, counted in points from the start of a range
+        let last = |points: usize| to_f64(points.saturating_sub(1));
+        let index = |at: Length, range: &Range<Length>, points: usize| {
+            (at - range.start).value / (range.end - range.start).value * last(points)
+        };
+        let mut energies = DMatrix::from_element(rows, columns, joule!(0.0));
+        for hit in hit_points {
+            let (along_x, along_y) = (
+                index(hit.position.x, &x, columns),
+                index(hit.position.y, &y, rows),
+            );
+            if !((0.0..=last(columns)).contains(&along_x) && (0.0..=last(rows)).contains(&along_y))
+            {
+                continue;
+            }
+            let ((fx, column), (fy, row)) = (modf(along_x), modf(along_y));
+            let (Some(column), Some(row)) = (try_f64_to_usize(column), try_f64_to_usize(row))
+            else {
+                continue;
+            };
+            for (next_row, next_column, share) in [
+                (0, 0, (1.0 - fx) * (1.0 - fy)),
+                (0, 1, fx * (1.0 - fy)),
+                (1, 0, (1.0 - fx) * fy),
+                (1, 1, fx * fy),
+            ] {
+                if share > 0.0
+                    && let Some(energy) = energies.get_mut((row + next_row, column + next_column))
+                {
+                    *energy += hit.value * share;
                 }
             }
-            Ok(FluenceData::new(
-                fluence_matrix,
-                left..right,
-                bottom..top,
-                FluenceEstimator::Binning,
-            ))
-        } else {
-            Err(energies_needed(FluenceEstimator::Binning))
         }
+        let fluences = energies.zip_map(
+            &FluenceData::point_areas(&x, &y, nr_of_points),
+            |energy, area| energy / area,
+        );
+        Ok(FluenceData::new(fluences, x, y, FluenceEstimator::Binning))
     }
 
     /// Calculate a fluence map ([`FluenceData`]) of this [`RaysHitMap`] that follows the ray tubes
@@ -881,6 +879,87 @@ mod test_rays_hit_map {
     use uom::si::{length::centimeter, radiant_exposure::joule_per_square_centimeter};
     use uuid::Uuid;
 
+    /// Bins hits of the given energies in J at the given points in m on a grid of the given
+    /// number of points over the given ranges in m, or over the hits if `None`.
+    fn binned(
+        hits: &[((f64, f64), f64)],
+        ranges: Option<(std::ops::Range<f64>, std::ops::Range<f64>)>,
+        nr_of_points: (usize, usize),
+    ) -> OpmResult<crate::nodes::fluence_detector::fluence_data::FluenceData> {
+        let mut map = RaysHitMap::default();
+        for ((x, y), energy) in hits {
+            map.add_hit_point(
+                HitPoint::Energy(EnergyHitPoint::new(meter!(*x, *y, 0.0), joule!(*energy))?),
+                None,
+            )?;
+        }
+        let ranges = ranges.map(|(x, y)| {
+            (
+                meter!(x.start)..meter!(x.end),
+                meter!(y.start)..meter!(y.end),
+            )
+        });
+        map.calc_fluence_with_binning(
+            nr_of_points,
+            ranges.as_ref().map(|(x, _)| x),
+            ranges.as_ref().map(|(_, y)| y),
+        )
+    }
+    /// The values of the given map in J/m², a row per point along y from its lower end.
+    fn values_of(map: &crate::nodes::fluence_detector::fluence_data::FluenceData) -> Vec<Vec<f64>> {
+        map.interp_distribution()
+            .row_iter()
+            .map(|row| row.iter().map(|fluence| fluence.value).collect())
+            .collect()
+    }
+    /// Binned over given ranges, a hit lands where it lies, with the upper half of the range in
+    /// the upper rows, and the map shows its energy over the area of the point it lands on.
+    #[test]
+    fn binning_over_given_ranges_is_upright_and_positive() -> OpmResult<()> {
+        // points 1 m apart from 0 m to 4 m: the hit at (1 m, 3 m) lands on row 3, column 1
+        let map = binned(&[((1.0, 3.0), 1.0)], Some((0.0..4.0, 0.0..4.0)), (5, 5))?;
+        let values = values_of(&map);
+        assert_eq!(values[3][1], 1.0);
+        assert_eq!(values.iter().flatten().filter(|v| **v != 0.0).count(), 1);
+        assert_eq!(map.y_range(), &(meter!(0.0)..meter!(4.0)));
+        Ok(())
+    }
+    /// Hits beyond the given ranges are left out of the map, which holds the others.
+    #[test]
+    fn binning_leaves_out_hits_beyond_the_given_ranges() -> OpmResult<()> {
+        let hits = [((5.0, 1.0), 1.0), ((1.0, -0.5), 1.0), ((1.0, 1.0), 1.0)];
+        let map = binned(&hits, Some((0.0..4.0, 0.0..4.0)), (5, 5))?;
+        assert_relative_eq!(map.total_energy().value, 1.0);
+        Ok(())
+    }
+    /// A hit in the middle of every cell spreads evenly: each point of the map stands for the
+    /// part of the cells around it within the map, half of one on an edge, a quarter in a
+    /// corner, and shows the same fluence.
+    #[test]
+    fn a_hit_in_the_middle_of_each_cell_bins_evenly() -> OpmResult<()> {
+        let hits = (0..4)
+            .flat_map(|i| (0..4).map(move |j| ((f64::from(i) + 0.5, f64::from(j) + 0.5), 1.0)))
+            .collect::<Vec<_>>();
+        let map = binned(&hits, Some((0.0..4.0, 0.0..4.0)), (5, 5))?;
+        for value in values_of(&map).iter().flatten() {
+            assert_relative_eq!(*value, 1.0, max_relative = 1e-12);
+        }
+        Ok(())
+    }
+    /// A binned map holds the energy of its hits, wherever they lie.
+    #[test]
+    fn binning_keeps_the_energy_of_its_hits() -> OpmResult<()> {
+        let hits = [
+            ((0.0, 0.0), 1.0),
+            ((0.3, 1.7), 2.0),
+            ((2.0, 0.4), 0.5),
+            ((1.1, 1.1), 0.25),
+            ((2.0, 2.0), 1.0),
+        ];
+        let map = binned(&hits, None, (7, 5))?;
+        assert_relative_eq!(map.total_energy().value, 4.75, max_relative = 1e-12);
+        Ok(())
+    }
     /// A grid of `n_x` × `n_y` rays 1 cm apart around the axis, spanning their ray tubes.
     fn ray_grid(n_x: usize, n_y: usize) -> OpmResult<Rays> {
         let mut rays = Rays::new_uniform_collimated(
