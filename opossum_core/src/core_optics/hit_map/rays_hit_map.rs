@@ -1140,12 +1140,15 @@ mod test_ray_tubes {
         light::{Ray, Rays},
         millimeter, nanometer,
         nodes::fluence_detector::fluence_data::FluenceData,
-        utils::test_helper::helper::{energy_of, fluence_near, hexapolar_bundle},
+        utils::test_helper::helper::{
+            assert_warned, check_logs, energy_of, fluence_near, hexapolar_bundle,
+        },
     };
     use approx::assert_relative_eq;
     use nalgebra::{Point2, Point3};
     use uom::si::{
-        energy::joule, length::millimeter, radiant_exposure::joule_per_square_centimeter,
+        energy::joule, f64::Length, length::millimeter,
+        radiant_exposure::joule_per_square_centimeter,
     };
 
     /// The bundle of [`hexapolar_bundle`], 5 mm in radius, spanning its ray tubes.
@@ -1163,18 +1166,40 @@ mod test_ray_tubes {
         let p = ray.position();
         p.x.get::<millimeter>().hypot(p.y.get::<millimeter>()) < radius
     }
+    /// Adds the hits of the given rays to the given map, each where `place` puts it, leaving out
+    /// the rays it puts nowhere.
+    fn add_placed_hits(
+        map: &mut RaysHitMap,
+        rays: &Rays,
+        place: impl Fn(&Ray) -> Option<Point3<Length>>,
+    ) -> OpmResult<()> {
+        for ray in rays.iter() {
+            if let Some(at) = place(ray) {
+                map.add_hit_point(
+                    HitPoint::Energy(EnergyHitPoint::new(at, ray.energy())?),
+                    ray.source(),
+                )?;
+            }
+        }
+        Ok(())
+    }
     /// Adds the hits of the given rays where they start, `scale` times as far from the axis, to
     /// the given map, leaving out the rays that start closer to the axis than `hole` (in mm).
     fn add_hits(map: &mut RaysHitMap, rays: &Rays, scale: f64, hole: f64) -> OpmResult<()> {
-        for ray in rays.iter().filter(|ray| !starts_within(ray, hole)) {
+        add_placed_hits(map, rays, |ray| {
             let p = ray.position();
-            let at = Point3::new(p.x * scale, p.y * scale, p.z);
-            map.add_hit_point(
-                HitPoint::Energy(EnergyHitPoint::new(at, ray.energy())?),
-                ray.source(),
-            )?;
-        }
-        Ok(())
+            (!starts_within(ray, hole)).then(|| Point3::new(p.x * scale, p.y * scale, p.z))
+        })
+    }
+    /// A map of the hits of the given rays where they start, with x moved to where `fold` puts
+    /// it, given x and y.
+    fn hits_folded(rays: &Rays, fold: impl Fn(Length, Length) -> Length) -> OpmResult<RaysHitMap> {
+        let mut map = RaysHitMap::default();
+        add_placed_hits(&mut map, rays, |ray| {
+            let p = ray.position();
+            Some(Point3::new(fold(p.x, p.y), p.y, p.z))
+        })?;
+        Ok(map)
     }
     /// A map of the hits of [`add_hits`].
     fn hits_of(rays: &Rays, scale: f64, hole: f64) -> OpmResult<RaysHitMap> {
@@ -1359,6 +1384,49 @@ mod test_ray_tubes {
                 );
             }
         }
+        Ok(())
+    }
+    /// Light folded over itself, as at a caustic, lies twice where it overlaps, and the map
+    /// says that it folds: its left half turned over onto its right half shows twice the fluence
+    /// there and none on the left.
+    #[test]
+    fn light_folded_over_itself_adds_up_and_warns() -> OpmResult<()> {
+        testing_logger::setup();
+        let map = map_of(&hits_folded(&bundle_in_tubes(10)?, |x, _| x.abs())?, 6.0)?;
+        assert_warned("folds over itself");
+        for (x, y) in [(2.0, 1.0), (3.0, -2.5)] {
+            assert_relative_eq!(
+                fluence_near(&map, x, y)?,
+                2.0 * flat_top_fluence(10),
+                max_relative = 0.03
+            );
+            assert!(fluence_near(&map, -x, y)?.abs() < 1e-12);
+        }
+        assert_relative_eq!(energy_of(&map), 1.0, max_relative = 0.03);
+        Ok(())
+    }
+    /// Light turned over as a whole, as behind a focus or a mirror, does not fold.
+    #[test]
+    fn light_turned_over_as_a_whole_does_not_fold() -> OpmResult<()> {
+        testing_logger::setup();
+        let map = map_of(&hits_folded(&bundle_in_tubes(10)?, |x, _| -x)?, 6.0)?;
+        check_logs(log::Level::Warn, vec![]);
+        assert_relative_eq!(
+            fluence_near(&map, 2.0, 1.0)?,
+            flat_top_fluence(10),
+            max_relative = 0.03
+        );
+        Ok(())
+    }
+    /// Light squashed to a line, as at a line focus, does not count as folded, even where
+    /// rounding turns some of its tubes over: here its upper half turns over and its lower half
+    /// does not, both squashed to a trillionth.
+    #[test]
+    fn light_squashed_to_a_line_does_not_fold() -> OpmResult<()> {
+        testing_logger::setup();
+        let squash = |x: Length, y: Length| x * 1e-12 * y.value.signum();
+        map_of(&hits_folded(&bundle_in_tubes(10)?, squash)?, 6.0)?;
+        check_logs(log::Level::Warn, vec![]);
         Ok(())
     }
 }

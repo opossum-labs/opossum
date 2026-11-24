@@ -6,6 +6,7 @@
 //! ends somewhere inside the torn tube, halfway on average (see the handbook, "Fluence").
 use std::{cmp::Ordering, ops::Range};
 
+use log::warn;
 use nalgebra::{DMatrix, Point2, Vector2};
 use spade::{
     DelaunayTriangulation, Triangulation,
@@ -163,6 +164,22 @@ impl<'a> ArrivedSheet<'a> {
             }
         }
     }
+    /// Returns whether the light of this sheet folds over itself on the surface, as it does at a
+    /// caustic: some of its alive tubes arrived turned over and others did not.
+    ///
+    /// A tube squashed to less than a billionth of its area at the source counts as neither: it
+    /// lies flat, as at a line focus, and rounding decides which way it turns.
+    pub fn folds(&self) -> bool {
+        const SQUASHED: f64 = 1e-9;
+        let (mut kept, mut turned) = (false, false);
+        for (tube, points) in self.alive_tubes() {
+            // spade's tubes run counterclockwise at the source
+            let magnification = signed_area(points) / tube.area();
+            kept |= magnification > SQUASHED;
+            turned |= magnification < -SQUASHED;
+        }
+        kept && turned
+    }
     /// Returns the smallest box around everything this sheet draws with the given values, as its
     /// lower and upper corner, `None` if it draws nothing.
     ///
@@ -217,6 +234,9 @@ fn margin_triangles(
 }
 /// Draws sheets of ray tubes, each with the values of its corners, into one fluence map.
 ///
+/// Where tubes overlap, their values add up. If the light of a sheet folds over itself (see
+/// [`ArrivedSheet::folds`]), a warning says that the map is unreliable near the fold.
+///
 /// # Arguments
 ///
 /// * `sheets` - the sheets, each with the fluence (in J/m²) at each of its corners.
@@ -244,6 +264,11 @@ pub fn draw_map(
                     .into(),
             )
         })?;
+    if sheets.iter().any(|(sheet, _)| sheet.folds()) {
+        warn!(
+            "light folds over itself on this surface (caustic): the fluence near the fold is unreliable"
+        );
+    }
     let x = x.cloned().unwrap_or(meter!(lower.x)..meter!(upper.x));
     let y = y.cloned().unwrap_or(meter!(lower.y)..meter!(upper.y));
     let mut grid = FluenceGrid::new(

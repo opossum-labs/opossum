@@ -976,7 +976,13 @@ mod tests {
         config.map_source(i_0, ray_builder);
         let analyzer = GhostFocusAnalyzer::new(config);
         analyzer.analyze(&mut scenery)?;
-        check_logs(log::Level::Warn, vec![]);
+        // one ghost meets a surface near its focus, where its light folds over itself
+        check_logs(
+            log::Level::Warn,
+            vec![
+                "light folds over itself on this surface (caustic): the fluence near the fold is unreliable",
+            ],
+        );
 
         Ok(())
     }
