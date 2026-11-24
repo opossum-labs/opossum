@@ -976,7 +976,9 @@ mod tests {
         config.map_source(i_0, ray_builder);
         let analyzer = GhostFocusAnalyzer::new(config);
         analyzer.analyze(&mut scenery)?;
-        // one ghost meets a surface near its focus, where its light folds over itself
+        // the main beam folds over itself on the last mirror: the tilted grating gives the
+        // converging beam coma
+
         check_logs(
             log::Level::Warn,
             vec![
