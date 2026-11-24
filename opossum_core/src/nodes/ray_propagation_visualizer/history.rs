@@ -9,16 +9,20 @@ use uom::si::{f64::Length, length::millimeter};
 use crate::{
     error::{OpmResult, OpossumError},
     millimeter,
+    types::{SiScalarSchema, Vector3Schema},
 };
 
 /// Struct that holds the history of ray positions for rays of a specific spectral bin.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct RayPositionHistorySpectrum {
     /// Ray history coordinate matrices.
+    #[schemars(with = "Vec<Vector3Schema>")]
     pub history: Vec<MatrixXx3<Length>>,
     /// central wavelength for polychromatic ray bundles
+    #[schemars(with = "SiScalarSchema")]
     pub center_wavelength: Length,
     /// spectral bin size
+    #[schemars(with = "SiScalarSchema")]
     pub wavelength_bin_size: Length,
 }
 
@@ -133,6 +137,7 @@ pub struct RayPositionHistories {
     /// Ray position histories grouped per spectral component.
     pub rays_pos_history: Vec<RayPositionHistorySpectrum>,
     /// Optional view direction vector for 2D plane projection.
+    #[schemars(with = "Option<Vector3Schema>")]
     pub plot_view_direction: Option<Vector3<f64>>,
     /// Ray color transparency alpha in [0.0, 1.0].
     pub ray_transparency: f64,

@@ -13,9 +13,9 @@ use crate::{
     error::{OpmResult, OpossumError},
     generic_validators::{AllNotNan, AllPositive},
     nodes::fluence_detector::Fluence,
+    types::SiScalarSchema,
     validated, validated_type,
 };
-
 /// A fluence that is neither negative nor NaN, as an LIDT has to be.
 pub type ValidatedLidt = validated_type!(Fluence, AllPositive && AllNotNan);
 
@@ -39,6 +39,7 @@ pub struct SurfaceConfig {
     #[serde(default)]
     coating: CoatingType,
     #[serde(default = "default_lidt", skip_serializing_if = "is_default_lidt")]
+    #[schemars(with = "SiScalarSchema")]
     lidt: ValidatedLidt,
 }
 

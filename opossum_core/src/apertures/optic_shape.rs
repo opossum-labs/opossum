@@ -14,6 +14,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     meter,
     properties::Proptype,
+    types::{SiScalarSchema, schema_helper_types::Point2Schema},
     utils::{default_from_name::DefaultFromName, math_utils::to_f64},
 };
 use nalgebra::{Point2, Point3, Rotation3, Vector3};
@@ -35,7 +36,7 @@ const MEETING_STEPS: usize = 100;
 const SETTLED: f64 = 1e-12;
 
 /// A shape with an edge: the outline of a component, or of a bore through it.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, EnumIter)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, EnumIter, JsonSchema)]
 pub enum OutlineShape {
     /// A circle around the origin.
     Circle(CircleShape),
@@ -126,12 +127,15 @@ impl OutlineShape {
 /// leaves it, and it runs along that axis through the whole component. Its center is where the
 /// axis of the bore crosses the plane of the outline. Untilted, it runs along the axis of the
 /// component (see [`Bore::with_tilt`]).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Bore {
     shape: OutlineShape,
+    #[schemars(with = "Point2Schema")]
     center: Point2<Length>,
+    #[schemars(with = "SiScalarSchema")]
     rotation: Angle,
     #[serde(default = "upright", skip_serializing_if = "is_upright")]
+    #[schemars(with = "(SiScalarSchema,SiScalarSchema)")]
     tilt: (Angle, Angle),
 }
 
@@ -318,7 +322,7 @@ impl Bore {
 ///
 /// The edge and the bore bound a region, and the bore lies within the edge; that is checked
 /// whenever an [`Outline`] is made, also when one is read from a file.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(try_from = "OutlineFields")]
 pub struct Outline {
     shape: OutlineShape,
@@ -327,7 +331,7 @@ pub struct Outline {
 }
 
 /// The fields of an [`Outline`] as a file states them, before they are checked.
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 struct OutlineFields {
     shape: OutlineShape,
     #[serde(default)]

@@ -34,6 +34,7 @@ use crate::{
         node_report::{NodeReport, NodeReportResult},
         report_note::{ReportLevel, ReportNote},
     },
+    types::SiScalarSchema,
 };
 pub use optic_graph::{ConnectionInfo, OpticGraph};
 use serde::{Deserialize, Serialize};
@@ -53,6 +54,7 @@ inventory::submit! {
 pub struct NodeGroup {
     node_attr: NodeAttr,
     graph: OpticGraph,
+    #[schemars(with = "HashMap<String, SiScalarSchema>")]
     input_port_distances: BTreeMap<String, Length>,
     accumulated_rays: Vec<HashMap<Uuid, Rays>>,
     ray_ends: Vec<Rays>,

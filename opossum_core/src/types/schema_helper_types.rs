@@ -20,6 +20,11 @@ pub struct Vector2Schema([f64; 2]);
 #[allow(dead_code)]
 pub struct Point2Schema((f64, f64));
 
+/// Helper schema type representing a 3D point `(x, y, z)` serialized as a 3-element tuple.
+#[derive(JsonSchema)]
+#[allow(dead_code)]
+pub struct Point3Schema((f64, f64, f64));
+
 /// Helper schema type representing a 2D point `(x, y)` serialized as a 2-element tuple.
 #[derive(JsonSchema)]
 #[allow(dead_code)]

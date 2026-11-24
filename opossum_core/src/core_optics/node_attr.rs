@@ -15,9 +15,9 @@ use crate::{
     error::{OpmResult, OpossumError},
     geometry::Geometry,
     properties::{Properties, Proptype, validator::Validator},
+    types::{SiScalarSchema, schema_helper_types::Point2Schema},
     utils::{file_utils::sanitize_filename, geom_transformation::Isometry},
 };
-
 fn deserialize_name<'de, D>(deserializer: D) -> Result<String, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -168,8 +168,10 @@ pub struct NodeAttr {
     #[serde(skip_serializing_if = "Option::is_none")]
     alignment: Option<Isometry>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "Option<(Uuid, SiScalarSchema)>")]
     align_like_node_at_distance: Option<(Uuid, Length)>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "Option<Point2Schema>")]
     gui_position: Option<Point2<f64>>,
 }
 

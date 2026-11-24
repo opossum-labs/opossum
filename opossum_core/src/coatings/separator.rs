@@ -9,6 +9,7 @@ use crate::{
     utils::default_from_name::DefaultFromName,
 };
 use nalgebra::Vector3;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use strum::{EnumIter, IntoEnumIterator};
@@ -21,7 +22,7 @@ use uom::si::{
 ///
 /// A spectrum keeps its filter parameters or its file; it is built once per interaction with a
 /// surface.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, JsonSchema)]
 pub enum SplittingConfigBuilder {
     /// a fixed (wavelength-independant) transmission value. Must be between 0.0 and 1.0
     FixedRatio(f64),

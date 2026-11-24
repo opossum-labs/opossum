@@ -3,11 +3,14 @@ use crate::{
     error::{OpmResult, OpossumError},
     millimeter,
     prelude::ApertureShape,
-    types::validated_type_definitions::ValidatedPolygonPoints2D,
+    types::{
+        schema_helper_types::Point2Schema, validated_type_definitions::ValidatedPolygonPoints2D,
+    },
 };
 use earcutr::earcut;
 use nalgebra::{Point2, Point3};
 use opm_macros_lib::EnsureValidated;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::{f64::Length, length::meter};
 use utoipa::ToSchema;
@@ -16,10 +19,13 @@ use utoipa::ToSchema;
 ///
 /// Only the points are written to a file; the triangles are worked out from them whenever they
 /// change, also when a polygon is read.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnsureValidated, ToSchema)]
+#[derive(
+    Debug, Clone, Serialize, Deserialize, PartialEq, EnsureValidated, ToSchema, JsonSchema,
+)]
 #[serde(try_from = "PolygonFields")]
 pub struct PolygonShape {
     #[schema(value_type = Object)]
+    #[schemars(with = "Vec<Point2Schema>")]
     points: ValidatedPolygonPoints2D,
     #[validate(skip)]
     #[serde(skip)]
@@ -27,8 +33,9 @@ pub struct PolygonShape {
 }
 
 /// The fields of a [`PolygonShape`] as a file states them.
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 struct PolygonFields {
+    #[schemars(with = "Vec<Point2Schema>")]
     points: ValidatedPolygonPoints2D,
 }
 
