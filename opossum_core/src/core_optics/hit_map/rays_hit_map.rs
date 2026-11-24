@@ -1420,13 +1420,14 @@ mod test_ray_tubes {
     }
     /// The margins at the edges of a flat-top beam hold as much of its energy as of its area:
     /// each reaches half a ring spacing `d` beyond its edge. A beam of radius `R` keeps
-    /// `R d / (R + d/2)²` of its energy there, a ring from `r` to `R` the share `d / (R − r + d)`.
+    /// `(R d + d²/4) / (R + d/2)²` of its energy there, a ring from `r` to `R` the share
+    /// `d / (R − r + d)`.
     #[test]
     fn the_margins_hold_their_share_of_the_energy() -> OpmResult<()> {
         let rays = bundle_in_tubes(10)?;
         let (d, outer): (f64, f64) = (0.5, 5.0);
         let beam = map_of(&hits_of(&rays, 1.0, 0.0)?, 6.0)?;
-        let share = outer * d / (outer + d / 2.0).powi(2);
+        let share = outer.mul_add(d, d * d / 4.0) / (outer + d / 2.0).powi(2);
         assert_relative_eq!(
             beam.edge_share().unwrap_or(f64::NAN),
             share,
@@ -1439,6 +1440,43 @@ mod test_ray_tubes {
             d / (outer - 2.5 + d),
             max_relative = 0.02
         );
+        Ok(())
+    }
+    /// The margins at the edge of a hole meet on the bisectors of its corners instead of
+    /// overlapping: however finely the map looks, it nowhere shows more than the flat top.
+    #[test]
+    fn the_margins_at_a_hole_do_not_overlap() -> OpmResult<()> {
+        // rings 1 mm apart: the edge of the hole runs through 18 rays, 20° apart
+        let hits = hits_of(&bundle_in_tubes(5)?, 1.0, 2.2)?;
+        let range = millimeter!(-3.5)..millimeter!(3.5);
+        let map = hits.calc_fluence_with_tubes(
+            (401, 401),
+            Some(&range),
+            Some(&range),
+            FluenceEstimator::Voronoi,
+        )?;
+        let peak = map.peak().get::<joule_per_square_centimeter>();
+        assert!(
+            peak < 1.1 * flat_top_fluence(5),
+            "the map shows {peak} J/cm² against {} J/cm²",
+            flat_top_fluence(5)
+        );
+        Ok(())
+    }
+    /// A square beam is even right into its corners, where the margins of its sides meet.
+    #[test]
+    fn a_square_beam_is_even_into_its_corners() -> OpmResult<()> {
+        // 5 × 5 rays 1 mm apart carry 1 J over 5 mm × 5 mm, the margins included: 4 J/cm²
+        let mut rays = Rays::new_uniform_collimated(
+            nanometer!(1000.0),
+            joule!(1.0),
+            &Grid::new(millimeter!(4.0, 4.0), Point2::new(5, 5))?,
+        )?;
+        rays.attach_mesh()?;
+        let map = map_of(&hits_of(&rays, 1.0, 0.0)?, 2.6)?;
+        for (x, y) in [(2.0, 2.0), (2.35, 2.25), (-2.4, 2.2), (0.0, 2.4)] {
+            assert_relative_eq!(fluence_near(&map, x, y)?, 4.0, max_relative = 1e-6);
+        }
         Ok(())
     }
     /// A map that does not follow ray tubes has no margins whose share it could tell.

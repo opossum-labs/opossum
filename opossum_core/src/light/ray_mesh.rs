@@ -8,9 +8,10 @@ use std::{cmp::Ordering, fmt, sync::Arc};
 
 use itertools::Itertools;
 use log::warn;
-use nalgebra::{Point2, Vector3};
+use nalgebra::{Point2, Vector2, Vector3};
 use spade::{
-    DelaunayTriangulation, HasPosition, Point2 as SheetPoint, Triangulation, handles::VertexHandle,
+    DelaunayTriangulation, HasPosition, Point2 as SheetPoint, Triangulation,
+    handles::{DirectedEdgeHandle, FaceHandle, InnerTag, VertexHandle},
 };
 
 use crate::{
@@ -212,29 +213,181 @@ fn triangulate(
     Ok(sheet)
 }
 /// The area a corner stands for at its source: its Voronoi cell, and beyond each outer edge of
-/// its sheet half of the margin of half a tube height there.
+/// its sheet the half of the margin there on its side, cut square through the middle of the
+/// edge, so that the piece where the margins of two edges meet belongs to the corner between them.
 ///
 /// The Voronoi cell is summed from the tubes around the corner, each contributing the part of
 /// itself that is closer to the corner than to its other corners. That holds however the tubes of
 /// a regular grid are cut into triangles, which a third of their areas does not.
 fn source_cell_area(corner: VertexHandle<'_, RayVertex>) -> f64 {
-    let at = |v: VertexHandle<'_, RayVertex>| Point2::new(v.position().x, v.position().y);
+    let position = |v: VertexHandle<'_, RayVertex>| Point2::new(v.position().x, v.position().y);
+    let at = |v: VertexHandle<'_, RayVertex>| Some(position(v));
+    let all = |_: Tube<'_>| true;
     corner
         .out_edges()
         .map(|edge| {
             // Every tube around the corner lies left of one of its edges, every outer edge
             // of the sheet through it is one of them.
-            let (left, right) = (edge.face().as_inner(), edge.rev().face().as_inner());
             let inside = edge.opposite_vertex().map_or(0.0, |third| {
-                voronoi_part(at(corner), at(edge.to()), at(third))
+                voronoi_part(position(corner), position(edge.to()), position(third))
             });
-            let margin = match (left, right) {
-                (Some(tube), None) | (None, Some(tube)) => tube.area() / 2.0,
-                _ => 0.0,
+            let margin = if let Some([start, end, end_out, start_out]) = margin(edge, &all, &at) {
+                let (middle, middle_out) = halfway([start, end, end_out, start_out]);
+                quadrilateral_area([start, middle, middle_out, start_out])
+            } else if let Some([start, end, end_out, start_out]) = margin(edge.rev(), &all, &at) {
+                let (middle, middle_out) = halfway([start, end, end_out, start_out]);
+                quadrilateral_area([middle, end, end_out, middle_out])
+            } else {
+                0.0
             };
             inside + margin
         })
         .sum()
+}
+/// Returns where a cut square through the middle of the edge of a margin (see [`margin`]) meets
+/// the edge and the far side of the margin.
+fn halfway([start, end, end_out, start_out]: [Point2<f64>; 4]) -> (Point2<f64>, Point2<f64>) {
+    let middle = start + (end - start) / 2.0;
+    let far = end_out - start_out;
+    let length_squared = far.norm_squared();
+    if length_squared <= 0.0 {
+        return (middle, end_out);
+    }
+    (
+        middle,
+        start_out + far * ((middle - start_out).dot(&far) / length_squared),
+    )
+}
+/// The area of a quadrilateral whose sides do not cross, from its corners in order.
+fn quadrilateral_area([a, b, c, d]: [Point2<f64>; 4]) -> f64 {
+    (c - a).perp(&(d - b)).abs() / 2.0
+}
+/// A ray tube: an inner face of the triangulation of a sheet.
+pub(crate) type Tube<'a> = FaceHandle<'a, InnerTag, RayVertex, (), (), ()>;
+/// An edge between two corners of the ray tubes of a sheet, running one way.
+pub(crate) type TubeEdge<'a> = DirectedEdgeHandle<'a, RayVertex, (), (), ()>;
+/// Returns the margin beyond the given edge of the alive tubes of a sheet, if no alive tube
+/// continues it: a strip half as wide as its tube is high, running out from the edge away from
+/// the tube. Where the margins of two edges meet at a corner, both end on the bisector there, so
+/// they neither overlap nor leave a gap; where the edge turns by more than 150°, the margin ends
+/// square to it (see the handbook, "Fluence").
+///
+/// # Arguments
+///
+/// * `edge` - an edge with an alive tube on its left.
+/// * `alive` - whether a tube is alive.
+/// * `at` - where a corner lies, `None` if it lies nowhere.
+///
+/// # Returns
+///
+/// The corners of the margin: the start and the end of the edge, then the points beyond its end
+/// and beyond its start, which are one point where the margin closes to a triangle. `None` if an
+/// alive tube continues the edge, if the edge has no length or if one of its corners lies nowhere.
+pub(crate) fn margin(
+    edge: TubeEdge<'_>,
+    alive: &impl Fn(Tube<'_>) -> bool,
+    at: &impl Fn(VertexHandle<'_, RayVertex>) -> Option<Point2<f64>>,
+) -> Option<[Point2<f64>; 4]> {
+    let is_alive = |side: TubeEdge<'_>| side.face().as_inner().is_some_and(alive);
+    if !is_alive(edge) || is_alive(edge.rev()) {
+        return None;
+    }
+    let (start, end) = (at(edge.from())?, at(edge.to())?);
+    let (normal, width) = outward(edge, at)?;
+    let normal_of = |other: TubeEdge<'_>| outward(other, at).map(|(normal, _)| normal);
+    let start_out = miter(
+        start,
+        normal,
+        previous_edge(edge, alive).and_then(normal_of),
+        width,
+    );
+    let end_out = miter(
+        end,
+        normal,
+        next_edge(edge, alive).and_then(normal_of),
+        width,
+    );
+    let (to_start_out, to_end_out) = (start_out - start, end_out - end);
+    if (end_out - start_out).dot(&(end - start)) <= 0.0 {
+        // the ends cross before the margin is as wide: it closes where they meet
+        let across = to_start_out.perp(&to_end_out);
+        let meet = start + to_start_out * ((end - start).perp(&to_end_out) / across);
+        return (across != 0.0).then_some([start, end, meet, meet]);
+    }
+    Some([start, end, end_out, start_out])
+}
+/// Returns the direction away from the tube on the left of the given edge, square to the edge,
+/// and half the height of that tube above the edge, which is how wide its margin is; `None` if
+/// the edge has no length or a corner lies nowhere.
+fn outward(
+    edge: TubeEdge<'_>,
+    at: &impl Fn(VertexHandle<'_, RayVertex>) -> Option<Point2<f64>>,
+) -> Option<(Vector2<f64>, f64)> {
+    let (start, end, third) = (
+        at(edge.from())?,
+        at(edge.to())?,
+        at(edge.opposite_vertex()?)?,
+    );
+    let along = end - start;
+    let length = along.norm();
+    if length <= 0.0 {
+        return None;
+    }
+    let normal = Vector2::new(along.y, -along.x) / length;
+    let height = normal.dot(&(third - start));
+    Some((
+        if height > 0.0 { -normal } else { normal },
+        height.abs() / 2.0,
+    ))
+}
+/// Returns where a margin `width` wide in the direction `normal` ends at the given corner: on
+/// the bisector with the margin of the `other` edge there, or square to its own edge if there is
+/// no other edge or the edge turns by more than 150°, where the end would reach out more than
+/// four times as far as the margin is wide.
+fn miter(
+    corner: Point2<f64>,
+    normal: Vector2<f64>,
+    other: Option<Vector2<f64>>,
+    width: f64,
+) -> Point2<f64> {
+    // the cosine of half the sharpest turn: 75°
+    const SHARPEST: f64 = 0.258_819_045_102_520_8;
+    let bisector = other
+        .and_then(|other| (normal + other).try_normalize(f64::EPSILON))
+        .filter(|bisector| bisector.dot(&normal) >= SHARPEST)
+        .unwrap_or(normal);
+    corner + bisector * (width / bisector.dot(&normal))
+}
+/// Returns the edge of the alive tubes that follows the given one at its end, found by turning
+/// around that corner through the alive tubes: the first edge with an alive tube on its left and
+/// none on its right.
+fn next_edge<'a>(edge: TubeEdge<'a>, alive: &impl Fn(Tube<'_>) -> bool) -> Option<TubeEdge<'a>> {
+    // the tube on the left of the given edge lies left of this one
+    let mut next = edge.rev().cw();
+    for _ in 0..edge.to().out_edges().count() {
+        let turned = next.cw();
+        if !turned.face().as_inner().is_some_and(alive) {
+            return Some(next);
+        }
+        next = turned;
+    }
+    None
+}
+/// Returns the edge of the alive tubes that the given one follows at its start, found by turning
+/// around that corner through the alive tubes the other way.
+fn previous_edge<'a>(
+    edge: TubeEdge<'a>,
+    alive: &impl Fn(Tube<'_>) -> bool,
+) -> Option<TubeEdge<'a>> {
+    // the tube on the left of the given edge lies right of this one
+    let mut back = edge.ccw();
+    for _ in 0..edge.from().out_edges().count() {
+        if !back.face().as_inner().is_some_and(alive) {
+            return Some(back.rev());
+        }
+        back = back.ccw();
+    }
+    None
 }
 /// The part of the triangle `p q r` that lies closer to `p` than to `q` and `r`, signed: negative
 /// beyond an obtuse angle, where the parts of the neighbors make up for it.
@@ -549,9 +702,9 @@ mod test {
         approx::assert_relative_eq!(voronoi_part(q, r, p), 0.125);
         approx::assert_relative_eq!(voronoi_part(r, p, q), 0.125);
     }
-    /// The corners of a square grid of 1 mm stand for a square of 1 mm² each, inside and on its
-    /// edges, where the margin makes up the missing half; at a corner of the grid a quarter of
-    /// it is missing.
+    /// The corners of a square grid of 1 mm stand for a square of 1 mm² each: inside, on its
+    /// edges, where the margin makes up the missing half, and at its corners, where the margins
+    /// of the two sides meet on the bisector and make up the missing quarter.
     #[test]
     fn the_corners_of_a_grid_stand_for_their_squares() -> OpmResult<()> {
         let rays = Rays::new_uniform_collimated(
@@ -560,18 +713,70 @@ mod test {
             &Grid::new(millimeter!(2.0, 2.0), nalgebra::Point2::new(3, 3))?,
         )?;
         let mesh = RayMesh::new(&rays)?;
-        let mut areas = only_sheet(&mesh)
+        let areas = only_sheet(&mesh)
             .vertices()
             .map(|v| v.data().cell_area() * 1e6)
             .collect::<Vec<_>>();
-        areas.sort_by(f64::total_cmp);
-        for (area, expected) in areas
-            .iter()
-            .zip([0.75, 0.75, 0.75, 0.75, 1.0, 1.0, 1.0, 1.0, 1.0])
-        {
-            approx::assert_relative_eq!(*area, expected, max_relative = 1e-9);
+        assert_eq!(areas.len(), 9);
+        for area in areas {
+            approx::assert_relative_eq!(area, 1.0, max_relative = 1e-9);
         }
         Ok(())
+    }
+    /// The margins around a single dead tube are wider than its corners leave room for: each
+    /// closes to a triangle whose tip lies where the bisectors of the corners meet, and together
+    /// they fill the tube without overlapping.
+    #[test]
+    fn the_margins_around_a_dead_tube_fill_it() -> OpmResult<()> {
+        let mesh = RayMesh::new(&hexapolar(2)?)?;
+        let sheet = only_sheet(&mesh);
+        let center = |tube: &Tube<'_>| {
+            tube.vertices()
+                .iter()
+                .any(|v| v.position().x.hypot(v.position().y) < 1e-12)
+        };
+        let dead = sheet
+            .inner_faces()
+            .find(center)
+            .ok_or_else(|| OpossumError::Other("no tube at the center".into()))?;
+        let alive = |tube: Tube<'_>| tube.fix() != dead.fix();
+        let at = |v: VertexHandle<'_, RayVertex>| Some(Point2::new(v.position().x, v.position().y));
+        let mut area = 0.0;
+        for edge in dead.adjacent_edges() {
+            let [start, end, end_out, start_out] = margin(edge.rev(), &alive, &at)
+                .ok_or_else(|| OpossumError::Other("no margin".into()))?;
+            assert_eq!(end_out, start_out);
+            area += (end - start).perp(&(end_out - start)).abs() / 2.0;
+        }
+        approx::assert_relative_eq!(area, dead.area(), max_relative = 1e-9);
+        Ok(())
+    }
+    /// A margin ends on the bisector with the margin of the next edge, and square to its own edge
+    /// where the edge turns by more than 150°.
+    #[test]
+    fn a_margin_ends_on_the_bisector_unless_the_edge_turns_sharply() {
+        let (corner, down) = (Point2::new(0.0, 0.0), Vector2::new(0.0, -1.0));
+        // the normal of the next edge, where the edge turns by the given angle in degrees
+        let turned = |angle: f64| {
+            let angle = angle.to_radians();
+            Vector2::new(-angle.sin(), -angle.cos())
+        };
+        approx::assert_relative_eq!(
+            miter(corner, down, Some(turned(90.0)), 1.0),
+            Point2::new(-1.0, -1.0),
+            epsilon = 1e-12
+        );
+        approx::assert_relative_eq!(
+            miter(corner, down, Some(turned(120.0)), 1.0),
+            Point2::new(-(3.0_f64.sqrt()), -1.0),
+            epsilon = 1e-12
+        );
+        approx::assert_relative_eq!(
+            miter(corner, down, Some(turned(160.0)), 1.0),
+            Point2::new(0.0, -1.0),
+            epsilon = 1e-12
+        );
+        approx::assert_relative_eq!(miter(corner, down, None, 1.0), Point2::new(0.0, -1.0));
     }
     /// A ray keeps its place in the tubes when it is copied, and drops it when written to file.
     #[test]

@@ -81,25 +81,17 @@
       <circle cx="48" cy="41.57" r="3.5"/><circle cx="60" cy="20.78" r="3.5"/>
     </g>
 
-    <!-- margins of half a tube height (10.39) beyond the edges of a hexagon of alive tubes -->
-    <rect id="m1" x="-12" y="-31.17" width="24" height="10.39"/>
-    <g id="margin-out-1">
-      <use href="#m1"/><use href="#m1" transform="rotate(60)"/>
-      <use href="#m1" transform="rotate(120)"/><use href="#m1" transform="rotate(180)"/>
-      <use href="#m1" transform="rotate(240)"/><use href="#m1" transform="rotate(300)"/>
-    </g>
-    <rect id="m2" x="-24" y="-41.57" width="48" height="10.39"/>
-    <g id="margin-in-2">
-      <use href="#m2"/><use href="#m2" transform="rotate(60)"/>
-      <use href="#m2" transform="rotate(120)"/><use href="#m2" transform="rotate(180)"/>
-      <use href="#m2" transform="rotate(240)"/><use href="#m2" transform="rotate(300)"/>
-    </g>
-    <rect id="m3" x="-36" y="-72.74" width="72" height="10.39"/>
-    <g id="margin-out-3">
-      <use href="#m3"/><use href="#m3" transform="rotate(60)"/>
-      <use href="#m3" transform="rotate(120)"/><use href="#m3" transform="rotate(180)"/>
-      <use href="#m3" transform="rotate(240)"/><use href="#m3" transform="rotate(300)"/>
-    </g>
+    <!-- margins of half a tube height (10.39) beyond the edges of a hexagon of alive tubes; the
+         margins of two edges meet on the bisector of their corner, so together they are a ring -->
+    <path id="margin-out-1" fill-rule="evenodd"
+          d="M36,0 L18,-31.18 L-18,-31.18 L-36,0 L-18,31.18 L18,31.18 Z
+             M24,0 L12,-20.78 L-12,-20.78 L-24,0 L-12,20.78 L12,20.78 Z"/>
+    <path id="margin-in-2" fill-rule="evenodd"
+          d="M48,0 L24,-41.57 L-24,-41.57 L-48,0 L-24,41.57 L24,41.57 Z
+             M36,0 L18,-31.18 L-18,-31.18 L-36,0 L-18,31.18 L18,31.18 Z"/>
+    <path id="margin-out-3" fill-rule="evenodd"
+          d="M84,0 L42,-72.75 L-42,-72.75 L-84,0 L-42,72.75 L42,72.75 Z
+             M72,0 L36,-62.35 L-36,-62.35 L-72,0 L-36,62.35 L36,62.35 Z"/>
   </defs>
 
   <!-- A background of its own keeps the figure readable on the dark book themes. -->
@@ -183,16 +175,18 @@
     <rect x="660" y="216" width="22" height="14" fill="url(#margin)" stroke="#d69e2e"/>
     <text x="692" y="223">margin: half a tube height beyond</text>
     <text x="692" y="237">each edge no alive tube continues,</text>
-    <text x="692" y="251">at a cut as at the outer edge</text>
+    <text x="692" y="251">at a cut as at the outer edge;</text>
+    <text x="692" y="265">at a corner two margins meet</text>
+    <text x="692" y="279">on its bisector</text>
 
-    <circle cx="671" cy="280" r="9" fill="none" stroke="#4a5568" stroke-width="1.5"
+    <circle cx="671" cy="310" r="9" fill="none" stroke="#4a5568" stroke-width="1.5"
             stroke-dasharray="5 3"/>
-    <text x="692" y="277">where the bore cuts the beam</text>
-    <text x="692" y="291">(seen from the source)</text>
+    <text x="692" y="307">where the bore cuts the beam</text>
+    <text x="692" y="321">(seen from the source)</text>
   </g>
-  <text x="660" y="350" font-size="12" fill="#1a202c">The map stays dark where</text>
-  <text x="660" y="366" font-size="12" fill="#1a202c">no alive tube lies: behind the</text>
-  <text x="660" y="382" font-size="12" fill="#1a202c">mirror around the light through</text>
-  <text x="660" y="398" font-size="12" fill="#1a202c">the bore, in front of it inside</text>
-  <text x="660" y="414" font-size="12" fill="#1a202c">the ring.</text>
+  <text x="660" y="366" font-size="12" fill="#1a202c">The map stays dark where</text>
+  <text x="660" y="382" font-size="12" fill="#1a202c">no alive tube lies: behind the</text>
+  <text x="660" y="398" font-size="12" fill="#1a202c">mirror around the light through</text>
+  <text x="660" y="414" font-size="12" fill="#1a202c">the bore, in front of it inside</text>
+  <text x="660" y="430" font-size="12" fill="#1a202c">the ring.</text>
 </svg>

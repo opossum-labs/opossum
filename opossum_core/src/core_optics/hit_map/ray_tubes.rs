@@ -8,24 +8,18 @@ use std::{cmp::Ordering, ops::Range};
 
 use log::warn;
 use nalgebra::{DMatrix, Point2, Vector2};
-use spade::{
-    DelaunayTriangulation, Triangulation,
-    handles::{FaceHandle, InnerTag, VertexHandle},
-};
+use spade::{DelaunayTriangulation, Triangulation, handles::VertexHandle};
 use uom::si::f64::Length;
 
 use super::fluence_estimator::FluenceEstimator;
 use crate::{
     J_per_m2,
     error::{OpmResult, OpossumError},
-    light::ray_mesh::RayVertex,
+    light::ray_mesh::{RayVertex, Tube, margin},
     meter,
     nodes::fluence_detector::fluence_data::FluenceData,
     utils::{to_f64, try_f64_to_usize},
 };
-
-/// A ray tube: an inner face of the triangulation of a sheet.
-type Tube<'a> = FaceHandle<'a, InnerTag, RayVertex, (), (), ()>;
 
 /// Where a corner of the ray tubes arrived on a surface and what its rays brought there: their
 /// summed energy or fluence.
@@ -138,25 +132,15 @@ impl<'a> ArrivedSheet<'a> {
                 continue;
             };
             draw((points, [fa, fb, fc]), false);
-            let area = signed_area(points).abs();
+            let alive = |tube: Tube<'_>| self.alive(tube);
+            let at = |v: VertexHandle<'_, RayVertex>| self.arrival(v).map(|a| a.position);
             for edge in tube.adjacent_edges() {
-                if edge
-                    .rev()
-                    .face()
-                    .as_inner()
-                    .is_some_and(|next| self.alive(next))
-                {
-                    continue;
-                }
-                let third = edge.opposite_vertex().and_then(|v| self.arrival(v));
-                if let (Some(a), Some(b), Some(c), Some(fa), Some(fb)) = (
-                    self.arrival(edge.from()),
-                    self.arrival(edge.to()),
-                    third,
+                if let (Some(corners), Some(fa), Some(fb)) = (
+                    margin(edge, &alive, &at),
                     value_of(edge.from()),
                     value_of(edge.to()),
                 ) {
-                    margin_triangles([a.position, b.position], c.position, area, [fa, fb])
+                    margin_triangles(corners, [fa, fb])
                         .into_iter()
                         .flatten()
                         .for_each(|triangle| draw(triangle, true));
@@ -200,37 +184,28 @@ impl<'a> ArrivedSheet<'a> {
 }
 /// A triangle to draw: its corners on the surface and the values there.
 pub type Triangle = ([Point2<f64>; 3], [f64; 3]);
-/// Returns the margin beyond an edge of a tube: a strip of half the tube height, running out from
-/// the edge on the side away from the third corner, as two triangles carrying the values of the
-/// edge across; `None` for an edge of no length.
+/// Returns the triangles of a margin (see [`margin`]), carrying the values of its edge across:
+/// two for a margin of four corners, one where the margin closes to a triangle, whose tip takes
+/// the mean of both values.
 ///
 /// # Arguments
 ///
-/// * `edge` - the two corners of the edge.
-/// * `third` - the third corner of the tube.
-/// * `tube_area` - the area of the tube on the surface.
-/// * `values` - the values at the two corners of the edge.
+/// * `corners` - the start and the end of the edge, then the points beyond its end and its start.
+/// * `values` - the values at the start and the end of the edge.
 fn margin_triangles(
-    [a, b]: [Point2<f64>; 2],
-    third: Point2<f64>,
-    tube_area: f64,
-    [fa, fb]: [f64; 2],
-) -> Option<[Triangle; 2]> {
-    let along = b - a;
-    let length_squared = along.norm_squared();
-    if length_squared <= 0.0 {
-        return None;
+    [start, end, end_out, start_out]: [Point2<f64>; 4],
+    [fs, fe]: [f64; 2],
+) -> [Option<Triangle>; 2] {
+    if end_out == start_out {
+        return [
+            Some(([start, end, end_out], [fs, fe, fs.midpoint(fe)])),
+            None,
+        ];
     }
-    // across the edge, as long as half the tube height: its area over the length of the edge
-    let mut across = Vector2::new(along.y, -along.x) * (tube_area / length_squared);
-    if across.dot(&(third - a)) > 0.0 {
-        across = -across;
-    }
-    let (a_out, b_out) = (a + across, b + across);
-    Some([
-        ([a, b, b_out], [fa, fb, fb]),
-        ([a, b_out, a_out], [fa, fb, fa]),
-    ])
+    [
+        Some(([start, end, end_out], [fs, fe, fe])),
+        Some(([start, end_out, start_out], [fs, fe, fs])),
+    ]
 }
 /// Draws sheets of ray tubes, each with the values of its corners, into one fluence map.
 ///
@@ -509,27 +484,45 @@ mod test {
             assert_relative_eq!(values[(3, 2)], 9.5, epsilon = 1e-12);
         }
     }
-    /// The margin runs half the tube height beyond the edge, away from the third corner, and
-    /// carries the values of the edge across.
-    #[test]
-    fn a_margin_runs_half_a_tube_height_out() {
+    /// Draws the triangles of a margin of the given corners and values onto a grid of 1 m
+    /// spacing from 0 m to 4 m in x and from -4 m to 0 m in y.
+    fn draw_margin(corners: [Point2<f64>; 4], values: [f64; 2]) -> DMatrix<f64> {
         let mut grid = FluenceGrid::new(&(0.0..4.0), &(-4.0..0.0), (5, 5));
-        // a tube of height 4 above the edge from (0, 0) to (4, 0): its margin reaches 2 below it
-        let (a, b, third) = (
-            Point2::new(0.0, 0.0),
-            Point2::new(4.0, 0.0),
-            Point2::new(0.0, 4.0),
-        );
-        for (corners, values) in margin_triangles([a, b], third, 8.0, [1.0, 3.0])
-            .into_iter()
-            .flatten()
-        {
+        for (corners, values) in margin_triangles(corners, values).into_iter().flatten() {
             grid.add_triangle(corners, values);
         }
-        let values = grid.values;
+        grid.values
+    }
+    /// A margin carries the values of its edge across.
+    #[test]
+    fn a_margin_carries_the_values_of_its_edge_across() {
+        // a margin 2 deep below the edge from (0, 0) to (4, 0)
+        let values = draw_margin(
+            [
+                Point2::new(0.0, 0.0),
+                Point2::new(4.0, 0.0),
+                Point2::new(4.0, -2.0),
+                Point2::new(0.0, -2.0),
+            ],
+            [1.0, 3.0],
+        );
         // row 3 lies at y = -1 within the margin, row 1 at y = -3 beyond it
         assert_relative_eq!(values[(3, 1)], 1.5, epsilon = 1e-12);
         assert_relative_eq!(values[(3, 2)], 2.0, epsilon = 1e-12);
         assert!(values.row(1).iter().all(|v| *v == 0.0), "{values}");
+    }
+    /// A margin that closes to a triangle carries the mean of the values of its edge to its tip:
+    /// below the middle of the edge it shows that mean all the way down.
+    #[test]
+    fn a_margin_closing_to_a_tip_carries_the_mean_there() {
+        let tip = Point2::new(2.0, -4.0);
+        let values = draw_margin(
+            [Point2::new(0.0, 0.0), Point2::new(4.0, 0.0), tip, tip],
+            [1.0, 3.0],
+        );
+        // rows 1 and 3 lie at y = -3 and y = -1, column 2 at x = 2, column 1 at x = 1
+        assert_relative_eq!(values[(1, 2)], 2.0, epsilon = 1e-12);
+        assert_relative_eq!(values[(3, 2)], 2.0, epsilon = 1e-12);
+        assert_relative_eq!(values[(3, 1)], 1.5, epsilon = 1e-12);
     }
 }
