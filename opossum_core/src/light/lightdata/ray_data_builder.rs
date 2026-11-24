@@ -9,7 +9,9 @@ use crate::{
     error::OpmResult,
     light::Rays,
     prelude::{Isometry, RayDataSource},
+    types::SiScalarSchema,
 };
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
@@ -19,12 +21,13 @@ use uom::si::f64::Length;
 /// with global physical properties that apply to the entire generated light field.
 /// This includes its 3D position and orientation in the optical system ([`Isometry`]),
 /// as well as an optional alignment wavelength used by analyzers.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, JsonSchema)]
 pub struct RayDataBuilder {
     source: RayDataSource,
     #[serde(skip_serializing_if = "Option::is_none")]
     isometry: Option<Isometry>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "Option<SiScalarSchema>")]
     alignment_wavelength: Option<Length>,
 }
 

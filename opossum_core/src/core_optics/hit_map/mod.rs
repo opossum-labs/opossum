@@ -19,22 +19,19 @@ pub mod fluence_estimator;
 pub mod rays_hit_map;
 
 use crate::{
-    J_per_cm2,
-    error::{OpmResult, OpossumError},
-    meter,
-    nodes::fluence_detector::{Fluence, fluence_data::FluenceData},
-    properties::Proptype,
+    J_per_cm2, error::{OpmResult, OpossumError}, meter, nodes::fluence_detector::{Fluence, fluence_data::FluenceData}, properties::Proptype, types::SiScalarSchema,
 };
 use fluence_estimator::FluenceEstimator;
 use log::warn;
 use nalgebra::DMatrix;
 use rays_hit_map::{HitPoint, HitPoints, RaysHitMap};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, ops::Range};
 use uom::si::f64::Length;
 use uuid::Uuid;
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema)]
 /// Storage struct for `RaysHitMap` on a surface from a single bounce
 pub struct BouncedHitMap {
     hit_map: HashMap<Uuid, RaysHitMap>,
@@ -85,11 +82,12 @@ impl BouncedHitMap {
 
 /// Data structure for storing intersection points (and energies) of [`Rays`](crate::light::rays::Rays) hitting an
 /// [`OpticSurface`](crate::core_optics::optic_surface::OpticSurface).
-#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema)]
 pub struct HitMap {
     /// Stores the hitpoints of the rays on this surface, separated by their bounce level and the individual ray bundle
     hit_map: Vec<BouncedHitMap>,
     /// Stores the fluence, position in the history of the ray bundles that create a critical fluence on this surface and the bounce level. key value is the uuid of the ray bundle
+    #[schemars(with = "HashMap<Uuid, (SiScalarSchema, usize, usize)>")]
     critical_fluence: HashMap<Uuid, (Fluence, usize, usize)>,
 }
 impl HitMap {

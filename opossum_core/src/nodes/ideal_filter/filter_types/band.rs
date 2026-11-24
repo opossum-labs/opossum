@@ -1,6 +1,7 @@
 use std::{fmt::Display, ops::Range, str::FromStr};
 
 use log::warn;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;
 use uom::si::{f64::Length, length::micrometer};
@@ -10,14 +11,14 @@ use crate::{
     light::Spectrum,
     nanometer,
     nodes::ideal_filter::filter_types::math::interpolate_transition,
+    types::SiScalarSchema,
     utils::default_from_name::DefaultFromName,
 };
-
 /// Specifies the type of band filter.
 ///
 /// - `BandPass`: Passes a specified wavelength band and attenuates others.
 /// - `Notch`: Filters out a specified wavelength band while passing others.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, Eq, Copy, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, Eq, Copy, Default, JsonSchema)]
 pub enum BandFilterType {
     /// Passes a specified wavelength band.
     #[default]
@@ -58,15 +59,17 @@ impl DefaultFromName for BandFilterType {}
 /// A `BandFilter` describes either a band-pass or notch filter. It includes
 /// parameters such as center wavelength, filter width, optional smooth transition width,
 /// the operational wavelength range, and the spectral resolution.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema)]
 pub struct BandFilter {
     /// The type of band filter (band-pass or notch).
     filter_type: BandFilterType,
 
     /// The central wavelength of the band.
+    #[schemars(with = "SiScalarSchema")]
     center_wavelength: Length,
 
     /// The full width of the band.
+    #[schemars(with = "SiScalarSchema")]
     width: Length,
 
     /// The minimum and maximum transmission values of the `BandFilter`
@@ -75,12 +78,15 @@ pub struct BandFilter {
     /// Optional smooth transition width at the band edges.
     ///
     /// If `Some`, the filter transitions gradually; if `None`, the transition is sharp.
+    #[schemars(with = "Option<SiScalarSchema>")]
     smooth_step_width: Option<Length>,
 
     /// The wavelength range over which the filter is defined.
+    #[schemars(with = "Range<SiScalarSchema>")]
     range: Range<Length>,
 
     /// The wavelength resolution associated with the filter's data.
+    #[schemars(with = "SiScalarSchema")]
     resolution: Length,
 }
 

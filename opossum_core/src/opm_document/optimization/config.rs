@@ -2,13 +2,14 @@ use super::{
     algorithm::OptimizationAlgorithm, coupling::ParameterCoupling, operand::StandardOperand,
     variable::FreeVariable,
 };
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Fully serializable configuration defining a complete optical optimization setup.
 ///
 /// Can be persisted to `.opt.ron` template files or embedded directly
 /// in project files (`.opm`).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema)]
 pub struct OptimizationConfig {
     /// List of independent free parameters tuned by the numerical solver.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

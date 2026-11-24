@@ -4,6 +4,7 @@ use std::{f64::consts::PI, fmt::Display};
 
 use nalgebra::{MatrixXx3, Point3, Rotation3, Unit, Vector3, vector};
 use num_traits::{ToPrimitive, Zero};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::{
     energy::joule,
@@ -22,26 +23,30 @@ use crate::{
     meter,
     nodes::{FilterType, fluence_detector::Fluence},
     percent,
+    types::{SiScalarSchema, Vector3Schema},
     utils::{geom_transformation::Isometry, math_utils::distance_3d_point},
 };
-
 ///Struct that contains all information about an optical ray
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, JsonSchema)]
 pub struct Ray {
     /// Current position of the ray in 3D space.
+    #[schemars(with = "Vector3Schema")]
     pos: Point3<Length>,
     /// History of positions traversed by the ray.
+    #[schemars(with = "Vec<Vector3Schema>")]
     pos_hist: Vec<Point3<Length>>,
     /// Current propagation direction of the ray (as a normalized direction cosine vector).
+    #[schemars(with = "Vector3Schema")]
     dir: Vector3<f64>,
     /// Up direction carried while placing nodes. It decides how a node is turned about the ray
     /// and turns with the ray at every surface. Only the optical axis of a positioning run has one.
     #[serde(skip)]
     up_direction: Option<Vector3<f64>>,
-    // pol: Vector2<Complex<f64>>, // Polarization vector (Jones vector), currently unused.
     /// Energy carried by the ray.
+    #[schemars(with = "SiScalarSchema")]
     e: Energy,
     /// Wavelength of the ray
+    #[schemars(with = "SiScalarSchema")]
     wvl: Length,
     /// Number of times the ray has bounced (reflected). Used as stop criterion.
     number_of_bounces: usize,
@@ -50,6 +55,7 @@ pub struct Ray {
     /// Indicates whether the ray is allowed to propagate further.
     valid: bool,
     /// Total optical path length traversed by the ray.
+    #[schemars(with = "SiScalarSchema")]
     path_length: Length,
     /// Refractive index of the medium in which the ray is propagating.
     refractive_index: f64,

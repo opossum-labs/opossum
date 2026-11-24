@@ -24,6 +24,7 @@ pub use pump_source::{
     TransversalProfile,
 };
 pub use scenario::{ActiveScenario, PumpConfig, PumpScenario};
+use schemars::JsonSchema;
 
 use crate::{
     error::OpmResult,
@@ -44,7 +45,7 @@ use utoipa::ToSchema;
 /// It lets a gain factor read from an `.opm` file run through the very same validation as one set
 /// through [`ConstGain::set_gain`], so a hand-edited file cannot smuggle in a negative or
 /// non-finite factor. Same pattern as [`RefrIndexConst`](crate::refractive_index::RefrIndexConst).
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 struct NonValidatedConstGain {
     gain: f64,
 }
@@ -70,9 +71,10 @@ impl Default for ValidatedGain {
 /// factor, regardless of how far the ray actually travels inside the medium and regardless of how
 /// much energy has already been extracted. It is meant for chain layout and system overview, not
 /// for a physically faithful description of an amplifier.
-#[derive(Serialize, Deserialize, ToSchema, Debug, Clone, Copy, PartialEq, EnsureValidated)]
+#[derive(Serialize, Deserialize, ToSchema, Debug, Clone, Copy, PartialEq, EnsureValidated, JsonSchema)]
 #[serde(try_from = "NonValidatedConstGain")]
 pub struct ConstGain {
+    #[schemars(with = "f64")]
     gain: ValidatedGain,
 }
 impl Default for ConstGain {
@@ -160,7 +162,7 @@ impl From<MonochromaticSmallSignalGain> for GainModel {
 ///
 /// Each escalation stage of the gain modelling adds one variant here. The hosting node does not
 /// change, only the value of its `amp config` property.
-#[derive(Default, Serialize, Deserialize, ToSchema, Debug, Clone, Copy, PartialEq, EnumIter)]
+#[derive(Default, Serialize, Deserialize, ToSchema, Debug, Clone, Copy, PartialEq, EnumIter, JsonSchema)]
 #[non_exhaustive]
 pub enum GainModel {
     /// No amplification. The node behaves exactly like the passive component it is.

@@ -1,20 +1,17 @@
 #![warn(missing_docs)]
 //! Module for storing references to optical nodes.
 use nalgebra::Point2;
+use schemars::{JsonSchema, Schema, SchemaGenerator};
 use serde::{
     Deserialize, Serialize, Serializer,
     de::{self},
 };
-use std::fmt::Debug;
+use std::{borrow::Cow, fmt::Debug};
 use uom::si::f64::Length;
 use uuid::Uuid;
 
 use crate::{
-    analyzers::Analyzable,
-    core_optics::{NodeAttr, NodeAttrExt, node_attr::NodePositioning},
-    nodes::{NodeGroup, OpticGraph, create_node_ref},
-    properties::Properties,
-    utils::geom_transformation::Isometry,
+    analyzers::Analyzable, core_optics::{NodeAttr, NodeAttrExt, node_attr::NodePositioning}, nodes::{NodeGroup, OpticGraph, create_node_ref}, properties::Properties, types::{SiScalarSchema, schema_helper_types::Point2Schema}, utils::geom_transformation::Isometry,
 };
 
 /// Structure for storing an optical node.
@@ -83,6 +80,16 @@ impl std::fmt::Display for OpticRef {
     }
 }
 
+impl JsonSchema for OpticRef {
+    fn schema_name() -> Cow<'static, str> {
+        DeserializedNode::schema_name()
+    }
+
+    fn json_schema(generator: &mut SchemaGenerator) -> Schema {
+        DeserializedNode::json_schema(generator)
+    }
+}
+
 #[derive(Serialize)]
 struct SerializedLeafNode<'a> {
     node_type: &'a str,
@@ -122,7 +129,8 @@ struct SerializedGroupNode<'a> {
     graph: &'a OpticGraph,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
+#[schemars(rename = "OpticNode", deny_unknown_fields)]
 pub(crate) struct DeserializedNode {
     pub(crate) node_type: String,
     pub(crate) name: String,
@@ -136,9 +144,12 @@ pub(crate) struct DeserializedNode {
     #[serde(default)]
     pub(crate) alignment: Option<Isometry>,
     #[serde(default)]
+    #[schemars(with = "Option<(Uuid, SiScalarSchema)>")]
     pub(crate) align_like_node_at_distance: Option<(Uuid, Length)>,
     #[serde(default)]
+    #[schemars(with = "Option<Point2Schema>")]
     pub(crate) gui_position: Option<Point2<f64>>,
+    /// Sub-graph contained inside this node (only populated when `node_type == "group"`).
     #[serde(default)]
     pub(crate) graph: OpticGraph,
 }

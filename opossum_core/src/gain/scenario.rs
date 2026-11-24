@@ -20,6 +20,7 @@ use crate::{
     gain::{GainModel, PumpSource},
     nodes::NodeGroup,
 };
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use utoipa::ToSchema;
@@ -31,7 +32,7 @@ use uuid::Uuid;
 /// [`GainModel`] decides what a beam passing through makes of it, and which pair is chosen is the
 /// whole point of an operating point — the same pumping can be evaluated with a cruder or a finer
 /// extraction model, and the same model can be run at several pump levels, without editing either.
-#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct PumpConfig {
     #[serde(default)]
     gain_model: GainModel,
@@ -92,7 +93,7 @@ impl PumpConfig {
 /// Only the nodes that do something are held. A configuration that neither pumps nor amplifies is
 /// removed from the scenario rather than stored as an inactive entry, so "is in the map" and "takes
 /// part in this operating point" cannot disagree.
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct PumpScenario {
     name: String,
     /// Keyed by node uuid; opaque in the API schema like every other uuid-keyed map in this crate

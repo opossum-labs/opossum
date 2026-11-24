@@ -4,6 +4,7 @@
 use std::fmt::{Debug, Display};
 
 use opm_macros_lib::OpmNode;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Energy;
 
@@ -34,7 +35,7 @@ use crate::{
 };
 
 #[non_exhaustive]
-#[derive(Debug, Default, Eq, PartialEq, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Default, Eq, PartialEq, Clone, Copy, Serialize, Deserialize, JsonSchema)]
 /// Type of the [`EnergyMeter`]. This is currently not used.
 pub enum Metertype {
     /// An ideal energy meter measuring integrated pulse energy.

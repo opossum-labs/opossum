@@ -10,11 +10,13 @@ use crate::{
     joule,
     light::Rays,
     meter, nanometer,
+    types::SiScalarSchema,
     utils::default_from_name::DefaultFromName,
     validated, validated_type,
 };
 use num_traits::Zero;
 use opm_macros_lib::EnsureValidated;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, path::PathBuf};
 use strum::EnumIter;
@@ -24,7 +26,7 @@ use uom::si::{
 };
 
 /// Builder for the generation of [`LightData::Geometric`](crate::light::lightdata::LightData::Geometric).
-#[derive(Clone, Serialize, Deserialize, PartialEq, EnumIter, EnsureValidated)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, EnumIter, EnsureValidated, JsonSchema)]
 pub enum RayDataSource {
     /// Raw [`Rays`] data.
     #[validate(skip)]
@@ -74,7 +76,7 @@ impl DefaultFromName for RayDataSource {}
 /// * `pos` - Position distribution (`PosDistType`) describing spatial distribution.
 /// * `energy` - Energy distribution (`EnergyDistType`) describing energy values of the rays.
 /// * `spect` - Spectral distribution (`SpecDistType`) defining wavelength properties.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, EnsureValidated)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, EnsureValidated, JsonSchema)]
 #[allow(clippy::struct_field_names)]
 pub struct CollimatedSrc {
     pos_dist: PosDistType,
@@ -190,11 +192,12 @@ impl CollimatedSrc {
 /// * `energy` - Energy distribution (`EnergyDistType`) describing energy values for the rays.
 /// * `spect` - Spectral distribution (`SpecDistType`) defining wavelength properties of the rays.
 /// * `reference_length` - A length scale used as a reference in calculations (`Length`).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnsureValidated)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnsureValidated, JsonSchema)]
 pub struct PointSrc {
     pos_dist: PosDistType,
     energy_dist: EnergyDistType,
     spect_dist: SpecDistType,
+    #[schemars(with = "SiScalarSchema")]
     reference_length: validated_type!(Length, AllPositive && AllNormal),
 }
 
@@ -371,17 +374,22 @@ type ValidatedAngle = validated_type!(Angle, AllFinite && StaticInRange<Angle, A
 /// - `wave_length`: Wavelength of emitted light.
 /// - `cone_angle`: Angular spread of rays emitted from each pixel.
 ///
-#[derive(Debug, Clone, PartialEq, Serialize, EnsureValidated)]
+#[derive(Debug, Clone, PartialEq, Serialize, EnsureValidated, JsonSchema)]
 pub struct ImageSrc {
     /// path to the image file
+    #[schemars(with = "PathBuf")]
     file_path: validated_type!(PathBuf, PathValid),
     /// x & y dimensions of the image
+    #[schemars(with = "SiScalarSchema")]
     pixel_size: validated_type!(Length, AllPositive && AllNormal),
     /// total energy
+    #[schemars(with = "SiScalarSchema")]
     total_energy: validated_type!(Energy, AllPositive && AllNormal),
     /// wavelength
+    #[schemars(with = "SiScalarSchema")]
     wave_length: validated_type!(Length, AllPositive && AllNormal),
     /// cone angle of each point src per pixel
+    #[schemars(with = "SiScalarSchema")]
     cone_angle: ValidatedAngle,
 }
 #[derive(Deserialize)]

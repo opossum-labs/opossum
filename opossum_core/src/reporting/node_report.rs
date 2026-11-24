@@ -3,9 +3,10 @@ use crate::{
     properties::{Properties, Proptype},
     reporting::report_note::{ReportLevel, ReportNote},
 };
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 /// Structure for storing node specific data to be integrated in an [`AnalysisReport`](crate::reporting::analysis_report::AnalysisReport).
 pub struct NodeReport {
     node_type: String,

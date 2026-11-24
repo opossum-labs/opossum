@@ -3,11 +3,13 @@ use crate::{
     light::Rays,
     millimeter, nanometer,
     nodes::wavefront::zernike::{Basis2D, DecompositionResult, fit_wavefront_points},
+    types::SiScalarSchema,
     utils::{geom_transformation::Isometry, to_f64},
 };
 use approx::relative_eq;
 use log::warn;
 use nalgebra::{DVector, MatrixXx3, Point2, Vector2};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::{
     f64::Length,
@@ -118,8 +120,9 @@ impl WaveFrontData {
 /// - `x`: the x axis of the wavefront map
 /// - `y`: the y axis of the wavefront map
 /// - `wf_map`: the wavefront map
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct WaveFrontMap {
+    #[schemars(with = "SiScalarSchema")]
     wavelength: Length,
     ptv: f64,
     rms: f64,

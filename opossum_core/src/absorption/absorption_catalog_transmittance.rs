@@ -5,6 +5,7 @@ use crate::generic_validators::{AllFinite, AllNotZero, AllPositive};
 use crate::light::Spectrum;
 use crate::{millimeter, validated, validated_type};
 use opm_macros_lib::EnsureValidated;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
@@ -17,9 +18,10 @@ impl Default for ValidatedLength {
 }
 
 /// Holds catalog internal transmittance data for a specific reference sample thickness.
-#[derive(Default, Clone, Serialize, Deserialize, Debug, PartialEq, EnsureValidated)]
+#[derive(Default, Clone, Serialize, Deserialize, Debug, PartialEq, EnsureValidated, JsonSchema)]
 pub struct AbsCatTrans {
     /// The reference thickness for the given transmittance data.
+    #[schemars(with = "f64")]
     reference_thickness: ValidatedLength,
     /// Tabulated wavelength-transmittance spectrum.
     spectrum: Spectrum,

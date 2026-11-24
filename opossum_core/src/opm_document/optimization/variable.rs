@@ -1,5 +1,6 @@
 use super::address::ParameterAddress;
 use crate::error::{OpmResult, OpossumError};
+use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize, de::Visitor};
 use std::fmt;
 use uom::si::{f64::Length, length::meter};
@@ -69,7 +70,7 @@ where
 }
 
 /// Closed interval `[min, max]` defining box constraints on a parameter in SI base units.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct BoxBounds {
     /// Lower bound (inclusive) in SI base units (may be `f64::NEG_INFINITY`).
     #[serde(deserialize_with = "deserialize_lower_bound")]
@@ -165,7 +166,7 @@ impl BoxBounds {
 }
 
 /// A free parameter directly manipulated by the numerical solver.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct FreeVariable {
     /// Address of the optical property or connection distance being varied.
     pub address: ParameterAddress,
@@ -224,7 +225,7 @@ impl FreeVariable {
 }
 
 /// Method used to approximate numerical gradients via finite differences.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
 pub enum FiniteDifferenceMethod {
     /// Central difference scheme: $\frac{f(x + h) - f(x - h)}{2h}$ ($O(h^2)$ accuracy, 2 evaluations per variable).
     #[default]

@@ -1,8 +1,9 @@
 use super::address::ParameterAddress;
 use crate::error::{OpmResult, OpossumError};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 /// Specific deterministic relationship between a dependent target parameter and one or more source parameters.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub enum CouplingType {
     /// Enforces equality: $\text{target} = \text{source}$ (e.g., identical air spacings in symmetric setups).
     Identical {
@@ -35,7 +36,7 @@ pub enum CouplingType {
     },
 }
 /// A coupling rule that drives a dependent parameter from other system variables.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct ParameterCoupling {
     /// Dependent parameter being modified.
     pub target: ParameterAddress,

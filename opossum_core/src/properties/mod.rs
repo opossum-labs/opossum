@@ -2,10 +2,11 @@
 pub mod property;
 pub mod proptype;
 pub mod validator;
-
+use std::collections::HashMap;
 use log::warn;
 pub use property::Property;
 pub use proptype::Proptype;
+use schemars::JsonSchema;
 
 use crate::{
     error::{OpmResult, OpossumError},
@@ -18,9 +19,10 @@ use std::fmt::Debug;
 /// A general set of optical properties.
 ///
 /// Properties keep the order in which they were created.
-#[derive(Default, Serialize, Debug, Clone, PartialEq)]
+#[derive(Default, Serialize, Debug, Clone, PartialEq, JsonSchema)]
 #[serde(transparent)]
 pub struct Properties {
+    #[schemars(with = "HashMap<String, Property>")]
     props: IndexMap<String, Property>,
 }
 

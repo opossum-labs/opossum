@@ -4,6 +4,7 @@
 //! A node group is a special type of optical node that can contain other optical nodes (including other groups) and connections between them. It allows to build up complex optical systems in a hierarchical way. The internal structure of a node group can be hidden or shown in the dot format by setting the `expand view` property of the group node. To use a node group from the outside, internal nodes / ports must be mapped to be visible (see [`map_input_port`](NodeGroup::map_input_port()) & [`map_output_port`](NodeGroup::map_output_port()) functions).
 
 use opm_macros_lib::OpmNode;
+use schemars::JsonSchema;
 mod analysis_energy;
 mod analysis_ghostfocus;
 mod analysis_raytrace;
@@ -33,6 +34,7 @@ use crate::{
         node_report::{NodeReport, NodeReportResult},
         report_note::{ReportLevel, ReportNote},
     },
+    types::SiScalarSchema,
 };
 pub use optic_graph::{ConnectionInfo, OpticGraph};
 use serde::{Deserialize, Serialize};
@@ -44,7 +46,7 @@ inventory::submit! {
     NodeRegistration::new::<NodeGroup>("group", "group node containing other nodes or groups")
 }
 
-#[derive(OpmNode, Debug, Clone)]
+#[derive(OpmNode, Debug, Clone, JsonSchema)]
 #[opm_node("yellow")]
 #[manual_analyzable]
 /// The basic building block of an optical system. It represents a group of other optical
@@ -52,6 +54,7 @@ inventory::submit! {
 pub struct NodeGroup {
     node_attr: NodeAttr,
     graph: OpticGraph,
+    #[schemars(with = "HashMap<String, SiScalarSchema>")]
     input_port_distances: BTreeMap<String, Length>,
     accumulated_rays: Vec<HashMap<Uuid, Rays>>,
     ray_ends: Vec<Rays>,

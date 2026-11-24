@@ -7,6 +7,7 @@ use crate::{
     kde::Kde,
     meter, micrometer,
     nodes::fluence_detector::{Fluence, fluence_data::FluenceData},
+    types::{SiScalarSchema, schema_helper_types::Point3Schema},
     utils::{
         AxLims,
         griddata::{
@@ -21,6 +22,7 @@ use itertools::Itertools;
 use libm::modf;
 use log::warn;
 use nalgebra::{DMatrix, DVector, MatrixXx2, Point2, Point3};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
 use uom::si::{
@@ -62,11 +64,13 @@ impl QuantityValidation for Fluence {
 }
 
 /// A generic hit point storing a position and a generic value (e.g., Energy or Fluence).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema)]
 pub struct BaseHitPoint<V> {
     /// Position of the intersection point
+    #[schemars(with = "Point3Schema")]
     pub position: Point3<Length>,
     /// Value (Energy or Fluence) of the ray that intersected the surface
+    #[schemars(with = "SiScalarSchema")]
     pub value: V,
 }
 
@@ -109,7 +113,7 @@ pub type EnergyHitPoint = BaseHitPoint<Energy>;
 pub type FluenceHitPoint = BaseHitPoint<Fluence>;
 
 /// Enum to store different types of hit point quantities in a hitmap
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema)]
 pub enum HitPoints {
     ///Energy hitpoints contain a vec of [`EnergyHitPoint`]
     Energy(Vec<EnergyHitPoint>),
@@ -157,11 +161,13 @@ impl Default for HitPoints {
     }
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema)]
 ///Storage struct for hitpoints on a surface from a single ray bundle
 pub struct RaysHitMap {
     hit_points: HitPoints,
+    #[schemars(with = "(SiScalarSchema, SiScalarSchema)")]
     x_lims: (Length, Length),
+    #[schemars(with = "(SiScalarSchema, SiScalarSchema)")]
     y_lims: (Length, Length),
 }
 impl RaysHitMap {

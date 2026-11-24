@@ -2,6 +2,7 @@ use crate::error::OpmResult;
 use crate::generic_validators::{AllFinite, StaticBounds, StaticInRange};
 use crate::{validated, validated_type};
 use opm_macros_lib::EnsureValidated;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 #[derive(Copy, Clone, PartialEq, Debug, Eq)]
@@ -27,8 +28,9 @@ impl Default for ValidatedAbsConst {
     }
 }
 
-#[derive(Default, Clone, Serialize, Deserialize, Debug, PartialEq, Copy, EnsureValidated)]
+#[derive(Default, Clone, Serialize, Deserialize, Debug, PartialEq, Copy, EnsureValidated, JsonSchema)]
 pub struct AbsConst {
+    #[schemars(with = "f64")]
     absorption_constant: ValidatedAbsConst,
 }
 impl AbsConst {

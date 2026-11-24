@@ -3,6 +3,7 @@ use std::fmt::Display;
 
 use crate::{error::OpmResult, utils::default_from_name::DefaultFromName};
 use opm_macros_lib::EnsureValidated;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;
 use uom::si::f64::Length;
@@ -19,7 +20,7 @@ pub trait SpectralDistribution {
     fn generate(&self) -> OpmResult<Vec<(Length, f64)>>;
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, EnumIter, EnsureValidated)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, EnumIter, EnsureValidated, JsonSchema)]
 /// Enum representing different types of spectral distributions
 pub enum SpecDistType {
     Gaussian(gaussian::Gaussian),

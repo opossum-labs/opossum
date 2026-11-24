@@ -1,6 +1,7 @@
 //! Schott model
 use std::ops::Range;
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 use uom::si::length::micrometer;
@@ -13,7 +14,7 @@ use super::RefractiveIndexType;
 use super::bounded_model::{BoundedFormula, DispersionFormula};
 
 /// Coefficients for the Schott dispersion formula.
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, JsonSchema)]
 pub struct SchottCoefficients {
     /// Coefficient A0
     pub a0: f64,

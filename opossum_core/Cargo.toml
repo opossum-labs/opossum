@@ -40,6 +40,7 @@ uom.workspace = true
 utoipa.workspace = true
 uuid.workspace = true
 
+schemars = { version = "1.2.3", features = ["uuid1", "preserve_order"] }
 petgraph = { version = "0.8", features = ["serde-1"] } # the graph library
 libm = { version = "0.2" }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
@@ -55,6 +56,7 @@ num-traits = "0.2"
 # mutants = "0.0.4"
 inventory = "0.3"
 indexmap = { version = "2", features = ["serde"] }
+serde_json = "1.0"
 
 [features]
 doc-images = []
@@ -66,6 +68,7 @@ assert_matches = "1"
 testing_logger = "0.1"
 criterion = { version = "0.8.0", features = ["html_reports"] }
 tempfile.workspace = true
+trybuild = "1.0"
 
 [[example]]
 name = "hhts"
