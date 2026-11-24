@@ -130,14 +130,14 @@ impl<'a> ArrivedSheet<'a> {
     /// # Arguments
     ///
     /// * `values` - the value of each corner, indexed like the vertices of the sheet.
-    /// * `draw` - what to do with each triangle.
-    pub fn for_each_triangle(&self, values: &[Option<f64>], mut draw: impl FnMut(Triangle)) {
+    /// * `draw` - what to do with each triangle, told whether it lies in a margin.
+    pub fn for_each_triangle(&self, values: &[Option<f64>], mut draw: impl FnMut(Triangle, bool)) {
         let value_of = |v: VertexHandle<'_, RayVertex>| values.get(v.index()).copied().flatten();
         for (tube, points) in self.alive_tubes() {
             let [Some(fa), Some(fb), Some(fc)] = tube.vertices().map(value_of) else {
                 continue;
             };
-            draw((points, [fa, fb, fc]));
+            draw((points, [fa, fb, fc]), false);
             let area = signed_area(points).abs();
             for edge in tube.adjacent_edges() {
                 if edge
@@ -159,7 +159,7 @@ impl<'a> ArrivedSheet<'a> {
                     margin_triangles([a.position, b.position], c.position, area, [fa, fb])
                         .into_iter()
                         .flatten()
-                        .for_each(&mut draw);
+                        .for_each(|triangle| draw(triangle, true));
                 }
             }
         }
@@ -188,7 +188,7 @@ impl<'a> ArrivedSheet<'a> {
     /// * `values` - the value of each corner, indexed like the vertices of the sheet.
     pub fn extent(&self, values: &[Option<f64>]) -> Option<(Point2<f64>, Point2<f64>)> {
         let mut extent: Option<(Point2<f64>, Point2<f64>)> = None;
-        self.for_each_triangle(values, |(corners, _)| {
+        self.for_each_triangle(values, |(corners, _), _| {
             for corner in corners {
                 extent = Some(extent.map_or((corner, corner), |(lower, upper)| {
                     (lower.inf(&corner), upper.sup(&corner))
@@ -235,7 +235,9 @@ fn margin_triangles(
 /// Draws sheets of ray tubes, each with the values of its corners, into one fluence map.
 ///
 /// Where tubes overlap, their values add up. If the light of a sheet folds over itself (see
-/// [`ArrivedSheet::folds`]), a warning says that the map is unreliable near the fold.
+/// [`ArrivedSheet::folds`]), a warning says that the map is unreliable near the fold. The map
+/// tells which share of its energy lies in the margins (see [`FluenceData::edge_share`]), summed
+/// over the triangles exactly rather than over the points of the map.
 ///
 /// # Arguments
 ///
@@ -276,17 +278,31 @@ pub fn draw_map(
         &(y.start.value..y.end.value),
         nr_of_points,
     );
+    // the energy of the tubes and of the margins: a linear triangle holds its area times its mean
+    let (mut in_tubes, mut in_margins) = (0.0, 0.0);
     for (sheet, values) in sheets {
-        sheet.for_each_triangle(values, |(corners, values)| {
-            grid.add_triangle(corners, values)
+        sheet.for_each_triangle(values, |(corners, values), in_margin| {
+            let energy = signed_area(corners).abs() * values.iter().sum::<f64>() / 3.0;
+            if in_margin {
+                in_margins += energy;
+            } else {
+                in_tubes += energy;
+            }
+            grid.add_triangle(corners, values);
         });
     }
-    Ok(FluenceData::new(
+    let map = FluenceData::new(
         grid.values.map(|fluence| J_per_m2!(fluence)),
         x,
         y,
         estimator,
-    ))
+    );
+    let total = in_tubes + in_margins;
+    Ok(if total > 0.0 {
+        map.with_edge_share(in_margins / total)
+    } else {
+        map
+    })
 }
 /// The signed area of a triangle: positive if its corners run counterclockwise.
 fn signed_area([a, b, c]: [Point2<f64>; 3]) -> f64 {

@@ -1418,6 +1418,37 @@ mod test_ray_tubes {
         );
         Ok(())
     }
+    /// The margins at the edges of a flat-top beam hold as much of its energy as of its area:
+    /// each reaches half a ring spacing `d` beyond its edge. A beam of radius `R` keeps
+    /// `R d / (R + d/2)²` of its energy there, a ring from `r` to `R` the share `d / (R − r + d)`.
+    #[test]
+    fn the_margins_hold_their_share_of_the_energy() -> OpmResult<()> {
+        let rays = bundle_in_tubes(10)?;
+        let (d, outer): (f64, f64) = (0.5, 5.0);
+        let beam = map_of(&hits_of(&rays, 1.0, 0.0)?, 6.0)?;
+        let share = outer * d / (outer + d / 2.0).powi(2);
+        assert_relative_eq!(
+            beam.edge_share().unwrap_or(f64::NAN),
+            share,
+            max_relative = 0.02
+        );
+        // the rings 0.5 mm apart that are left reach from 2.5 mm to 5 mm
+        let ring = map_of(&hits_of(&rays, 1.0, 2.2)?, 6.0)?;
+        assert_relative_eq!(
+            ring.edge_share().unwrap_or(f64::NAN),
+            d / (outer - 2.5 + d),
+            max_relative = 0.02
+        );
+        Ok(())
+    }
+    /// A map that does not follow ray tubes has no margins whose share it could tell.
+    #[test]
+    fn a_kde_map_tells_no_share_of_margins() -> OpmResult<()> {
+        let map =
+            hits_of(&bundle_in_tubes(3)?, 1.0, 0.0)?.calc_fluence_with_kde((21, 21), None, None)?;
+        assert!(map.edge_share().is_none());
+        Ok(())
+    }
     /// Light squashed to a line, as at a line focus, does not count as folded, even where
     /// rounding turns some of its tubes over: here its upper half turns over and its lower half
     /// does not, both squashed to a trillionth.

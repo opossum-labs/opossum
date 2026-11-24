@@ -197,6 +197,13 @@ impl OpticNode for FluenceDetector {
                 "Fluence estimation algorithm used",
                 (*fluence_data.estimator()).into(),
             )?;
+            if let Some(share) = fluence_data.edge_share() {
+                props.create(
+                    "Energy in edge margins",
+                    "Share of the energy at the edges of the light, placed only to within half a ray tube",
+                    Proptype::F64(share),
+                )?;
+            }
 
             if self.apodization_warning {
                 props.create(
@@ -454,6 +461,10 @@ mod test {
         assert!(props.contains("Peak Fluence"));
         assert!(props.contains("Total energy"));
         assert!(props.contains("Estimator"));
+        let Proptype::F64(share) = props.get("Energy in edge margins")? else {
+            panic!("Expected the share of the energy in the edge margins");
+        };
+        assert!(*share > 0.0 && *share < 1.0, "{share}");
 
         // Verify read_observable retrieves raw SI values
         let peak = detector.read_observable("peak fluence");

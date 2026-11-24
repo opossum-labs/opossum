@@ -35,6 +35,10 @@ pub struct FluenceData {
     y_range: Range<Length>,
     /// the estimator which has been used to calculate this fluence
     estimator: FluenceEstimator,
+    /// the share of the energy in the margins at the edges of the light, for a map that follows
+    /// ray tubes (see [`FluenceData::with_edge_share`])
+    #[serde(default)]
+    edge_share: Option<f64>,
 }
 impl FluenceData {
     /// Constructs a new [`FluenceData`] struct
@@ -61,7 +65,26 @@ impl FluenceData {
             x_range,
             y_range,
             estimator,
+            edge_share: None,
         }
+    }
+    /// Returns this [`FluenceData`] with the given share of its energy in the margins at the
+    /// edges of the light: the energy that a map following ray tubes places only to within half a
+    /// tube (see the handbook, "Fluence").
+    ///
+    /// # Arguments
+    ///
+    /// * `share` - the share, from 0 to 1.
+    #[must_use]
+    pub const fn with_edge_share(mut self, share: f64) -> Self {
+        self.edge_share = Some(share);
+        self
+    }
+    /// Returns the share of the energy of this [`FluenceData`] in the margins at the edges of the
+    /// light, `None` for a map that does not follow ray tubes.
+    #[must_use]
+    pub const fn edge_share(&self) -> Option<f64> {
+        self.edge_share
     }
     /// Returns the [`FluenceEstimator`] that was used to calculate this [`FluenceData`]
     #[must_use]
