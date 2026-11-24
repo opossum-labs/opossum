@@ -25,7 +25,7 @@ The report shows the fluence map, its peak fluence, its total energy and the est
 
 - Voronoi: follows the ray tubes the source spans. Each corner spreads its energy over the area it stands for at the source, grown as much as its tubes grew on the way. Where light was cut away, as behind a bored mirror, the map stays dark.
 - KDE: spreads the energy of each ray with a smooth kernel. Plain rays only.
-- Binning: sums the energies of the rays in the cells of a grid. Plain rays only.
+- Binning: spreads the energy of each ray over the four points of a grid around it. Plain rays only.
 - HelperRays: follows the same ray tubes as Voronoi, with the fluence the helper rays of each ray measured at its corners.
 
 Further information can be found [here](../../concepts/fluence.md)

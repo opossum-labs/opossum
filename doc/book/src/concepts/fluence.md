@@ -14,9 +14,9 @@ This creates a trade-off between spatial resolution and statistical stability. T
 
 ## Binning
 
-The binning method divides the detector into a regular grid of square cells. Each ray contributes its energy to the cell where it lands, and fluence is computed as energy divided by cell area.
+The binning method spans a regular grid of points over the detector. A ray rarely lands on a point; it spreads its energy over the four points around it, the nearer a point the more: a ray 30 % of the way from one point to the next gives 70 % to the first and 30 % to the second. Each point shows the energy it got over the area it stands for, the cell around it, so the map holds the energy of all the rays within it.
 
-This method behaves like a pixelated representation of the detector. It is simple and computationally efficient, and it guarantees energy conservation within each cell.
+This method behaves like a pixelated representation of the detector. It is simple and computationally efficient, and spreading a ray over four points keeps a ray that crosses a cell border from making the map jump.
 
 However, the result strongly depends on grid resolution. A coarse grid smooths out details and can hide peak fluence regions, while a fine grid requires a high number of rays to avoid noise. As a result, binning is often used for fast but lower-resolution analysis.
 
@@ -39,6 +39,8 @@ The Voronoi estimator spreads the energy `E` that the rays of a corner bring ove
 `F = E / A_src · D_src / D_det`
 
 where `D_src` and `D_det` are the areas of the alive tubes around the corner at the source and on the surface. A tube torn away counts on neither side, so a corner right next to a cut shows the fluence of the light that is there.
+
+So that `E / A_src` shows the light the source describes, a source that samples a distribution, a Gaussian for instance, gives each ray in an analysis the value of the distribution where it lies times the area it stands for. A ray that stands for less area, as the one in the middle of a hexapolar pattern, carries less energy. Raw rays keep the energies they were given, and light that is only drawn in the 3D view is sent out with equal shares.
 
 ![The fluence at a corner of the ray tubes](../images/fluence_tube_vertex_value.svg)
 
@@ -109,7 +111,7 @@ The final fluence map is obtained by summing the contributions of all rays, resu
 
 The smoothing strength is controlled by the kernel width. If the width is too small, the result becomes noisy and resembles raw sampling. If it is too large, fine spatial details are lost and peak fluence can be reduced.
 
-To balance this, the kernel width is typically chosen based on the density of samples using established statistical rules that adapt smoothing to the number and spread of rays.
+To balance this, the kernel width is chosen by an established statistical rule from the spread and the number of the hits; it cannot be set by hand. The rule errs on the smooth side: with few rays the kernel is wide, and the peak comes out low (see [Peak Fluence and Interpretation](#peak-fluence-and-interpretation)).
 
 This method provides the smoothest representation of fluence and is especially useful when a continuous interpretation of the beam profile is required. Like binning, it spreads the energy of plain rays and refuses rays with helper rays.
 
@@ -117,7 +119,49 @@ This method provides the smoothest representation of fluence and is especially u
 
 Peak fluence represents the maximum energy concentration on the detector surface and is one of the most important quantities in optical system analysis.
 
-It is sensitive to both sampling density and reconstruction method. Insufficient sampling can underestimate peak values, while excessive smoothing can reduce peak intensity. Conversely, coarse binning can either exaggerate or suppress peaks depending on grid alignment and resolution.
+It is sensitive to both sampling density and reconstruction method. The cuts below show where it goes well and where it goes wrong. Each is a cut along x through a map that OPOSSUM computes, next to the exact fluence; the example `opossum_reporter/examples/fluence_peak_examples.rs` makes them.
+
+### Too few rays
+
+![A Gaussian beam drawn from 50 and from 2000 rays](../images/fluence_peak_rays.svg)
+
+*A Gaussian beam with σ = 2 mm, its peak 1 mm off the axis. With 50 rays the peak falls between rays and comes out 7 % low and 0.5 mm off; with 2000 rays it is right.*
+
+A map that follows ray tubes knows the fluence at its rays and runs linearly between them. A peak that falls between two rays is cut off. The rays need to lie closer than the features of the light are wide, above all where the peak is.
+
+### Binning: the grid
+
+![A Gaussian beam binned on three grids](../images/fluence_peak_binning.svg)
+
+*The same beam of 10000 rays, binned on 9 × 9, 41 × 41 and 301 × 301 points. Too coarse, a point averages over the peak, which comes out 16 % low. Too fine, too few rays fall near a point, and the map turns into noise with spikes far above the peak. In between, the peak is right.*
+
+As a rule of thumb, some ten rays or more should fall into each cell of the grid.
+
+### KDE: the kernel
+
+![A Gaussian beam by KDE from 100, 1000 and 10000 rays](../images/fluence_peak_kde.svg)
+
+*The same beam by KDE, from 100, 1000 and 10000 rays. The kernel follows the spread of the hits, which is that of the whole beam, and narrows only slowly with more rays: the peak comes out 33 %, 17 % and 8 % low.*
+
+KDE never shows noise, and its peak is a lower bound. A small hot spot in a large beam suffers most, as the kernel is set by the large beam.
+
+### At an edge
+
+![A flat-top beam with a bore, drawn from rays 1 mm and 0.2 mm apart](../images/fluence_peak_edge.svg)
+
+*A flat-top beam of 1 J/cm² with a bore of 2.75 mm radius. The map shows the full fluence right up to the edge of the bore, which it places within half a ray spacing: at 2.5 mm with rays 1 mm apart, at 2.7 mm with rays 0.2 mm apart.*
+
+At a cut, the peak is right, but where the light ends is known only to half a tube (see [Edges](#edges)); the report tells how much energy lies in that uncertain margin.
+
+### At a fold
+
+![Light folded over itself, drawn from rays 0.5 mm and 0.1 mm apart](../images/fluence_peak_fold.svg)
+
+*Light folded over itself, as near a caustic: every ray moved from x to x − x³/48 (in mm), which folds the light back at 2.67 mm. From 2.4 mm on a second layer of light lies on the first, and both maps add the two up; the coarse one starts the second layer half a ray spacing early. At the fold the exact fluence grows without bound, and the peak of the map is set by the rays: 15 J/cm² with rays 0.5 mm apart, 29 J/cm² with rays 0.1 mm apart.*
+
+Near a fold, more rays do not bring the peak closer to a true value, because in geometric optics there is none: diffraction limits it, which ray tracing does not know. The map warns when light folds over itself (see [Folds and caustics](#folds-and-caustics)).
+
+### Energy
 
 The methods do not hold the same energy either. Binning and KDE spread the energy of every ray that hit the surface. A map that follows ray tubes holds the energy of the tubes that arrived complete and of their margins: the margins estimate where the light ends, and a ray all of whose tubes tore shows nowhere.
 
@@ -132,5 +176,7 @@ Binning uses fixed grid cells and is fast but resolution-dependent.
 Voronoi and helper rays follow the ray tubes the source spans: holes and cuts stay dark, overlapping light adds up, and light folding over itself is warned about. An edge is known to half a tube.
 
 KDE produces a smooth continuous distribution by spreading each ray’s energy over space.
+
+A peak is only as good as the rays around it: they must lie closer than the light changes, binning needs enough rays in each cell, the peak of KDE is a lower bound, and at a fold the rays rather than the light set the peak.
 
 The choice of method affects how clearly peak fluence and spatial energy distribution are represented, especially in systems with focused beams or non-uniform illumination.

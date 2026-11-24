@@ -13,7 +13,7 @@ use opossum_core::{
         energy::General2DGaussian,
         position::{FibonacciEllipse, Hexapolar},
     },
-    light::Rays,
+    light::{RayMesh, Rays},
     nodes::fluence_detector::fluence_data::FluenceData,
     prelude::*,
     utils::AxLims,
@@ -22,7 +22,7 @@ use opossum_reporter::plotting::{
     PlotArgs, PlotData, PlotParameters, PlotSeries, PlotType, PltBackEnd,
 };
 use plotters::style::RGBAColor;
-use std::f64::consts::PI;
+use std::{f64::consts::PI, sync::Arc};
 use uom::si::{f64::Length, length::millimeter, radiant_exposure::joule_per_square_centimeter};
 
 /// Where the figures go, seen from the workspace root.
@@ -48,35 +48,33 @@ fn main() -> OpmResult<()> {
     Ok(())
 }
 
-/// A Gaussian beam drawn over its ray tubes, from few and from many rays: with few rays the
-/// peak lies between them and comes out low.
+/// A Gaussian beam whose peak lies 1 mm off the axis, drawn over its ray tubes from few and from
+/// many rays: with few rays the peak falls between them and comes out low, as between two rays
+/// the map runs linearly.
 fn few_and_many_rays() -> OpmResult<()> {
-    let few = cut(
-        &hits(&gaussian_beam(50)?, Some)?,
-        FluenceEstimator::Voronoi,
-        8.0,
-        401,
-    )?;
-    let many = cut(
-        &hits(&gaussian_beam(2000)?, Some)?,
-        FluenceEstimator::Voronoi,
-        8.0,
-        401,
-    )?;
+    let tubes = |rays: usize| {
+        cut(
+            &hits(&gaussian_beam(rays, 1.0)?, Some)?,
+            FluenceEstimator::Voronoi,
+            8.0,
+            401,
+        )
+    };
     plot(
         "fluence_peak_rays",
-        None,
+        (-8.0, 8.0),
+        (0.0, 4.5),
         &[
-            (&few, BAD, "Voronoi, 50 rays"),
-            (&many, GOOD, "Voronoi, 2000 rays"),
-            (&exact(gaussian, -8.0, 8.0), EXACT, "exact"),
+            (&tubes(50)?, BAD, "Voronoi, 50 rays"),
+            (&tubes(2000)?, GOOD, "Voronoi, 2000 rays"),
+            (&exact(|x| gaussian(x - 1.0), -8.0, 8.0), EXACT, "exact"),
         ],
     )
 }
 
-/// A Gaussian beam of 2000 rays binned on a coarse, a fitting and a fine grid.
+/// A Gaussian beam of 10000 rays binned on a coarse, a fitting and a fine grid.
 fn binning_grids() -> OpmResult<()> {
-    let hits = hits(&gaussian_beam(2000)?, Some)?;
+    let hits = hits(&gaussian_beam(10_000, 0.0)?, Some)?;
     let binned = |points: usize| -> OpmResult<Cut> {
         let range = millimeter!(-8.5)..millimeter!(8.5);
         let map = hits.calc_fluence_map(
@@ -89,7 +87,8 @@ fn binning_grids() -> OpmResult<()> {
     };
     plot(
         "fluence_peak_binning",
-        AxLims::new(0.0, 8.0),
+        (-8.5, 8.5),
+        (0.0, 8.0),
         &[
             (&binned(301)?, MIDDLE, "Binning, 301 × 301 points: too fine"),
             (&binned(9)?, BAD, "Binning, 9 × 9 points: too coarse"),
@@ -103,7 +102,7 @@ fn binning_grids() -> OpmResult<()> {
 fn kde_kernels() -> OpmResult<()> {
     let kde = |rays: usize| {
         cut(
-            &hits(&gaussian_beam(rays)?, Some)?,
+            &hits(&gaussian_beam(rays, 0.0)?, Some)?,
             FluenceEstimator::KDE,
             8.0,
             201,
@@ -111,7 +110,8 @@ fn kde_kernels() -> OpmResult<()> {
     };
     plot(
         "fluence_peak_kde",
-        None,
+        (-8.0, 8.0),
+        (0.0, 4.5),
         &[
             (&kde(100)?, BAD, "KDE, 100 rays"),
             (&kde(1000)?, MIDDLE, "KDE, 1000 rays"),
@@ -135,7 +135,8 @@ fn an_edge() -> OpmResult<()> {
     let cut_away = |x: f64| if x.abs() < bore { 0.0 } else { 1.0 };
     plot(
         "fluence_peak_edge",
-        AxLims::new(0.0, 1.3),
+        (-6.0, 6.0),
+        (0.0, 1.3),
         &[
             (&ring(8)?, BAD, "Voronoi, rays 1 mm apart"),
             (&ring(40)?, GOOD, "Voronoi, rays 0.2 mm apart"),
@@ -176,7 +177,8 @@ fn a_fold() -> OpmResult<()> {
     };
     plot(
         "fluence_peak_fold",
-        AxLims::new(0.0, 8.0),
+        (1.5, 3.2),
+        (0.0, 32.0),
         &[
             (&folded(10)?, BAD, "Voronoi, rays 0.5 mm apart"),
             (&folded(50)?, GOOD, "Voronoi, rays 0.1 mm apart"),
@@ -185,23 +187,30 @@ fn a_fold() -> OpmResult<()> {
     )
 }
 
-/// A collimated Gaussian beam of 1 J with a standard deviation of 2 mm, of the given number of
-/// rays spread evenly over a disk of 8 mm radius, spanning its ray tubes.
-fn gaussian_beam(rays: usize) -> OpmResult<Rays> {
-    let mut beam = Rays::new_collimated(
+/// The given rays as an analysis sends them out: their energy spread over the area each stands
+/// for, spanning their ray tubes.
+fn as_sent_out(mut rays: Rays) -> OpmResult<Rays> {
+    let mesh = Arc::new(RayMesh::new(&rays)?);
+    rays.spread_energy_over_cells(&mesh)?;
+    rays.attach(mesh);
+    Ok(rays)
+}
+/// A collimated Gaussian beam of 1 J with a standard deviation of 2 mm, its peak `center` mm
+/// along x, of the given number of rays spread evenly over a disk of 8 mm radius, as an analysis
+/// sends it out.
+fn gaussian_beam(rays: usize, center: f64) -> OpmResult<Rays> {
+    as_sent_out(Rays::new_collimated(
         nanometer!(1000.0),
         &General2DGaussian::new(
             joule!(1.0),
-            millimeter!(0.0, 0.0),
+            millimeter!(center, 0.0),
             millimeter!(2.0, 2.0),
             1.0,
             degree!(0.0),
             false,
         )?,
         &FibonacciEllipse::new(millimeter!(8.0), millimeter!(8.0), rays)?,
-    )?;
-    beam.attach_mesh()?;
-    Ok(beam)
+    )?)
 }
 /// The exact fluence of [`gaussian_beam`] at `x` mm on the x axis, in J/cm².
 fn gaussian(x: f64) -> f64 {
@@ -212,18 +221,16 @@ fn gaussian(x: f64) -> f64 {
 fn flat_top_beam(rings: u8) -> OpmResult<Rays> {
     flat_top_beam_of(8.0, rings)
 }
-/// A collimated flat-top beam of 1 J/cm² in hexapolar rings out to the given radius in mm,
-/// spanning its ray tubes. Its outermost ring stands for half a ring spacing beyond it, so the
+/// A collimated flat-top beam of 1 J/cm² in hexapolar rings out to the given radius in mm, as
+/// an analysis sends it out. Its outermost ring stands for half a ring spacing beyond it, so the
 /// beam carries 1 J/cm² over a disk that much wider.
 fn flat_top_beam_of(radius: f64, rings: u8) -> OpmResult<Rays> {
     let reach = radius * (1.0 + 0.5 / f64::from(rings)) / 10.0;
-    let mut beam = Rays::new_uniform_collimated(
+    as_sent_out(Rays::new_uniform_collimated(
         nanometer!(1000.0),
         joule!(PI * reach * reach),
         &Hexapolar::new(millimeter!(radius), rings)?,
-    )?;
-    beam.attach_mesh()?;
-    Ok(beam)
+    )?)
 }
 /// The hits of the given rays where `place` puts the point they start at; a ray it puts nowhere
 /// does not hit.
@@ -278,9 +285,15 @@ fn exact(fluence: impl Fn(f64) -> f64, from: f64, to: f64) -> Cut {
         })
         .collect()
 }
-/// Writes the given curves into one plot `name`.svg among the images of the handbook, with the
-/// fluence axis reaching over `fluence`, or over all of the curves if `None`.
-fn plot(name: &str, fluence: Option<AxLims>, curves: &[(&Cut, RGBAColor, &str)]) -> OpmResult<()> {
+/// Writes the given curves into one plot `name`.svg among the images of the handbook, showing
+/// `x` from the first to the second value in mm and the fluence from the first to the second
+/// value in J/cm². Prints the peak of each curve.
+fn plot(
+    name: &str,
+    (x_from, x_to): (f64, f64),
+    (fluence_from, fluence_to): (f64, f64),
+    curves: &[(&Cut, RGBAColor, &str)],
+) -> OpmResult<()> {
     let mut params = PlotParameters::default();
     params
         .set(&PlotArgs::FName(format!("{name}.svg")))?
@@ -288,11 +301,11 @@ fn plot(name: &str, fluence: Option<AxLims>, curves: &[(&Cut, RGBAColor, &str)])
         .set(&PlotArgs::Backend(PltBackEnd::SVG))?
         .set(&PlotArgs::PlotAutoSize(false))?
         .set(&PlotArgs::PlotSize((720, 400)))?
+        .set(&PlotArgs::AxisEqual(false))?
+        .set(&PlotArgs::XLim(AxLims::new(x_from, x_to)))?
+        .set(&PlotArgs::YLim(AxLims::new(fluence_from, fluence_to)))?
         .set(&PlotArgs::XLabel("x in mm".into()))?
         .set(&PlotArgs::YLabel("fluence in J/cm²".into()))?;
-    if fluence.is_some() {
-        params.set(&PlotArgs::YLim(fluence))?;
-    }
     let series = curves
         .iter()
         .map(|(cut, color, label)| {
@@ -303,9 +316,13 @@ fn plot(name: &str, fluence: Option<AxLims>, curves: &[(&Cut, RGBAColor, &str)])
                 .unwrap_or_default();
             let low = cut.iter().map(|(_, f)| *f).fold(f64::INFINITY, f64::min);
             println!("{name}: {label}: peak {peak:.3} J/cm² at {at:.3} mm, lowest {low:.3}");
+            let shown = cut
+                .iter()
+                .filter(|(x, _)| (x_from..=x_to).contains(x))
+                .collect::<Vec<_>>();
             let points = MatrixXx2::from_row_iterator(
-                cut.len(),
-                cut.iter().flat_map(|(x, f)| [*x, f.min(1e3)]),
+                shown.len(),
+                shown.iter().flat_map(|(x, f)| [*x, f.min(1e3)]),
             );
             Ok(PlotSeries::new(
                 &PlotData::new_dim2(points)?,
