@@ -113,7 +113,7 @@ fn test_optimize_kepler_focal_position_simulated_annealing() -> OpmResult<()> {
             OperandMode::Equal,
             1.0,
         ))
-        .with_algorithm(OptimizationAlgorithm::simulated_annealing().with_temperature(1.0))
+        .with_algorithm(OptimizationAlgorithm::adaptive_simulated_annealing().with_temperature(1.0))
         .optimize()?;
 
     let best_distance = summary.value(&dist_address).unwrap();
@@ -178,11 +178,11 @@ fn test_parallel_gradient_thread_execution() -> OpmResult<()> {
     });
     let r1 = FreeVariable::new(ParameterAddress::NodeProperty {
         node_id: lens2_id,
-        property_name: "front curvature".into(),
+        property_name: "front radius of curvature".into(),
     });
     let r2 = FreeVariable::new(ParameterAddress::NodeProperty {
         node_id: lens2_id,
-        property_name: "rear curvature".into(),
+        property_name: "rear radius of curvature".into(),
     });
 
     let spot_observable = ObservableAddress {

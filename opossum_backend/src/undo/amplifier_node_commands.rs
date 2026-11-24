@@ -1,5 +1,5 @@
 //! `apply` body for the document-level [`Command::PatchAmplifierNodes`] variant.
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
 use opossum_core::opm_document::OpmDocument;
 use uuid::Uuid;
@@ -15,9 +15,9 @@ use super::Command;
 #[derive(Clone)]
 pub struct PatchAmplifierNodes {
     /// The candidate set in place beforehand, so `apply` can build the inverse that restores it.
-    pub old: HashSet<Uuid>,
+    pub old: BTreeSet<Uuid>,
     /// The candidate set to install.
-    pub new: HashSet<Uuid>,
+    pub new: BTreeSet<Uuid>,
 }
 
 /// Installs `cmd.new` as the document's amplifier-candidate set, returning the

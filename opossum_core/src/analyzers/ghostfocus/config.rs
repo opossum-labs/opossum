@@ -6,20 +6,35 @@ use crate::{
     light::{Rays, lightdata::ray_data_builder::RayDataBuilder},
     material::Material,
     nodes::NodeGroup,
+    properties::proptype::AssetRef,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use uuid::Uuid;
+
+fn default_ambient_material() -> AssetRef<Material> {
+    AssetRef::Inline(Material::vacuum())
+}
+
+const fn is_default_vacuum(asset: &AssetRef<Material>) -> bool {
+    match asset {
+        AssetRef::Inline(mat) => mat.id().is_nil(),
+        AssetRef::Id(id) => id.is_nil(),
+    }
+}
 
 #[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 /// Configuration for performing a ghost focus analysis
 pub struct GhostFocusConfig {
     max_bounces: usize,
     fluence_estimator: FluenceEstimator,
-    source_map: HashMap<Uuid, RayDataBuilder>,
-    ambient_material: Material,
-    /// The operating point of the run currently being performed - see [`ActiveScenario`]. Not part
-    /// of the configuration a user edits and not written to file.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    source_map: BTreeMap<Uuid, RayDataBuilder>,
+    #[serde(
+        default = "default_ambient_material",
+        skip_serializing_if = "is_default_vacuum"
+    )]
+    ambient_material: AssetRef<Material>,
     #[serde(skip)]
     active_pump_scenario: ActiveScenario,
 }
@@ -74,7 +89,7 @@ impl GhostFocusConfig {
     }
     /// Returns a reference to the source map of this [`GhostFocusConfig`].
     #[must_use]
-    pub const fn source_map(&self) -> &HashMap<Uuid, RayDataBuilder> {
+    pub const fn source_map(&self) -> &BTreeMap<Uuid, RayDataBuilder> {
         &self.source_map
     }
     /// The first source UUID whose mapping differs from `other`'s (added, removed, or changed value), if
@@ -87,14 +102,26 @@ impl GhostFocusConfig {
             .copied()
             .find(|uuid| self.source_map.get(uuid) != other.source_map.get(uuid))
     }
-    /// Returns a reference to the ambient material of this analysis
+    /// Returns a reference to the ambient material of this analysis.
     #[must_use]
-    pub const fn ambient_material(&self) -> &Material {
+    pub fn ambient_material(&self) -> &Material {
+        self.ambient_material.unwrap_inline()
+    }
+
+    /// Sets the ambient material for this analysis.
+    pub fn set_ambient_material(&mut self, material: Material) {
+        self.ambient_material = AssetRef::Inline(material);
+    }
+
+    /// Returns a reference to the raw [`AssetRef`] for serialization/resolution.
+    #[must_use]
+    pub const fn ambient_material_ref(&self) -> &AssetRef<Material> {
         &self.ambient_material
     }
-    /// Sets the ambient material for this analysis
-    pub fn set_ambient_material(&mut self, material: Material) {
-        self.ambient_material = material;
+
+    /// Sets the raw [`AssetRef`] for serialization/resolution.
+    pub fn set_ambient_material_ref(&mut self, asset: AssetRef<Material>) {
+        self.ambient_material = asset;
     }
 }
 impl Default for GhostFocusConfig {
@@ -102,8 +129,8 @@ impl Default for GhostFocusConfig {
         Self {
             max_bounces: 1,
             fluence_estimator: FluenceEstimator::Voronoi,
-            source_map: HashMap::new(),
-            ambient_material: Material::vacuum(),
+            source_map: BTreeMap::new(),
+            ambient_material: AssetRef::Inline(Material::vacuum()),
             active_pump_scenario: ActiveScenario::default(),
         }
     }
@@ -128,9 +155,8 @@ impl PropagationStrategy for GhostFocusConfig {
         surf.add_to_rays_cache(reflected_rays, backward);
         Ok(())
     }
-
     fn ambient_refractive_index(&self) -> crate::refractive_index::RefractiveIndexType {
-        self.ambient_material.refractive_index_type().clone()
+        self.ambient_material().refractive_index_type().clone()
     }
 }
 #[cfg(test)]

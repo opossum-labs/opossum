@@ -216,7 +216,7 @@ fn main() -> OpmResult<()> {
     // Configure ray visualization transparency
     ray_prop_vis.set_property("ray transparency", 1.0.into())?;
     // Configure visualization direction
-    ray_prop_vis.set_property("view_direction", Proptype::Vec3(Vector3::y()))?;
+    ray_prop_vis.set_property("view direction", Proptype::Vec3(Vector3::y()))?;
     // Add visualizer node
     let i_sd3 = scenery.add_node(ray_prop_vis)?;
 

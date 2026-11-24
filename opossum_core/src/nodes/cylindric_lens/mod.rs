@@ -29,15 +29,15 @@ inventory::submit! {
 /// A real cylindric lens with spherical (or flat) surfaces. By default, the curvature is aligned along the (local) y axis.
 ///
 /// # Curvature convention:
-/// - negative curvature on the input will be a concave (defocusing) surface
-/// - positive curvature on the input will be a convex (focusing) surface
-/// - negative curvature on the output will be a convex (focusing) surface
-/// - positive curvature on the output will be a concave (defocusing) surface
+/// - negative radius of curvature on the input will be a concave (defocusing) surface
+/// - positive radius of curvature on the input will be a convex (focusing) surface
+/// - negative radius of curvature on the output will be a convex (focusing) surface
+/// - positive radius of curvature on the output will be a concave (defocusing) surface
 /// ## Optical Ports
 ///   - Inputs
-///     - `front`
+///     - `input_1`
 ///   - Outputs
-///     - `rear`
+///     - `output_1`
 ///
 /// ## Properties
 ///   - `name`
@@ -58,22 +58,22 @@ impl Default for CylindricLens {
         let mut node_attr = NodeAttr::new("cylindric lens");
         node_attr
             .create_property_with_validator(
-                "front curvature",
+                "front radius of curvature",
                 "radius of curvature of front surface",
                 Validator::AndValidator {
                     validators: vec![Validator::NumericIsNotZero, Validator::NumericIsNotNaN],
                 },
-                Proptype::Curvature(millimeter!(500.0)),
+                Proptype::RadiusOfCurvature(millimeter!(500.0)),
             )
             .unwrap();
         node_attr
             .create_property_with_validator(
-                "rear curvature",
+                "rear radius of curvature",
                 "radius of curvature of rear surface",
                 Validator::AndValidator {
                     validators: vec![Validator::NumericIsNotZero, Validator::NumericIsNotNaN],
                 },
-                Proptype::Curvature(millimeter!(-500.0)),
+                Proptype::RadiusOfCurvature(millimeter!(-500.0)),
             )
             .unwrap();
         node_attr
@@ -140,12 +140,14 @@ impl CylindricLens {
     ) -> OpmResult<Self> {
         let mut cyl_lens = Self::default();
         cyl_lens.node_attr.set_name(name);
-        cyl_lens
-            .node_attr
-            .set_property("front curvature", Proptype::Curvature(front_curvature))?;
-        cyl_lens
-            .node_attr
-            .set_property("rear curvature", Proptype::Curvature(rear_curvature))?;
+        cyl_lens.node_attr.set_property(
+            "front radius of curvature",
+            Proptype::RadiusOfCurvature(front_curvature),
+        )?;
+        cyl_lens.node_attr.set_property(
+            "rear radius of curvature",
+            Proptype::RadiusOfCurvature(rear_curvature),
+        )?;
         cyl_lens
             .node_attr
             .set_property("center thickness", center_thickness.into())?;
@@ -160,12 +162,12 @@ impl CylindricLens {
 impl OpticNode for CylindricLens {
     fn create_geometry(&self) -> OpmResult<Option<Geometry>> {
         let (
-            Ok(Proptype::Curvature(front_curvature)),
-            Ok(Proptype::Curvature(rear_curvature)),
+            Ok(Proptype::RadiusOfCurvature(front_curvature)),
+            Ok(Proptype::RadiusOfCurvature(rear_curvature)),
             Ok(Proptype::Length(center_thickness)),
         ) = (
-            self.node_attr.get_property("front curvature"),
-            self.node_attr.get_property("rear curvature"),
+            self.node_attr.get_property("front radius of curvature"),
+            self.node_attr.get_property("rear radius of curvature"),
             self.node_attr.get_property("center thickness"),
         )
         else {
@@ -220,11 +222,15 @@ mod test {
         assert_eq!(node.node_type(), "cylindric lens");
         assert!(!node.inverted());
         assert_eq!(node.node_color(), "aqua");
-        let Ok(Proptype::Curvature(roc)) = node.node_attr.get_property("front curvature") else {
+        let Ok(Proptype::RadiusOfCurvature(roc)) =
+            node.node_attr.get_property("front radius of curvature")
+        else {
             panic!()
         };
         assert_eq!(*roc, millimeter!(500.0));
-        let Ok(Proptype::Curvature(roc)) = node.node_attr.get_property("rear curvature") else {
+        let Ok(Proptype::RadiusOfCurvature(roc)) =
+            node.node_attr.get_property("rear radius of curvature")
+        else {
             panic!()
         };
         assert_eq!(*roc, millimeter!(-500.0));
@@ -272,11 +278,15 @@ mod test {
         let ref_index = RefrIndexConst::new(2.0)?;
         let node = CylindricLens::new("test", roc, roc, ct, ref_index)?;
         assert_eq!(node.name(), "test");
-        let Ok(Proptype::Curvature(roc)) = node.node_attr.get_property("front curvature") else {
+        let Ok(Proptype::RadiusOfCurvature(roc)) =
+            node.node_attr.get_property("front radius of curvature")
+        else {
             panic!()
         };
         assert_eq!(*roc, millimeter!(100.0));
-        let Ok(Proptype::Curvature(roc)) = node.node_attr.get_property("rear curvature") else {
+        let Ok(Proptype::RadiusOfCurvature(roc)) =
+            node.node_attr.get_property("rear radius of curvature")
+        else {
             panic!()
         };
         assert_eq!(*roc, millimeter!(100.0));

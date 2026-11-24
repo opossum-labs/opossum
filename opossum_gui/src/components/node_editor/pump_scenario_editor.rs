@@ -374,7 +374,7 @@ fn ScenarioAmplifiers(scenario_id: Uuid) -> Element {
                 }
             } else {
                 div { class: "amp-filter",
-                    for (label, shows_one_group) in [("All", false), ("By group", true)] {
+                    for (label , shows_one_group) in [("All", false), ("By group", true)] {
                         button {
                             key: "{label}",
                             r#type: "button",
@@ -387,11 +387,11 @@ fn ScenarioAmplifiers(scenario_id: Uuid) -> Element {
                 if by_group() {
                     select {
                         class: "amp-group-select",
-                        value: active_group.map(|id| id.to_string()).unwrap_or_default(),
+                        value: active_group.map_or_default(|id| id.to_string()),
                         onchange: move |e| {
                             selected_group.set(Uuid::parse_str(&e.value()).ok());
                         },
-                        for (group_id, group_name) in groups {
+                        for (group_id , group_name) in groups {
                             option { key: "{group_id}", value: "{group_id}", "{group_name}" }
                         }
                     }

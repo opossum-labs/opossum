@@ -29,7 +29,7 @@ use crate::{
 /// Same purpose as [`OPTIC_SHAPE`](crate::geometry::body::OPTIC_SHAPE) for the transversal
 /// extent: the node declarations and every reader refer to the property by this constant rather
 /// than by a literal.
-pub const MATERIAL: &str = "Material";
+pub const MATERIAL: &str = "material";
 
 /// The wavelength a material is characterised at when nothing else is given.
 ///
@@ -50,7 +50,6 @@ pub fn default_reference_wavelength() -> Length {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Material {
     /// Shared metadata header (UUID, versioning, name, vendor).
-    #[serde(flatten)]
     pub header: AssetHeader,
 
     /// Primary optical properties.

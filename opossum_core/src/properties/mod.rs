@@ -462,15 +462,19 @@ mod test {
         // order a node author declares its properties in is the order the user sees. Sorting by
         // name would put e.g. a lens' `material` between its `front curvature` and `rear curvature`.
         let mut props = Properties::default();
-        props.create("front curvature", "", 1.0.into())?;
-        props.create("rear curvature", "", 2.0.into())?;
+        props.create("front radius of curvature", "", 1.0.into())?;
+        props.create("rear radius of curvature", "", 2.0.into())?;
         props.create("material", "", 3.0.into())?;
         assert_eq!(
             props
                 .iter()
                 .map(|(name, _)| name.as_str())
                 .collect::<Vec<_>>(),
-            vec!["front curvature", "rear curvature", "material"]
+            vec![
+                "front radius of curvature",
+                "rear radius of curvature",
+                "material"
+            ]
         );
         Ok(())
     }

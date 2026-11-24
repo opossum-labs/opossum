@@ -21,8 +21,14 @@ fn main() -> OpmResult<()> {
         OPTIC_SHAPE,
         OpticShape::from(CircleShape::new(millimeter!(9.0))?).into(),
     )?;
-    lens1.set_property("front curvature", Proptype::Curvature(millimeter!(10.0)))?;
-    lens1.set_property("rear curvature", Proptype::Curvature(millimeter!(9.0)))?;
+    lens1.set_property(
+        "front radius of curvature",
+        Proptype::RadiusOfCurvature(millimeter!(10.0)),
+    )?;
+    lens1.set_property(
+        "rear radius ofcurvature",
+        Proptype::RadiusOfCurvature(millimeter!(9.0)),
+    )?;
     lens1.set_property("center thickness", millimeter!(1.0).into())?;
     lens1.set_coating(Extruded::FRONT, &CoatingType::Fresnel)?;
     let l1 = scenery.add_node(lens1)?;

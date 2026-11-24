@@ -21,7 +21,7 @@ pub const PORT_MAP_DIST: f64 = 20.0;
 
 /// Total horizontal overhang of a mapped port tag extending beyond the node border.
 /// Calculated as: `PORT_MAP_DIST + 2.0 * PORT_WIDTH + BORDER_WIDTH + PORT_MAP_TAG_WIDTH / 2.0 (20.0)`.
-pub const PORT_MAP_OVERHANG: f64 = PORT_MAP_DIST + 2.0 * PORT_WIDTH + BORDER_WIDTH + 20.0;
+pub const PORT_MAP_OVERHANG: f64 = 2.0f64.mul_add(PORT_WIDTH, PORT_MAP_DIST) + BORDER_WIDTH + 20.0;
 
 // constants for GraphStore
 pub const SUGIYAMA_VERTEX_SPACING: f64 = 250.0;

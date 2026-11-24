@@ -70,7 +70,7 @@ fn test_optimization_config_serde_roundtrip() -> OpmResult<()> {
         .with_variable(
             FreeVariable::new(ParameterAddress::NodeProperty {
                 node_id,
-                property_name: "front curvature".into(),
+                property_name: "front radius of curvature".into(),
             })
             .with_length_bounds(millimeter!(50.0), millimeter!(200.0))?,
         )

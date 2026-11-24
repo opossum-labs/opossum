@@ -177,7 +177,7 @@ impl Isometry {
     /// For the translation, it is assumed to transform a point of meters
     /// # Attributes
     /// - `view_point`: origin of the view. will translate the cartesian origin to this point
-    /// - `view_direction`: view direction vector. The rotation will rotate the z vector onto this direction
+    /// - `view direction`: view direction vector. The rotation will rotate the z vector onto this direction
     /// - `up_direction`: vertical direction of the view. Must not be collinear to the view!
     #[must_use]
     pub fn new_from_view(

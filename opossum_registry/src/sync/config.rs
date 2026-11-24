@@ -154,9 +154,7 @@ pub fn ensure_remote_configured(local_path: &Path, remote_url: &str) -> OpmResul
                 url_found = true;
                 let current_url = trimmed
                     .split_once('=')
-                    .map(|(_, val)| val.trim())
-                    .unwrap_or_default();
-
+                    .map_or_default(|(_, val)| val.trim());
                 if current_url == trimmed_url {
                     updated_lines.push(line.to_string());
                 } else {

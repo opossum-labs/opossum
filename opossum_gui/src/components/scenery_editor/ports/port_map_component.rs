@@ -1,7 +1,6 @@
+use crate::components::scenery_editor::constants::{BORDER_WIDTH, PORT_MAP_DIST, PORT_WIDTH};
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_core::prelude::PortType;
-
-use crate::components::scenery_editor::constants::{BORDER_WIDTH, PORT_MAP_DIST, PORT_WIDTH};
 
 #[component]
 pub fn PortMapComponent(

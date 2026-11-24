@@ -24,7 +24,7 @@ use indexmap::IndexMap;
 pub use optimization::OptimizationConfig;
 pub use positioning_run::PositioningRun;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 use uuid::Uuid;
 /// Current version of the `.opm` file format schema.
 pub const CURRENT_OPM_FILE_VERSION: u32 = 0;
@@ -48,8 +48,8 @@ pub struct OpmDocument {
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     pub(crate) pump_scenarios: IndexMap<Uuid, PumpScenario>,
     /// Nodes marked as amplifier candidates, independent of any [`PumpScenario`].
-    #[serde(default, skip_serializing_if = "HashSet::is_empty")]
-    pub(crate) amplifier_nodes: HashSet<Uuid>,
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub(crate) amplifier_nodes: BTreeSet<Uuid>,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     pub(crate) embedded_materials: IndexMap<Uuid, Material>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -66,7 +66,7 @@ impl Default for OpmDocument {
             scenery: NodeGroup::default(),
             analyzers: IndexMap::default(),
             pump_scenarios: IndexMap::default(),
-            amplifier_nodes: HashSet::default(),
+            amplifier_nodes: BTreeSet::default(),
             embedded_materials: IndexMap::default(),
             optimization_config: None,
             metric_store: HashMap::new(),
@@ -91,6 +91,16 @@ impl OpmDocument {
     /// Returns a mutable reference to the scenery of this [`OpmDocument`].
     pub const fn scenery_mut(&mut self) -> &mut NodeGroup {
         &mut self.scenery
+    }
+    /// Returns the schema file version of this [`OpmDocument`].
+    #[must_use]
+    pub const fn opm_file_version(&self) -> u32 {
+        self.opm_file_version
+    }
+    /// Returns a reference to the embedded materials map of this [`OpmDocument`].
+    #[must_use]
+    pub const fn embedded_materials(&self) -> &IndexMap<Uuid, Material> {
+        &self.embedded_materials
     }
     /// Returns a cloned map of all analyzers registered in this [`OpmDocument`].
     #[must_use]
@@ -207,7 +217,7 @@ impl OpmDocument {
     }
     /// Returns the set of node [`Uuid`]s marked as amplifier candidates in this [`OpmDocument`].
     #[must_use]
-    pub const fn amplifier_nodes(&self) -> &HashSet<Uuid> {
+    pub const fn amplifier_nodes(&self) -> &BTreeSet<Uuid> {
         &self.amplifier_nodes
     }
     /// Returns whether the node with the given [`Uuid`] is marked as an amplifier candidate.
@@ -234,7 +244,7 @@ impl OpmDocument {
         self.amplifier_nodes.retain(|id| scenery.exists(*id));
     }
     /// Replaces the entire amplifier candidate set at once (e.g., for undo/redo) without modifying scenarios.
-    pub fn set_amplifier_nodes(&mut self, nodes: HashSet<Uuid>) {
+    pub fn set_amplifier_nodes(&mut self, nodes: BTreeSet<Uuid>) {
         self.amplifier_nodes = nodes;
     }
     /// Returns the cached scalar metrics collected during the last [`analyze_headless`](Self::analyze_headless) run.

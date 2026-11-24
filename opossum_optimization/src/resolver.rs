@@ -121,7 +121,7 @@ impl ParameterResolver {
                 };
 
                 if let Some(val) = resolved_val {
-                    values.insert(coupling.target.clone(), val);
+                    values.insert(coupling.target, val);
                     progress = true;
                 } else {
                     remaining.push(coupling);

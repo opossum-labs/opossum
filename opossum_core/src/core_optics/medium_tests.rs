@@ -67,7 +67,7 @@ fn scenario_with_gain(node_id: Uuid, gain: f64) -> OpmResult<PumpScenario> {
     Ok(scenario_with_model(
         node_id,
         GainModel::Const(ConstGain::new(gain)?),
-        PumpSource::None,
+        PumpSource::Unpumped,
     ))
 }
 /// An operating point in which the node with the given [`Uuid`] runs the given configuration.
@@ -638,7 +638,7 @@ fn ghost_reflections_are_amplified_on_every_pass_through_the_medium() -> OpmResu
     for gain in [1.0, 2.0, 3.0] {
         let measured = ghost_energies_per_bounce(
             GainModel::Const(ConstGain::new(gain)?),
-            PumpSource::None,
+            PumpSource::Unpumped,
             2,
         )?;
         let expected = expected_energies(gain);
@@ -1162,7 +1162,7 @@ fn a_small_signal_head_is_passive_without_a_pump() -> OpmResult<()> {
         GainModel::MonochromaticSmallSignalGain(MonochromaticSmallSignalGain::new(
             head_gain_coefficient(),
         )?),
-        PumpSource::None,
+        PumpSource::Unpumped,
     )));
     assert_relative_eq!(
         traced_energy_ratio(&mut head, &config)?,

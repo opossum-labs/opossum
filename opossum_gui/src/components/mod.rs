@@ -1,3 +1,4 @@
+#![allow(clippy::empty_enums)]
 pub mod app;
 pub mod asset_editor;
 pub mod context_menu;

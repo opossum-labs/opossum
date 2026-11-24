@@ -160,7 +160,7 @@ impl Extraction for MonochromaticSmallSignalGain {
         config: &PumpConfig,
     ) -> OpmResult<Option<Inversion>> {
         Ok(Some(match config.pump() {
-            PumpSource::None => Inversion::Uniform(0.0),
+            PumpSource::Unpumped => Inversion::Uniform(0.0),
             PumpSource::Const => Inversion::Uniform(1.0),
             PumpSource::Analytic(pump) => {
                 let mut field = InversionField::from_body(body, pump.grid())?;
@@ -489,7 +489,7 @@ mod test {
         // Even a model with a nonzero coefficient leaves an unpumped medium (β = 0) untouched: the
         // pump, not the model, decides whether there is any inversion to amplify.
         let model = MonochromaticSmallSignalGain::new(reciprocal_centimeter!(0.5))?;
-        let passive = PumpConfig::new(GainModel::None, PumpSource::None);
+        let passive = PumpConfig::new(GainModel::None, PumpSource::Unpumped);
         assert_relative_eq!(
             factor_through_disk(&model, &passive, &ray_at(0.0, 0.0)?)?,
             1.0

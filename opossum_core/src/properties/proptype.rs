@@ -45,6 +45,7 @@ use uuid::Uuid;
 /// Wrapper for registry assets that can hold either the full inline data
 /// or a lightweight UUID reference for serialization.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(untagged)]
 pub enum AssetRef<T> {
     /// Full in-memory asset struct.
     Inline(T),
@@ -133,7 +134,7 @@ pub enum Proptype {
     /// Property for storing a [`SpectrometerType`] of a [`Sepctrometer`](crate::nodes::Spectrometer) node.
     SpectrometerType(SpectrometerType),
     /// Property for storing a [`Metertype`] of an [`Energymeter`](crate::nodes::EnergyMeter) node.
-    Metertype(Metertype),
+    MeterType(Metertype),
     /// An [`Uuid`] for identifying an optical node.
     Uuid(Uuid),
     /// The optic shape of a component: an outline on its axis, possibly with a bore through it.
@@ -163,8 +164,8 @@ pub enum Proptype {
     WfLambda(f64, Length),
     /// a geometrical length
     Length(Length),
-    /// a curvature
-    Curvature(Length),
+    /// a radius of curvature (e.g. for lens surfaces), This value usually is never zero ban can be `+/-Inf`.
+    RadiusOfCurvature(Length),
     /// an optional length parameter. used, e.g., for the alignment wavelength of the source
     LengthOption(Option<Length>),
     /// an energy value
@@ -202,7 +203,7 @@ impl Proptype {
         match self {
             Self::F64(v) | Self::WfLambda(v, _) => Some(*v),
             Self::I32(v) => Some(f64::from(*v)),
-            Self::Length(v) | Self::Curvature(v) => Some(v.value),
+            Self::Length(v) | Self::RadiusOfCurvature(v) => Some(v.value),
             Self::Angle(v) => Some(v.value),
             Self::Energy(v) => Some(v.value),
             Self::Fluence(v) => Some(v.value),
@@ -226,7 +227,7 @@ impl Proptype {
                 *v = value.round() as i32;
                 Ok(())
             }
-            Self::Length(v) | Self::Curvature(v) => {
+            Self::Length(v) | Self::RadiusOfCurvature(v) => {
                 v.value = value;
                 Ok(())
             }

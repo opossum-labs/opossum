@@ -31,7 +31,7 @@ impl AdaptiveSimulatedAnnealing {
         // Initialize step sizes to 10% of parameter span or fallback
         let step_sizes = vars
             .iter()
-            .map(|v| v.bounds.as_ref().map_or(0.01, |b| (b.max - b.min) * 0.10))
+            .map(|v| v.bounds.finite_span().map_or(0.01, |span| span * 0.10))
             .collect();
 
         Self {
@@ -62,10 +62,7 @@ impl AdaptiveSimulatedAnnealing {
             }
 
             let ratio = to_f64(self.accepted_counts[i]) / to_f64(self.proposed_counts[i]);
-            let bounds_span = self.free_vars[i]
-                .bounds
-                .as_ref()
-                .map_or(1.0, |b| b.max - b.min);
+            let bounds_span = self.free_vars[i].bounds.finite_span().unwrap_or(1.0);
 
             if ratio > 0.40 {
                 // Too many accepted steps: increase step size to explore faster
@@ -129,12 +126,9 @@ where
 
         // 2. Sample perturbation using current adaptive step size
         let delta = rng.random_range(-1.0..=1.0) * self.step_sizes[idx];
-        let mut new_val = current_param[idx] + delta;
 
         // Respect parameter bounds
-        if let Some(bounds) = &self.free_vars[idx].bounds {
-            new_val = bounds.clamp(new_val);
-        }
+        let new_val = self.free_vars[idx].bounds.clamp(current_param[idx] + delta);
         candidate_param[idx] = new_val;
 
         // 3. Evaluate new cost

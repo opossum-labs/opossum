@@ -55,7 +55,7 @@ pub struct CxMenu {
 impl CxMenu {
     #[must_use]
     pub const fn width() -> f64 {
-        150. + 2. * Self::padding()
+        2.0f64.mul_add(Self::padding(), 150.)
     }
     #[must_use]
     pub const fn padding() -> f64 {
@@ -101,7 +101,7 @@ pub fn ContextMenu(cxt_command_handler: EventHandler<Option<CxtCommand>>) -> Ele
                 id: "context-menu",
                 style: "top: {y}px; left: {x}px; width: {width}px; padding: {padding}px;",
 
-                for (index, (label, cmd)) in cx_menu.entries.into_iter().enumerate() {
+                for (index , (label , cmd)) in cx_menu.entries.into_iter().enumerate() {
                     MenuItem {
                         key: "{index}",
                         class: "context-menu-item",

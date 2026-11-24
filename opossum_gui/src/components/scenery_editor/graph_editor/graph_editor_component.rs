@@ -1,8 +1,8 @@
-use crate::components::app::SIDEBAR_SWITCHER_WIDTH;
-use crate::components::scene_view::SceneView;
 use crate::components::{
+    app::SIDEBAR_SWITCHER_WIDTH,
     context_menu::cx_menu::CxMenu,
     node_editor::{NodeConfigEditor, PumpScenarioEditor},
+    scene_view::SceneView,
     scenery_editor::{
         DragStatus, NodeEditorCommand, SelectedNode,
         graph_editor::{
@@ -306,8 +306,7 @@ pub fn GraphEditor(
         TabKey::Graph(id) => workspace
             .tabs()
             .get(id)
-            .map(|graph| graph.graph_info().read().name.clone())
-            .unwrap_or_default(),
+            .map_or_default(|graph| graph.graph_info().read().name.clone()),
         TabKey::Scene => "3D View".to_owned(),
     };
 
@@ -449,7 +448,7 @@ pub fn GraphEditor(
                                     key: "{side:?}",
                                     class: "editor-tabs",
                                     style: "grid-column: {side.grid_column()};",
-                                    value: front.map(TabKey::value).unwrap_or_default(),
+                                    value: front.map_or_default(TabKey::value),
                                     on_value_change: move |value: String| {
                                         if let Some(tab) = TabKey::parse(&value) {
                                             // Directly as well as through the active graph: clicking
@@ -462,7 +461,7 @@ pub fn GraphEditor(
                                         }
                                     },
                                     TabList { class: "editor-tab-list",
-                                        for (index, key) in pane_tabs.into_iter().enumerate() {
+                                        for (index , key) in pane_tabs.into_iter().enumerate() {
                                             TabTrigger {
                                                 key: "{key.value()}",
                                                 value: key.value(),
@@ -637,7 +636,7 @@ pub fn GraphEditor(
                 // of a row the row's full width, which would stretch the label across the window.
                 TabDragGhost {
                     drag: tab_drag,
-                    label: dragged_tab().map(tab_label).unwrap_or_default(),
+                    label: dragged_tab().map_or_default(tab_label),
                 }
             }
         }

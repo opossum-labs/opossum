@@ -116,6 +116,9 @@ impl UiVariableRow {
         address: &ParameterAddress,
         bounds: BoxBounds,
     ) -> (Option<f64>, Option<f64>) {
+        if !bounds.is_finite() {
+            return (None, None);
+        }
         if matches!(address, ParameterAddress::SurfaceCurvature { .. }) {
             if (bounds.min > 0.0 && bounds.max > 0.0) || (bounds.min < 0.0 && bounds.max < 0.0) {
                 (Some(1000.0 / bounds.max), Some(1000.0 / bounds.min))

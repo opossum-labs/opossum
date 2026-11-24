@@ -1,5 +1,5 @@
+#![allow(clippy::empty_enums)]
 //! Dioxus component [`GlbViewer`] and the associated [`ViewerHandle`].
-
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use dioxus::document::{self, Eval};

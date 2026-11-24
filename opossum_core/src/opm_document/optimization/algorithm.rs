@@ -1,6 +1,7 @@
 use super::variable::{FiniteDifferenceMethod, FreeVariable};
 use crate::error::{OpmResult, OpossumError};
 use serde::{Deserialize, Serialize};
+
 /// Supported numerical optimization algorithms and their solver-specific hyperparameters.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum OptimizationAlgorithm {
@@ -32,8 +33,8 @@ pub enum OptimizationAlgorithm {
         /// Finite-difference scheme used to compute numerical gradients.
         gradient_method: FiniteDifferenceMethod,
     },
-    /// Simulated Annealing global stochastic optimization.
-    SimulatedAnnealing {
+    /// Adaptive Simulated Annealing global stochastic optimization (Corana 1/5th success rule).
+    AdaptiveSimulatedAnnealing {
         /// Maximum number of Markov-chain step evaluations.
         max_iterations: u64,
         #[allow(clippy::doc_markdown)]
@@ -42,19 +43,17 @@ pub enum OptimizationAlgorithm {
         #[allow(clippy::doc_markdown)]
         /// Geometric cooling factor $\alpha$ in $T_{k+1} = \alpha \cdot T_k$ (typically `0.85..=0.999`).
         cooling_rate: f64,
-        /// Maximum iterations without finding a new global best before early termination.
-        stall_best: u64,
-        /// Maximum consecutive rejected candidate steps before early termination.
-        stall_accepted: u64,
-        /// Optional fixed interval of iterations after which the temperature schedule reanneals.
-        reannealing_fixed: Option<u64>,
+        /// Number of proposals per variable before adapting step sizes.
+        adaptation_cycle: u64,
     },
 }
+
 impl Default for OptimizationAlgorithm {
     fn default() -> Self {
         Self::nelder_mead()
     }
 }
+
 impl OptimizationAlgorithm {
     /// Creates a default Damped Least Squares (DLS) configuration (50 iterations).
     #[must_use]
@@ -65,6 +64,7 @@ impl OptimizationAlgorithm {
             gradient_tolerance: 1e-7,
         }
     }
+
     /// Creates a default Nelder-Mead configuration (100 iterations, `1e-6` standard deviation tolerance).
     #[must_use]
     pub const fn nelder_mead() -> Self {
@@ -73,6 +73,7 @@ impl OptimizationAlgorithm {
             sd_tolerance: 1e-6,
         }
     }
+
     /// Creates a default L-BFGS configuration (60 iterations) using central finite differences.
     #[must_use]
     pub const fn lbfgs() -> Self {
@@ -83,32 +84,33 @@ impl OptimizationAlgorithm {
             gradient_method: FiniteDifferenceMethod::Central,
         }
     }
+
     #[allow(clippy::doc_markdown)]
-    /// Creates a default Simulated Annealing configuration (10,000 iterations, $T_0 = 100$, $\alpha = 0.995$).
+    /// Creates a default Adaptive Simulated Annealing configuration (10,000 iterations, $T_0 = 100$, $\alpha = 0.995$).
     #[must_use]
-    pub const fn simulated_annealing() -> Self {
-        Self::SimulatedAnnealing {
+    pub const fn adaptive_simulated_annealing() -> Self {
+        Self::AdaptiveSimulatedAnnealing {
             max_iterations: 10_000,
-            initial_temperature: 100.0, // Should be roughly comparable to initial merit cost
-            cooling_rate: 0.995,        // Slow geometric cooling
-            stall_best: u64::MAX, // Do not abort early just because no new global best was found
-            stall_accepted: 1_000, // Terminate only after 1000 consecutive rejected steps
-            reannealing_fixed: None,
+            initial_temperature: 100.0,
+            cooling_rate: 0.995,
+            adaptation_cycle: 20,
         }
     }
-    /// Sets the geometric cooling rate $\alpha$ if this variant is [`OptimizationAlgorithm::SimulatedAnnealing`].
+
+    /// Sets the geometric cooling rate $\alpha$ if this variant is [`OptimizationAlgorithm::AdaptiveSimulatedAnnealing`].
     #[must_use]
     pub const fn with_cooling_rate(mut self, rate: f64) -> Self {
-        if let Self::SimulatedAnnealing { cooling_rate, .. } = &mut self {
+        if let Self::AdaptiveSimulatedAnnealing { cooling_rate, .. } = &mut self {
             *cooling_rate = rate;
         }
         self
     }
+
     #[allow(clippy::doc_markdown)]
-    /// Sets the initial temperature $T_0$ if this variant is [`OptimizationAlgorithm::SimulatedAnnealing`].
+    /// Sets the initial temperature $T_0$ if this variant is [`OptimizationAlgorithm::AdaptiveSimulatedAnnealing`].
     #[must_use]
     pub const fn with_temperature(mut self, temp: f64) -> Self {
-        if let Self::SimulatedAnnealing {
+        if let Self::AdaptiveSimulatedAnnealing {
             initial_temperature,
             ..
         } = &mut self
@@ -117,6 +119,19 @@ impl OptimizationAlgorithm {
         }
         self
     }
+
+    /// Sets the adaptation cycle length if this variant is [`OptimizationAlgorithm::AdaptiveSimulatedAnnealing`].
+    #[must_use]
+    pub const fn with_adaptation_cycle(mut self, cycle: u64) -> Self {
+        if let Self::AdaptiveSimulatedAnnealing {
+            adaptation_cycle, ..
+        } = &mut self
+        {
+            *adaptation_cycle = cycle;
+        }
+        self
+    }
+
     /// Sets the maximum number of solver iterations for any algorithm variant.
     #[must_use]
     pub const fn with_max_iterations(mut self, iters: u64) -> Self {
@@ -124,10 +139,11 @@ impl OptimizationAlgorithm {
             Self::Dls { max_iterations, .. }
             | Self::NelderMead { max_iterations, .. }
             | Self::LBFGS { max_iterations, .. }
-            | Self::SimulatedAnnealing { max_iterations, .. } => *max_iterations = iters,
+            | Self::AdaptiveSimulatedAnnealing { max_iterations, .. } => *max_iterations = iters,
         }
         self
     }
+
     /// Sets the standard deviation tolerance for [`OptimizationAlgorithm::NelderMead`]
     /// or the gradient tolerance for [`OptimizationAlgorithm::LBFGS`].
     ///
@@ -139,12 +155,13 @@ impl OptimizationAlgorithm {
             Self::LBFGS {
                 gradient_tolerance, ..
             } => *gradient_tolerance = tol,
-            Self::SimulatedAnnealing { .. } | Self::Dls { .. } => {}
+            Self::AdaptiveSimulatedAnnealing { .. } | Self::Dls { .. } => {}
         }
         self
     }
+
     /// Automatically generates a non-degenerate, bound-respecting initial simplex of $N + 1$ vertices
-    /// for $N$ free variables.
+    /// for $N$ free variables starting from `initial_values`.
     ///
     /// Each perturbed vertex shifts one coordinate by 5% of its bound span (or 5% of its magnitude,
     /// falling back to `1e-3` near zero), flipping the step direction if it would exceed `bounds.max`.
@@ -153,31 +170,30 @@ impl OptimizationAlgorithm {
     ///
     /// Returns an error if:
     /// - `free_vars` is empty, or
-    /// - any [`FreeVariable`] has `initial_value == None`.
-    pub fn build_initial_simplex(free_vars: &[FreeVariable]) -> OpmResult<Vec<Vec<f64>>> {
+    /// - `initial_values.len() != free_vars.len()`.
+    pub fn build_initial_simplex(
+        free_vars: &[FreeVariable],
+        initial_values: &[f64],
+    ) -> OpmResult<Vec<Vec<f64>>> {
         let n = free_vars.len();
         if n == 0 {
             return Err(OpossumError::Other(
                 "Cannot build simplex without free variables".to_string(),
             ));
         }
-        let base_vertex: Vec<f64> = free_vars
-            .iter()
-            .map(|v| {
-                v.initial_value.ok_or_else(|| {
-                    OpossumError::Other(format!(
-                        "FreeVariable '{}' has uninitialized start value",
-                        v.address
-                    ))
-                })
-            })
-            .collect::<Result<_, _>>()?;
+        if initial_values.len() != n {
+            return Err(OpossumError::Other(format!(
+                "Expected {n} initial values for simplex construction, got {}",
+                initial_values.len()
+            )));
+        }
+        let base_vertex = initial_values.to_vec();
         let mut simplex = Vec::with_capacity(n + 1);
         simplex.push(base_vertex.clone());
         for (i, var) in free_vars.iter().enumerate() {
             let mut vertex = base_vertex.clone();
             let current = vertex[i];
-            let step = var.bounds.as_ref().map_or_else(
+            let step = var.bounds.finite_span().map_or_else(
                 || {
                     if current.abs() > 1e-7 {
                         current.abs() * 0.05
@@ -185,12 +201,10 @@ impl OptimizationAlgorithm {
                         1e-3
                     }
                 },
-                |bounds| (bounds.max - bounds.min) * 0.05,
+                |span| span * 0.05,
             );
             let mut candidate = current + step;
-            if let Some(bounds) = &var.bounds
-                && candidate > bounds.max
-            {
+            if candidate > var.bounds.max {
                 candidate = current - step;
             }
             vertex[i] = candidate;

@@ -1,5 +1,4 @@
 mod coating_editor;
-
 use dioxus::prelude::*;
 use opossum_core::{
     coatings::CoatingType, core_optics::SurfaceConfig, nodes::fluence_detector::Fluence,

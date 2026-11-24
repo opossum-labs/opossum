@@ -474,7 +474,7 @@ pub enum PumpSource {
     ///
     /// This is the default, so a component nobody pumped behaves exactly as it always did.
     #[default]
-    None,
+    Unpumped,
     /// A uniform inversion throughout the medium: `β = 1` everywhere it reaches.
     ///
     /// It carries no parameters — how hard the medium is pumped is the gain coefficient the
@@ -487,7 +487,7 @@ pub enum PumpSource {
 impl Display for PumpSource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::None => write!(f, "None"),
+            Self::Unpumped => write!(f, "Unpumped"),
             Self::Const => write!(f, "Const"),
             Self::Analytic(_) => write!(f, "Analytic"),
         }
@@ -501,7 +501,7 @@ impl PumpSource {
     /// stores only the entries that actually do something.
     #[must_use]
     pub const fn is_active(&self) -> bool {
-        !matches!(self, Self::None)
+        !matches!(self, Self::Unpumped)
     }
 }
 
@@ -611,7 +611,7 @@ mod test {
     }
     #[test]
     fn default_is_unpumped() {
-        assert_eq!(PumpSource::default(), PumpSource::None);
+        assert_eq!(PumpSource::default(), PumpSource::Unpumped);
         assert!(!PumpSource::default().is_active());
         // A uniform pump and a shaped one both do something; only `None` is passive.
         assert!(PumpSource::Const.is_active());
@@ -619,7 +619,7 @@ mod test {
     }
     #[test]
     fn fmt() {
-        assert_eq!(format!("{}", PumpSource::None), "None");
+        assert_eq!(format!("{}", PumpSource::Unpumped), "Unpumped");
         assert_eq!(format!("{}", PumpSource::Const), "Const");
         assert_eq!(
             format!("{}", PumpSource::Analytic(AnalyticPump::default())),
@@ -640,7 +640,7 @@ mod test {
     #[test]
     fn serde_roundtrip() -> OpmResult<()> {
         for source in [
-            PumpSource::None,
+            PumpSource::Unpumped,
             PumpSource::Const,
             PumpSource::Analytic(AnalyticPump::new(
                 TransversalProfile::SuperGaussian(SuperGaussianShape::default()),

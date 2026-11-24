@@ -1,5 +1,5 @@
 // src/platform/desktop.rs
-
+#![allow(clippy::empty_enums)]
 use std::process::Child;
 use std::sync::{Arc, Mutex};
 

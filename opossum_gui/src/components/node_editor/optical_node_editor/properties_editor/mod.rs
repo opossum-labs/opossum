@@ -258,7 +258,7 @@ fn get_geometric_editor(
                 readonly,
             }
         }),
-        Proptype::Curvature(curvature) => Some(rsx! {
+        Proptype::RadiusOfCurvature(curvature) => Some(rsx! {
             CurvatureEditor {
                 node_id,
                 curvature,

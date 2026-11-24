@@ -23,6 +23,9 @@ use opossum_core::{
     },
 };
 
+/// Internal merit cost threshold for early solver termination.
+const DEFAULT_TARGET_COST: f64 = 1e-8;
+
 /// Internal container holding the raw numerical output of an executed solver.
 struct SolverOutcome {
     best_params: Vec<f64>,
@@ -51,21 +54,16 @@ impl<'a> OpticOptimizer<'a> {
             couplings: Vec::new(),
             operands: Vec::new(),
             algorithm: OptimizationAlgorithm::default(),
-            target_cost: 1e-8,
+            target_cost: DEFAULT_TARGET_COST,
         }
     }
 
     /// Creates an `OpticOptimizer` pre-configured from a serialized `OptimizationConfig`.
     ///
-    /// Any free variables lacking an explicit initial value have their baseline values
-    /// populated directly from the current state of the document.
-    ///
     /// # Errors
-    /// Returns an error if the configuration contains invalid parameters.
+    /// Returns an error if the configuration contains invalid parameter addresses.
     pub fn from_config(doc: &'a mut OpmDocument, config: OptimizationConfig) -> OpmResult<Self> {
-        let mut optimizer = Self::new(doc)
-            .with_algorithm(config.algorithm)
-            .with_target_cost(config.target_cost);
+        let mut optimizer = Self::new(doc).with_algorithm(config.algorithm);
 
         for var in config.free_variables {
             optimizer = optimizer.add_variable(var)?;
@@ -82,16 +80,12 @@ impl<'a> OpticOptimizer<'a> {
         Ok(optimizer)
     }
 
-    /// Registers a free parameter. If no initial value was set on the variable,
-    /// it is automatically read from the current state of the document.
+    /// Registers a free parameter and validates that its address exists in the current document.
     ///
     /// # Errors
-    /// Returns an error if the start value of the given free variable cannot be determined.
-    pub fn add_variable(mut self, mut variable: FreeVariable) -> OpmResult<Self> {
-        if variable.initial_value.is_none() {
-            let current_val = MetricReader::read_parameter_value(self.doc, &variable.address)?;
-            variable.initial_value = Some(current_val);
-        }
+    /// Returns an error if the parameter address cannot be resolved in the document.
+    pub fn add_variable(mut self, variable: FreeVariable) -> OpmResult<Self> {
+        let _ = MetricReader::read_parameter_value(self.doc, &variable.address)?;
         self.free_variables.push(variable);
         Ok(self)
     }
@@ -270,7 +264,13 @@ impl<'a> OpticOptimizer<'a> {
             OptimizationAlgorithm::NelderMead {
                 max_iterations,
                 sd_tolerance,
-            } => self.run_nelder_mead_observed(merit, max_iterations, sd_tolerance, observer),
+            } => self.run_nelder_mead_observed(
+                merit,
+                initial_vector,
+                max_iterations,
+                sd_tolerance,
+                observer,
+            ),
             OptimizationAlgorithm::LBFGS {
                 max_iterations,
                 gradient_tolerance,
@@ -287,17 +287,18 @@ impl<'a> OpticOptimizer<'a> {
                     observer,
                 )
             }
-            OptimizationAlgorithm::SimulatedAnnealing {
+            OptimizationAlgorithm::AdaptiveSimulatedAnnealing {
                 max_iterations,
                 initial_temperature,
                 cooling_rate,
-                ..
-            } => self.run_sa_observed(
+                adaptation_cycle,
+            } => self.run_asa_observed(
                 merit,
                 initial_vector,
                 max_iterations,
                 initial_temperature,
                 cooling_rate,
+                adaptation_cycle,
                 observer,
             ),
             OptimizationAlgorithm::Dls {
@@ -338,12 +339,14 @@ impl<'a> OpticOptimizer<'a> {
     fn run_nelder_mead_observed(
         &self,
         merit: MeritFunction,
+        initial_vector: &[f64],
         max_iterations: u64,
         sd_tolerance: f64,
         observer: ProgressObserver,
     ) -> Result<OpmResult<SolverOutcome>, argmin::core::Error> {
-        let initial_simplex = OptimizationAlgorithm::build_initial_simplex(&self.free_variables)
-            .map_err(|e| argmin::core::Error::msg(e.to_string()))?;
+        let initial_simplex =
+            OptimizationAlgorithm::build_initial_simplex(&self.free_variables, initial_vector)
+                .map_err(|e| argmin::core::Error::msg(e.to_string()))?;
         let solver = NelderMead::new(initial_simplex).with_sd_tolerance(sd_tolerance)?;
 
         Executor::new(merit, solver)
@@ -389,17 +392,18 @@ impl<'a> OpticOptimizer<'a> {
 
     /// Configures and executes Adaptive Simulated Annealing with a progress observer.
     #[allow(clippy::too_many_arguments)]
-    fn run_sa_observed(
+    fn run_asa_observed(
         &self,
         merit: MeritFunction,
         initial_vector: &[f64],
         max_iterations: u64,
         initial_temperature: f64,
         cooling_rate: f64,
+        adaptation_cycle: u64,
         observer: ProgressObserver,
     ) -> Result<OpmResult<SolverOutcome>, argmin::core::Error> {
         let solver = AdaptiveSimulatedAnnealing::new(&merit, initial_temperature, cooling_rate)
-            .with_adaptation_cycle(20);
+            .with_adaptation_cycle(adaptation_cycle);
 
         Executor::new(merit, solver)
             .configure(|state| {
@@ -463,17 +467,11 @@ impl<'a> OpticOptimizer<'a> {
         })
     }
 
-    /// Safely collects the initial parameter vector from all free variables.
+    /// Collects the current parameter values directly from the active [`OpmDocument`].
     fn collect_initial_vector(&self) -> OpmResult<Vec<f64>> {
         self.free_variables
             .iter()
-            .map(|v| {
-                v.initial_value.ok_or_else(|| {
-                    OpossumError::Other(format!(
-                        "FreeVariable '{v:?}' has uninitialized start value"
-                    ))
-                })
-            })
+            .map(|v| MetricReader::read_parameter_value(self.doc, &v.address))
             .collect()
     }
 
@@ -487,7 +485,7 @@ impl<'a> OpticOptimizer<'a> {
             OptimizationAlgorithm::NelderMead {
                 max_iterations,
                 sd_tolerance,
-            } => self.execute_nelder_mead(merit, max_iterations, sd_tolerance),
+            } => self.execute_nelder_mead(merit, &initial_vector, max_iterations, sd_tolerance),
             OptimizationAlgorithm::LBFGS {
                 max_iterations,
                 gradient_tolerance,
@@ -522,17 +520,18 @@ impl<'a> OpticOptimizer<'a> {
 
                 self.handle_solver_state(res.state())
             }
-            OptimizationAlgorithm::SimulatedAnnealing {
+            OptimizationAlgorithm::AdaptiveSimulatedAnnealing {
                 max_iterations,
                 initial_temperature,
                 cooling_rate,
-                ..
-            } => self.execute_simulated_annealing(
+                adaptation_cycle,
+            } => self.execute_adaptive_simulated_annealing(
                 merit,
                 initial_vector,
                 max_iterations,
                 initial_temperature,
                 cooling_rate,
+                adaptation_cycle,
             ),
             OptimizationAlgorithm::Dls {
                 max_iterations,
@@ -561,10 +560,12 @@ impl<'a> OpticOptimizer<'a> {
     fn execute_nelder_mead(
         &self,
         merit: MeritFunction,
+        initial_vector: &[f64],
         max_iterations: u64,
         sd_tolerance: f64,
     ) -> OpmResult<SolverOutcome> {
-        let initial_simplex = OptimizationAlgorithm::build_initial_simplex(&self.free_variables)?;
+        let initial_simplex =
+            OptimizationAlgorithm::build_initial_simplex(&self.free_variables, initial_vector)?;
         let solver = NelderMead::new(initial_simplex)
             .with_sd_tolerance(sd_tolerance)
             .map_err(|e| OpossumError::Other(format!("Failed to set tolerance: {e}")))?;
@@ -598,16 +599,17 @@ impl<'a> OpticOptimizer<'a> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn execute_simulated_annealing(
+    fn execute_adaptive_simulated_annealing(
         &self,
         merit: MeritFunction,
         initial_vector: Vec<f64>,
         max_iterations: u64,
         initial_temperature: f64,
         cooling_rate: f64,
+        adaptation_cycle: u64,
     ) -> OpmResult<SolverOutcome> {
         let solver = AdaptiveSimulatedAnnealing::new(&merit, initial_temperature, cooling_rate)
-            .with_adaptation_cycle(20);
+            .with_adaptation_cycle(adaptation_cycle);
 
         let res = Executor::new(merit, solver)
             .configure(|state| {
@@ -617,11 +619,13 @@ impl<'a> OpticOptimizer<'a> {
                     .target_cost(self.target_cost)
             })
             .run()
-            .map_err(|e| OpossumError::Other(format!("Simulated Annealing failed: {e}")))?;
+            .map_err(|e| {
+                OpossumError::Other(format!("Adaptive Simulated Annealing failed: {e}"))
+            })?;
 
         let state = res.state();
         let best_params = state.best_param.clone().ok_or_else(|| {
-            OpossumError::Other("Simulated Annealing produced no solution".to_string())
+            OpossumError::Other("Adaptive Simulated Annealing produced no solution".to_string())
         })?;
 
         let converged = match state.get_termination_reason() {

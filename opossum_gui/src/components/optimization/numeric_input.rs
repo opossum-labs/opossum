@@ -56,19 +56,19 @@ pub fn NumericCommitInput(
     };
 
     rsx! {
-      input {
-        r#type: "text",
-        class: "form-control form-control-sm bg-black text-light border-secondary p-0 px-1 font-monospace text-end",
-        style: "height: 22px; font-size: 11px;",
-        disabled,
-        value: "{text}",
-        oninput: move |e: FormEvent| text.set(e.value()),
-        onblur: move |_| commit(),
-        onkeydown: move |e: KeyboardEvent| {
-            if e.key() == Key::Enter {
-                commit();
-            }
-        },
-      }
+        input {
+            r#type: "text",
+            class: "form-control form-control-sm bg-black text-light border-secondary p-0 px-1 font-monospace text-end",
+            style: "height: 22px; font-size: 11px;",
+            disabled,
+            value: "{text}",
+            oninput: move |e: FormEvent| text.set(e.value()),
+            onblur: move |_| commit(),
+            onkeydown: move |e: KeyboardEvent| {
+                if e.key() == Key::Enter {
+                    commit();
+                }
+            },
+        }
     }
 }
