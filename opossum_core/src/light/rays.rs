@@ -3,9 +3,11 @@
 use crate::distributions::spectral::laser_lines::MIN_WAVELENGTH_DIFF_NM;
 use crate::geometry::Rim;
 use crate::{
-    J_per_cm2, centimeter,
     coatings::SplittingConfig,
-    core_optics::hit_map::fluence_estimator::FluenceEstimator,
+    core_optics::hit_map::{
+        fluence_estimator::FluenceEstimator,
+        rays_hit_map::{EnergyHitPoint, HitPoint, RaysHitMap},
+    },
     degree,
     distributions::{
         energy::EnergyDistribution,
@@ -24,35 +26,25 @@ use crate::{
     prelude::EnergyLaserLines,
     properties::Proptype,
     refractive_index::RefractiveIndexType,
-    utils::{
-        AxLims,
-        filter_data::get_unique_finite_values_sorted,
-        geom_transformation::Isometry,
-        griddata::{
-            VoronoiedData, calc_closed_poly_area, create_voronoi_cells,
-            grid_interpolate_3d_triangulated_scatter_data, linspace,
-        },
-        to_f64,
-    },
+    utils::{filter_data::get_unique_finite_values_sorted, geom_transformation::Isometry, to_f64},
 };
 use approx::relative_eq;
 use image::{GrayImage, ImageReader};
 use itertools::{Itertools, izip};
 use kahan::KahanSummator;
 use log::warn;
-use nalgebra::{
-    DMatrix, DVector, Matrix2xX, MatrixXx2, MatrixXx3, Point2, Point3, Vector3, distance, vector,
-};
+use nalgebra::{DMatrix, MatrixXx2, MatrixXx3, Point2, Point3, Vector3, distance, vector};
 use serde::{Deserialize, Serialize};
+use spade::Triangulation;
 use std::{fmt::Display, ops::Range, path::Path, sync::Arc};
 use uom::si::f64::Ratio;
 use uom::{
     num_traits::Zero,
     si::{
-        area::square_centimeter,
+        area::square_meter,
         energy::joule,
         f64::{Angle, Area, Energy, Length},
-        length::{centimeter, millimeter, nanometer},
+        length::{millimeter, nanometer},
     },
 };
 use uuid::Uuid;
@@ -438,8 +430,10 @@ impl Rays {
     /// This functions generates a bundle of (collimated) rays of the given wavelength .
     /// The fluence is distributed according to the specified distribution function over the indivual rays: [`FluenceDistribution`].
     /// The ray positions are distributed according to the given [`PositionDistribution`].
-    /// The total energy of the ray bundle depends on the size of the beam, as well as the fluence distribution
-    ///  
+    /// Each ray carries its fluence times the area it stands for in the ray tubes of the bundle
+    /// (see [`RayVertex::cell_area`](crate::light::ray_mesh::RayVertex::cell_area)), so the total
+    /// energy depends on the size of the beam as well as on the fluence distribution.
+    ///
     /// # Errors
     /// This function returns an error if the ray creatio of a single ray fails
     pub fn new_collimated_w_fluence_helper(
@@ -457,34 +451,30 @@ impl Rays {
         //apply distribution strategy
         let ray_fluences = fluence_strategy.apply(&ray_pos_plane);
 
-        let ray_pos_plane_cm = Matrix2xX::from_vec(
-            ray_pos_plane
-                .iter()
-                .flat_map(|p| vec![p.x.get::<centimeter>(), p.y.get::<centimeter>()])
-                .collect_vec(),
-        )
-        .transpose();
-
-        let (voronoi, _) = create_voronoi_cells(&ray_pos_plane_cm)?;
-        //create rays
-        let nr_of_rays = ray_pos.len();
-        let mut rays: Vec<Ray> = Vec::<Ray>::with_capacity(nr_of_rays);
-        for (pos, fluence, cell) in
-            izip!(ray_pos.iter(), ray_fluences.iter(), voronoi.cells().iter())
+        // the area each ray stands for, from the tubes of plain rays starting where they start
+        let plain = ray_pos
+            .iter()
+            .map(|pos| Ray::new_collimated(*pos, wave_length, joule!(1.)))
+            .collect::<OpmResult<Vec<_>>>()?;
+        let mut areas = vec![0.0; ray_pos.len()];
+        for corner in RayMesh::new(&Self::from(plain))?
+            .sheets()
+            .iter()
+            .flat_map(|sheet| sheet.vertices())
         {
-            let v_neighbours = cell
-                .points()
-                .iter()
-                .map(|p| Point2::new(p.x, p.y))
-                .collect::<Vec<Point2<f64>>>();
-            let energy = if v_neighbours.len() >= 3 {
-                Area::new::<square_centimeter>(calc_closed_poly_area(&v_neighbours)?) * *fluence
-            } else {
-                joule!(0.)
-            };
-            let ray = Ray::new_collimated_w_fluence_helper(*pos, wave_length, energy, *fluence)?;
-            rays.push(ray);
+            let rays = corner.data().rays();
+            for ray in rays {
+                if let Some(area) = areas.get_mut(*ray as usize) {
+                    *area = corner.data().cell_area() / to_f64(rays.len());
+                }
+            }
         }
+        let rays = izip!(&ray_pos, &ray_fluences, &areas)
+            .map(|(pos, fluence, area)| {
+                let energy = Area::new::<square_meter>(*area) * *fluence;
+                Ray::new_collimated_w_fluence_helper(*pos, wave_length, energy, *fluence)
+            })
+            .collect::<OpmResult<Vec<_>>>()?;
         Ok(Self {
             ray_bundle: rays,
             node_origin: None,
@@ -829,106 +819,26 @@ impl Rays {
         }
         rays_at_pos
     }
-    fn calc_ray_fluence_in_voronoi_cells(
-        &self,
-        iso: &Isometry, // projected_ray_pos: &MatrixXx2<Length>,
-    ) -> OpmResult<(VoronoiedData, AxLims, AxLims)> {
-        let valid_rays = Self::from(
-            self.ray_bundle
-                .iter()
-                .filter(|r| r.valid())
-                .cloned()
-                .collect_vec(),
-        );
-
-        let projected_ray_pos = valid_rays.get_xy_rays_pos(true, iso);
-
-        let ray_pos_cm = MatrixXx2::from_iterator(
-            projected_ray_pos.nrows(),
-            projected_ray_pos
-                .iter()
-                .map(uom::si::f64::Length::get::<centimeter>),
-        );
-        let proj_ax1_lim = AxLims::finite_from_dvector(&ray_pos_cm.column(0)).ok_or_else(|| {
-            OpossumError::Other(
-                "cannot construct voronoi cells with non-finite axes bounds!".into(),
-            )
-        })?;
-        let proj_ax2_lim = AxLims::finite_from_dvector(&ray_pos_cm.column(1)).ok_or_else(|| {
-            OpossumError::Other(
-                "cannot construct voronoi cells with non-finite axes bounds!".into(),
-            )
-        })?;
-
-        let (voronoi, _beam_area) = create_voronoi_cells(&ray_pos_cm).map_err(|_| {
-            OpossumError::Other(
-                "Voronoi diagram for fluence estimation could not be created!".into(),
-            )
-        })?;
-
-        //get the voronoi cells
-        let v_cells = voronoi.cells();
-
-        let mut fluence_scatter = DVector::from_element(voronoi.sites.len(), f64::NAN);
-
-        for (idx, ray) in valid_rays.iter().enumerate() {
-            let v_neighbours = v_cells[idx]
-                .points()
-                .iter()
-                .map(|p| Point2::new(p.x, p.y))
-                .collect::<Vec<Point2<f64>>>();
-            if v_neighbours.len() >= 3 {
-                let poly_area = calc_closed_poly_area(&v_neighbours)?;
-                fluence_scatter[idx] = ray.energy().get::<joule>() / poly_area;
-            } else {
-                warn!(
-                    "polygon could not be created. number of neighbors {}",
-                    v_neighbours.len()
-                );
-            }
-        }
-        Ok((
-            VoronoiedData::combine_data_with_voronoi_diagram(voronoi, fluence_scatter)?,
-            proj_ax1_lim,
-            proj_ax2_lim,
-        ))
-    }
-
-    /// Calculates the spatial energy distribution (fluence) of a ray bundle, its coordinates in a plane
-    /// transversal to its propagation diraction and the peak fluence.
+    /// Calculates the fluence map of this bundle, 100 × 100 points, on the x-y plane of the given
+    /// isometry: its valid rays, projected onto that plane, drawn over their ray tubes as the
+    /// Voronoi estimator draws them (see [`RaysHitMap::calc_fluence_with_tubes`]).
+    ///
     /// # Errors
-    /// This function errors if
-    /// - creation of the linearly spaced axes fails
-    /// - voronating the ray position or the fluence calculation in the voronoi cells fails
-    /// - interpolation fails
+    /// This function errors if the bundle spans no ray tubes (see [`Rays::attach_mesh`]) or if
+    /// none of its tubes holds only valid rays.
     pub fn calc_fluence_at_position(&self, iso: &Isometry) -> OpmResult<FluenceData> {
-        let num_axes_points = 100;
-
-        // calculate the fluence of each ray by linking the ray energy with the area of its voronoi cell
-        let (voronoi_fluence_scatter, co_ax1_lim, co_ax2_lim) =
-            self.calc_ray_fluence_in_voronoi_cells(iso)?;
-
-        //axes definition
-        let co_ax1 = linspace(co_ax1_lim.min, co_ax1_lim.max, num_axes_points)?;
-        let co_ax2 = linspace(co_ax2_lim.min, co_ax2_lim.max, num_axes_points)?;
-
-        //currently only interpolation. voronoid data for plotting must still be implemented
-        let (interp_fluence, _) = grid_interpolate_3d_triangulated_scatter_data(
-            &voronoi_fluence_scatter,
-            &co_ax1,
-            &co_ax2,
-        )?;
-
-        Ok(FluenceData::new(
-            DMatrix::from_iterator(
-                co_ax1.len(),
-                co_ax2.len(),
-                interp_fluence.iter().map(|val| J_per_cm2!(*val)),
-            ),
-            centimeter!(co_ax1_lim.min)..centimeter!(co_ax1_lim.max),
-            centimeter!(co_ax2_lim.min)..centimeter!(co_ax2_lim.max),
-            FluenceEstimator::Voronoi,
-        ))
+        let mut hits = RaysHitMap::default();
+        for ray in self.ray_bundle.iter().filter(|ray| ray.valid()) {
+            let at = ray.inverse_transformed_ray(iso).position();
+            hits.add_hit_point(
+                HitPoint::Energy(EnergyHitPoint::new(
+                    Point3::new(at.x, at.y, meter!(0.)),
+                    ray.energy(),
+                )?),
+                ray.source(),
+            )?;
+        }
+        hits.calc_fluence_with_tubes((100, 100), None, None, FluenceEstimator::Voronoi)
     }
 
     /// Add a single ray to the ray bundle.
@@ -2297,21 +2207,31 @@ mod test {
     }
     #[test]
     fn calc_fluence_at_position_test() -> OpmResult<()> {
-        let rays = Rays::new_uniform_collimated(
+        let mut rays = Rays::new_uniform_collimated(
             nanometer!(1000.0),
             joule!(1.0),
             &FibonacciRectangle::new(centimeter!(1.), centimeter!(1.), 2000)?,
         )?;
-
+        rays.attach_mesh()?;
         let _ = rays.calc_fluence_at_position(&Isometry::identity())?;
 
-        let rays = Rays::new_uniform_collimated(
+        let mut rays = Rays::new_uniform_collimated(
             nanometer!(1000.0),
             joule!(1.0),
             &FibonacciRectangle::new(centimeter!(1.), centimeter!(2.), 10000)?,
         )?;
-
+        rays.attach_mesh()?;
         let _ = rays.calc_fluence_at_position(&Isometry::identity())?;
+        Ok(())
+    }
+    /// Without ray tubes a bundle shows no fluence map.
+    #[test]
+    fn calc_fluence_at_position_needs_ray_tubes() -> OpmResult<()> {
+        let rays = crate::utils::test_helper::helper::hexapolar_bundle(3)?;
+        assert!(
+            rays.calc_fluence_at_position(&Isometry::identity())
+                .is_err()
+        );
         Ok(())
     }
 
@@ -2448,6 +2368,45 @@ mod test {
             1.,
             epsilon = 2. * f64::EPSILON
         );
+        Ok(())
+    }
+    /// A helper beam of an even fluence carries that fluence times the area its rays stand for:
+    /// the beam, reaching half a ring spacing beyond its outermost ring.
+    #[test]
+    fn a_helper_beam_of_even_fluence_carries_its_fluence_times_its_area() -> OpmResult<()> {
+        // a Gaussian 1 m wide is even over a beam of 5 mm, at 1 / (2π) J/m²
+        let even = crate::distributions::fluence::general_gaussian::General2DGaussian::new(
+            joule!(1.),
+            millimeter!(0., 0.),
+            meter!(1., 1.),
+            radian!(0.),
+        )?;
+        let rays = Rays::new_collimated_w_fluence_helper(
+            nanometer!(1000.),
+            &even,
+            &Hexapolar::new(millimeter!(5.), 10)?,
+        )?;
+        let area_in_m2 = 1e-4 / crate::utils::test_helper::helper::flat_top_fluence(5.0, 10);
+        assert_relative_eq!(
+            rays.total_energy().get::<joule>(),
+            area_in_m2 / (2. * std::f64::consts::PI),
+            max_relative = 0.03
+        );
+        Ok(())
+    }
+    /// A flat-top beam shows its fluence on the plane it lies in.
+    #[test]
+    fn calc_fluence_at_position_shows_a_flat_top() -> OpmResult<()> {
+        let mut rays = crate::utils::test_helper::helper::hexapolar_bundle(10)?;
+        rays.attach_mesh()?;
+        let map = rays.calc_fluence_at_position(&Isometry::identity())?;
+        for (x, y) in [(2.0, 1.0), (-3.0, 2.5), (1.0, -4.0)] {
+            assert_relative_eq!(
+                crate::utils::test_helper::helper::fluence_near(&map, x, y)?,
+                crate::utils::test_helper::helper::flat_top_fluence(5.0, 10),
+                max_relative = 0.03
+            );
+        }
         Ok(())
     }
 }

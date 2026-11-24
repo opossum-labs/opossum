@@ -9,11 +9,12 @@ use std::time::Instant;
 use uom::si::{length::millimeter, radiant_exposure::joule_per_square_centimeter};
 
 fn main() -> OpmResult<()> {
-    let rays = Rays::new_uniform_collimated(
+    let mut rays = Rays::new_uniform_collimated(
         nanometer!(1053.),
         joule!(1.),
         &Hexapolar::new(millimeter!(1.), 20)?,
     )?;
+    rays.attach_mesh()?;
 
     let mut plt_params = PlotParameters::default();
     plt_params
