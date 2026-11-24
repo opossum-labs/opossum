@@ -389,15 +389,37 @@ fn previous_edge<'a>(
     }
     None
 }
-/// The part of the triangle `p q r` that lies closer to `p` than to `q` and `r`, signed: negative
-/// beyond an obtuse angle, where the parts of the neighbors make up for it.
+/// The part of the triangle `p q r` that lies closer to `p` than to `q` and `r`.
+///
+/// Without an obtuse angle the bisectors of the sides meet inside the triangle, and the part is
+/// that of the Voronoi cell of `p`. With an obtuse angle they meet beyond its longest side: an
+/// acute corner then gets the right triangle that its side to the obtuse corner spans with the
+/// bisector of that side, and the obtuse corner the rest. So no part is negative, as the Voronoi
+/// formula would make the corners at the long side of an obtuse triangle on the edge of a sheet.
 fn voronoi_part(p: Point2<f64>, q: Point2<f64>, r: Point2<f64>) -> f64 {
     let twice_area = (q - p).perp(&(r - p)).abs();
     if twice_area <= 0.0 {
         return 0.0;
     }
+    // the dot products of the sides at each corner, negative at an obtuse angle
+    let (at_p, at_q, at_r) = (
+        (q - p).dot(&(r - p)),
+        (r - q).dot(&(p - q)),
+        (p - r).dot(&(q - r)),
+    );
+    // the part of an acute corner beside an obtuse one: its side to it squared, times the
+    // tangent of its angle, over 8
+    let beside = |side: f64, at: f64| side * twice_area / at / 8.0;
     let (pq, pr) = ((p - q).norm_squared(), (p - r).norm_squared());
-    pq.mul_add((p - r).dot(&(q - r)), pr * (p - q).dot(&(r - q))) / (8.0 * twice_area)
+    if at_q < 0.0 {
+        beside(pq, at_p)
+    } else if at_r < 0.0 {
+        beside(pr, at_p)
+    } else if at_p < 0.0 {
+        twice_area / 2.0 - beside(pq, at_q) - beside(pr, at_r)
+    } else {
+        pq.mul_add(at_r, pr * at_q) / (8.0 * twice_area)
+    }
 }
 impl PartialEq for RayMesh {
     /// Two meshes are equal if their sheets have the same corners, in the same places and order,
@@ -701,6 +723,45 @@ mod test {
         approx::assert_relative_eq!(voronoi_part(p, q, r), 0.25);
         approx::assert_relative_eq!(voronoi_part(q, r, p), 0.125);
         approx::assert_relative_eq!(voronoi_part(r, p, q), 0.125);
+    }
+    /// Every corner of an irregular pattern stands for some area, also at its edge, where the
+    /// tubes are flat and obtuse.
+    #[test]
+    fn the_corners_of_a_fibonacci_pattern_stand_for_some_area() -> OpmResult<()> {
+        let rays = Rays::new_uniform_collimated(
+            nanometer!(1000.0),
+            joule!(1.0),
+            &crate::distributions::position::FibonacciEllipse::new(
+                millimeter!(8.0),
+                millimeter!(8.0),
+                500,
+            )?,
+        )?;
+        let mesh = RayMesh::new(&rays)?;
+        for corner in only_sheet(&mesh).vertices() {
+            assert!(corner.data().cell_area() > 0.0, "{:?}", corner.data());
+        }
+        Ok(())
+    }
+    /// In a triangle with an obtuse angle, as at the edge of an irregular pattern, the part
+    /// closest to each corner is positive, and the parts make up the triangle: each acute corner
+    /// gets the right triangle its side to the obtuse corner spans with the bisector of that side.
+    #[test]
+    fn the_voronoi_parts_of_an_obtuse_triangle_make_it_up() {
+        // obtuse at r: the side from p to r is √4.25 long and rises by a quarter
+        let (p, q, r) = (
+            Point2::new(0.0, 0.0),
+            Point2::new(4.0, 0.0),
+            Point2::new(2.0, 0.5),
+        );
+        let beside = 4.25 * 0.25 / 8.0;
+        for (corner, part) in [
+            (voronoi_part(p, q, r), beside),
+            (voronoi_part(q, r, p), beside),
+            (voronoi_part(r, p, q), 1.0 - 2.0 * beside),
+        ] {
+            approx::assert_relative_eq!(corner, part, max_relative = 1e-12);
+        }
     }
     /// The corners of a square grid of 1 mm stand for a square of 1 mm² each: inside, on its
     /// edges, where the margin makes up the missing half, and at its corners, where the margins

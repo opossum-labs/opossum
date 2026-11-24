@@ -14,7 +14,10 @@ use std::ops::Range;
 pub use coarsen::SpectrumDrawing;
 use coarsen::coarsened;
 use opossum_core::{
-    analyzers::{RayTraceConfig, raytrace::RayTracingAnalyzer},
+    analyzers::{
+        RayTraceConfig,
+        raytrace::{RayTracingAnalyzer, TracePurpose},
+    },
     error::OpmResult,
     light::Rays,
     nodes::NodeGroup,
@@ -100,8 +103,8 @@ pub fn traced_rays(
         .collect::<OpmResult<_>>()?;
     config.set_source_map(coarse_sources);
     let mut scenery = positioned.clone();
-    // Drawn light shows no fluence map, so its sources span no ray tubes.
-    RayTracingAnalyzer::new(config).trace_positioned(&mut scenery, false)?;
+    // Drawn light shows no fluence map: its sources send it out as they build it.
+    RayTracingAnalyzer::new(config).trace_positioned(&mut scenery, TracePurpose::Drawing)?;
     Ok(scenery.take_ray_ends())
 }
 

@@ -665,6 +665,54 @@ mod test {
         }
         Ok(())
     }
+    /// A flat-top beam is even in its middle too, where the middle ray of the hexapolar pattern
+    /// stands for less area than the rays of its rings and so carries less energy.
+    #[test]
+    fn a_flat_top_beam_is_even_in_its_middle() -> OpmResult<()> {
+        let map = map_of_a_flat_top(vec![(nanometer!(1000.0), 1.0)], false)?;
+        approx::assert_relative_eq!(
+            fluence_near(&map, 0.0, 0.0)?,
+            flat_top_fluence(),
+            max_relative = 0.02
+        );
+        Ok(())
+    }
+    /// A Gaussian beam on a Fibonacci pattern shows its exact peak: each ray carries the beam
+    /// over the area it stands for, which the innermost rays of the pattern stand for less of.
+    #[test]
+    fn a_gaussian_beam_on_a_fibonacci_pattern_shows_its_peak() -> OpmResult<()> {
+        use crate::{
+            degree,
+            distributions::{
+                energy::General2DGaussian, position::FibonacciEllipse, spectral::LaserLines,
+            },
+            joule, millimeter,
+            prelude::{CollimatedSrc, RayDataSource},
+        };
+        use uom::si::radiant_exposure::joule_per_square_centimeter;
+        let source = RayDataSource::Collimated(CollimatedSrc::new(
+            FibonacciEllipse::new(millimeter!(8.0), millimeter!(8.0), 2000)?.into(),
+            General2DGaussian::new(
+                joule!(1.0),
+                millimeter!(0.0, 0.0),
+                millimeter!(2.0, 2.0),
+                1.0,
+                degree!(0.0),
+                false,
+            )?
+            .into(),
+            LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+        ));
+        let map = detector_map(source.into(), FluenceEstimator::Voronoi, false)?;
+        // 1 J over 2 π σ², with σ = 0.2 cm
+        let peak = 1.0 / (2.0 * std::f64::consts::PI * 0.04);
+        approx::assert_relative_eq!(
+            map.peak().get::<joule_per_square_centimeter>(),
+            peak,
+            max_relative = 0.02
+        );
+        Ok(())
+    }
     /// The light a bored mirror reflects is a ring: the map stays dark in its hole and shows the
     /// full fluence right next to the edge of the bore.
     #[test]

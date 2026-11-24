@@ -61,6 +61,22 @@ pub struct RayTraceConfig {
     /// map. Set by the analysis for its run; not saved to file.
     #[serde(skip)]
     ray_tubes: bool,
+    /// Whether the sources spread the energy they sample over the area each ray stands for, as
+    /// they do in an analysis. Set for the run (see [`TracePurpose`]); not saved to file.
+    #[serde(skip)]
+    energy_over_cells: bool,
+}
+/// What the light of a ray trace is traced for, which decides how much its sources prepare it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TracePurpose {
+    /// An analysis: the sources spread the energy they sample over the area each ray stands for,
+    /// and span ray tubes if a fluence map follows them.
+    Analysis {
+        /// Whether the sources span ray tubes (see [`RayMesh`](crate::light::RayMesh)).
+        ray_tubes: bool,
+    },
+    /// Drawing the light, as the 3D view does: the sources send it out as they build it.
+    Drawing,
 }
 impl Default for RayTraceConfig {
     /// Create a default config for a ray tracing analysis with the following parameters:
@@ -81,6 +97,7 @@ impl Default for RayTraceConfig {
             positioning_run: false,
             collect_ray_ends: false,
             ray_tubes: false,
+            energy_over_cells: false,
         }
     }
 }
@@ -241,6 +258,7 @@ impl RayTraceConfig {
             positioning_run: true,
             collect_ray_ends: false,
             ray_tubes: false,
+            energy_over_cells: false,
         }
     }
 }
@@ -261,6 +279,11 @@ impl PropagationStrategy for RayTraceConfig {
     /// Set for the run by [`RayTracingAnalyzer::trace_positioned`]; positioning never spans them.
     fn needs_ray_tubes(&self) -> bool {
         self.ray_tubes
+    }
+    /// Set for the run by [`RayTracingAnalyzer::trace_positioned`]: in an analysis, not when the
+    /// light is drawn or the nodes are positioned.
+    fn spreads_energy_over_cells(&self) -> bool {
+        self.energy_over_cells
     }
     fn on_surface_interaction(
         &self,
@@ -298,17 +321,28 @@ impl RayTracingAnalyzer {
     /// # Arguments
     ///
     /// - `scenery`: the positioned scenery to trace, which keeps the light it receives
-    /// - `ray_tubes`: whether the sources span ray tubes (see [`RayMesh`](crate::light::RayMesh)):
-    ///   [`OpticNode::needs_ray_tubes`] of the scenery for an analysis, `false` where no fluence
-    ///   map is read, as when the light is drawn
+    /// - `purpose`: what the light is traced for: an analysis, whose sources span ray tubes if
+    ///   [`OpticNode::needs_ray_tubes`] of the scenery says so, or drawing the light
     ///
     /// # Errors
     ///
     /// This function returns an error if a node cannot prepare its medium or the trace fails.
-    pub fn trace_positioned(&self, scenery: &mut NodeGroup, ray_tubes: bool) -> OpmResult<()> {
-        let config = RayTraceConfig {
-            ray_tubes,
-            ..self.config.clone()
+    pub fn trace_positioned(
+        &self,
+        scenery: &mut NodeGroup,
+        purpose: TracePurpose,
+    ) -> OpmResult<()> {
+        let config = match purpose {
+            TracePurpose::Analysis { ray_tubes } => RayTraceConfig {
+                ray_tubes,
+                energy_over_cells: true,
+                ..self.config.clone()
+            },
+            TracePurpose::Drawing => RayTraceConfig {
+                ray_tubes: false,
+                energy_over_cells: false,
+                ..self.config.clone()
+            },
         };
         scenery.reset_data();
         scenery.prepare_volume(&config)?;
@@ -337,7 +371,7 @@ impl Analyzer for RayTracingAnalyzer {
         )?;
         info!("Performing ray tracing analysis of scenery{scenery_name}.");
         let ray_tubes = scenery.needs_ray_tubes();
-        self.trace_positioned(scenery, ray_tubes)
+        self.trace_positioned(scenery, TracePurpose::Analysis { ray_tubes })
     }
     fn report(&self, scenery: &NodeGroup) -> OpmResult<AnalysisReport> {
         let mut report = scenery.toplevel_report(super::AnalyzerKind::RayTrace)?;
@@ -474,7 +508,7 @@ mod test {
                 .ok_or_else(|| OpossumError::Other("no light left the dummy".into()))
         };
 
-        analyzer.trace_positioned(&mut scenery, false)?;
+        analyzer.trace_positioned(&mut scenery, TracePurpose::Drawing)?;
         assert_relative_eq!(end_of(&mut scenery)?, 0.05, epsilon = 1e-9);
 
         analyzer.analyze(&mut scenery)?;
@@ -601,7 +635,7 @@ mod test {
     fn config_debug() {
         assert_eq!(
             format!("{:?}", RayTraceConfig::default()),
-            "RayTraceConfig { min_energy_per_ray: 1e-12 m^2 kg^1 s^-2, max_number_of_bounces: 1000, max_number_of_refractions: 1000, missed_surface_strategy: Stop, source_map: {}, ambient_material: Material { header: AssetHeader { schema_version: 1, id: 00000000-0000-0000-0000-000000000000, version: 0, name: \"vacuum\", manufacturer: None, description: None }, optical: OpticalProperties { refractive_index: Const(RefrIndexConst { refractive_index: Validated { value: 1.0, validator: AndValidator { v1: AllFinite, v2: StaticInRange { _marker: PhantomData<(f64, opossum_core::refractive_index::refr_index_const::RefIndBounds)> }, _marker: PhantomData<f64> } } }), absorption: None }, thermal: None, mechanical: None }, active_pump_scenario: ActiveScenario(None), positioning_run: false, collect_ray_ends: false, ray_tubes: false }"
+            "RayTraceConfig { min_energy_per_ray: 1e-12 m^2 kg^1 s^-2, max_number_of_bounces: 1000, max_number_of_refractions: 1000, missed_surface_strategy: Stop, source_map: {}, ambient_material: Material { header: AssetHeader { schema_version: 1, id: 00000000-0000-0000-0000-000000000000, version: 0, name: \"vacuum\", manufacturer: None, description: None }, optical: OpticalProperties { refractive_index: Const(RefrIndexConst { refractive_index: Validated { value: 1.0, validator: AndValidator { v1: AllFinite, v2: StaticInRange { _marker: PhantomData<(f64, opossum_core::refractive_index::refr_index_const::RefIndBounds)> }, _marker: PhantomData<f64> } } }), absorption: None }, thermal: None, mechanical: None }, active_pump_scenario: ActiveScenario(None), positioning_run: false, collect_ray_ends: false, ray_tubes: false, energy_over_cells: false }"
         );
     }
     #[test]

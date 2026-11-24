@@ -864,9 +864,60 @@ impl Rays {
     ///
     /// This function returns an error if the bundle cannot be triangulated (see [`RayMesh::new`]).
     pub fn attach_mesh(&mut self) -> OpmResult<()> {
-        let mesh = Arc::new(RayMesh::new(self)?);
+        self.attach(Arc::new(RayMesh::new(self)?));
+        Ok(())
+    }
+    /// Gives every ray of this bundle its place in the given ray tubes, which the bundle spans
+    /// (see [`RayMesh::new`]).
+    pub fn attach(&mut self, mesh: Arc<RayMesh>) {
         for (index, ray) in (0..).zip(self.ray_bundle.iter_mut()) {
             ray.set_source(RaySource::new(Arc::clone(&mesh), index));
+        }
+    }
+    /// Spreads the energy of each sheet of this bundle over its rays by the area each stands for
+    /// (see [`RayVertex::cell_area`](crate::light::ray_mesh::RayVertex::cell_area)).
+    ///
+    /// A source that samples a distribution of its energy gives each ray the value of the
+    /// distribution where it lies, as if every ray stood for the same area. The rays of a
+    /// hexapolar or a Fibonacci pattern do not: the ray in the middle of a hexapolar pattern stands
+    /// for less area than those of its rings. Spread, each ray carries its value times its area,
+    /// and each sheet keeps its energy, so the laser lines of a spectrum and the pixels of an image
+    /// keep their shares. The rays of a sheet without tubes keep their energies.
+    ///
+    /// # Arguments
+    ///
+    /// * `mesh` - the ray tubes this bundle spans (see [`RayMesh::new`]).
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the energy of a ray cannot be scaled.
+    pub fn spread_energy_over_cells(&mut self, mesh: &RayMesh) -> OpmResult<()> {
+        for sheet in mesh.sheets() {
+            // each ray of the sheet with the share of its corner's area it stands for
+            let mut shares = Vec::new();
+            for corner in sheet.vertices() {
+                let rays = corner.data().rays();
+                let share = corner.data().cell_area() / to_f64(rays.len());
+                shares.extend(rays.iter().map(|ray| (*ray as usize, share)));
+            }
+            let (energy, weighted) =
+                shares
+                    .iter()
+                    .fold((0.0, 0.0), |(energy, weighted), (ray, share)| {
+                        let e = self
+                            .ray_bundle
+                            .get(*ray)
+                            .map_or(0.0, |ray| ray.energy().value);
+                        (energy + e, e.mul_add(*share, weighted))
+                    });
+            if weighted <= 0.0 {
+                continue;
+            }
+            for (ray, share) in shares {
+                if let Some(ray) = self.ray_bundle.get_mut(ray) {
+                    ray.scale_energy(share * energy / weighted)?;
+                }
+            }
         }
         Ok(())
     }

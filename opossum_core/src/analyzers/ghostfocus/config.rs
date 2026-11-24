@@ -130,6 +130,10 @@ impl PropagationStrategy for GhostFocusConfig {
     fn needs_ray_tubes(&self) -> bool {
         self.ray_tubes
     }
+    /// A ghost focus run is always an analysis.
+    fn spreads_energy_over_cells(&self) -> bool {
+        true
+    }
     fn on_surface_interaction(
         &self,
         surf: &mut OpticSurface,

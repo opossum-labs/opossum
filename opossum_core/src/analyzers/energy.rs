@@ -126,6 +126,10 @@ impl PropagationStrategy for EnergyConfig {
     fn needs_ray_tubes(&self) -> bool {
         false
     }
+    /// An energy analysis sends out no rays.
+    fn spreads_energy_over_cells(&self) -> bool {
+        false
+    }
 }
 /// Analyzer for simulating a simple energy flow
 #[derive(Debug, Default)]
