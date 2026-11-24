@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 use uuid::Uuid;
 
-use crate::{
+pub use crate::{
     asset::AssetHeader,
     error::OpmResult,
     refractive_index::{
