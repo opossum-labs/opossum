@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="440" viewBox="0 0 760 440"
+     font-family="Helvetica, Arial, sans-serif">
+  <title>The margin at an edge of the light</title>
+  <desc>Top, seen from above: columns of rays, one tube height apart. The light came from the left.
+        The rays of the four left columns arrived; the tubes between them are alive. The rays of
+        the right column were cut away, so the tubes between the last two columns are torn: the
+        light ends somewhere inside them, but the rays cannot tell where. The map carries the
+        values of the edge half a tube height on, as a hatched margin: that is where the light
+        ends on average. Bottom, a cut across the edge with the same horizontal axis: the map is
+        flat up to the end of the margin and then drops to zero; the light itself ends somewhere
+        inside the torn tube, for example at the red dashed step. The place of the edge is
+        therefore known only to half a tube height.</desc>
+
+  <defs>
+    <pattern id="margin" width="6" height="6" patternUnits="userSpaceOnUse"
+             patternTransform="rotate(45)">
+      <rect width="6" height="6" fill="#fefcbf"/>
+      <line x1="0" y1="0" x2="0" y2="6" stroke="#d69e2e" stroke-width="2"/>
+    </pattern>
+    <clipPath id="band"><rect x="60" y="40" width="250" height="160"/></clipPath>
+    <marker id="tick" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="8" markerHeight="8"
+            orient="auto">
+      <path d="M 5 0 L 5 10" stroke="#4a5568" stroke-width="1.5"/>
+    </marker>
+  </defs>
+
+  <!-- A background of its own keeps the figure readable on the dark book themes. -->
+  <rect x="0" y="0" width="760" height="440" rx="8" fill="#ffffff"/>
+
+  <text x="185" y="26" font-size="14" font-weight="bold" text-anchor="middle"
+        fill="#1a202c">seen from above</text>
+
+  <!-- the torn tube, where the light ends somewhere -->
+  <rect x="236" y="40" width="52" height="160" fill="#fffaf0"/>
+  <!-- the alive tubes, and the margin beyond their edge -->
+  <rect x="80" y="40" width="156" height="160" fill="#bee3f8"/>
+  <rect x="236" y="40" width="26" height="160" fill="url(#margin)"/>
+
+  <g clip-path="url(#band)" fill="none" stroke-width="1">
+    <g stroke="#2b6cb0">
+      <line x1="80" y1="0" x2="80" y2="240"/>
+      <line x1="132" y1="0" x2="132" y2="240"/>
+      <line x1="184" y1="0" x2="184" y2="240"/>
+      <line x1="236" y1="0" x2="236" y2="240"/>
+      <polyline points="80,0 132,30 80,60 132,90 80,120 132,150 80,180 132,210 80,240"/>
+      <polyline points="184,0 132,30 184,60 132,90 184,120 132,150 184,180 132,210 184,240"/>
+      <polyline points="184,0 236,30 184,60 236,90 184,120 236,150 184,180 236,210 184,240"/>
+    </g>
+    <g stroke="#a0aec0" stroke-dasharray="3 3">
+      <line x1="288" y1="0" x2="288" y2="240"/>
+      <polyline points="288,0 236,30 288,60 236,90 288,120 236,150 288,180 236,210 288,240"/>
+    </g>
+  </g>
+  <!-- the rays: arrived, and cut away -->
+  <g fill="#2b6cb0">
+    <circle cx="80" cy="60" r="4"/><circle cx="80" cy="120" r="4"/><circle cx="80" cy="180" r="4"/>
+    <circle cx="132" cy="90" r="4"/><circle cx="132" cy="150" r="4"/>
+    <circle cx="184" cy="60" r="4"/><circle cx="184" cy="120" r="4"/><circle cx="184" cy="180" r="4"/>
+    <circle cx="236" cy="90" r="4"/><circle cx="236" cy="150" r="4"/>
+  </g>
+  <g fill="#ffffff" stroke="#a0aec0" stroke-width="1.2">
+    <circle cx="288" cy="60" r="4"/><circle cx="288" cy="120" r="4"/><circle cx="288" cy="180" r="4"/>
+  </g>
+  <!-- where the light really ends: somewhere in the torn tube -->
+  <line x1="272" y1="40" x2="272" y2="200" stroke="#e53e3e" stroke-width="1.5"
+        stroke-dasharray="6 3"/>
+
+  <!-- ── the cut across the edge, on the same horizontal axis ────────────── -->
+  <text x="185" y="252" font-size="14" font-weight="bold" text-anchor="middle"
+        fill="#1a202c">across the edge</text>
+  <rect x="236" y="264" width="52" height="112" fill="#fffaf0"/>
+  <line x1="60" y1="376" x2="320" y2="376" stroke="#4a5568" stroke-width="1"/>
+  <line x1="60" y1="270" x2="60" y2="376" stroke="#4a5568" stroke-width="1"/>
+  <text x="54" y="300" font-size="11" text-anchor="end" fill="#4a5568">F</text>
+  <text x="54" y="380" font-size="11" text-anchor="end" fill="#4a5568">0</text>
+  <!-- the map: flat up to the end of the margin -->
+  <rect x="236" y="296" width="26" height="80" fill="url(#margin)"/>
+  <polyline points="60,296 262,296 262,376 320,376" fill="none" stroke="#2b6cb0"
+            stroke-width="3" stroke-linejoin="round"/>
+  <!-- the light: it ends somewhere in the torn tube -->
+  <polyline points="60,300 272,300 272,376" fill="none" stroke="#e53e3e" stroke-width="1.5"
+            stroke-dasharray="6 3"/>
+  <!-- one tube height, and half of it -->
+  <path d="M 236 404 L 288 404" stroke="#4a5568" stroke-width="1" marker-start="url(#tick)"
+        marker-end="url(#tick)"/>
+  <text x="262" y="420" font-size="11" text-anchor="middle" fill="#4a5568">one tube</text>
+  <path d="M 236 390 L 262 390" stroke="#d69e2e" stroke-width="1" marker-start="url(#tick)"
+        marker-end="url(#tick)"/>
+  <text x="230" y="394" font-size="11" text-anchor="end" fill="#b7791f">half a tube</text>
+
+  <!-- ── what it means ───────────────────────────────────────────────────── -->
+  <g font-size="12" fill="#2d3748">
+    <rect x="350" y="52" width="22" height="14" fill="#bee3f8" stroke="#2b6cb0"/>
+    <text x="382" y="63">alive tubes: all their rays arrived</text>
+
+    <line x1="350" y1="92" x2="372" y2="92" stroke="#a0aec0" stroke-width="1.5"
+          stroke-dasharray="3 3"/>
+    <text x="382" y="89">torn tube: its outer ray was cut away.</text>
+    <text x="382" y="104">The light ends somewhere inside it,</text>
+    <text x="382" y="119">but the rays cannot tell where.</text>
+
+    <rect x="350" y="138" width="22" height="14" fill="url(#margin)" stroke="#d69e2e"/>
+    <text x="382" y="149">margin: the map carries the values of the</text>
+    <text x="382" y="164">edge half a tube height on, where the</text>
+    <text x="382" y="179">light ends on average</text>
+
+    <line x1="350" y1="300" x2="372" y2="300" stroke="#2b6cb0" stroke-width="3"/>
+    <text x="382" y="304">the map</text>
+    <line x1="350" y1="324" x2="372" y2="324" stroke="#e53e3e" stroke-width="1.5"
+          stroke-dasharray="6 3"/>
+    <text x="382" y="328">the light: it may end anywhere in the</text>
+    <text x="382" y="343">torn tube, here a little beyond the margin</text>
+
+    <text x="350" y="384">So the place of an edge is known only to half a</text>
+    <text x="350" y="399">tube. The report tells the share of the energy</text>
+    <text x="350" y="414">in such margins: <tspan font-family="monospace">Energy in edge margins</tspan>.</text>
+  </g>
+</svg>

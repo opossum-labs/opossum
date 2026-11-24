@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="340" viewBox="0 0 680 340"
+     font-family="Helvetica, Arial, sans-serif">
+  <title>Two sheets of ray tubes and the map that adds them</title>
+  <desc>Left: two sheets of rays, one blue and one orange, for example of two wavelengths or the
+        cones of two pixels of an image source. Each sheet spans its own tubes; no tube joins a
+        blue ray to an orange one, even where the sheets overlap. Right: the map draws both sheets
+        and adds them, so where both lie it shows their summed fluence, darker in the figure.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#4a5568"/>
+    </marker>
+    <!-- one family of lattice lines, 24 apart, inside a hexagon of two rings -->
+    <g id="rows">
+      <line x1="-24" y1="-41.57" x2="24" y2="-41.57"/>
+      <line x1="-36" y1="-20.78" x2="36" y2="-20.78"/>
+      <line x1="-48" y1="0" x2="48" y2="0"/>
+      <line x1="-36" y1="20.78" x2="36" y2="20.78"/>
+      <line x1="-24" y1="41.57" x2="24" y2="41.57"/>
+    </g>
+    <g id="lattice">
+      <use href="#rows"/>
+      <use href="#rows" transform="rotate(60)"/>
+      <use href="#rows" transform="rotate(120)"/>
+    </g>
+    <polygon id="hex" points="48,0 24,-41.57 -24,-41.57 -48,0 -24,41.57 24,41.57"/>
+    <g id="rays">
+      <circle cx="0" cy="0" r="3"/>
+      <circle cx="24" cy="0" r="3"/><circle cx="12" cy="-20.78" r="3"/>
+      <circle cx="-12" cy="-20.78" r="3"/><circle cx="-24" cy="0" r="3"/>
+      <circle cx="-12" cy="20.78" r="3"/><circle cx="12" cy="20.78" r="3"/>
+      <circle cx="48" cy="0" r="3"/><circle cx="36" cy="-20.78" r="3"/>
+      <circle cx="24" cy="-41.57" r="3"/><circle cx="0" cy="-41.57" r="3"/>
+      <circle cx="-24" cy="-41.57" r="3"/><circle cx="-36" cy="-20.78" r="3"/>
+      <circle cx="-48" cy="0" r="3"/><circle cx="-36" cy="20.78" r="3"/>
+      <circle cx="-24" cy="41.57" r="3"/><circle cx="0" cy="41.57" r="3"/>
+      <circle cx="24" cy="41.57" r="3"/><circle cx="36" cy="20.78" r="3"/>
+    </g>
+  </defs>
+
+  <!-- A background of its own keeps the figure readable on the dark book themes. -->
+  <rect x="0" y="0" width="680" height="340" rx="8" fill="#ffffff"/>
+
+  <!-- ── left: two sheets, each with its own tubes ───────────────────────── -->
+  <text x="175" y="36" font-size="14" font-weight="bold" text-anchor="middle"
+        fill="#1a202c">two sheets, each with its own tubes</text>
+  <text x="175" y="54" font-size="11" text-anchor="middle" fill="#4a5568">e.g. two wavelengths,
+    or the cones of two pixels</text>
+  <g transform="translate(150,170)">
+    <use href="#hex" fill="#bee3f8" fill-opacity="0.6"/>
+    <use href="#lattice" stroke="#2b6cb0" stroke-width="1"/>
+    <use href="#rays" fill="#2b6cb0"/>
+  </g>
+  <g transform="translate(200,196)">
+    <use href="#hex" fill="#feebc8" fill-opacity="0.6"/>
+    <use href="#lattice" stroke="#dd6b20" stroke-width="1"/>
+    <use href="#rays" fill="#dd6b20"/>
+  </g>
+  <text x="175" y="282" font-size="12" text-anchor="middle" fill="#2d3748">no tube joins a blue
+    ray</text>
+  <text x="175" y="298" font-size="12" text-anchor="middle" fill="#2d3748">to an orange one</text>
+
+  <path d="M 300 180 L 360 180" fill="none" stroke="#4a5568" stroke-width="1.5"
+        marker-end="url(#arrow)"/>
+
+  <!-- ── right: the map adds them ────────────────────────────────────────── -->
+  <text x="500" y="36" font-size="14" font-weight="bold" text-anchor="middle"
+        fill="#1a202c">the map adds them</text>
+  <g transform="translate(475,170)">
+    <use href="#hex" fill="#3182ce" fill-opacity="0.35"/>
+  </g>
+  <g transform="translate(525,196)">
+    <use href="#hex" fill="#3182ce" fill-opacity="0.35"/>
+  </g>
+  <text x="500" y="282" font-size="12" text-anchor="middle" fill="#2d3748">where both lie, the
+    map shows</text>
+  <text x="500" y="298" font-size="12" text-anchor="middle" fill="#2d3748">their summed
+    fluence</text>
+</svg>
