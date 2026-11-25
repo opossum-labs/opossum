@@ -215,13 +215,6 @@ impl FreeVariable {
         self.delta_abs_min = delta_abs_min;
         self
     }
-
-    /// Computes the adaptive finite-difference step size $h = \max(\delta_{\text{abs,min}}, \delta_{\text{rel}} \cdot |x|)$.
-    #[must_use]
-    pub fn finite_difference_step(&self, current_val: f64) -> f64 {
-        let rel_step = self.delta_rel * current_val.abs();
-        self.delta_abs_min.max(rel_step)
-    }
 }
 
 #[cfg(test)]
@@ -241,19 +234,5 @@ mod tests {
         assert!((bounds.penalty(1.0) - 1.0).abs() < 1e-12);
         assert!((bounds.penalty(10.0) - 4.0).abs() < 1e-12);
         Ok(())
-    }
-    #[test]
-    fn adaptive_step_calculation() {
-        let addr = ParameterAddress::NodeProperty {
-            node_id: Uuid::new_v4(),
-            property_name: "radius".into(),
-        };
-        let var = FreeVariable::new(addr);
-        // Near zero: delta_abs_min dominates
-        let step_at_zero = var.finite_difference_step(0.0);
-        assert_eq!(step_at_zero, DEFAULT_DELTA_ABS_MIN);
-        // Large values: delta_rel dominates
-        let step_large = var.finite_difference_step(100.0);
-        assert!((step_large - 100.0 * DEFAULT_DELTA_REL).abs() < 1e-12);
     }
 }
