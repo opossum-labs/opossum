@@ -4862,52 +4862,6 @@
           "additionalProperties": false
         },
         {
-          "description": "Limited-memory Broyden-Fletcher-Goldfarb-Shanno (quasi-Newton method).",
-          "type": "object",
-          "properties": {
-            "LBFGS": {
-              "type": "object",
-              "properties": {
-                "max_iterations": {
-                  "description": "Maximum number of quasi-Newton iterations.",
-                  "type": "integer",
-                  "format": "uint64",
-                  "minimum": 0
-                },
-                "gradient_tolerance": {
-                  "description": "Convergence threshold on the norm of the approximated gradient.",
-                  "type": "number",
-                  "format": "double"
-                },
-                "history_size": {
-                  "description": "Number of past correction pairs stored to approximate the inverse Hessian.",
-                  "type": "integer",
-                  "format": "uint",
-                  "minimum": 0
-                },
-                "gradient_method": {
-                  "description": "Finite-difference scheme used to compute numerical gradients.",
-                  "allOf": [
-                    {
-                      "$ref": "#/definitions/FiniteDifferenceMethod"
-                    }
-                  ]
-                }
-              },
-              "required": [
-                "max_iterations",
-                "gradient_tolerance",
-                "history_size",
-                "gradient_method"
-              ]
-            }
-          },
-          "required": [
-            "LBFGS"
-          ],
-          "additionalProperties": false
-        },
-        {
           "description": "Adaptive Simulated Annealing global stochastic optimization (Corana 1/5th success rule).",
           "type": "object",
           "properties": {
@@ -4949,21 +4903,6 @@
             "AdaptiveSimulatedAnnealing"
           ],
           "additionalProperties": false
-        }
-      ]
-    },
-    "FiniteDifferenceMethod": {
-      "description": "Method used to approximate numerical gradients via finite differences.",
-      "oneOf": [
-        {
-          "description": "Central difference scheme: $\\frac{f(x + h) - f(x - h)}{2h}$ ($O(h^2)$ accuracy, 2 evaluations per variable).",
-          "type": "string",
-          "const": "Central"
-        },
-        {
-          "description": "Forward difference scheme: $\\frac{f(x + h) - f(x)}{h}$ ($O(h)$ accuracy, 1 additional evaluation per variable).",
-          "type": "string",
-          "const": "Forward"
         }
       ]
     }

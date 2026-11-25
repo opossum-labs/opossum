@@ -1,5 +1,5 @@
 use argmin::{
-    core::{CostFunction, Error, Gradient},
+    core::{CostFunction, Error},
     solver::simulatedannealing::Anneal,
 };
 use nalgebra::{DMatrix, DVector};
@@ -15,7 +15,7 @@ use opossum_core::{
     error::OpmResult,
     opm_document::{
         OpmDocument,
-        optimization::{FiniteDifferenceMethod, FreeVariable, ParameterAddress, ParameterCoupling},
+        optimization::{FreeVariable, ParameterAddress, ParameterCoupling},
     },
 };
 use rayon::prelude::*;
@@ -38,7 +38,6 @@ pub struct MeritFunction {
     operands: Vec<Arc<dyn Operand>>,
     fatal_penalty: f64,
     bounds_penalty_weight: f64,
-    gradient_method: FiniteDifferenceMethod,
 }
 
 impl MeritFunction {
@@ -66,15 +65,7 @@ impl MeritFunction {
             operands,
             fatal_penalty: DEFAULT_FATAL_PENALTY,
             bounds_penalty_weight: DEFAULT_BOUNDS_PENALTY_WEIGHT,
-            gradient_method: FiniteDifferenceMethod::default(),
         })
-    }
-
-    /// Configures the finite difference approximation method for gradients.
-    #[must_use]
-    pub const fn with_gradient_method(mut self, method: FiniteDifferenceMethod) -> Self {
-        self.gradient_method = method;
-        self
     }
 
     /// Sets a custom penalty value for fatal simulation crashes
@@ -153,55 +144,6 @@ impl MeritFunction {
             }
         }
         total_cost
-    }
-    /// Computes the numerical gradient vector using adaptive finite differences.
-    ///
-    /// Evaluates parameter perturbations in parallel across available CPU cores via Rayon.
-    #[must_use]
-    pub fn compute_gradient(&self, x: &[f64]) -> Vec<f64> {
-        let n = self.free_variables.len();
-
-        match self.gradient_method {
-            FiniteDifferenceMethod::Central => (0..n)
-                .into_par_iter()
-                .map(|i| {
-                    let h = self.free_variables[i].finite_difference_step(x[i]);
-                    let mut x_plus = x.to_vec();
-                    x_plus[i] += h;
-                    let mut x_minus = x.to_vec();
-                    x_minus[i] -= h;
-                    // Physical connection distances cannot be negative; clamp backward step to 0.0
-                    // so finite differences do not hit the fatal_penalty wall near zero distance.
-                    if matches!(
-                        self.free_variables[i].address,
-                        ParameterAddress::ConnectionDistance { .. }
-                    ) && x[i] >= 0.0
-                        && x_minus[i] < 0.0
-                    {
-                        x_minus[i] = 0.0;
-                    }
-                    let actual_span = x_plus[i] - x_minus[i];
-                    let f_plus = self.evaluate(&x_plus);
-                    let f_minus = self.evaluate(&x_minus);
-                    (f_plus - f_minus) / actual_span
-                })
-                .collect(),
-            FiniteDifferenceMethod::Forward => {
-                let f_base = self.evaluate(x);
-                (0..n)
-                    .into_par_iter()
-                    .map(|i| {
-                        let h = self.free_variables[i].finite_difference_step(x[i]);
-
-                        let mut x_plus = x.to_vec();
-                        x_plus[i] += h;
-
-                        let f_plus = self.evaluate(&x_plus);
-                        (f_plus - f_base) / h
-                    })
-                    .collect()
-            }
-        }
     }
     /// Evaluates the signed residual vector R(x) for all operands and box bounds.
     ///
@@ -317,15 +259,6 @@ impl CostFunction for MeritFunction {
 
     fn cost(&self, param: &Self::Param) -> Result<Self::Output, Error> {
         Ok(self.evaluate(param))
-    }
-}
-
-impl Gradient for MeritFunction {
-    type Param = Vec<f64>;
-    type Gradient = Vec<f64>;
-
-    fn gradient(&self, param: &Self::Param) -> Result<Self::Gradient, Error> {
-        Ok(self.compute_gradient(param))
     }
 }
 

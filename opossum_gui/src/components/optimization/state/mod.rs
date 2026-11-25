@@ -45,7 +45,7 @@ impl Default for OptimizationModel {
             schema: None,
             variable_rows: Vec::new(),
             operands: Vec::new(),
-            algorithm: OptimizationAlgorithm::lbfgs(),
+            algorithm: OptimizationAlgorithm::dls(),
             scope_group_id: None,
             validation_issues: Vec::new(),
         }
@@ -517,7 +517,6 @@ impl OptimizationModel {
     pub const fn algorithm_kind(&self) -> &'static str {
         match self.algorithm {
             OptimizationAlgorithm::Dls { .. } => "DLS",
-            OptimizationAlgorithm::LBFGS { .. } => "LBFGS",
             OptimizationAlgorithm::NelderMead { .. } => "NelderMead",
             OptimizationAlgorithm::AdaptiveSimulatedAnnealing { .. } => {
                 "AdaptiveSimulatedAnnealing"
@@ -531,7 +530,6 @@ impl OptimizationModel {
         match self.algorithm {
             OptimizationAlgorithm::Dls { max_iterations, .. }
             | OptimizationAlgorithm::NelderMead { max_iterations, .. }
-            | OptimizationAlgorithm::LBFGS { max_iterations, .. }
             | OptimizationAlgorithm::AdaptiveSimulatedAnnealing { max_iterations, .. } => {
                 max_iterations
             }
@@ -542,12 +540,11 @@ impl OptimizationModel {
     pub fn set_algorithm_kind(&mut self, kind: &str) {
         let iters = self.max_iterations();
         self.algorithm = match kind {
-            "DLS" => OptimizationAlgorithm::dls().with_max_iterations(iters),
             "NelderMead" => OptimizationAlgorithm::nelder_mead().with_max_iterations(iters),
             "AdaptiveSimulatedAnnealing" => {
                 OptimizationAlgorithm::adaptive_simulated_annealing().with_max_iterations(iters)
             }
-            _ => OptimizationAlgorithm::lbfgs().with_max_iterations(iters),
+            _ => OptimizationAlgorithm::dls().with_max_iterations(iters),
         };
     }
 

@@ -98,7 +98,7 @@ fn test_optimization_config_serde_roundtrip() -> OpmResult<()> {
             91,
             50.0,
         ))
-        .with_algorithm(OptimizationAlgorithm::lbfgs());
+        .with_algorithm(OptimizationAlgorithm::dls());
 
     let json = ron::to_string(&config).map_err(|e| OpossumError::Other(e.to_string()))?;
     let deserialized: OptimizationConfig =

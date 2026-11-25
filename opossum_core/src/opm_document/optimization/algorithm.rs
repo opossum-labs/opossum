@@ -1,4 +1,4 @@
-use super::variable::{FiniteDifferenceMethod, FreeVariable};
+use super::variable::FreeVariable;
 use crate::error::{OpmResult, OpossumError};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -22,17 +22,6 @@ pub enum OptimizationAlgorithm {
         max_iterations: u64,
         /// Convergence threshold on the standard deviation of function values across simplex vertices.
         sd_tolerance: f64,
-    },
-    /// Limited-memory Broyden-Fletcher-Goldfarb-Shanno (quasi-Newton method).
-    LBFGS {
-        /// Maximum number of quasi-Newton iterations.
-        max_iterations: u64,
-        /// Convergence threshold on the norm of the approximated gradient.
-        gradient_tolerance: f64,
-        /// Number of past correction pairs stored to approximate the inverse Hessian.
-        history_size: usize,
-        /// Finite-difference scheme used to compute numerical gradients.
-        gradient_method: FiniteDifferenceMethod,
     },
     /// Adaptive Simulated Annealing global stochastic optimization (Corana 1/5th success rule).
     AdaptiveSimulatedAnnealing {
@@ -72,17 +61,6 @@ impl OptimizationAlgorithm {
         Self::NelderMead {
             max_iterations: 100,
             sd_tolerance: 1e-6,
-        }
-    }
-
-    /// Creates a default L-BFGS configuration (60 iterations) using central finite differences.
-    #[must_use]
-    pub const fn lbfgs() -> Self {
-        Self::LBFGS {
-            max_iterations: 60,
-            gradient_tolerance: 1e-5,
-            history_size: 10,
-            gradient_method: FiniteDifferenceMethod::Central,
         }
     }
 
@@ -139,7 +117,6 @@ impl OptimizationAlgorithm {
         match &mut self {
             Self::Dls { max_iterations, .. }
             | Self::NelderMead { max_iterations, .. }
-            | Self::LBFGS { max_iterations, .. }
             | Self::AdaptiveSimulatedAnnealing { max_iterations, .. } => *max_iterations = iters,
         }
         self
@@ -153,9 +130,6 @@ impl OptimizationAlgorithm {
     pub const fn with_sd_tolerance(mut self, tol: f64) -> Self {
         match &mut self {
             Self::NelderMead { sd_tolerance, .. } => *sd_tolerance = tol,
-            Self::LBFGS {
-                gradient_tolerance, ..
-            } => *gradient_tolerance = tol,
             Self::AdaptiveSimulatedAnnealing { .. } | Self::Dls { .. } => {}
         }
         self

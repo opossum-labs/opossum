@@ -224,15 +224,6 @@ impl FreeVariable {
     }
 }
 
-/// Method used to approximate numerical gradients via finite differences.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
-pub enum FiniteDifferenceMethod {
-    /// Central difference scheme: $\frac{f(x + h) - f(x - h)}{2h}$ ($O(h^2)$ accuracy, 2 evaluations per variable).
-    #[default]
-    Central,
-    /// Forward difference scheme: $\frac{f(x + h) - f(x)}{h}$ ($O(h)$ accuracy, 1 additional evaluation per variable).
-    Forward,
-}
 #[cfg(test)]
 mod tests {
     use super::*;

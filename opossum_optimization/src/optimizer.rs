@@ -1,10 +1,6 @@
 use argmin::{
     core::{Executor, State, TerminationReason},
-    solver::{
-        linesearch::{BacktrackingLineSearch, condition::ArmijoCondition},
-        neldermead::NelderMead,
-        quasinewton::LBFGS,
-    },
+    solver::neldermead::NelderMead,
 };
 use std::sync::{Arc, atomic::AtomicBool};
 
@@ -271,22 +267,6 @@ impl<'a> OpticOptimizer<'a> {
                 sd_tolerance,
                 observer,
             ),
-            OptimizationAlgorithm::LBFGS {
-                max_iterations,
-                gradient_tolerance,
-                history_size,
-                gradient_method,
-            } => {
-                let merit = merit.with_gradient_method(gradient_method);
-                self.run_lbfgs_observed(
-                    merit,
-                    initial_vector,
-                    max_iterations,
-                    gradient_tolerance,
-                    history_size,
-                    observer,
-                )
-            }
             OptimizationAlgorithm::AdaptiveSimulatedAnnealing {
                 max_iterations,
                 initial_temperature,
@@ -352,36 +332,6 @@ impl<'a> OpticOptimizer<'a> {
         Executor::new(merit, solver)
             .configure(|state| {
                 state
-                    .max_iters(max_iterations)
-                    .target_cost(self.target_cost)
-            })
-            .add_observer(observer, argmin::core::observers::ObserverMode::Always)
-            .run()
-            .map(|res| self.handle_solver_state(res.state()))
-    }
-
-    /// Configures and executes L-BFGS with Armijo backtracking line search and a progress observer.
-    #[allow(clippy::too_many_arguments)]
-    fn run_lbfgs_observed(
-        &self,
-        merit: MeritFunction,
-        initial_vector: &[f64],
-        max_iterations: u64,
-        gradient_tolerance: f64,
-        history_size: usize,
-        observer: ProgressObserver,
-    ) -> Result<OpmResult<SolverOutcome>, argmin::core::Error> {
-        // Armijo condition with relaxed slope c1 = 1e-4
-        let condition = ArmijoCondition::new(1e-4)?;
-        // Robust geometric backtracking line search (contraction rho = 0.8)
-        let linesearch = BacktrackingLineSearch::new(condition).rho(0.8)?;
-        let solver =
-            LBFGS::new(linesearch, history_size).with_tolerance_grad(gradient_tolerance)?;
-
-        Executor::new(merit, solver)
-            .configure(|state| {
-                state
-                    .param(initial_vector.to_vec())
                     .max_iters(max_iterations)
                     .target_cost(self.target_cost)
             })
@@ -486,40 +436,6 @@ impl<'a> OpticOptimizer<'a> {
                 max_iterations,
                 sd_tolerance,
             } => self.execute_nelder_mead(merit, &initial_vector, max_iterations, sd_tolerance),
-            OptimizationAlgorithm::LBFGS {
-                max_iterations,
-                gradient_tolerance,
-                history_size,
-                gradient_method,
-            } => {
-                let merit = merit.with_gradient_method(gradient_method);
-
-                let condition = ArmijoCondition::new(1e-4).map_err(|e| {
-                    OpossumError::Other(format!("Failed to create Armijo condition: {e}"))
-                })?;
-
-                let linesearch = BacktrackingLineSearch::new(condition)
-                    .rho(0.8)
-                    .map_err(|e| {
-                        OpossumError::Other(format!("Failed to set backtracking line search: {e}"))
-                    })?;
-
-                let solver = LBFGS::new(linesearch, history_size)
-                    .with_tolerance_grad(gradient_tolerance)
-                    .map_err(|e| OpossumError::Other(format!("Failed to set tolerance: {e}")))?;
-
-                let res = Executor::new(merit, solver)
-                    .configure(|state| {
-                        state
-                            .param(initial_vector.clone())
-                            .max_iters(max_iterations)
-                            .target_cost(self.target_cost)
-                    })
-                    .run()
-                    .map_err(|e| OpossumError::Other(format!("Optimization failed: {e}")))?;
-
-                self.handle_solver_state(res.state())
-            }
             OptimizationAlgorithm::AdaptiveSimulatedAnnealing {
                 max_iterations,
                 initial_temperature,

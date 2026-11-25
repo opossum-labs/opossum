@@ -95,7 +95,7 @@ fn test_optimize_kepler_best_form_lens_curvature() -> OpmResult<()> {
             OperandMode::Equal,
             1.0,
         ))
-        .with_algorithm(OptimizationAlgorithm::lbfgs().with_max_iterations(30))
+        .with_algorithm(OptimizationAlgorithm::dls().with_max_iterations(30))
         .optimize()?;
 
     let best_c1 = summary.value(&front_c_addr).unwrap();
