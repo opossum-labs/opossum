@@ -266,12 +266,88 @@ fn project_to_plane() -> OpmResult<()> {
         wavelength_bin_size: nanometer!(1.),
     };
 
-    let projected_rays = pos_hist.project_to_plane(Vector3::x())?;
-    assert_eq!(projected_rays[0][(0, 0)].get::<millimeter>(), 0.);
-    assert_eq!(projected_rays[0][(0, 1)].get::<millimeter>(), 0.);
-    assert_eq!(projected_rays[1][(0, 0)].get::<millimeter>(), 0.);
-    assert_eq!(projected_rays[1][(0, 1)].get::<millimeter>(), 1.);
-    assert_eq!(projected_rays[2][(0, 0)].get::<millimeter>(), 1.);
-    assert_eq!(projected_rays[2][(0, 1)].get::<millimeter>(), 0.);
+    // 1. Zero-length normal vector must return an error
+    assert!(pos_hist.project_to_plane(Vector3::zeros()).is_err());
+
+    // 2. Projection along X axis (co_ax_1 = Z, co_ax_2 = Y)
+    let projected_x = pos_hist.project_to_plane(Vector3::x())?;
+    assert_relative_eq!(projected_x[0][(0, 0)].get::<millimeter>(), 0.);
+    assert_relative_eq!(projected_x[0][(0, 1)].get::<millimeter>(), 0.);
+    assert_relative_eq!(projected_x[1][(0, 0)].get::<millimeter>(), 0.);
+    assert_relative_eq!(projected_x[1][(0, 1)].get::<millimeter>(), 1.);
+    assert_relative_eq!(projected_x[2][(0, 0)].get::<millimeter>(), 1.);
+    assert_relative_eq!(projected_x[2][(0, 1)].get::<millimeter>(), 0.);
+
+    // 3. Projection along Y axis (co_ax_1 = Z, co_ax_2 = X)
+    let projected_y = pos_hist.project_to_plane(Vector3::y())?;
+    assert_relative_eq!(projected_y[0][(0, 0)].get::<millimeter>(), 0.);
+    assert_relative_eq!(projected_y[0][(0, 1)].get::<millimeter>(), 1.);
+    assert_relative_eq!(projected_y[1][(0, 0)].get::<millimeter>(), 0.);
+    assert_relative_eq!(projected_y[1][(0, 1)].get::<millimeter>(), 0.);
+    assert_relative_eq!(projected_y[2][(0, 0)].get::<millimeter>(), 1.);
+    assert_relative_eq!(projected_y[2][(0, 1)].get::<millimeter>(), 0.);
+
+    // 4. Projection along Z axis (co_ax_1 = X, co_ax_2 = Y)
+    let projected_z = pos_hist.project_to_plane(Vector3::z())?;
+    assert_relative_eq!(projected_z[0][(0, 0)].get::<millimeter>(), 1.);
+    assert_relative_eq!(projected_z[0][(0, 1)].get::<millimeter>(), 0.);
+    assert_relative_eq!(projected_z[1][(0, 0)].get::<millimeter>(), 0.);
+    assert_relative_eq!(projected_z[1][(0, 1)].get::<millimeter>(), 1.);
+    assert_relative_eq!(projected_z[2][(0, 0)].get::<millimeter>(), 0.);
+    assert_relative_eq!(projected_z[2][(0, 1)].get::<millimeter>(), 0.);
+
+    // 5. General non-unit oblique normal vector (1, 1, 0) with norm = sqrt(2):
+    // co_ax_1 = (1/sqrt(2), -1/sqrt(2), 0), co_ax_2 = (0, 0, 1)
+    let oblique_normal = Vector3::new(1.0, 1.0, 0.0);
+    let projected_oblique = pos_hist.project_to_plane(oblique_normal)?;
+    assert_relative_eq!(
+        projected_oblique[0][(0, 0)].get::<millimeter>(),
+        std::f64::consts::FRAC_1_SQRT_2
+    );
+    assert_relative_eq!(projected_oblique[0][(0, 1)].get::<millimeter>(), 0.);
+    assert_relative_eq!(
+        projected_oblique[1][(0, 0)].get::<millimeter>(),
+        -std::f64::consts::FRAC_1_SQRT_2
+    );
+    assert_relative_eq!(projected_oblique[1][(0, 1)].get::<millimeter>(), 0.);
+    assert_relative_eq!(projected_oblique[2][(0, 0)].get::<millimeter>(), 0.);
+    assert_relative_eq!(projected_oblique[2][(0, 1)].get::<millimeter>(), 1.);
+
+    Ok(())
+}
+#[test]
+fn node_report_applies_plot_view_direction_from_properties() -> OpmResult<()> {
+    // Arrange: Create visualizer with a custom non-default view direction
+    let expected_view_dir = Vector3::new(0.0, 1.0, 0.0);
+    let mut visualizer = RayPropagationVisualizer::new("test_visualizer", Some(expected_view_dir))?;
+
+    visualizer
+        .node_attr
+        .set_property("ray transparency", 0.75.into())?;
+
+    // Populate with valid collimated rays so position history extraction succeeds
+    let rays = Rays::new_uniform_collimated(
+        nanometer!(1053.0),
+        joule!(1.0),
+        &Hexapolar::new(millimeter!(1.0), 1)?,
+    )?;
+    visualizer.set_light_data(Some(LightData::Geometric(rays)));
+
+    // Act: Generate the node report for a raytrace analysis
+    let NodeReportResult::Report(report) =
+        visualizer.node_report("test-uuid", AnalyzerKind::RayTrace)?
+    else {
+        panic!("Expected NodeReportResult::Report, but received a warning");
+    };
+
+    // Assert: Verify the report contains RayPositionHistories with the configured properties
+    let ray_plot_prop = report.properties().get("Ray plot")?;
+    let Proptype::RayPositionHistory(histories) = ray_plot_prop else {
+        panic!("Expected Proptype::RayPositionHistory for 'Ray plot'");
+    };
+
+    assert_eq!(histories.plot_view_direction, Some(expected_view_dir));
+    assert_relative_eq!(histories.ray_transparency, 0.75);
+
     Ok(())
 }

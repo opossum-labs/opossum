@@ -18,7 +18,9 @@ use crate::{
 ///
 /// - `BandPass`: Passes a specified wavelength band and attenuates others.
 /// - `Notch`: Filters out a specified wavelength band while passing others.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, Eq, Copy, Default, JsonSchema)]
+#[derive(
+    Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, Eq, Copy, Default, JsonSchema,
+)]
 pub enum BandFilterType {
     /// Passes a specified wavelength band.
     #[default]

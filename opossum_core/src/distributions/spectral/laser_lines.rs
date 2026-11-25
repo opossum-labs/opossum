@@ -1,8 +1,9 @@
 use crate::{
     error::OpmResult,
     generic_validators::{AllNotEmpty, AllPositive, XNormal, YFinite, YNotAllZero},
-    nanometer, validated_vec, validated_vec_type,
-    types::schema_helper_types::Vector2Schema
+    nanometer,
+    types::schema_helper_types::Vector2Schema,
+    validated_vec, validated_vec_type,
 };
 use opm_macros_lib::EnsureValidated;
 use schemars::JsonSchema;

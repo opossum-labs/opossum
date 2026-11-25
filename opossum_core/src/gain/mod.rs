@@ -71,7 +71,9 @@ impl Default for ValidatedGain {
 /// factor, regardless of how far the ray actually travels inside the medium and regardless of how
 /// much energy has already been extracted. It is meant for chain layout and system overview, not
 /// for a physically faithful description of an amplifier.
-#[derive(Serialize, Deserialize, ToSchema, Debug, Clone, Copy, PartialEq, EnsureValidated, JsonSchema)]
+#[derive(
+    Serialize, Deserialize, ToSchema, Debug, Clone, Copy, PartialEq, EnsureValidated, JsonSchema,
+)]
 #[serde(try_from = "NonValidatedConstGain")]
 pub struct ConstGain {
     #[schemars(with = "f64")]
@@ -162,7 +164,9 @@ impl From<MonochromaticSmallSignalGain> for GainModel {
 ///
 /// Each escalation stage of the gain modelling adds one variant here. The hosting node does not
 /// change, only the value of its `amp config` property.
-#[derive(Default, Serialize, Deserialize, ToSchema, Debug, Clone, Copy, PartialEq, EnumIter, JsonSchema)]
+#[derive(
+    Default, Serialize, Deserialize, ToSchema, Debug, Clone, Copy, PartialEq, EnumIter, JsonSchema,
+)]
 #[non_exhaustive]
 pub enum GainModel {
     /// No amplification. The node behaves exactly like the passive component it is.

@@ -1,5 +1,8 @@
 use super::address::MetricSource;
-use crate::{core_optics::observable::MetricDimension, opm_document::optimization::ObservableAddress, utils::to_f64};
+use crate::{
+    core_optics::observable::MetricDimension, opm_document::optimization::ObservableAddress,
+    utils::to_f64,
+};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;

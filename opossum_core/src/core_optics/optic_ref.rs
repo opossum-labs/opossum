@@ -11,7 +11,12 @@ use uom::si::f64::Length;
 use uuid::Uuid;
 
 use crate::{
-    analyzers::Analyzable, core_optics::{NodeAttr, NodeAttrExt, node_attr::NodePositioning}, nodes::{NodeGroup, OpticGraph, create_node_ref}, properties::Properties, types::{SiScalarSchema, schema_helper_types::Point2Schema}, utils::geom_transformation::Isometry,
+    analyzers::Analyzable,
+    core_optics::{NodeAttr, NodeAttrExt, node_attr::NodePositioning},
+    nodes::{NodeGroup, OpticGraph, create_node_ref},
+    properties::Properties,
+    types::{SiScalarSchema, schema_helper_types::Point2Schema},
+    utils::geom_transformation::Isometry,
 };
 
 /// Structure for storing an optical node.

@@ -42,10 +42,7 @@ pub type VectorMetricStore = HashMap<MetricStoreKey, Vec<f64>>;
 /// It contains the [`NodeGroup`] representing the optical model, a list of analyzers,
 /// optional pump scenarios, embedded materials, and an optional optimization configuration.
 #[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
-#[schemars(
-    title = "OPOSSUM Model Document v1",
-    deny_unknown_fields
-)]
+#[schemars(title = "OPOSSUM Model Document v1", deny_unknown_fields)]
 pub struct OpmDocument {
     /// File format version. MUST be `1` for this specification.
     pub(crate) opm_file_version: u32,

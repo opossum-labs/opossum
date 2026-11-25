@@ -2,11 +2,11 @@
 pub mod property;
 pub mod proptype;
 pub mod validator;
-use std::collections::HashMap;
 use log::warn;
 pub use property::Property;
 pub use proptype::Proptype;
 use schemars::JsonSchema;
+use std::collections::HashMap;
 
 use crate::{
     error::{OpmResult, OpossumError},

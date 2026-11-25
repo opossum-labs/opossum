@@ -1,8 +1,8 @@
 //! Thermal properties module for materials
+use crate::types::SiScalarSchema;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::{TemperatureCoefficient, ThermalConductivity};
-use crate::types::SiScalarSchema;
 /// Optional thermal properties of a material.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema)]
 pub struct ThermalProperties {

@@ -15,7 +15,9 @@ impl Default for ValidatedLBConst {
     }
 }
 
-#[derive(Default, Clone, Serialize, Deserialize, Debug, PartialEq, Copy, EnsureValidated, JsonSchema)]
+#[derive(
+    Default, Clone, Serialize, Deserialize, Debug, PartialEq, Copy, EnsureValidated, JsonSchema,
+)]
 pub struct AbsLBConst {
     #[schemars(with = "f64")]
     absorption_coefficient: ValidatedLBConst,

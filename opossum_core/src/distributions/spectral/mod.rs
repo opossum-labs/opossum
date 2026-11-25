@@ -20,7 +20,9 @@ pub trait SpectralDistribution {
     fn generate(&self) -> OpmResult<Vec<(Length, f64)>>;
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, EnumIter, EnsureValidated, JsonSchema)]
+#[derive(
+    Debug, Clone, PartialEq, Serialize, Deserialize, EnumIter, EnsureValidated, JsonSchema,
+)]
 /// Enum representing different types of spectral distributions
 pub enum SpecDistType {
     Gaussian(gaussian::Gaussian),

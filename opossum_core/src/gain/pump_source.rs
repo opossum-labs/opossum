@@ -55,7 +55,17 @@ const DEFAULT_LONGITUDINAL_CELLS: usize = 16;
 /// The two ends of the same optical axis the light itself travels along, so this is stated in the
 /// optic's own frame rather than as a direction in the laboratory.
 #[derive(
-    Default, Serialize, Deserialize, ToSchema, Debug, Clone, Copy, PartialEq, Eq, EnumIter, JsonSchema
+    Default,
+    Serialize,
+    Deserialize,
+    ToSchema,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    EnumIter,
+    JsonSchema,
 )]
 pub enum PumpDirection {
     /// The pump enters at the entrance face and is absorbed on its way towards the exit.

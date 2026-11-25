@@ -42,7 +42,16 @@ impl Default for ValidatedReflectivity {
 /// The simple model represents an ideal coating with a given constant reflectivity independent from
 /// the incoming wavelength, angle of incidence, or refractive index of the following medium.
 #[derive(
-    Default, Deserialize, Serialize, Debug, Clone, ToSchema, PartialEq, EnsureValidated, Copy, JsonSchema
+    Default,
+    Deserialize,
+    Serialize,
+    Debug,
+    Clone,
+    ToSchema,
+    PartialEq,
+    EnsureValidated,
+    Copy,
+    JsonSchema,
 )]
 pub struct CoatingConstantR {
     /// The reflectivity of the coating in the range [0.0, 1.0].

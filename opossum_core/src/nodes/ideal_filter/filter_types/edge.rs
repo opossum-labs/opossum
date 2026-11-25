@@ -496,7 +496,9 @@ impl From<EdgeFilter> for Spectrum {
 ///
 /// - `LongPass`: Allows wavelengths longer than the specified edge wavelength to pass.
 /// - `ShortPass`: Allows wavelengths shorter than the specified edge wavelength to pass.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, Eq, Copy, Default, JsonSchema)]
+#[derive(
+    Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, Eq, Copy, Default, JsonSchema,
+)]
 pub enum EdgeFilterType {
     /// Passes wavelengths longer than the edge wavelength.
     LongPass,

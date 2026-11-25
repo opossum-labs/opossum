@@ -17,7 +17,9 @@ use crate::{
 };
 
 /// Builder for the generation of [`LightData`].
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, EnsureValidated, JsonSchema)]
+#[derive(
+    Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, EnsureValidated, JsonSchema,
+)]
 pub enum LightDataBuilder {
     /// Builder for the generation of [`LightData::Energy`].
     Energy(EnergyDataBuilder),

@@ -21,7 +21,9 @@ use crate::{
 use uuid::Uuid;
 
 /// Strategy to use if a [`Ray`] misses a surface
-#[derive(Default, PartialEq, Eq, Debug, Clone, Copy, Serialize, Deserialize, EnumIter, JsonSchema)]
+#[derive(
+    Default, PartialEq, Eq, Debug, Clone, Copy, Serialize, Deserialize, EnumIter, JsonSchema,
+)]
 pub enum MissedSurfaceStrategy {
     /// The [`Ray`] it is set as invalid and does no longer propagate.
     #[default]

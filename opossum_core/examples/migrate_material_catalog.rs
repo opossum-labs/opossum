@@ -1,8 +1,6 @@
 use opossum_core::{
     error::{OpmResult, OpossumError},
-    material::{
-        AssetHeader, Material, MechanicalProperties, OpticalProperties, ThermalProperties,
-    },
+    material::{AssetHeader, Material, MechanicalProperties, OpticalProperties, ThermalProperties},
 };
 use ron::{extensions::Extensions, ser::PrettyConfig};
 use serde::Deserialize;
@@ -40,7 +38,10 @@ fn collect_ron_files(dir: &Path, out: &mut Vec<PathBuf>) -> std::io::Result<()> 
         let path = entry.path();
         if path.is_dir() {
             collect_ron_files(&path, out)?;
-        } else if path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("ron")) {
+        } else if path
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("ron"))
+        {
             out.push(path);
         }
     }
@@ -76,9 +77,8 @@ fn main() -> OpmResult<()> {
     let mut skipped_count = 0usize;
 
     for path in &files {
-        let raw = fs::read_to_string(path).map_err(|e| {
-            OpossumError::Other(format!("Failed to read {}: {e}", path.display()))
-        })?;
+        let raw = fs::read_to_string(path)
+            .map_err(|e| OpossumError::Other(format!("Failed to read {}: {e}", path.display())))?;
 
         // Skip files that are already in the new v1 Material format
         if ron::from_str::<Material>(&raw).is_ok() {
@@ -86,9 +86,8 @@ fn main() -> OpmResult<()> {
             continue;
         }
 
-        let legacy: LegacyMaterial = ron::from_str(&raw).map_err(|e| {
-            OpossumError::Other(format!("Failed to parse {}: {e}", path.display()))
-        })?;
+        let legacy: LegacyMaterial = ron::from_str(&raw)
+            .map_err(|e| OpossumError::Other(format!("Failed to parse {}: {e}", path.display())))?;
 
         let modern = Material::from(legacy);
         let serialized = ron::ser::to_string_pretty(&modern, pretty_cfg.clone()).map_err(|e| {
@@ -104,9 +103,8 @@ fn main() -> OpmResult<()> {
         })?;
         assert_eq!(modern, reparsed);
 
-        fs::write(path, format!("{serialized}\n")).map_err(|e| {
-            OpossumError::Other(format!("Failed to write {}: {e}", path.display()))
-        })?;
+        fs::write(path, format!("{serialized}\n"))
+            .map_err(|e| OpossumError::Other(format!("Failed to write {}: {e}", path.display())))?;
         migrated_count += 1;
     }
 

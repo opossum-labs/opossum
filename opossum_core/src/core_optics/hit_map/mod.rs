@@ -19,7 +19,12 @@ pub mod fluence_estimator;
 pub mod rays_hit_map;
 
 use crate::{
-    J_per_cm2, error::{OpmResult, OpossumError}, meter, nodes::fluence_detector::{Fluence, fluence_data::FluenceData}, properties::Proptype, types::SiScalarSchema,
+    J_per_cm2,
+    error::{OpmResult, OpossumError},
+    meter,
+    nodes::fluence_detector::{Fluence, fluence_data::FluenceData},
+    properties::Proptype,
+    types::SiScalarSchema,
 };
 use fluence_estimator::FluenceEstimator;
 use log::warn;

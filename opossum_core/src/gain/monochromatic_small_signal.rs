@@ -57,7 +57,9 @@ impl Default for ValidatedGainCoefficient {
 /// Parameters of an unsaturated gain that follows the path through the medium.
 ///
 /// See the [module documentation](self) for what the model does and what it deliberately does not.
-#[derive(Serialize, Deserialize, ToSchema, Debug, Clone, Copy, PartialEq, EnsureValidated, JsonSchema)]
+#[derive(
+    Serialize, Deserialize, ToSchema, Debug, Clone, Copy, PartialEq, EnsureValidated, JsonSchema,
+)]
 #[serde(try_from = "NonValidatedMonochromaticSmallSignalGain")]
 pub struct MonochromaticSmallSignalGain {
     #[schema(value_type = f64)]

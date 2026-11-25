@@ -3,8 +3,9 @@ use super::PositionDistribution;
 use crate::{
     error::OpmResult,
     generic_validators::{AllFinite, AllNotZero, AllPositive, NotAllZero},
-    millimeter, validated, validated_type,
+    millimeter,
     types::schema_helper_types::Point2Schema,
+    validated, validated_type,
 };
 use nalgebra::{Point2, Point3, point};
 use num_traits::Zero;

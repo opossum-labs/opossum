@@ -97,16 +97,17 @@ impl RayPositionHistorySpectrum {
 
         let normed_normal_vec = plane_normal_vec / vec_norm;
 
-        // Choose projection basis vectors perpendicular to the normal vector
-        let (co_ax_1, co_ax_2) = if plane_normal_vec.cross(&Vector3::x()).norm() < f64::EPSILON {
+        // Choose projection basis vectors perpendicular to the normalized normal vector
+        let (co_ax_1, co_ax_2) = if normed_normal_vec.cross(&Vector3::x()).norm() < f64::EPSILON {
             (Vector3::z(), Vector3::y())
-        } else if plane_normal_vec.cross(&Vector3::y()).norm() < f64::EPSILON {
+        } else if normed_normal_vec.cross(&Vector3::y()).norm() < f64::EPSILON {
             (Vector3::z(), Vector3::x())
-        } else if plane_normal_vec.cross(&Vector3::z()).norm() < f64::EPSILON {
+        } else if normed_normal_vec.cross(&Vector3::z()).norm() < f64::EPSILON {
             (Vector3::x(), Vector3::y())
         } else {
             let x_vec = Vector3::x();
-            let mut proj_x = x_vec - x_vec.dot(&normed_normal_vec) * plane_normal_vec;
+            // Project onto the plane using the normalized normal vector
+            let mut proj_x = x_vec - x_vec.dot(&normed_normal_vec) * normed_normal_vec;
             proj_x /= proj_x.norm();
             (proj_x, proj_x.cross(&normed_normal_vec))
         };
@@ -120,7 +121,7 @@ impl RayPositionHistorySpectrum {
                         .map(uom::si::f64::Length::get::<millimeter>)
                         .collect::<Vec<f64>>(),
                 );
-                let proj_pos = pos_t - pos_t.dot(&normed_normal_vec) * plane_normal_vec;
+                let proj_pos = pos_t - pos_t.dot(&normed_normal_vec) * normed_normal_vec;
 
                 projected_ray_pos[(row, 0)] = millimeter!(proj_pos.dot(&co_ax_1));
                 projected_ray_pos[(row, 1)] = millimeter!(proj_pos.dot(&co_ax_2));

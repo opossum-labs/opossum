@@ -28,7 +28,9 @@ impl Default for ValidatedAbsConst {
     }
 }
 
-#[derive(Default, Clone, Serialize, Deserialize, Debug, PartialEq, Copy, EnsureValidated, JsonSchema)]
+#[derive(
+    Default, Clone, Serialize, Deserialize, Debug, PartialEq, Copy, EnsureValidated, JsonSchema,
+)]
 pub struct AbsConst {
     #[schemars(with = "f64")]
     absorption_constant: ValidatedAbsConst,

@@ -136,7 +136,8 @@ impl OpticNode for RayPropagationVisualizer {
         if let Some(LightData::Geometric(rays)) = data
             && let Ok(mut ray_position_histories) = rays.get_rays_position_history(true)
         {
-            if let Ok(Proptype::Vec3(view_vec)) = self.properties().get("viewdirection") {
+            // Use the exact property key "view direction" (with space) matching Default::default()
+            if let Ok(Proptype::Vec3(view_vec)) = self.properties().get("view direction") {
                 ray_position_histories.plot_view_direction = Some(*view_vec);
             }
             if let Ok(Proptype::F64(transparency)) = self.properties().get("ray transparency") {

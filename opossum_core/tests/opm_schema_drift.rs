@@ -60,8 +60,8 @@ fn format_line_diff(expected: &str, actual: &str) -> String {
 
 #[test]
 fn verify_opm_v1_schema_up_to_date() {
-    let generated_raw = generate_opm_v1_schema_json()
-        .expect("Failed to serialize OpmDocument JSON schema");
+    let generated_raw =
+        generate_opm_v1_schema_json().expect("Failed to serialize OpmDocument JSON schema");
     let schema_path = schema_file_path();
 
     if env::var("UPDATE_SCHEMA").as_deref() == Ok("1") {
