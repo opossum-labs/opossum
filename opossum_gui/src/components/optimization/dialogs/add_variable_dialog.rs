@@ -89,7 +89,11 @@ pub fn AddVariableDialog(mut model: Signal<OptimizationModel>, mut open: Signal<
                                             .variable_rows
                                             .iter()
                                             .any(|r| r.address == var.address);
-                                        let (val_display, _) = format_parameter_value(&var.address, var.initial_value);
+                                        let (val_display, _) = format_parameter_value(
+                                            &var.address,
+                                            var.initial_value,
+                                            var.unit.as_ref(),
+                                        );
                                         rsx! {
                                           button {
                                             r#type: "button",

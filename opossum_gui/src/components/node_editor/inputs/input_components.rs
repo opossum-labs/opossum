@@ -2,11 +2,13 @@ use crate::{
     OPOSSUM_UI_LOGS,
     components::node_editor::inputs::{
         InputData, InputParam, format_exp_number_notation, format_si_with_base_unit,
-        parse_exp_input_strict, parse_si_number, parse_unit_input_strict,
+        parse_exp_input_strict, parse_si_number, parse_unit_input_permissive,
+        parse_unit_input_strict,
     },
 };
 use dioxus::prelude::*;
 use itertools::Itertools;
+use opossum_core::opm_document::optimization::ParameterUnit;
 use std::ops::{AddAssign, SubAssign};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -320,22 +322,16 @@ pub fn RowedInputs(inputs: Vec<InputData>) -> Element {
                 match chunk {
                     // Two inputs in a row: Split equally into two columns
                     [first, second] => rsx! {
-                        div {
-                            class: "col-sm-6",
-                            title: first.tooltip.clone().unwrap_or_default(),
+                        div { class: "col-sm-6", title: first.tooltip.clone().unwrap_or_default(),
                             InputParamLabeledInput { input_data: first.clone() }
                         }
-                        div {
-                            class: "col-sm-6",
-                            title: second.tooltip.clone().unwrap_or_default(),
+                        div { class: "col-sm-6", title: second.tooltip.clone().unwrap_or_default(),
                             InputParamLabeledInput { input_data: second.clone() }
                         }
                     },
                     // Single trailing input: Render in a half-width column for visual consistency
                     [single] => rsx! {
-                        div {
-                            class: "col-sm-6",
-                            title: single.tooltip.clone().unwrap_or_default(),
+                        div { class: "col-sm-6", title: single.tooltip.clone().unwrap_or_default(),
                             InputParamLabeledInput { input_data: single.clone() }
                         }
                     },
@@ -399,7 +395,7 @@ pub fn LabeledInput(
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq)]
 pub struct UnitHandling {
     /// The base unit of the input field. Eg. "m" for length, "W" for power, etc.
     /// This base unit will (optionally) be prefixed with the typical SI prefixes (m, k, M, etc.)
@@ -408,12 +404,145 @@ pub struct UnitHandling {
     /// displayed as `1k`, and `0.001` will be displayed as `1m`. Also, when the user inputs values
     /// with SI prefixes, they will be correctly parsed. If `false`, no SI prefix handling will be applied.
     pub handle_prefix: bool,
+    /// Multiplier from internal SI base unit to display base unit (`1.0` for SI units, `180.0 / PI` for `"°"`).
+    pub display_scale: f64,
 }
 impl UnitHandling {
     pub fn new(base_unit: &str, handle_prefix: bool) -> Self {
         Self {
             base_unit: base_unit.to_string(),
             handle_prefix,
+            display_scale: 1.0,
+        }
+    }
+    #[must_use]
+    pub const fn with_display_scale(mut self, display_scale: f64) -> Self {
+        self.display_scale = display_scale;
+        self
+    }
+}
+impl From<&ParameterUnit> for UnitHandling {
+    fn from(unit: &ParameterUnit) -> Self {
+        Self {
+            base_unit: unit.base_unit.clone(),
+            handle_prefix: unit.handle_prefix,
+            display_scale: unit.display_scale,
+        }
+    }
+}
+/// Defines whether [`OptionalNumericInput`] operates as a plain scalar or with physical units.
+#[derive(Clone, PartialEq, Default)]
+pub enum NumericUnitMode {
+    /// Dimensionless `f64` supporting `.` and `,` as decimal separators and scientific notation.
+    #[default]
+    Dimensionless,
+    /// Physical quantity in SI base units with optional unit/prefix parsing and unit display feedback.
+    Unit(UnitHandling),
+}
+/// Formats an optional `f64` according to the active [`NumericUnitMode`].
+fn format_numeric_opt(opt_val: Option<f64>, mode: &NumericUnitMode, reciprocal: bool) -> String {
+    opt_val.map_or_else(String::new, |num| match mode {
+        NumericUnitMode::Dimensionless => format_exp_number_notation(num).trim().to_string(),
+        NumericUnitMode::Unit(unit_cfg) => format_si_with_base_unit(num, unit_cfg, reciprocal),
+    })
+}
+/// Reusable numeric input supporting `Option<f64>`, `.` and `,` decimal separators,
+/// optional SI units (falling back to the base unit if omitted), and commit on blur or `Enter`.
+#[component]
+pub fn OptionalNumericInput(
+    value: ReadSignal<Option<f64>>,
+    on_commit: EventHandler<Option<f64>>,
+    #[props(default = NumericUnitMode::Dimensionless)] mode: NumericUnitMode,
+    #[props(default = false)] allow_empty: bool,
+    #[props(default = false)] disabled: bool,
+    #[props(default = false)] reciprocal: bool,
+    #[props(default = String::new())] class: String,
+    #[props(default = String::new())] style: String,
+    #[props(default = String::new())] placeholder: String,
+) -> Element {
+    let val_memo = use_memo(use_reactive!(|value| *value.read()));
+    let mode_memo = use_memo(use_reactive!(|mode| mode));
+    let mut text = use_signal(|| format_numeric_opt(*value.read(), &mode_memo.peek(), reciprocal));
+
+    use_effect(move || {
+        let formatted = format_numeric_opt(*val_memo.read(), &mode_memo.read(), reciprocal);
+        if formatted != *text.peek() {
+            text.set(formatted);
+        }
+    });
+
+    // All captured variables (`Signal`, `Memo`, `EventHandler`, `bool`) are `Copy`,
+    // so `commit` itself is `Copy` and can be used across multiple event handlers.
+    let mut commit = move || {
+        if disabled {
+            return;
+        }
+        let raw = text.read().trim().to_string();
+        if raw.is_empty() && allow_empty {
+            text.set(String::new());
+            on_commit.call(None);
+            return;
+        }
+
+        let current_mode = mode_memo.peek().clone();
+        let parsed_opt = match &current_mode {
+            NumericUnitMode::Dimensionless => parse_exp_input_strict(&raw)
+                .ok()
+                .and_then(|s| s.parse::<f64>().ok())
+                .filter(|v| v.is_finite()),
+            NumericUnitMode::Unit(unit_cfg) => {
+                parse_unit_input_permissive(&raw, &unit_cfg.base_unit)
+                    .ok()
+                    .and_then(|(num_str, prefix_str)| {
+                        parse_si_number(&num_str, &prefix_str, reciprocal)
+                    })
+                    .map(|display_val| display_val / unit_cfg.display_scale)
+                    .filter(|v| v.is_finite())
+            }
+        };
+
+        if let Some(parsed) = parsed_opt {
+            text.set(format_numeric_opt(Some(parsed), &current_mode, reciprocal));
+            on_commit.call(Some(parsed));
+        } else {
+            // Revert invalid text to the last confirmed value
+            text.set(format_numeric_opt(
+                *val_memo.peek(),
+                &current_mode,
+                reciprocal,
+            ));
+        }
+    };
+
+    let effective_class = if class.is_empty() {
+        "form-control form-control-sm bg-black text-light border-secondary p-0 px-1 font-monospace text-end"
+            .to_string()
+    } else {
+        class
+    };
+
+    let effective_style = if style.is_empty() {
+        "height: 22px; font-size: 11px;".to_string()
+    } else {
+        style
+    };
+
+    rsx! {
+        input {
+            r#type: "text",
+            class: "{effective_class}",
+            style: "{effective_style}",
+            placeholder: "{placeholder}",
+            disabled,
+            value: "{text}",
+            oninput: move |e: FormEvent| text.set(e.value()),
+            onblur: move |_| commit(),
+            onkeydown: move |e: KeyboardEvent| {
+                if e.key() == Key::Enter {
+                    commit();
+                }
+                e.stop_propagation();
+            },
         }
     }
 }

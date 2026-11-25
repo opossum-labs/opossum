@@ -220,9 +220,29 @@ pub fn parse_si_number(num_str: &str, prefix_str: &str, reciprocal: bool) -> Opt
     let normalized = num_str.replace(',', ".");
     normalized
         .parse::<f64>()
-        .map_or(None, |parsed| Some(parsed * 10f64.powi(factor)))
+        .ok()
+        .map(|parsed| parsed * 10f64.powi(factor))
 }
+/// Parses a unit input consisting of a numeric value and an optional SI-prefixed unit.
+///
+/// If no unit suffix is provided (e.g. `"0.05"` or `"12,5"`), the value is interpreted
+/// directly in `base_unit` with an empty SI prefix.
+///
+/// # Errors
+/// Returns an error if the numeric part is invalid or if a non-matching unit/prefix is supplied.
+pub fn parse_unit_input_permissive(input: &str, base_unit: &str) -> OpmResult<(String, String)> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return Err(OpossumError::Other("Empty input".into()));
+    }
 
+    // Check if input is a pure number without any unit suffix
+    if let Ok(normalized_num) = parse_exp_input_strict(trimmed) {
+        return Ok((normalized_num, String::new()));
+    }
+
+    parse_unit_input_strict(trimmed, base_unit)
+}
 pub fn parse_exp_input_strict(input: &str) -> OpmResult<String> {
     let regex = Regex::new(r"^[+-]?(?:(\d+([.,]\d*)?)|([.,]\d+))([eE][+-]?\d+)?$")
         .map_err(|e| OpossumError::Other(format!("Error compiling regex: {e}")))?;
@@ -358,14 +378,17 @@ pub fn format_si_with_base_unit(
     unit_config: &UnitHandling,
     reciprocal: bool,
 ) -> String {
+    let scaled_value = value * unit_config.display_scale;
     if unit_config.handle_prefix {
         format!(
             "{}{}",
-            format_si_notation(value, reciprocal),
+            format_si_notation(scaled_value, reciprocal),
             unit_config.base_unit
         )
+    } else if scaled_value.is_infinite() {
+        format!("∞ {}", unit_config.base_unit)
     } else {
-        format!("{} {}", value, unit_config.base_unit)
+        format!("{scaled_value} {}", unit_config.base_unit)
     }
 }
 
@@ -955,5 +978,118 @@ mod tests {
             let result = format_si_notation(x, reciprocal);
             assert_eq!(result, expected, "x={x} reciprocal={reciprocal}");
         }
+    }
+    #[test]
+    fn parse_unit_input_permissive_with_and_without_units() -> OpmResult<()> {
+        let base_unit = "m";
+
+        // Pure numbers without unit suffix fall back to base_unit with empty prefix
+        let unitless_cases = vec![
+            ("0.05", "0.05", ""),
+            ("12,5", "12.5", ""),
+            ("-3.2e-4", "-3.2e-4", ""),
+            ("  42,0  ", "42.0", ""),
+            (".5", ".5", ""),
+        ];
+        for (input, expected_val, expected_prefix) in unitless_cases {
+            let (val, prefix) = parse_unit_input_permissive(input, base_unit)?;
+            assert_eq!(val, expected_val, "Unitless input '{input}' value mismatch");
+            assert_eq!(
+                prefix, expected_prefix,
+                "Unitless input '{input}' prefix mismatch"
+            );
+        }
+
+        // Inputs with explicit SI prefixes and base unit (no space between prefix and unit)
+        let unit_cases = vec![
+            ("50 mm", "50", "m"),
+            ("12,5µm", "12.5", "µ"),
+            ("10 um", "10", "u"),
+            ("-1.5 km", "-1.5", "k"),
+            ("2.0 m", "2.0", ""),
+        ];
+        for (input, expected_val, expected_prefix) in unit_cases {
+            let (val, prefix) = parse_unit_input_permissive(input, base_unit)?;
+            assert_eq!(val, expected_val, "Unit input '{input}' value mismatch");
+            assert_eq!(
+                prefix, expected_prefix,
+                "Unit input '{input}' prefix mismatch"
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn parse_unit_input_permissive_rejects_invalid_inputs() {
+        let base_unit = "m";
+        let invalid_cases = vec![
+            "",        // empty
+            "   ",     // whitespace only
+            "abc",     // non-numeric
+            "50 s",    // wrong base unit
+            "50 xm",   // invalid SI prefix
+            "12,3,4",  // malformed decimal separators
+            "12..5 m", // malformed number with unit
+        ];
+
+        for input in invalid_cases {
+            assert!(
+                parse_unit_input_permissive(input, base_unit).is_err(),
+                "Input '{input}' should be rejected by permissive parser"
+            );
+        }
+    }
+
+    #[test]
+    fn format_and_roundtrip_si_units_with_display_scale() -> OpmResult<()> {
+        use approx::assert_relative_eq;
+        use std::f64::consts::PI;
+
+        // 1. Standard SI length with engineering prefixes (m -> mm, µm)
+        let length_cfg = UnitHandling::new("m", true);
+        assert_eq!(format_si_with_base_unit(0.05, &length_cfg, false), "50 mm");
+        assert_eq!(
+            format_si_with_base_unit(2.5e-6, &length_cfg, false),
+            "2.5 µm"
+        );
+        assert_eq!(format_si_with_base_unit(0.0, &length_cfg, false), "0.0 m");
+
+        // Round-trip: unitless input "0,025" interpreted as meters -> formatted as "25 mm"
+        let (num_str, prefix) = parse_unit_input_permissive("0,025", &length_cfg.base_unit)?;
+        let parsed_m =
+            parse_si_number(&num_str, &prefix, false).unwrap() / length_cfg.display_scale;
+        assert_relative_eq!(parsed_m, 0.025, epsilon = 1e-12);
+        assert_eq!(
+            format_si_with_base_unit(parsed_m, &length_cfg, false),
+            "25 mm"
+        );
+
+        // 2. Angular quantity stored in radians, displayed in degrees without SI prefixes
+        let angle_cfg = UnitHandling::new("°", false).with_display_scale(180.0 / PI);
+        assert_eq!(
+            format_si_with_base_unit(PI / 4.0, &angle_cfg, false),
+            "45 °"
+        );
+        assert_eq!(
+            format_si_with_base_unit(f64::INFINITY, &angle_cfg, false),
+            "∞ °"
+        );
+
+        // Round-trip: user enters "90" (without "°") or "90 °" -> stored as PI / 2 rad
+        for raw_input in ["90", "90 °", "90,0°"] {
+            let (num_str, prefix) = parse_unit_input_permissive(raw_input, &angle_cfg.base_unit)?;
+            let parsed_rad =
+                parse_si_number(&num_str, &prefix, false).unwrap() / angle_cfg.display_scale;
+            assert_relative_eq!(parsed_rad, PI / 2.0, epsilon = 1e-12);
+        }
+
+        // 3. Reciprocal SI prefix handling (inverts prefix exponent: 1000.0 -> "1 mm")
+        assert_eq!(format_si_with_base_unit(1000.0, &length_cfg, true), "1 mm");
+        let (r_num, r_prefix) = parse_unit_input_permissive("2.5 mm", &length_cfg.base_unit)?;
+        let parsed_reciprocal = parse_si_number(&r_num, &r_prefix, true).unwrap();
+        assert_relative_eq!(parsed_reciprocal, 2500.0, epsilon = 1e-12);
+
+        Ok(())
     }
 }
