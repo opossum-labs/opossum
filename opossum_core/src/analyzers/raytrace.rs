@@ -583,9 +583,6 @@ mod test {
         assert!(rays_reach_the_meter_in_tubes(Some(
             FluenceEstimator::Voronoi
         ))?);
-        assert!(rays_reach_the_meter_in_tubes(Some(
-            FluenceEstimator::HelperRays
-        ))?);
         assert!(!rays_reach_the_meter_in_tubes(Some(
             FluenceEstimator::Binning
         ))?);

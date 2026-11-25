@@ -12,5 +12,5 @@ pub use light_result::{LightRays, LightResult};
 pub use lightdata::LightData;
 pub use ray::Ray;
 pub use ray_mesh::{RayMesh, RaySource};
-pub use rays::{FluenceRays, Rays};
+pub use rays::Rays;
 pub use spectrum::Spectrum;

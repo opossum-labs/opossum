@@ -173,8 +173,8 @@ mod test {
     #[test]
     fn set_fluence_estimator() {
         let mut c = GhostFocusConfig::default();
-        c.set_fluence_estimator(FluenceEstimator::HelperRays);
-        assert_eq!(c.fluence_estimator(), &FluenceEstimator::HelperRays);
+        c.set_fluence_estimator(FluenceEstimator::KDE);
+        assert_eq!(c.fluence_estimator(), &FluenceEstimator::KDE);
     }
     #[test]
     fn test_map_and_get_source() {

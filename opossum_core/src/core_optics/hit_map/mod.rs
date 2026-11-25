@@ -226,7 +226,7 @@ impl HitMap {
         None
     }
     /// Calculate a fluence map ([`FluenceData`]) of this [`HitMap`] that follows the ray tubes of
-    /// its bundles, as the Voronoi and the helper ray estimator do.
+    /// its bundles, as the Voronoi estimator does.
     ///
     /// The tubes of all stored [`RaysHitMap`]s are drawn into one map, which covers all of them
     /// (see [`RaysHitMap::calc_fluence_with_tubes`]).
@@ -306,7 +306,7 @@ impl HitMap {
         estimator: &FluenceEstimator,
     ) -> OpmResult<FluenceData> {
         match estimator {
-            FluenceEstimator::Voronoi | FluenceEstimator::HelperRays => {
+            FluenceEstimator::Voronoi => {
                 self.calc_combined_fluence_with_tubes(nr_of_points, *estimator)
             }
             FluenceEstimator::KDE => self.calc_combined_fluence_with_kde(nr_of_points),
@@ -904,7 +904,7 @@ mod test_hit_map {
                 None,
             )?;
         }
-        for estimator in [FluenceEstimator::Voronoi, FluenceEstimator::HelperRays] {
+        for estimator in [FluenceEstimator::Voronoi] {
             assert!(
                 hm.calc_combined_fluence_with_tubes((50, 50), estimator)
                     .is_err()
@@ -916,7 +916,7 @@ mod test_hit_map {
     /// draws them, and a second bundle adds as much again.
     #[test]
     fn a_combined_tube_map_shows_the_fluences_helper_rays_brought() -> OpmResult<()> {
-        for estimator in [FluenceEstimator::HelperRays, FluenceEstimator::Voronoi] {
+        for estimator in [FluenceEstimator::Voronoi] {
             let mut hm = HitMap::default();
             add_bundle_in_tubes(&mut hm, &square_with_center(), fluence_hit)?;
             let fl_data = hm.calc_combined_fluence_with_tubes((51, 51), estimator)?;
@@ -925,16 +925,6 @@ mod test_hit_map {
             let fl_data = hm.calc_combined_fluence_with_tubes((51, 51), estimator)?;
             assert_relative_eq!(fl_data.interp_distribution()[(25, 25)].value, 20000.);
         }
-        Ok(())
-    }
-    /// The helper ray estimator spreads the energies of plain rays as the Voronoi one does.
-    #[test]
-    fn a_combined_helper_ray_map_of_plain_rays_spreads_their_energies() -> OpmResult<()> {
-        let mut hm = HitMap::default();
-        add_bundle_in_tubes(&mut hm, &square_with_center(), energy_hit)?;
-        let fl_data =
-            hm.calc_combined_fluence_with_tubes((51, 51), FluenceEstimator::HelperRays)?;
-        assert_relative_eq!(fl_data.interp_distribution()[(25, 25)].value, 2.);
         Ok(())
     }
 
@@ -1083,10 +1073,6 @@ mod test_hit_map {
         );
         assert!(
             hm.calc_fluence_map((51, 51), &FluenceEstimator::Binning)
-                .is_ok()
-        );
-        assert!(
-            hm.calc_fluence_map((51, 51), &FluenceEstimator::HelperRays)
                 .is_ok()
         );
         Ok(())

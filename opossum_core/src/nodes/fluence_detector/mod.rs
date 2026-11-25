@@ -279,7 +279,7 @@ mod test {
         light::{LightData, LightResult, spectrum_helper::create_he_ne_spec},
         nanometer,
         nodes::test_helper::helper::*,
-        utils::test_helper::helper::{fluence_near, point_near},
+        utils::test_helper::helper::fluence_near,
     };
     #[test]
     fn default() {
@@ -552,85 +552,6 @@ mod test {
             .ok_or_else(|| crate::error::OpossumError::Other("no fluence detector".into()))?
             .calc_fluence_data()?
             .ok_or_else(|| crate::error::OpossumError::Other("the detector has no map".into()))
-    }
-    /// A collimated Gaussian beam of 1 J with the given standard deviation in mm, of rays with
-    /// helper rays in [`BEAM_RINGS`] hexapolar rings of [`BEAM_RADIUS`].
-    fn helper_beam(
-        sigma: f64,
-    ) -> OpmResult<crate::light::lightdata::ray_data_builder::RayDataBuilder> {
-        use crate::{
-            distributions::{fluence::general_gaussian::General2DGaussian, position::Hexapolar},
-            joule,
-            light::Rays,
-            millimeter,
-            prelude::RayDataSource,
-            radian,
-        };
-        let rays = Rays::new_collimated_w_fluence_helper(
-            nanometer!(1000.0),
-            &General2DGaussian::new(
-                joule!(1.0),
-                millimeter!(0.0, 0.0),
-                millimeter!(sigma, sigma),
-                radian!(0.0),
-            )?,
-            &Hexapolar::new(millimeter!(BEAM_RADIUS), BEAM_RINGS)?,
-        )?;
-        Ok(RayDataSource::Raw(rays).into())
-    }
-    /// The fluence in J/cm² of the beam of [`helper_beam`] at `r` mm from its center.
-    fn gaussian_fluence(sigma: f64, r: f64) -> f64 {
-        let (sigma, r) = (sigma / 10.0, r / 10.0);
-        (-r * r / (2.0 * sigma * sigma)).exp() / (2.0 * std::f64::consts::PI * sigma * sigma)
-    }
-    /// The map of a beam of rays with helper rays shows the fluence they bring, peak included.
-    #[test]
-    fn a_helper_beam_shows_its_fluence() -> OpmResult<()> {
-        let map = detector_map(helper_beam(3.0)?, FluenceEstimator::HelperRays, false)?;
-        for (x, y) in [(0.0, 0.0), (3.0, 0.0), (-2.0, 4.0), (5.0, -5.0)] {
-            let (x, y, fluence) = point_near(&map, x, y)?;
-            approx::assert_relative_eq!(
-                fluence,
-                gaussian_fluence(3.0, f64::hypot(x, y)),
-                max_relative = 0.03
-            );
-        }
-        approx::assert_relative_eq!(
-            map.peak()
-                .get::<uom::si::radiant_exposure::joule_per_square_centimeter>(),
-            gaussian_fluence(3.0, 0.0),
-            max_relative = 0.01
-        );
-        Ok(())
-    }
-    /// The map of rays with helper rays a bored mirror reflects stays dark in the hole as well.
-    #[test]
-    fn the_hole_behind_a_bored_mirror_stays_dark_for_helper_rays() -> OpmResult<()> {
-        let map = detector_map(helper_beam(30.0)?, FluenceEstimator::HelperRays, true)?;
-        let center = fluence_near(&map, 0.0, 0.0)?;
-        assert!(
-            center < 0.01 * gaussian_fluence(30.0, 0.0),
-            "the hole shows {center} J/cm²"
-        );
-        approx::assert_relative_eq!(
-            fluence_near(&map, 3.0, 0.0)?,
-            gaussian_fluence(30.0, 3.0),
-            max_relative = 0.05
-        );
-        Ok(())
-    }
-    /// KDE spreads the energies of the hits: rays with helper rays bring fluences instead, which
-    /// it refuses.
-    #[test]
-    fn kde_refuses_the_fluences_of_helper_rays() -> OpmResult<()> {
-        let map = detector_map(helper_beam(3.0)?, FluenceEstimator::KDE, false);
-        assert!(
-            map.as_ref()
-                .is_err_and(|e| e.to_string().contains("energies")),
-            "KDE has no energies to spread, but gave {:?}",
-            map.map(|map| map.peak())
-        );
-        Ok(())
     }
     /// A flat-top beam shows its fluence across the map.
     #[test]

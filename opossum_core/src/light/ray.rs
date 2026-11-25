@@ -7,20 +7,19 @@ use num_traits::{ToPrimitive, Zero};
 use serde::{Deserialize, Serialize};
 use uom::si::{
     energy::joule,
-    f64::{Energy, Length, Ratio},
+    f64::{Energy, Length},
     length::{meter, nanometer},
-    ratio::ratio,
 };
 
 use crate::{
     coatings::{Coating, SplittingConfig},
-    core_optics::hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint, HitPoint},
+    core_optics::hit_map::rays_hit_map::{EnergyHitPoint, HitPoint},
     error::{OpmResult, OpossumError},
     geometry::SurfaceHit,
     joule,
-    light::{FluenceRays, RaySource, Rays},
+    light::RaySource,
     meter,
-    nodes::{FilterType, fluence_detector::Fluence},
+    nodes::FilterType,
     percent,
     utils::{geom_transformation::Isometry, math_utils::distance_3d_point},
 };
@@ -53,12 +52,6 @@ pub struct Ray {
     path_length: Length,
     /// Refractive index of the medium in which the ray is propagating.
     refractive_index: f64,
-    /// Helper rays used for fluence or wavefront calculations.
-    helper_rays: Option<FluenceRays>,
-    /// Indicates if this is a helper ray (true) or a primary ray (false).
-    ///
-    /// This is currently a workaround until a new separate helper ray struct is available.
-    is_helper: bool,
     /// Where this ray stands in the ray tubes of its source, if a fluence map follows them (see
     /// [`RayMesh`](crate::light::RayMesh)). Not written to file.
     #[serde(skip)]
@@ -102,8 +95,6 @@ impl Ray {
             number_of_bounces: 0,
             number_of_refractions: 0,
             valid: true,
-            helper_rays: None,
-            is_helper: false,
             source: None,
         })
     }
@@ -116,82 +107,6 @@ impl Ray {
     /// Sets where this [`Ray`] stands in the ray tubes of its source.
     pub(crate) fn set_source(&mut self, source: RaySource) {
         self.source = Some(source);
-    }
-
-    /// Marks the ray as a helper ray if `is_helper` is true.
-    ///
-    /// Helper rays are used for fluence or wavefront calculations.
-    pub const fn set_is_helper(&mut self, is_helper: bool) {
-        self.is_helper = is_helper;
-    }
-    /// Creates a new collimated ray with three additional helper rays for fluence calculations.
-    ///
-    /// The ray is horizontally polarized and collinear with the z-axis (optical axis).
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if:
-    /// - The given wavelength is <= 0.0, `NaN`, or infinite.
-    /// - The given energy is < 0.0, `NaN`, or infinite.
-    pub fn new_collimated_w_fluence_helper(
-        position: Point3<Length>,
-        wave_length: Length,
-        energy: Energy,
-        init_fluence: Fluence,
-    ) -> OpmResult<Self> {
-        let mut ray = Self::new(position, Vector3::z(), wave_length, energy)?;
-        ray.helper_rays = Some(FluenceRays::new(&ray, init_fluence)?);
-        Ok(ray)
-    }
-
-    /// Calculates the fluence of this [`Ray`] using its helper rays.
-    ///
-    /// Returns `Some(Fluence)` if successful, or `None` if helper rays are not available or incomplete.
-    #[must_use]
-    pub fn helper_ray_fluence(&self) -> Option<Fluence> {
-        self.helper_rays.as_ref().and_then(|fluence| {
-            let rays = fluence.rays();
-            if let (Some(ray0), Some(ray1), Some(ray2)) = (
-                rays.get_ray_by_idx(0),
-                rays.get_ray_by_idx(1),
-                rays.get_ray_by_idx(2),
-            ) {
-                let ray0_pos = ray0.position();
-                let ray1_pos = ray1.position();
-                let ray2_pos = ray2.position();
-
-                let ab = ray0_pos - ray1_pos;
-                let ac = ray0_pos - ray2_pos;
-
-                let area = 0.5
-                    * ((ab.y * ac.z - ab.z * ac.y) * (ab.y * ac.z - ab.z * ac.y)
-                        + (ab.z * ac.x - ab.x * ac.z) * (ab.z * ac.x - ab.x * ac.z)
-                        + (ab.x * ac.y - ab.y * ac.x) * (ab.x * ac.y - ab.y * ac.x))
-                        .sqrt();
-                let new_fluence = *fluence.effective_energy() / area;
-                Some(new_fluence)
-            } else {
-                None
-            }
-        })
-    }
-
-    /// Returns an optional mutable reference to the helper [`Rays`]
-    #[must_use]
-    pub fn helper_rays_mut(&mut self) -> Option<&mut Rays> {
-        self.helper_rays
-            .as_mut()
-            .map(super::rays::FluenceRays::rays_mut)
-    }
-    /// Drops the helper rays of this [`Ray`], once their triangle has torn apart.
-    ///
-    /// The fluence of the ray is no longer defined then (see [`Ray::helper_ray_fluence`]). The ray
-    /// stays one that carried helper rays, so a surface records no hit for it any more, neither a
-    /// fluence nor an energy (see [`Ray::refract_at`]).
-    pub fn drop_helper_rays(&mut self) {
-        if let Some(helpers) = self.helper_rays_mut() {
-            *helpers = Rays::default();
-        }
     }
 
     /// Create a new collimated ray.
@@ -661,32 +576,16 @@ impl Ray {
         if n2.is_some() {
             self.number_of_refractions += 1;
         }
-        let mut generated_hit_point = None;
         // A detector records no hit outside its window.
-        if self.helper_rays.is_none() && !self.is_helper {
-            if hit.recorded() {
-                generated_hit_point = Some(HitPoint::Energy(EnergyHitPoint::new(
-                    hit.local_point(),
-                    input_energy,
-                )?));
-            }
-        } else if let Some(helper_fluence) = &self.helper_ray_fluence() {
-            if hit.recorded() {
-                generated_hit_point = Some(HitPoint::Fluence(FluenceHitPoint::new(
-                    hit.local_point(),
-                    *helper_fluence,
-                )?));
-            }
-            self.change_helper_fluence_by_factor(percent!(100.0) - reflectivity)?;
-            reflected_ray.change_helper_fluence_by_factor(reflectivity)?;
-        }
+        let generated_hit_point = if hit.recorded() {
+            Some(HitPoint::Energy(EnergyHitPoint::new(
+                hit.local_point(),
+                input_energy,
+            )?))
+        } else {
+            None
+        };
         Ok((Some(reflected_ray), generated_hit_point))
-    }
-
-    fn change_helper_fluence_by_factor(&mut self, factor: Ratio) -> OpmResult<()> {
-        self.helper_rays.as_mut().map_or(Ok(()), |helper_rays| {
-            helper_rays.change_effective_energy_by_factor(factor)
-        })
     }
     /// Attenuate a ray's energy by a given filter.
     ///
@@ -715,8 +614,7 @@ impl Ray {
     ///
     /// Unlike [`filter_energy`](Ray::filter_energy), which attenuates by a transmission and can
     /// therefore only ever remove energy, this takes any non-negative factor: it is what an active
-    /// medium needs, where a ray leaves with more energy than it entered with. The fluence its
-    /// helper rays carry is scaled by the same factor.
+    /// medium needs, where a ray leaves with more energy than it entered with.
     ///
     /// # Arguments
     ///
@@ -734,7 +632,6 @@ impl Ray {
                 "energy scaling factor must be finite and non-negative but is {factor}"
             )));
         }
-        self.change_helper_fluence_by_factor(Ratio::new::<ratio>(factor))?;
         self.e *= factor;
         Ok(())
     }
@@ -857,7 +754,6 @@ impl Display for Ray {
 mod test {
     use super::*;
     use crate::{
-        J_per_cm2,
         coatings::{CoatingConstantR, IdealAR},
         degree,
         geometry::{Face, Geometry, SurfaceGeometry, SurfaceShape},
@@ -1806,59 +1702,6 @@ mod test {
     }
 
     #[test]
-    fn set_is_helper() -> OpmResult<()> {
-        let mut ray = Ray::new(
-            meter!(1., 1., 1.),
-            Vector3::new(0., 0., 1.),
-            nanometer!(1000.),
-            joule!(1.),
-        )?;
-        assert!(!ray.is_helper);
-        ray.set_is_helper(true);
-        assert!(ray.is_helper);
-        ray.set_is_helper(false);
-        assert!(!ray.is_helper);
-        Ok(())
-    }
-
-    #[test]
-    fn new_collimated_w_fluence_helper() {
-        let ray = Ray::new_collimated_w_fluence_helper(
-            meter!(1., 1., 1.),
-            nanometer!(1000.),
-            joule!(1.),
-            J_per_cm2!(1.),
-        );
-        assert!(ray.is_ok());
-    }
-    #[test]
-    fn helper_ray_fluence() -> OpmResult<()> {
-        let ray = Ray::new(
-            meter!(1., 1., 1.),
-            Vector3::new(0., 0., 1.),
-            nanometer!(1000.),
-            joule!(1.),
-        )?;
-        assert!(ray.helper_ray_fluence().is_none());
-        let mut ray = Ray::new_collimated_w_fluence_helper(
-            meter!(1., 1., 1.),
-            nanometer!(1000.),
-            joule!(1.),
-            J_per_cm2!(1.),
-        )?;
-        assert_relative_eq!(
-            ray.helper_ray_fluence().unwrap().value / 10000.,
-            1.,
-            epsilon = 1e-8
-        );
-
-        let fluence_rays = ray.helper_rays_mut().unwrap();
-        *fluence_rays = Rays::default();
-        assert!(ray.helper_ray_fluence().is_none());
-        Ok(())
-    }
-
-    #[test]
     fn position_history_with_current() -> OpmResult<()> {
         let ray = Ray::new(
             meter!(1., 2., 3.),
@@ -1900,43 +1743,6 @@ mod test {
         assert_relative_eq!(hist[(2, 0)].value, 3.);
         assert_relative_eq!(hist[(2, 1)].value, 4.);
         assert_relative_eq!(hist[(2, 2)].value, 5.);
-        Ok(())
-    }
-
-    #[test]
-    fn change_helper_fluence_by_factor() -> OpmResult<()> {
-        let mut original_ray = Ray::new_collimated_w_fluence_helper(
-            meter!(1., 1., 1.),
-            nanometer!(1000.),
-            joule!(1.),
-            J_per_cm2!(1.),
-        )?;
-        assert!(
-            original_ray
-                .change_helper_fluence_by_factor(percent!(-100.0))
-                .is_err()
-        );
-        assert!(
-            original_ray
-                .change_helper_fluence_by_factor(percent!(f64::NAN))
-                .is_err()
-        );
-        assert!(
-            original_ray
-                .change_helper_fluence_by_factor(percent!(f64::NEG_INFINITY))
-                .is_err()
-        );
-        assert!(
-            original_ray
-                .change_helper_fluence_by_factor(percent!(f64::INFINITY))
-                .is_err()
-        );
-        original_ray.change_helper_fluence_by_factor(percent!(400.0))?;
-        assert_relative_eq!(
-            original_ray.helper_ray_fluence().unwrap().value / 40000.,
-            1.,
-            epsilon = 1e-9
-        );
         Ok(())
     }
 }
