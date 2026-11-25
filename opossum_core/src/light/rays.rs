@@ -6,7 +6,7 @@ use crate::{
     coatings::SplittingConfig,
     core_optics::hit_map::{
         fluence_estimator::FluenceEstimator,
-        rays_hit_map::{EnergyHitPoint, HitPoint, RaysHitMap},
+        rays_hit_map::{HitPoint, RaysHitMap},
     },
     degree,
     distributions::{
@@ -770,10 +770,7 @@ impl Rays {
         for ray in self.ray_bundle.iter().filter(|ray| ray.valid()) {
             let at = ray.inverse_transformed_ray(iso).position();
             hits.add_hit_point(
-                HitPoint::Energy(EnergyHitPoint::new(
-                    Point3::new(at.x, at.y, meter!(0.)),
-                    ray.energy(),
-                )?),
+                HitPoint::new(Point3::new(at.x, at.y, meter!(0.)), ray.energy())?,
                 ray.source(),
             )?;
         }

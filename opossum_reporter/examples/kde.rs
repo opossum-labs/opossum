@@ -1,7 +1,7 @@
 use opossum_core::{
     core_optics::hit_map::{
         fluence_estimator::FluenceEstimator,
-        rays_hit_map::{EnergyHitPoint, HitPoint, RaysHitMap},
+        rays_hit_map::{HitPoint, RaysHitMap},
     },
     distributions::position::{Hexapolar, PositionDistribution},
     prelude::*,
@@ -16,7 +16,7 @@ fn main() -> OpmResult<()> {
     let weight = joule!(1.0) / Ratio::new::<uom::si::ratio::ratio>(points.len() as f64);
     let mut hit_map = RaysHitMap::default();
     for p in points {
-        let hit_point = HitPoint::Energy(EnergyHitPoint::new(p, weight)?);
+        let hit_point = HitPoint::new(p, weight)?;
         hit_map.add_hit_point(hit_point, None)?;
     }
     let fluence_data = hit_map.calc_fluence_map((100, 100), &FluenceEstimator::KDE, None, None)?;

@@ -6,7 +6,7 @@ use nalgebra::{DMatrix, DVector, DVectorView, Matrix2xX, MatrixXx2, MatrixXx3, P
 use opossum_core::{
     analyzers::ghostfocus::GhostFocusHistory,
     apertures::{Aperture, ApertureShape, CircleShape},
-    core_optics::hit_map::HitMap,
+    core_optics::hit_map::{HitMap, rays_hit_map::HitPoint},
     error::{OpmResult, OpossumError},
     light::Spectrum,
     meter,
@@ -394,7 +394,7 @@ impl Plottable for HitMap {
             for (i, bounced_ray_bundles) in self.hit_map().iter().enumerate() {
                 xy_positions.push(Vec::<Point2<Length>>::new());
                 for rays_hitmap in bounced_ray_bundles.hit_map().values() {
-                    for p in rays_hitmap.hit_map().positions() {
+                    for p in rays_hitmap.hit_points().iter().map(HitPoint::position) {
                         xy_positions[i].push(Point2::new(p.x, p.y));
                         x_max = x_max.max(p.x.value);
                         y_max = y_max.max(p.y.value);

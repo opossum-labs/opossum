@@ -13,7 +13,7 @@ use uom::si::{
 
 use crate::{
     coatings::{Coating, SplittingConfig},
-    core_optics::hit_map::rays_hit_map::{EnergyHitPoint, HitPoint},
+    core_optics::hit_map::rays_hit_map::HitPoint,
     error::{OpmResult, OpossumError},
     geometry::SurfaceHit,
     joule,
@@ -578,10 +578,7 @@ impl Ray {
         }
         // A detector records no hit outside its window.
         let generated_hit_point = if hit.recorded() {
-            Some(HitPoint::Energy(EnergyHitPoint::new(
-                hit.local_point(),
-                input_energy,
-            )?))
+            Some(HitPoint::new(hit.local_point(), input_energy)?)
         } else {
             None
         };
@@ -1163,7 +1160,7 @@ mod test {
             .intersect(Extruded::FRONT, &ray)
             .ok_or_else(|| OpossumError::Other("the ray missed the lens".into()))?;
         let (_, hit) = ray.refract_at(&surface_hit, &IdealAR, Some(1.5))?;
-        let Some(HitPoint::Energy(hit)) = hit else {
+        let Some(hit) = hit else {
             return Err(OpossumError::Other("the ray left no energy hit".into()));
         };
         assert_abs_diff_eq!(hit.position().x.get::<millimeter>(), 3.0, epsilon = 1e-9);

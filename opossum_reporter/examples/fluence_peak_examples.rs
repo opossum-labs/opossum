@@ -7,7 +7,7 @@ use nalgebra::{MatrixXx2, Point3};
 use opossum_core::{
     core_optics::hit_map::{
         fluence_estimator::FluenceEstimator,
-        rays_hit_map::{EnergyHitPoint, HitPoint, RaysHitMap},
+        rays_hit_map::{HitPoint, RaysHitMap},
     },
     distributions::{
         energy::General2DGaussian,
@@ -241,10 +241,7 @@ fn hits(
     let mut hits = RaysHitMap::default();
     for ray in rays {
         if let Some(at) = place(ray.position()) {
-            hits.add_hit_point(
-                HitPoint::Energy(EnergyHitPoint::new(at, ray.energy())?),
-                ray.source(),
-            )?;
+            hits.add_hit_point(HitPoint::new(at, ray.energy())?, ray.source())?;
         }
     }
     Ok(hits)

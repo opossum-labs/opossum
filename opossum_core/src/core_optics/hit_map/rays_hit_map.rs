@@ -1,6 +1,6 @@
 //! The structures for storing the actual hitmap.
 //!
-//! This module also conatins the routines for genearating a fluence map using different estimator strategies.
+//! This module also contains the routines for generating a fluence map using different estimator strategies.
 use crate::{
     error::{OpmResult, OpossumError},
     joule,
@@ -10,7 +10,6 @@ use crate::{
     nodes::fluence_detector::{Fluence, fluence_data::FluenceData},
     utils::{to_f64, try_f64_to_usize},
 };
-use itertools::Itertools;
 use libm::modf;
 use nalgebra::{DMatrix, Point2, Point3};
 use serde::{Deserialize, Serialize};
@@ -18,7 +17,6 @@ use std::{ops::Range, sync::Arc};
 use uom::si::{
     energy::joule,
     f64::{Energy, Length},
-    radiant_exposure::joule_per_square_meter,
 };
 
 use super::{
@@ -26,135 +24,49 @@ use super::{
     ray_tubes::{Arrival, ArrivedSheet, draw_map},
 };
 
-/// Trait to ensure that a generic physical quantity can be validated
-/// for being finite and positive.
-pub trait QuantityValidation {
-    /// Returns true if the underlying value is finite.
-    fn is_finite(&self) -> bool;
-    /// Returns true if the underlying value is negative.
-    fn is_sign_negative(&self) -> bool;
-}
-
-// Implement the validation trait for Energy
-impl QuantityValidation for Energy {
-    fn is_finite(&self) -> bool {
-        self.value.is_finite()
-    }
-    fn is_sign_negative(&self) -> bool {
-        self.value.is_sign_negative()
-    }
-}
-
-// Implement the validation trait for Fluence
-impl QuantityValidation for Fluence {
-    fn is_finite(&self) -> bool {
-        self.value.is_finite()
-    }
-    fn is_sign_negative(&self) -> bool {
-        self.value.is_sign_negative()
-    }
-}
-
-/// A generic hit point storing a position and a generic value (e.g., Energy or Fluence).
+/// Where a ray hit a surface and the energy it brought there.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct BaseHitPoint<V> {
-    /// Position of the intersection point
-    pub position: Point3<Length>,
-    /// Value (Energy or Fluence) of the ray that intersected the surface
-    pub value: V,
+pub struct HitPoint {
+    /// Where the ray hit, in the coordinates of the surface.
+    position: Point3<Length>,
+    /// The energy the ray brought.
+    energy: Energy,
 }
-
-impl<V> BaseHitPoint<V>
-where
-    V: Copy + QuantityValidation, // Use our custom trait bound here
-{
-    /// Creates a new generic hit point.
+impl HitPoint {
+    /// Creates a new [`HitPoint`].
     ///
     /// # Errors
-    /// Returns an error if the value is negative or not finite, or if the
-    /// position coordinates are not finite.
-    pub fn new(position: Point3<Length>, value: V) -> OpmResult<Self> {
-        // Correct check for NaN, infinity, and negative values
-        if !value.is_finite() || value.is_sign_negative() {
+    /// This function returns an error if the energy is negative or not finite, or if the position
+    /// is not finite.
+    pub fn new(position: Point3<Length>, energy: Energy) -> OpmResult<Self> {
+        if !energy.is_finite() || energy.is_sign_negative() {
             return Err(OpossumError::Other(
-                "Value must be positive and finite".into(),
+                "the energy of a hit must be positive and finite".into(),
             ));
         }
-        // Validate the position coordinates
         if !position.x.is_finite() || !position.y.is_finite() || !position.z.is_finite() {
-            return Err(OpossumError::Other("Position must be finite".into()));
+            return Err(OpossumError::Other(
+                "the position of a hit must be finite".into(),
+            ));
         }
-        Ok(Self { position, value })
+        Ok(Self { position, energy })
     }
-    /// Returns the position of this hit point.
+    /// Returns where the ray hit, in the coordinates of the surface.
     #[must_use]
     pub fn position(&self) -> Point3<Length> {
         self.position
     }
-    /// Returns the value of this hit point.
+    /// Returns the energy the ray brought.
     #[must_use]
-    pub const fn value(&self) -> V {
-        self.value
-    }
-}
-
-// Define the type aliases for seamless integration
-pub type EnergyHitPoint = BaseHitPoint<Energy>;
-pub type FluenceHitPoint = BaseHitPoint<Fluence>;
-
-/// Enum to store different types of hit point quantities in a hitmap
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum HitPoints {
-    ///Energy hitpoints contain a vec of [`EnergyHitPoint`]
-    Energy(Vec<EnergyHitPoint>),
-    ///Fluence hitpoints contain a vec of [`FluenceHitPoint`]
-    Fluence(Vec<FluenceHitPoint>),
-}
-
-impl HitPoints {
-    /// Returns the length of the store hit-point vector within this [`HitPoints`]
-    #[must_use]
-    pub const fn len(&self) -> usize {
-        match self {
-            Self::Energy(vec) => vec.len(),
-            Self::Fluence(vec) => vec.len(),
-        }
-    }
-    /// Checks if the stored hit-point vectors are emtpy. Returns true if empty, false otherwise.
-    #[must_use]
-    pub const fn is_empty(&self) -> bool {
-        match self {
-            Self::Energy(vec) => vec.is_empty(),
-            Self::Fluence(vec) => vec.is_empty(),
-        }
-    }
-
-    /// Returns a vector of 3d positions of the stored hit-point vectors
-    #[must_use]
-    pub fn positions(&self) -> Vec<Point3<Length>> {
-        match self {
-            Self::Energy(vec) => vec.iter().map(EnergyHitPoint::position).collect_vec(),
-            Self::Fluence(vec) => vec.iter().map(FluenceHitPoint::position).collect_vec(),
-        }
-    }
-}
-/// Enum to pass different types of hit point quantities in a hitmap
-pub enum HitPoint {
-    ///Energy hitpoint contains an [`EnergyHitPoint`]
-    Energy(EnergyHitPoint),
-    ///Fluence hitpoint contains a [`FluenceHitPoint`]
-    Fluence(FluenceHitPoint),
-}
-impl Default for HitPoints {
-    fn default() -> Self {
-        Self::Energy(Vec::<EnergyHitPoint>::new())
+    pub const fn energy(&self) -> Energy {
+        self.energy
     }
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
 ///Storage struct for hitpoints on a surface from a single ray bundle
 pub struct RaysHitMap {
-    hit_points: HitPoints,
+    hit_points: Vec<HitPoint>,
     x_lims: (Length, Length),
     y_lims: (Length, Length),
     /// The ray tubes the hits stand in, in the order they first hit (see [`RayMesh`]). Not
@@ -167,52 +79,25 @@ pub struct RaysHitMap {
     vertices: Vec<(u32, u32)>,
 }
 impl RaysHitMap {
-    /// Creates a new [`RaysHitMap`]
+    /// Creates a new [`RaysHitMap`] of the given hits, which follow no ray tubes.
     #[must_use]
-    pub fn new(hit_points: HitPoints) -> Self {
-        let (xmin, xmax, ymin, ymax) = match &hit_points {
-            HitPoints::Energy(vec) => vec.iter().fold(
-                (
-                    meter!(f64::INFINITY),
-                    meter!(f64::NEG_INFINITY),
-                    meter!(f64::INFINITY),
-                    meter!(f64::NEG_INFINITY),
-                ),
-                |arg0, v| {
-                    (
-                        arg0.0.min(v.position.x),
-                        arg0.1.max(v.position.x),
-                        arg0.2.min(v.position.y),
-                        arg0.3.max(v.position.y),
-                    )
-                },
-            ),
-            HitPoints::Fluence(vec) => vec.iter().fold(
-                (
-                    meter!(f64::INFINITY),
-                    meter!(f64::NEG_INFINITY),
-                    meter!(f64::INFINITY),
-                    meter!(f64::NEG_INFINITY),
-                ),
-                |arg0, v| {
-                    (
-                        arg0.0.min(v.position.x),
-                        arg0.1.max(v.position.x),
-                        arg0.2.min(v.position.y),
-                        arg0.3.max(v.position.y),
-                    )
-                },
-            ),
-        };
+    pub fn new(hit_points: Vec<HitPoint>) -> Self {
+        let far = (meter!(f64::INFINITY), meter!(f64::NEG_INFINITY));
+        let (x_lims, y_lims) = hit_points.iter().fold((far, far), |(x, y), hit| {
+            (
+                (x.0.min(hit.position.x), x.1.max(hit.position.x)),
+                (y.0.min(hit.position.y), y.1.max(hit.position.y)),
+            )
+        });
         Self {
             hit_points,
-            x_lims: (xmin, xmax),
-            y_lims: (ymin, ymax),
+            x_lims,
+            y_lims,
             meshes: Vec::new(),
             vertices: Vec::new(),
         }
     }
-    /// Add intersection point (with energy/fluence) to this [`RaysHitMap`].
+    /// Add intersection point (with its energy) to this [`RaysHitMap`].
     ///
     /// # Arguments
     ///
@@ -221,15 +106,14 @@ impl RaysHitMap {
     ///   follows the tubes only while every one of its hits stands in them.
     ///
     /// # Errors
-    /// This function errors if the hitpoint that should be added does not match the already stored
-    /// hit point type, or if the hits stand in more than `u32::MAX` meshes.
+    /// This function errors if the hits stand in more than `u32::MAX` meshes.
     pub fn add_hit_point(
         &mut self,
         hit_point: HitPoint,
         source: Option<&RaySource>,
     ) -> OpmResult<()> {
         let in_tubes = self.follows_tubes() || self.hit_points.is_empty();
-        self.push_hit_point(hit_point)?;
+        self.push_hit_point(hit_point);
         match source {
             Some(source) if in_tubes => {
                 let slot = self
@@ -257,61 +141,23 @@ impl RaysHitMap {
         !self.hit_points.is_empty() && self.vertices.len() == self.hit_points.len()
     }
     /// Add an intersection point to the hit points of this map and widen its limits.
-    fn push_hit_point(&mut self, hit_point: HitPoint) -> OpmResult<()> {
-        match hit_point {
-            HitPoint::Energy(energy_hit_point) => {
-                if let HitPoints::Energy(v) = &mut self.hit_points {
-                    // Update limits based on the new point
-                    if v.is_empty() {
-                        self.x_lims.0 = energy_hit_point.position.x;
-                        self.x_lims.1 = energy_hit_point.position.x;
-                        self.y_lims.0 = energy_hit_point.position.y;
-                        self.y_lims.1 = energy_hit_point.position.y;
-                    } else {
-                        self.x_lims.0 = energy_hit_point.position.x.min(self.x_lims.0);
-                        self.x_lims.1 = energy_hit_point.position.x.max(self.x_lims.1);
-                        self.y_lims.0 = energy_hit_point.position.y.min(self.y_lims.0);
-                        self.y_lims.1 = energy_hit_point.position.y.max(self.y_lims.1);
-                    }
-                    // Fast insertion: just push the point without searching for duplicates
-                    v.push(energy_hit_point);
-                } else {
-                    return Err(OpossumError::Analysis(
-                        "wrong hit point type for this hitmap! Must be Energyhitpoint!".into(),
-                    ));
-                }
-            }
-            HitPoint::Fluence(fluence_hit_point) => {
-                if let HitPoints::Fluence(v) = &mut self.hit_points {
-                    // Update limits based on the new point
-                    if v.is_empty() {
-                        self.x_lims.0 = fluence_hit_point.position.x;
-                        self.x_lims.1 = fluence_hit_point.position.x;
-                        self.y_lims.0 = fluence_hit_point.position.y;
-                        self.y_lims.1 = fluence_hit_point.position.y;
-                    } else {
-                        self.x_lims.0 = fluence_hit_point.position.x.min(self.x_lims.0);
-                        self.x_lims.1 = fluence_hit_point.position.x.max(self.x_lims.1);
-                        self.y_lims.0 = fluence_hit_point.position.y.min(self.y_lims.0);
-                        self.y_lims.1 = fluence_hit_point.position.y.max(self.y_lims.1);
-                    }
-                    // Fast insertion: just push the point without searching for duplicates
-                    v.push(fluence_hit_point);
-                } else {
-                    return Err(OpossumError::Analysis(
-                        "wrong hit point type for this hitmap! Must be Fluencehitpoint!".into(),
-                    ));
-                }
-            }
+    fn push_hit_point(&mut self, hit_point: HitPoint) {
+        let (x, y) = (hit_point.position.x, hit_point.position.y);
+        if self.hit_points.is_empty() {
+            self.x_lims = (x, x);
+            self.y_lims = (y, y);
+        } else {
+            self.x_lims = (x.min(self.x_lims.0), x.max(self.x_lims.1));
+            self.y_lims = (y.min(self.y_lims.0), y.max(self.y_lims.1));
         }
-        Ok(())
+        self.hit_points.push(hit_point);
     }
-    /// Returns the x limit (min, max) of the [`HitPoints`] that are stored in this [`RaysHitMap`]
+    /// Returns the x limit (min, max) of the hit points that are stored in this [`RaysHitMap`]
     #[must_use]
     pub fn x_lims(&self) -> &(Length, Length) {
         &self.x_lims
     }
-    /// Returns the y limit (min, max) of the [`HitPoints`] that are stored in this [`RaysHitMap`]
+    /// Returns the y limit (min, max) of the hit points that are stored in this [`RaysHitMap`]
     #[must_use]
     pub fn y_lims(&self) -> &(Length, Length) {
         &self.y_lims
@@ -320,39 +166,10 @@ impl RaysHitMap {
     /// Merge this [`RaysHitMap`] with another [`RaysHitMap`].
     ///
     /// The merged map follows no ray tubes: it is made for the estimators that need none.
-    ///
-    /// # Errors
-    /// This function errors if the hit-point type of the respective [`RaysHitMap`] does not match
-    pub fn merge(&mut self, other_map: &Self) -> OpmResult<()> {
+    pub fn merge(&mut self, other_map: &Self) {
         self.meshes.clear();
         self.vertices.clear();
-        match &mut self.hit_points {
-            HitPoints::Energy(mut_vec) => match &other_map.hit_points {
-                HitPoints::Energy(vec) => {
-                    for hit_point in vec {
-                        mut_vec.push(hit_point.clone());
-                    }
-                }
-                HitPoints::Fluence(_) => {
-                    return Err(OpossumError::Analysis(
-                        "wrong hit point type for this hitmap! Must be Fluencehitpoint!".into(),
-                    ));
-                }
-            },
-            HitPoints::Fluence(mut_vec) => match &other_map.hit_points {
-                HitPoints::Fluence(vec) => {
-                    for hit_point in vec {
-                        mut_vec.push(hit_point.clone());
-                    }
-                }
-                HitPoints::Energy(_) => {
-                    return Err(OpossumError::Analysis(
-                        "wrong hit point type for this hitmap! Must be Fluencehitpoint!".into(),
-                    ));
-                }
-            },
-        }
-        Ok(())
+        self.hit_points.extend_from_slice(&other_map.hit_points);
     }
     /// Calculate a fluence map ([`FluenceData`]) of this [`RaysHitMap`] using the "Binning" method
     ///
@@ -367,18 +184,13 @@ impl RaysHitMap {
     /// -`ax_2_range`: optional range along y the map covers, from the first to the last point; that of the hits if `None`
     ///
     /// # Errors
-    /// This function errors if
-    /// - no ranges are given and the [`RaysHitMap`] is empty.
-    /// - its hits brought fluences rather than energies.
+    /// This function errors if no ranges are given and the [`RaysHitMap`] is empty.
     pub fn calc_fluence_with_binning(
         &self,
         nr_of_points: (usize, usize),
         ax_1_range: Option<&Range<Length>>,
         ax_2_range: Option<&Range<Length>>,
     ) -> OpmResult<FluenceData> {
-        let HitPoints::Energy(hit_points) = &self.hit_points else {
-            return Err(energies_needed(FluenceEstimator::Binning));
-        };
         let (x, y) = if let (Some(x), Some(y)) = (ax_1_range, ax_2_range) {
             (x.clone(), y.clone())
         } else {
@@ -397,7 +209,7 @@ impl RaysHitMap {
             (at - range.start).value / (range.end - range.start).value * last(points)
         };
         let mut energies = DMatrix::from_element(rows, columns, joule!(0.0));
-        for hit in hit_points {
+        for hit in &self.hit_points {
             let (along_x, along_y) = (
                 index(hit.position.x, &x, columns),
                 index(hit.position.y, &y, rows),
@@ -420,7 +232,7 @@ impl RaysHitMap {
                 if share > 0.0
                     && let Some(energy) = energies.get_mut((row + next_row, column + next_column))
                 {
-                    *energy += hit.value * share;
+                    *energy += hit.energy * share;
                 }
             }
         }
@@ -464,59 +276,42 @@ impl RaysHitMap {
         )
     }
     /// Returns the sheets of ray tubes the hits of this map stand in, each with the fluence, in
-    /// J/m², its corners show: from the energies plain rays brought (see
-    /// [`ArrivedSheet::fluences_from_energies`]), or as rays with helper rays brought it along.
+    /// J/m², its corners show (see [`ArrivedSheet::fluences_from_energies`]).
     ///
     /// # Errors
     ///
     /// This function returns an error if the hits do not all stand in ray tubes.
     pub(super) fn tube_sheets(&self) -> OpmResult<Vec<(ArrivedSheet<'_>, Vec<Option<f64>>)>> {
-        let at = |position: &Point3<Length>| Point2::new(position.x.value, position.y.value);
-        Ok(match &self.hit_points {
-            HitPoints::Energy(hits) => self
-                .arrived_sheets(|hit| {
-                    hits.get(hit)
-                        .map(|p| (at(&p.position), p.value.get::<joule>()))
-                })?
-                .into_iter()
-                .map(|sheet| {
-                    let fluences = sheet.fluences_from_energies();
-                    (sheet, fluences)
-                })
-                .collect(),
-            HitPoints::Fluence(hits) => self
-                .arrived_sheets(|hit| {
-                    hits.get(hit)
-                        .map(|p| (at(&p.position), p.value.get::<joule_per_square_meter>()))
-                })?
-                .into_iter()
-                .map(|sheet| {
-                    let fluences = sheet.arrived_values();
-                    (sheet, fluences)
-                })
-                .collect(),
-        })
+        Ok(self
+            .arrived_sheets()?
+            .into_iter()
+            .map(|sheet| {
+                let fluences = sheet.fluences_from_energies();
+                (sheet, fluences)
+            })
+            .collect())
     }
     /// Returns the sheets of ray tubes the hits of this map stand in, each with the corners that
     /// arrived here.
     ///
     /// A corner arrived if all its rays hit here. It arrived where its first ray hit and brought
-    /// what all its rays brought together. A ray that hits again, as both arms of an
+    /// the energy of all its rays together. A ray that hits again, as both arms of an
     /// interferometer do where they meet, arrives in another copy of its sheet: the k-th hit of
     /// each ray belongs to the k-th copy.
-    ///
-    /// # Arguments
-    ///
-    /// * `hit_of` - where the hit with the given index lies on the surface, in meters, and what
-    ///   it brought: its energy or its fluence.
     ///
     /// # Errors
     ///
     /// This function returns an error if the hits do not all stand in ray tubes.
-    fn arrived_sheets(
-        &self,
-        hit_of: impl Fn(usize) -> Option<(Point2<f64>, f64)>,
-    ) -> OpmResult<Vec<ArrivedSheet<'_>>> {
+    fn arrived_sheets(&self) -> OpmResult<Vec<ArrivedSheet<'_>>> {
+        // where the hit with the given index lies on the surface, in meters, and its energy, in J
+        let hit_of = |hit: usize| {
+            self.hit_points.get(hit).map(|hit| {
+                (
+                    Point2::new(hit.position.x.value, hit.position.y.value),
+                    hit.energy.get::<joule>(),
+                )
+            })
+        };
         if !self.follows_tubes() {
             return Err(OpossumError::Analysis(
                 "the rays on this surface span no ray tubes, which a Voronoi map follows".into(),
@@ -558,11 +353,11 @@ impl RaysHitMap {
                         .rays()
                         .iter()
                         .map(|ray| hit_of_ray.get(*ray as usize).copied().flatten());
-                    let (position, mut value) = hit_of(hits.next()??)?;
+                    let (position, mut energy) = hit_of(hits.next()??)?;
                     for hit in hits {
-                        value += hit_of(hit?)?.1;
+                        energy += hit_of(hit?)?.1;
                     }
-                    Some(Arrival { position, value })
+                    Some(Arrival { position, energy })
                 };
                 sheets.extend(
                     mesh.sheets()
@@ -574,45 +369,41 @@ impl RaysHitMap {
         Ok(sheets)
     }
     fn calc_2d_bounding_box(&self, margin: Length) -> OpmResult<(Length, Length, Length, Length)> {
-        if let HitPoints::Energy(hit_points) = &self.hit_points {
-            if !margin.is_finite() {
-                return Err(OpossumError::Other("margin must be finite".into()));
-            }
-            hit_points.first().map_or_else(
-                || {
-                    Err(OpossumError::Other(
-                        "could not calculate bounding box".into(),
-                    ))
-                },
-                |hit_point| {
-                    let mut left = hit_point.position.x;
-                    let mut right = hit_point.position.x;
-                    let mut top = hit_point.position.y;
-                    let mut bottom = hit_point.position.y;
-                    for point in hit_points {
-                        if point.position.x < left {
-                            left = point.position.x;
-                        }
-                        if point.position.y < bottom {
-                            bottom = point.position.y;
-                        }
-                        if point.position.x > right {
-                            right = point.position.x;
-                        }
-                        if point.position.y > top {
-                            top = point.position.y;
-                        }
-                    }
-                    left -= margin;
-                    right += margin;
-                    bottom -= margin;
-                    top += margin;
-                    Ok((left, right, top, bottom))
-                },
-            )
-        } else {
-            Err(OpossumError::Analysis("wrong hit point type for to calculate 2d bounding box for kde! Must be an Energyhitpoint!".into()))
+        if !margin.is_finite() {
+            return Err(OpossumError::Other("margin must be finite".into()));
         }
+        self.hit_points.first().map_or_else(
+            || {
+                Err(OpossumError::Other(
+                    "could not calculate bounding box".into(),
+                ))
+            },
+            |hit_point| {
+                let mut left = hit_point.position.x;
+                let mut right = hit_point.position.x;
+                let mut top = hit_point.position.y;
+                let mut bottom = hit_point.position.y;
+                for point in &self.hit_points {
+                    if point.position.x < left {
+                        left = point.position.x;
+                    }
+                    if point.position.y < bottom {
+                        bottom = point.position.y;
+                    }
+                    if point.position.x > right {
+                        right = point.position.x;
+                    }
+                    if point.position.y > top {
+                        top = point.position.y;
+                    }
+                }
+                left -= margin;
+                right += margin;
+                bottom -= margin;
+                top += margin;
+                Ok((left, right, top, bottom))
+            },
+        )
     }
 
     /// Calculate a fluence map ([`FluenceData`]) of this [`RaysHitMap`] using the "Kernel Density Estimator (KDE)" method
@@ -623,50 +414,39 @@ impl RaysHitMap {
     /// -`ax_2_range_opt`: optional range of the axis 2 on which the data should be interpolated    
     ///
     /// # Errors
-    /// This function errors if
-    /// - no bandwidth for the kernel can be estimated
-    /// - The hit point type is neither energy nor fluence
+    /// This function errors if no bandwidth for the kernel can be estimated.
     pub fn calc_fluence_with_kde(
         &self,
         nr_of_points: (usize, usize),
         ax_1_range: Option<&Range<Length>>,
         ax_2_range: Option<&Range<Length>>,
     ) -> OpmResult<FluenceData> {
-        if let HitPoints::Energy(hit_points) = &self.hit_points {
-            let mut kde = Kde::default();
-            // Define Accessors
-            let accessor = |p: &EnergyHitPoint| (p.position.xy(), p.value);
-            let pos_accessor = |p: &EnergyHitPoint| p.position.xy();
-            // Estimate bandwidth
-            let mut est_bandwidth = Kde::bandwidth_estimate(hit_points, pos_accessor);
-
-            if !est_bandwidth.is_normal() {
-                est_bandwidth = micrometer!(10.0);
-            }
-            kde.set_band_width(est_bandwidth)?;
-            let (left, right, top, bottom) =
-                if let (Some(range_1), Some(range_2)) = (ax_1_range, ax_2_range) {
-                    (range_1.start, range_1.end, range_2.start, range_2.end)
-                } else {
-                    self.calc_2d_bounding_box(3. * est_bandwidth)?
-                };
-            let fluence_matrix = kde.kde_2d(
-                hit_points,
-                accessor,
-                &(left..right, bottom..top),
-                nr_of_points,
-            );
-
-            let fluence_data = FluenceData::new(
-                fluence_matrix,
-                left..right,
-                bottom..top,
-                FluenceEstimator::KDE,
-            );
-            Ok(fluence_data)
-        } else {
-            Err(energies_needed(FluenceEstimator::KDE))
+        let mut kde = Kde::default();
+        let accessor = |p: &HitPoint| (p.position.xy(), p.energy);
+        let pos_accessor = |p: &HitPoint| p.position.xy();
+        let mut est_bandwidth = Kde::bandwidth_estimate(&self.hit_points, pos_accessor);
+        if !est_bandwidth.is_normal() {
+            est_bandwidth = micrometer!(10.0);
         }
+        kde.set_band_width(est_bandwidth)?;
+        let (left, right, top, bottom) =
+            if let (Some(range_1), Some(range_2)) = (ax_1_range, ax_2_range) {
+                (range_1.start, range_1.end, range_2.start, range_2.end)
+            } else {
+                self.calc_2d_bounding_box(3. * est_bandwidth)?
+            };
+        let fluence_matrix = kde.kde_2d(
+            &self.hit_points,
+            accessor,
+            &(left..right, bottom..top),
+            nr_of_points,
+        );
+        Ok(FluenceData::new(
+            fluence_matrix,
+            left..right,
+            bottom..top,
+            FluenceEstimator::KDE,
+        ))
     }
 
     /// Calculate a fluence map ([`FluenceData`]) of this [`RaysHitMap`].
@@ -718,138 +498,42 @@ impl RaysHitMap {
             .peak())
     }
 
-    /// Returns a reference to the hit map of this [`RaysHitMap`].
+    /// Returns the hits of this [`RaysHitMap`], in the order they hit.
     #[must_use]
-    pub const fn hit_map(&self) -> &HitPoints {
+    pub fn hit_points(&self) -> &[HitPoint] {
         &self.hit_points
     }
 }
-/// The error of an estimator that spreads the energies of the hits, asked for a map of hits that
-/// brought fluences.
-fn energies_needed(estimator: FluenceEstimator) -> OpossumError {
-    OpossumError::Analysis(format!(
-        "the {estimator} estimator spreads the energies of the hits, but rays with helper rays bring fluences: use the Voronoi or the helper ray estimator"
-    ))
-}
 #[cfg(test)]
 mod test_hitpoint {
-    use crate::{
-        J_per_cm2,
-        core_optics::hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint},
-        error::OpmResult,
-        joule, meter,
-    };
+    use crate::{core_optics::hit_map::rays_hit_map::HitPoint, error::OpmResult, joule, meter};
     #[test]
-    fn new_fluence_hit_point() {
-        assert!(FluenceHitPoint::new(meter!(1.0, 1.0, 1.0), J_per_cm2!(f64::NAN)).is_err());
-        assert!(FluenceHitPoint::new(meter!(1.0, 1.0, 1.0), J_per_cm2!(f64::INFINITY)).is_err());
-        assert!(FluenceHitPoint::new(meter!(1.0, 1.0, 1.0), J_per_cm2!(-0.1)).is_err());
-        assert!(
-            FluenceHitPoint::new(meter!(1.0, 1.0, 1.0), J_per_cm2!(f64::NEG_INFINITY)).is_err()
-        );
-        assert!(FluenceHitPoint::new(meter!(1.0, 1.0, 1.0), J_per_cm2!(0.0)).is_ok());
+    fn new() {
+        assert!(HitPoint::new(meter!(1.0, 1.0, 1.0), joule!(f64::NAN)).is_err());
+        assert!(HitPoint::new(meter!(1.0, 1.0, 1.0), joule!(f64::INFINITY)).is_err());
+        assert!(HitPoint::new(meter!(1.0, 1.0, 1.0), joule!(-0.1)).is_err());
+        assert!(HitPoint::new(meter!(1.0, 1.0, 1.0), joule!(f64::NEG_INFINITY)).is_err());
+        assert!(HitPoint::new(meter!(1.0, 1.0, 1.0), joule!(0.0)).is_ok());
 
-        assert!(FluenceHitPoint::new(meter!(f64::NAN, 1.0, 1.0), J_per_cm2!(1.0)).is_err());
-        assert!(FluenceHitPoint::new(meter!(f64::INFINITY, 1.0, 1.0), J_per_cm2!(1.0)).is_err());
-        assert!(
-            FluenceHitPoint::new(meter!(f64::NEG_INFINITY, 1.0, 1.0), J_per_cm2!(1.0)).is_err()
-        );
+        assert!(HitPoint::new(meter!(f64::NAN, 1.0, 1.0), joule!(1.0)).is_err());
+        assert!(HitPoint::new(meter!(f64::INFINITY, 1.0, 1.0), joule!(1.0)).is_err());
+        assert!(HitPoint::new(meter!(f64::NEG_INFINITY, 1.0, 1.0), joule!(1.0)).is_err());
 
-        assert!(FluenceHitPoint::new(meter!(1.0, f64::NAN, 1.0), J_per_cm2!(1.0)).is_err());
-        assert!(FluenceHitPoint::new(meter!(1.0, f64::INFINITY, 1.0), J_per_cm2!(1.0)).is_err());
-        assert!(
-            FluenceHitPoint::new(meter!(1.0, f64::NEG_INFINITY, 1.0), J_per_cm2!(1.0)).is_err()
-        );
+        assert!(HitPoint::new(meter!(1.0, f64::NAN, 1.0), joule!(1.0)).is_err());
+        assert!(HitPoint::new(meter!(1.0, f64::INFINITY, 1.0), joule!(1.0)).is_err());
+        assert!(HitPoint::new(meter!(1.0, f64::NEG_INFINITY, 1.0), joule!(1.0)).is_err());
 
-        assert!(FluenceHitPoint::new(meter!(1.0, 1.0, f64::NAN), J_per_cm2!(1.0)).is_err());
-        assert!(FluenceHitPoint::new(meter!(1.0, 1.0, f64::INFINITY), J_per_cm2!(1.0)).is_err());
-        assert!(
-            FluenceHitPoint::new(meter!(1.0, 1.0, f64::NEG_INFINITY), J_per_cm2!(1.0)).is_err()
-        );
+        assert!(HitPoint::new(meter!(1.0, 1.0, f64::NAN), joule!(1.0)).is_err());
+        assert!(HitPoint::new(meter!(1.0, 1.0, f64::INFINITY), joule!(1.0)).is_err());
+        assert!(HitPoint::new(meter!(1.0, 1.0, f64::NEG_INFINITY), joule!(1.0)).is_err());
     }
     #[test]
-    fn new_energy_hit_point() {
-        assert!(EnergyHitPoint::new(meter!(1.0, 1.0, 1.0), joule!(f64::NAN)).is_err());
-        assert!(EnergyHitPoint::new(meter!(1.0, 1.0, 1.0), joule!(f64::INFINITY)).is_err());
-        assert!(EnergyHitPoint::new(meter!(1.0, 1.0, 1.0), joule!(-0.1)).is_err());
-        assert!(EnergyHitPoint::new(meter!(1.0, 1.0, 1.0), joule!(f64::NEG_INFINITY)).is_err());
-        assert!(EnergyHitPoint::new(meter!(1.0, 1.0, 1.0), joule!(0.0)).is_ok());
-
-        assert!(EnergyHitPoint::new(meter!(f64::NAN, 1.0, 1.0), joule!(1.0)).is_err());
-        assert!(EnergyHitPoint::new(meter!(f64::INFINITY, 1.0, 1.0), joule!(1.0)).is_err());
-        assert!(EnergyHitPoint::new(meter!(f64::NEG_INFINITY, 1.0, 1.0), joule!(1.0)).is_err());
-
-        assert!(EnergyHitPoint::new(meter!(1.0, f64::NAN, 1.0), joule!(1.0)).is_err());
-        assert!(EnergyHitPoint::new(meter!(1.0, f64::INFINITY, 1.0), joule!(1.0)).is_err());
-        assert!(EnergyHitPoint::new(meter!(1.0, f64::NEG_INFINITY, 1.0), joule!(1.0)).is_err());
-
-        assert!(EnergyHitPoint::new(meter!(1.0, 1.0, f64::NAN), joule!(1.0)).is_err());
-        assert!(EnergyHitPoint::new(meter!(1.0, 1.0, f64::INFINITY), joule!(1.0)).is_err());
-        assert!(EnergyHitPoint::new(meter!(1.0, 1.0, f64::NEG_INFINITY), joule!(1.0)).is_err());
-    }
-    #[test]
-    fn getters_fluence_hit_point() -> OpmResult<()> {
-        let hm = FluenceHitPoint::new(meter!(1.0, 2.0, 3.0), J_per_cm2!(4.0))?;
+    fn getters() -> OpmResult<()> {
+        let hm = HitPoint::new(meter!(1.0, 2.0, 3.0), joule!(4.0))?;
         assert_eq!(hm.position().x, meter!(1.0));
         assert_eq!(hm.position().y, meter!(2.0));
         assert_eq!(hm.position().z, meter!(3.0));
-        assert_eq!(hm.value(), J_per_cm2!(4.0));
-        Ok(())
-    }
-    #[test]
-    fn getters_energ_hit_point() -> OpmResult<()> {
-        let hm = EnergyHitPoint::new(meter!(1.0, 2.0, 3.0), joule!(4.0))?;
-        assert_eq!(hm.position().x, meter!(1.0));
-        assert_eq!(hm.position().y, meter!(2.0));
-        assert_eq!(hm.position().z, meter!(3.0));
-        assert_eq!(hm.value(), joule!(4.0));
-        Ok(())
-    }
-}
-#[cfg(test)]
-mod test_hitpoints {
-    use super::HitPoints;
-    use crate::{
-        J_per_cm2,
-        core_optics::hit_map::rays_hit_map::{EnergyHitPoint, FluenceHitPoint},
-        error::OpmResult,
-        joule, meter,
-    };
-
-    #[test]
-    fn len() -> OpmResult<()> {
-        let hp = HitPoints::Energy(vec![]);
-        assert!(hp.is_empty());
-        let hp = HitPoints::Fluence(vec![]);
-        assert!(hp.is_empty());
-
-        let hp = HitPoints::Energy(vec![EnergyHitPoint::new(
-            meter!(1.0, 2.0, 3.0),
-            joule!(4.0),
-        )?]);
-        assert!(!hp.is_empty());
-        assert!(hp.len() == 1);
-        let hp = HitPoints::Fluence(vec![
-            FluenceHitPoint::new(meter!(1.0, 2.0, 3.0), J_per_cm2!(4.0))?,
-            FluenceHitPoint::new(meter!(2.0, 3.0, 4.0), J_per_cm2!(5.0))?,
-        ]);
-        assert!(!hp.is_empty());
-        assert!(hp.len() == 2);
-        Ok(())
-    }
-    #[test]
-    fn positions() -> OpmResult<()> {
-        let hp = HitPoints::Fluence(vec![
-            FluenceHitPoint::new(meter!(1.0, 2.0, 3.0), J_per_cm2!(4.0))?,
-            FluenceHitPoint::new(meter!(2.0, 3.0, 4.0), J_per_cm2!(5.0))?,
-        ]);
-        let pos = hp.positions();
-        assert_eq!(pos[0].x.value, 1.);
-        assert_eq!(pos[0].y.value, 2.);
-        assert_eq!(pos[0].z.value, 3.);
-        assert_eq!(pos[1].x.value, 2.);
-        assert_eq!(pos[1].y.value, 3.);
-        assert_eq!(pos[1].z.value, 4.);
+        assert_eq!(hm.energy(), joule!(4.0));
         Ok(())
     }
 }
@@ -857,11 +541,9 @@ mod test_hitpoints {
 mod test_rays_hit_map {
     use super::RaysHitMap;
     use crate::{
-        J_per_cm2, centimeter,
+        centimeter,
         core_optics::hit_map::{
-            HitMap,
-            fluence_estimator::FluenceEstimator,
-            rays_hit_map::{EnergyHitPoint, FluenceHitPoint, HitPoint, HitPoints},
+            HitMap, fluence_estimator::FluenceEstimator, rays_hit_map::HitPoint,
         },
         distributions::position::Grid,
         error::OpmResult,
@@ -871,6 +553,7 @@ mod test_rays_hit_map {
     };
     use approx::assert_relative_eq;
     use nalgebra::Point2;
+    use spade::Triangulation;
     use uom::si::{length::centimeter, radiant_exposure::joule_per_square_centimeter};
     use uuid::Uuid;
 
@@ -883,10 +566,7 @@ mod test_rays_hit_map {
     ) -> OpmResult<crate::nodes::fluence_detector::fluence_data::FluenceData> {
         let mut map = RaysHitMap::default();
         for ((x, y), energy) in hits {
-            map.add_hit_point(
-                HitPoint::Energy(EnergyHitPoint::new(meter!(*x, *y, 0.0), joule!(*energy))?),
-                None,
-            )?;
+            map.add_hit_point(HitPoint::new(meter!(*x, *y, 0.0), joule!(*energy))?, None)?;
         }
         let ranges = ranges.map(|(x, y)| {
             (
@@ -968,31 +648,43 @@ mod test_rays_hit_map {
         rays.attach_mesh()?;
         Ok(rays)
     }
-    /// The hit of the given ray where it starts, bringing 10 J/cm² on the axis, 1 J/cm² more per
-    /// cm along x and 3 J/cm² more per cm along y.
-    fn fluence_hit(ray: &Ray) -> OpmResult<HitPoint> {
+    /// The area the given ray stands for at its source, in cm² (see
+    /// [`RayVertex::cell_area`](crate::light::ray_mesh::RayVertex::cell_area)).
+    fn cell_area_of(ray: &Ray) -> f64 {
+        ray.source()
+            .and_then(|source| {
+                source
+                    .mesh()
+                    .sheets()
+                    .iter()
+                    .flat_map(|sheet| sheet.vertices())
+                    .find(|corner| corner.data().rays().contains(&source.index()))
+                    .map(|corner| corner.data().cell_area() * 1e4)
+            })
+            .unwrap_or_default()
+    }
+    /// The hit of the given ray where it starts, with the energy that shows 10 J/cm² on the axis,
+    /// 1 J/cm² more per cm along x and 3 J/cm² more per cm along y over the area the ray stands
+    /// for.
+    fn linear_hit(ray: &Ray) -> OpmResult<HitPoint> {
         let p = ray.position();
         let fluence = 10.0 + p.x.get::<centimeter>() + 3.0 * p.y.get::<centimeter>();
-        Ok(HitPoint::Fluence(FluenceHitPoint::new(
-            p,
-            J_per_cm2!(fluence),
-        )?))
+        HitPoint::new(p, joule!(fluence * cell_area_of(ray)))
     }
-    /// A map of the hits of [`fluence_hit`] of [`ray_grid`].
-    fn fluence_hit_map(n_x: usize, n_y: usize) -> OpmResult<RaysHitMap> {
-        let mut map = RaysHitMap::new(HitPoints::Fluence(vec![]));
+    /// A map of the hits of [`linear_hit`] of [`ray_grid`].
+    fn linear_hit_map(n_x: usize, n_y: usize) -> OpmResult<RaysHitMap> {
+        let mut map = RaysHitMap::default();
         for ray in ray_grid(n_x, n_y)?.iter() {
-            map.add_hit_point(fluence_hit(ray)?, ray.source())?;
+            map.add_hit_point(linear_hit(ray)?, ray.source())?;
         }
         Ok(map)
     }
     #[test]
     fn lims() -> OpmResult<()> {
-        let hp = HitPoints::Fluence(vec![
-            FluenceHitPoint::new(meter!(1.0, 2.0, 3.0), J_per_cm2!(4.0))?,
-            FluenceHitPoint::new(meter!(2.0, 3.0, 4.0), J_per_cm2!(5.0))?,
+        let rhm = RaysHitMap::new(vec![
+            HitPoint::new(meter!(1.0, 2.0, 3.0), joule!(4.0))?,
+            HitPoint::new(meter!(2.0, 3.0, 4.0), joule!(5.0))?,
         ]);
-        let rhm = RaysHitMap::new(hp);
         assert_eq!(rhm.x_lims.0.value, 1.0);
         assert_eq!(rhm.x_lims.1.value, 2.0);
         assert_eq!(rhm.y_lims.0.value, 2.0);
@@ -1000,70 +692,31 @@ mod test_rays_hit_map {
         Ok(())
     }
     #[test]
-    fn new_energy_hit_point() -> OpmResult<()> {
-        let rhm = RaysHitMap::new(HitPoints::Energy(vec![]));
+    fn new() -> OpmResult<()> {
+        let rhm = RaysHitMap::new(vec![]);
         assert_eq!(rhm.hit_points.len(), 0);
-
-        let hp = EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?;
-        let rhm = RaysHitMap::new(HitPoints::Energy(vec![hp]));
+        let hp = HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?;
+        let rhm = RaysHitMap::new(vec![hp]);
         assert_eq!(rhm.hit_points.len(), 1);
         Ok(())
     }
     #[test]
-    fn new_fluence_hit_point() -> OpmResult<()> {
-        let rhm = RaysHitMap::new(HitPoints::Fluence(vec![]));
-        assert_eq!(rhm.hit_points.len(), 0);
-
-        let hp = FluenceHitPoint::new(meter!(0.0, 0.0, 0.0), J_per_cm2!(1.0))?;
-        let rhm = RaysHitMap::new(HitPoints::Fluence(vec![hp]));
-        assert_eq!(rhm.hit_points.len(), 1);
-        Ok(())
-    }
-    #[test]
-    fn add_to_hitmap_energy_hit_point() -> OpmResult<()> {
+    fn add_hit_point() -> OpmResult<()> {
         let mut rhm = RaysHitMap::default();
         assert_eq!(rhm.hit_points.len(), 0);
-        let hp = EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?;
-        rhm.add_hit_point(HitPoint::Energy(hp), None)?;
+        let hp = HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?;
+        rhm.add_hit_point(hp, None)?;
         assert_eq!(rhm.hit_points.len(), 1);
         Ok(())
     }
     #[test]
-    fn add_energy_to_hitmap_fluence_hit_point() -> OpmResult<()> {
-        let mut rhm = RaysHitMap::default();
-        assert_eq!(rhm.hit_points.len(), 0);
-        let hp = FluenceHitPoint::new(meter!(0.0, 0.0, 0.0), J_per_cm2!(1.0))?;
-        assert!(rhm.add_hit_point(HitPoint::Fluence(hp), None).is_err());
-        Ok(())
-    }
-    #[test]
-    fn merge_energy_hit_point() -> OpmResult<()> {
-        let hp = EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?;
-        let mut rhm = RaysHitMap::new(HitPoints::Energy(vec![hp]));
-        let hp2 = EnergyHitPoint::new(meter!(1.0, 1.0, 1.0), joule!(1.0))?;
-        let rhm2 = RaysHitMap::new(HitPoints::Energy(vec![hp2]));
-        rhm.merge(&rhm2)?;
+    fn merge() -> OpmResult<()> {
+        let hp = HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?;
+        let mut rhm = RaysHitMap::new(vec![hp]);
+        let hp2 = HitPoint::new(meter!(1.0, 1.0, 1.0), joule!(1.0))?;
+        let rhm2 = RaysHitMap::new(vec![hp2]);
+        rhm.merge(&rhm2);
         assert_eq!(rhm.hit_points.len(), 2);
-        Ok(())
-    }
-    #[test]
-    fn merge_fluence_hit_point() -> OpmResult<()> {
-        let hp = FluenceHitPoint::new(meter!(0.0, 0.0, 0.0), J_per_cm2!(1.0))?;
-        let mut rhm = RaysHitMap::new(HitPoints::Fluence(vec![hp]));
-        let hp2 = FluenceHitPoint::new(meter!(1.0, 1.0, 1.0), J_per_cm2!(1.0))?;
-        let rhm2 = RaysHitMap::new(HitPoints::Fluence(vec![hp2]));
-        rhm.merge(&rhm2)?;
-        assert_eq!(rhm.hit_points.len(), 2);
-        Ok(())
-    }
-    #[test]
-    fn merge_fluence_to_energy() -> OpmResult<()> {
-        let hp = EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?;
-        let mut rhm = RaysHitMap::new(HitPoints::Energy(vec![hp]));
-        let hp2 = FluenceHitPoint::new(meter!(1.0, 1.0, 1.0), J_per_cm2!(1.0))?;
-        let mut rhm2 = RaysHitMap::new(HitPoints::Fluence(vec![hp2]));
-        assert!(rhm.merge(&rhm2).is_err());
-        assert!(rhm2.merge(&rhm).is_err());
         Ok(())
     }
     #[test]
@@ -1071,50 +724,32 @@ mod test_rays_hit_map {
         let mut rhm = RaysHitMap::default();
         assert!(rhm.calc_2d_bounding_box(meter!(0.0)).is_err());
 
-        rhm.add_hit_point(
-            HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?),
-            None,
-        )?;
+        rhm.add_hit_point(HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?, None)?;
         assert_eq!(
             rhm.calc_2d_bounding_box(meter!(0.0))?,
             (meter!(0.0), meter!(0.0), meter!(0.0), meter!(0.0))
         );
-        rhm.add_hit_point(
-            HitPoint::Energy(EnergyHitPoint::new(meter!(-1.0, 1.0, 0.0), joule!(1.0))?),
-            None,
-        )?;
+        rhm.add_hit_point(HitPoint::new(meter!(-1.0, 1.0, 0.0), joule!(1.0))?, None)?;
         assert_eq!(
             rhm.calc_2d_bounding_box(meter!(0.0))?,
             (meter!(-1.0), meter!(0.0), meter!(1.0), meter!(0.0))
         );
-        rhm.add_hit_point(
-            HitPoint::Energy(EnergyHitPoint::new(meter!(-1.0, 1.0, 0.0), joule!(1.0))?),
-            None,
-        )?;
+        rhm.add_hit_point(HitPoint::new(meter!(-1.0, 1.0, 0.0), joule!(1.0))?, None)?;
         assert_eq!(
             rhm.calc_2d_bounding_box(meter!(0.5))?,
             (meter!(-1.5), meter!(0.5), meter!(1.5), meter!(-0.5))
         );
-        rhm.add_hit_point(
-            HitPoint::Energy(EnergyHitPoint::new(meter!(-1.0, -1.0, 0.0), joule!(1.0))?),
-            None,
-        )?;
+        rhm.add_hit_point(HitPoint::new(meter!(-1.0, -1.0, 0.0), joule!(1.0))?, None)?;
         assert_eq!(
             rhm.calc_2d_bounding_box(meter!(0.5))?,
             (meter!(-1.5), meter!(0.5), meter!(1.5), meter!(-1.5))
         );
-        rhm.add_hit_point(
-            HitPoint::Energy(EnergyHitPoint::new(meter!(-1.0, 2.0, 0.0), joule!(1.0))?),
-            None,
-        )?;
+        rhm.add_hit_point(HitPoint::new(meter!(-1.0, 2.0, 0.0), joule!(1.0))?, None)?;
         assert_eq!(
             rhm.calc_2d_bounding_box(meter!(0.5))?,
             (meter!(-1.5), meter!(0.5), meter!(2.5), meter!(-1.5))
         );
-        rhm.add_hit_point(
-            HitPoint::Energy(EnergyHitPoint::new(meter!(1.0, 2.0, 0.0), joule!(1.0))?),
-            None,
-        )?;
+        rhm.add_hit_point(HitPoint::new(meter!(1.0, 2.0, 0.0), joule!(1.0))?, None)?;
         assert_eq!(
             rhm.calc_2d_bounding_box(meter!(0.5))?,
             (meter!(-1.5), meter!(1.5), meter!(2.5), meter!(-1.5))
@@ -1128,7 +763,7 @@ mod test_rays_hit_map {
     #[test]
     fn fluence_matrix_has_expected_dimensions() -> OpmResult<()> {
         let nr_of_points = (5, 4);
-        let result = fluence_hit_map(4, 3)?.calc_fluence_with_tubes(
+        let result = linear_hit_map(4, 3)?.calc_fluence_with_tubes(
             nr_of_points,
             None,
             None,
@@ -1142,7 +777,7 @@ mod test_rays_hit_map {
     /// Two rays span no tube, so they leave no map.
     #[test]
     fn too_few_points_should_fail() -> OpmResult<()> {
-        let error = fluence_hit_map(2, 1)?
+        let error = linear_hit_map(2, 1)?
             .calc_fluence_with_tubes((4, 4), None, None, FluenceEstimator::Voronoi)
             .expect_err("no tube");
         assert!(error.to_string().contains("no ray tube"), "{error}");
@@ -1150,7 +785,7 @@ mod test_rays_hit_map {
     }
     #[test]
     fn fluence_values_are_positive_and_finite() -> OpmResult<()> {
-        let res = fluence_hit_map(4, 4)?.calc_fluence_with_tubes(
+        let res = linear_hit_map(4, 4)?.calc_fluence_with_tubes(
             (6, 5),
             None,
             None,
@@ -1171,7 +806,7 @@ mod test_rays_hit_map {
         let mut scene = HitMap::default();
         let id = Uuid::new_v4();
         for ray in ray_grid(3, 3)?.iter() {
-            scene.add_to_hitmap(fluence_hit(ray)?, 0, id, ray.source())?;
+            scene.add_to_hitmap(linear_hit(ray)?, 0, id, ray.source())?;
         }
         let nr_of_points = (10, 6);
         let fluence_data =
@@ -1181,11 +816,11 @@ mod test_rays_hit_map {
         assert_eq!(mat.nrows(), nr_of_points.1);
         Ok(())
     }
-    /// Between its corners a helper ray map runs linearly, so it shows a linear fluence as it is.
+    /// Between its corners a tube map runs linearly, so it shows a linear fluence as it is.
     #[test]
     fn values_increase_consistently_with_position() -> OpmResult<()> {
         let range = centimeter!(-1.0)..centimeter!(1.0);
-        let res = fluence_hit_map(3, 3)?.calc_fluence_with_tubes(
+        let res = linear_hit_map(3, 3)?.calc_fluence_with_tubes(
             (5, 5),
             Some(&range),
             Some(&range),
@@ -1204,10 +839,7 @@ mod test_rays_hit_map {
 mod test_ray_tubes {
     use super::RaysHitMap;
     use crate::{
-        core_optics::hit_map::{
-            fluence_estimator::FluenceEstimator,
-            rays_hit_map::{EnergyHitPoint, HitPoint},
-        },
+        core_optics::hit_map::{fluence_estimator::FluenceEstimator, rays_hit_map::HitPoint},
         distributions::position::Grid,
         error::OpmResult,
         joule,
@@ -1249,10 +881,7 @@ mod test_ray_tubes {
     ) -> OpmResult<()> {
         for ray in rays.iter() {
             if let Some(at) = place(ray) {
-                map.add_hit_point(
-                    HitPoint::Energy(EnergyHitPoint::new(at, ray.energy())?),
-                    ray.source(),
-                )?;
+                map.add_hit_point(HitPoint::new(at, ray.energy())?, ray.source())?;
             }
         }
         Ok(())
@@ -1345,10 +974,7 @@ mod test_ray_tubes {
         let mut map = hits_of(&bundle_in_tubes(3)?, 1.0, 0.0)?;
         assert!(map.follows_tubes());
         map.add_hit_point(
-            HitPoint::Energy(EnergyHitPoint::new(
-                millimeter!(0.0, 0.0, 0.0),
-                joule!(1.0),
-            )?),
+            HitPoint::new(millimeter!(0.0, 0.0, 0.0), joule!(1.0))?,
             None,
         )?;
         assert!(!map.follows_tubes());
@@ -1368,7 +994,7 @@ mod test_ray_tubes {
             .map(|(slot, _)| *slot)
             .collect::<Vec<_>>();
         assert_eq!(slots, [[0; 7], [1; 7]].concat());
-        map.merge(&hits_of(&first, 1.0, 0.0)?)?;
+        map.merge(&hits_of(&first, 1.0, 0.0)?);
         assert!(!map.follows_tubes());
         Ok(())
     }

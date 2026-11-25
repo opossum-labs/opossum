@@ -2,7 +2,7 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use opossum_core::{
     core_optics::hit_map::{
         fluence_estimator::FluenceEstimator,
-        rays_hit_map::{EnergyHitPoint, HitPoint, RaysHitMap},
+        rays_hit_map::{HitPoint, RaysHitMap},
     },
     distributions::position::{Hexapolar, PositionDistribution, SobolDist},
     prelude::*,
@@ -15,7 +15,7 @@ fn criterion_kde(c: &mut Criterion) {
     let weight = joule!(1.0) / Ratio::new::<uom::si::ratio::ratio>(points.len() as f64);
     let mut hit_map = RaysHitMap::default();
     for p in points {
-        let hit_point = HitPoint::Energy(EnergyHitPoint::new(p, weight).unwrap());
+        let hit_point = HitPoint::new(p, weight).unwrap();
         hit_map.add_hit_point(hit_point, None).unwrap();
     }
     c.bench_function("kde", |b| {
@@ -29,7 +29,7 @@ fn criterion_binning(c: &mut Criterion) {
     let weight = joule!(1.0) / Ratio::new::<uom::si::ratio::ratio>(points.len() as f64);
     let mut hit_map = RaysHitMap::default();
     for p in points {
-        let hit_point = HitPoint::Energy(EnergyHitPoint::new(p, weight).unwrap());
+        let hit_point = HitPoint::new(p, weight).unwrap();
         hit_map.add_hit_point(hit_point, None).unwrap();
     }
     c.bench_function("binning", |b| {

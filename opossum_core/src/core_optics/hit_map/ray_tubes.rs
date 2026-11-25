@@ -21,14 +21,13 @@ use crate::{
     utils::{to_f64, try_f64_to_usize},
 };
 
-/// Where a corner of the ray tubes arrived on a surface and what its rays brought there: their
-/// summed energy or fluence.
+/// Where a corner of the ray tubes arrived on a surface and the energy its rays brought there.
 #[derive(Clone, Copy, Debug)]
 pub struct Arrival {
     /// Where the corner arrived, in the coordinates of the surface, in meters.
     pub position: Point2<f64>,
-    /// The summed energy (in J) or fluence (in J/m²) of the rays of the corner.
-    pub value: f64,
+    /// The summed energy of the rays of the corner, in J.
+    pub energy: f64,
 }
 
 /// A sheet of ray tubes, with the corners that arrived on a surface.
@@ -110,16 +109,8 @@ impl<'a> ArrivedSheet<'a> {
             .map(|((corner, arrival), (at_source, on_surface))| {
                 let (arrival, cell) = ((*arrival)?, corner.data().cell_area());
                 (on_surface > 0.0 && cell > 0.0)
-                    .then(|| arrival.value / cell * at_source / on_surface)
+                    .then(|| arrival.energy / cell * at_source / on_surface)
             })
-            .collect()
-    }
-    /// Returns the value each corner of this sheet brought, as the fluence it shows when its
-    /// rays bring their fluence along: `None` for a corner that did not arrive.
-    pub fn arrived_values(&self) -> Vec<Option<f64>> {
-        self.arrivals
-            .iter()
-            .map(|arrival| arrival.map(|arrival| arrival.value))
             .collect()
     }
     /// Hands each triangle this sheet covers the surface with to `draw`: its alive tubes, each

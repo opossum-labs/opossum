@@ -28,7 +28,7 @@ use crate::{
 };
 use fluence_estimator::FluenceEstimator;
 use ray_tubes::draw_map;
-use rays_hit_map::{HitPoint, HitPoints, RaysHitMap};
+use rays_hit_map::{HitPoint, RaysHitMap};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, ops::Range};
 use uom::si::f64::Length;
@@ -49,20 +49,17 @@ impl BouncedHitMap {
     /// * `source` - where the ray stands in the ray tubes of its source, if it does.
     ///
     /// # Errors
-    /// This function errors if the hit-point that should be added does not match the already stored hit point type
+    /// This function errors if the hits stand in more than `u32::MAX` meshes (see
+    /// [`RaysHitMap::add_hit_point`]).
     pub fn add_to_hitmap(
         &mut self,
         hit_point: HitPoint,
         uuid: Uuid,
         source: Option<&RaySource>,
     ) -> OpmResult<()> {
-        let kind = match hit_point {
-            HitPoint::Energy(_) => HitPoints::Energy(vec![]),
-            HitPoint::Fluence(_) => HitPoints::Fluence(vec![]),
-        };
         self.hit_map
             .entry(uuid)
-            .or_insert_with(|| RaysHitMap::new(kind))
+            .or_default()
             .add_hit_point(hit_point, source)
     }
     /// Returns a reference to the internal map of [`RaysHitMap`]s.
@@ -166,10 +163,8 @@ impl HitMap {
         }
     }
     /// Returns a merged [`RaysHitMap`] containing all bounces and uuid's of this [`HitMap`].
-    ///
-    /// # Errors
-    /// This function errors if merging the [`RaysHitMap`] fails
-    pub fn get_merged_rays_hit_map(&self) -> OpmResult<RaysHitMap> {
+    #[must_use]
+    pub fn get_merged_rays_hit_map(&self) -> RaysHitMap {
         let mut merged_rays_hit_map = RaysHitMap::default();
         let mut count = 0;
         for bounced_hit_map in &self.hit_map {
@@ -177,12 +172,12 @@ impl HitMap {
                 if count == 0 {
                     merged_rays_hit_map = hit_map.1.clone();
                 } else {
-                    merged_rays_hit_map.merge(hit_map.1)?;
+                    merged_rays_hit_map.merge(hit_map.1);
                 }
                 count += 1;
             }
         }
-        Ok(merged_rays_hit_map)
+        merged_rays_hit_map
     }
 
     /// Returns the 'bounding box' of this hitmap, meaning the minimum and maximum position values in x and y
@@ -214,13 +209,13 @@ impl HitMap {
 
     /// Returns the first hitpoint in this [`HitMap`] or None if there is none
     #[must_use]
-    pub fn get_first_hitpoints(&self) -> Option<&HitPoints> {
+    pub fn get_first_hitpoints(&self) -> Option<&[HitPoint]> {
         for bhm in &self.hit_map {
             if bhm.hit_map.is_empty() {
                 continue;
             }
             if let Some(rhm) = bhm.hit_map.values().next() {
-                return Some(rhm.hit_map());
+                return Some(rhm.hit_points());
             }
         }
         None
@@ -265,13 +260,12 @@ impl HitMap {
     /// -`nr_of_points`: tuple containing the number of (columns, rows) of the matrix on which the data should be calculated
     ///
     /// # Errors
-    /// This function errors if the [`RaysHitMap`]s cannot be merged or if
-    /// [`RaysHitMap::calc_fluence_with_kde`] fails, as it does for hits that brought fluences.
+    /// This function errors if [`RaysHitMap::calc_fluence_with_kde`] fails.
     pub fn calc_combined_fluence_with_kde(
         &self,
         nr_of_points: (usize, usize),
     ) -> OpmResult<FluenceData> {
-        self.get_merged_rays_hit_map()?
+        self.get_merged_rays_hit_map()
             .calc_fluence_with_kde(nr_of_points, None, None)
     }
 
@@ -283,13 +277,12 @@ impl HitMap {
     /// -`nr_of_points`: tuple containing the number of (columns, rows) of the matrix on which the data should be calculated
     ///
     /// # Errors
-    /// This function errors if the [`RaysHitMap`]s cannot be merged or if
-    /// [`RaysHitMap::calc_fluence_with_binning`] fails, as it does for hits that brought fluences.
+    /// This function errors if [`RaysHitMap::calc_fluence_with_binning`] fails.
     pub fn calc_combined_fluence_with_binning(
         &self,
         nr_of_points: (usize, usize),
     ) -> OpmResult<FluenceData> {
-        self.get_merged_rays_hit_map()?
+        self.get_merged_rays_hit_map()
             .calc_fluence_with_binning(nr_of_points, None, None)
     }
 
@@ -323,7 +316,7 @@ impl From<HitMap> for Proptype {
 #[cfg(test)]
 mod test_bounced_hit_map {
     use crate::{
-        core_optics::hit_map::{BouncedHitMap, HitPoint, rays_hit_map::EnergyHitPoint},
+        core_optics::hit_map::{BouncedHitMap, HitPoint},
         error::{OpmResult, OpossumError},
         joule, meter,
     };
@@ -335,7 +328,7 @@ mod test_bounced_hit_map {
         let uuid1 = Uuid::new_v4();
         let uuid2 = Uuid::new_v4();
         bhm.add_to_hitmap(
-            HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?),
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?,
             uuid1,
             None,
         )?;
@@ -343,13 +336,13 @@ mod test_bounced_hit_map {
             bhm.hit_map
                 .get(&uuid1)
                 .ok_or(OpossumError::Other("UUID1 not found in map".into()))?
-                .hit_map()
+                .hit_points()
                 .len(),
             1
         );
         assert!(!bhm.hit_map.contains_key(&uuid2));
         bhm.add_to_hitmap(
-            HitPoint::Energy(EnergyHitPoint::new(meter!(1.0, 0.0, 0.0), joule!(1.0))?),
+            HitPoint::new(meter!(1.0, 0.0, 0.0), joule!(1.0))?,
             uuid1,
             None,
         )?;
@@ -357,13 +350,13 @@ mod test_bounced_hit_map {
             bhm.hit_map
                 .get(&uuid1)
                 .ok_or(OpossumError::Other("UUID1 not found in map".into()))?
-                .hit_map()
+                .hit_points()
                 .len(),
             2
         );
         assert!(!bhm.hit_map.contains_key(&uuid2));
         bhm.add_to_hitmap(
-            HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?),
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?,
             uuid2,
             None,
         )?;
@@ -371,7 +364,7 @@ mod test_bounced_hit_map {
             bhm.hit_map
                 .get(&uuid1)
                 .ok_or(OpossumError::Other("UUID1 not found in map".into()))?
-                .hit_map()
+                .hit_points()
                 .len(),
             2
         );
@@ -379,7 +372,7 @@ mod test_bounced_hit_map {
             bhm.hit_map
                 .get(&uuid2)
                 .ok_or(OpossumError::Other("UUID2 not found in map".into()))?
-                .hit_map()
+                .hit_points()
                 .len(),
             1
         );
@@ -391,31 +384,31 @@ mod test_bounced_hit_map {
         let uuid1 = Uuid::new_v4();
         let uuid2 = Uuid::new_v4();
         bhm.add_to_hitmap(
-            HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?),
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?,
             uuid1,
             None,
         )?;
         bhm.add_to_hitmap(
-            HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?),
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?,
             uuid1,
             None,
         )?;
         bhm.add_to_hitmap(
-            HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?),
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?,
             uuid2,
             None,
         )?;
         assert_eq!(
             bhm.get_rays_hit_map(uuid1)
                 .ok_or(OpossumError::Other("UUID1 not found in map".into()))?
-                .hit_map()
+                .hit_points()
                 .len(),
             2
         );
         assert_eq!(
             bhm.get_rays_hit_map(uuid2)
                 .ok_or(OpossumError::Other("UUID2 not found in map".into()))?
-                .hit_map()
+                .hit_points()
                 .len(),
             1
         );
@@ -429,12 +422,7 @@ mod test_hit_map {
     use uuid::Uuid;
 
     use crate::{
-        J_per_cm2,
-        core_optics::hit_map::{
-            HitMap, HitPoint,
-            fluence_estimator::FluenceEstimator,
-            rays_hit_map::{EnergyHitPoint, FluenceHitPoint},
-        },
+        core_optics::hit_map::{HitMap, HitPoint, fluence_estimator::FluenceEstimator},
         error::OpmResult,
         joule,
         light::Ray,
@@ -451,19 +439,19 @@ mod test_hit_map {
         let uuid1 = Uuid::new_v4();
         let uuid2 = Uuid::new_v4();
         hm.add_to_hitmap(
-            HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?),
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?,
             1,
             uuid1,
             None,
         )?;
         hm.add_to_hitmap(
-            HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?),
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?,
             1,
             uuid2,
             None,
         )?;
         hm.add_to_hitmap(
-            HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?),
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?,
             0,
             uuid1,
             None,
@@ -473,109 +461,10 @@ mod test_hit_map {
     }
 
     #[test]
-    fn add_wrong_to_hitmap_energy_same_bundle() -> OpmResult<()> {
-        let uuid = Uuid::new_v4();
-        let mut hm = HitMap::default();
-        hm.add_to_hitmap(
-            HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?),
-            0,
-            uuid,
-            None,
-        )?;
-        assert!(
-            hm.add_to_hitmap(
-                HitPoint::Fluence(FluenceHitPoint::new(
-                    meter!(0.0, 0.0, 0.0),
-                    J_per_cm2!(1.0)
-                )?),
-                0,
-                uuid,
-                None,
-            )
-            .is_err()
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn add_wrong_to_hitmap_fluence_same_bundle() -> OpmResult<()> {
-        let uuid = Uuid::new_v4();
-        let mut hm = HitMap::default();
-        hm.add_to_hitmap(
-            HitPoint::Fluence(FluenceHitPoint::new(
-                meter!(0.0, 0.0, 0.0),
-                J_per_cm2!(1.0),
-            )?),
-            0,
-            uuid,
-            None,
-        )?;
-        assert!(
-            hm.add_to_hitmap(
-                HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?),
-                0,
-                uuid,
-                None,
-            )
-            .is_err()
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn add_wrong_to_hitmap_different_bundle() -> OpmResult<()> {
-        let mut hm = HitMap::default();
-        hm.add_to_hitmap(
-            HitPoint::Fluence(FluenceHitPoint::new(
-                meter!(0.0, 0.0, 0.0),
-                J_per_cm2!(1.0),
-            )?),
-            0,
-            Uuid::new_v4(),
-            None,
-        )?;
-        assert!(
-            hm.add_to_hitmap(
-                HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?),
-                0,
-                Uuid::new_v4(),
-                None,
-            )
-            .is_ok()
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn add_wrong_to_hitmap_different_bounce() -> OpmResult<()> {
-        let uuid = Uuid::new_v4();
-        let mut hm = HitMap::default();
-        hm.add_to_hitmap(
-            HitPoint::Fluence(FluenceHitPoint::new(
-                meter!(0.0, 0.0, 0.0),
-                J_per_cm2!(1.0),
-            )?),
-            0,
-            uuid,
-            None,
-        )?;
-        assert!(
-            hm.add_to_hitmap(
-                HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?),
-                1,
-                uuid,
-                None,
-            )
-            .is_ok()
-        );
-        Ok(())
-    }
-
-    #[test]
     fn add_to_hitmap_energy() -> OpmResult<()> {
         let mut hm = HitMap::default();
         hm.add_to_hitmap(
-            HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?),
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?,
             1,
             Uuid::new_v4(),
             None,
@@ -584,36 +473,7 @@ mod test_hit_map {
         assert_eq!(hm.hit_map[0].hit_map.len(), 0);
         assert_eq!(hm.hit_map[1].hit_map.len(), 1);
         hm.add_to_hitmap(
-            HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?),
-            0,
-            Uuid::new_v4(),
-            None,
-        )?;
-        assert_eq!(hm.hit_map.len(), 2);
-        assert_eq!(hm.hit_map[0].hit_map.len(), 1);
-        assert_eq!(hm.hit_map[1].hit_map.len(), 1);
-        Ok(())
-    }
-    #[test]
-    fn add_to_hitmap_fluence() -> OpmResult<()> {
-        let mut hm = HitMap::default();
-        hm.add_to_hitmap(
-            HitPoint::Fluence(FluenceHitPoint::new(
-                meter!(0.0, 0.0, 0.0),
-                J_per_cm2!(1.0),
-            )?),
-            1,
-            Uuid::new_v4(),
-            None,
-        )?;
-        assert_eq!(hm.hit_map.len(), 2);
-        assert_eq!(hm.hit_map[0].hit_map.len(), 0);
-        assert_eq!(hm.hit_map[1].hit_map.len(), 1);
-        hm.add_to_hitmap(
-            HitPoint::Fluence(FluenceHitPoint::new(
-                meter!(0.0, 0.0, 0.0),
-                J_per_cm2!(1.0),
-            )?),
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?,
             0,
             Uuid::new_v4(),
             None,
@@ -627,23 +487,7 @@ mod test_hit_map {
     fn reset_energy() -> OpmResult<()> {
         let mut hm = HitMap::default();
         hm.add_to_hitmap(
-            HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?),
-            1,
-            Uuid::new_v4(),
-            None,
-        )?;
-        hm.reset();
-        assert!(hm.is_empty());
-        Ok(())
-    }
-    #[test]
-    fn reset_fluence() -> OpmResult<()> {
-        let mut hm = HitMap::default();
-        hm.add_to_hitmap(
-            HitPoint::Fluence(FluenceHitPoint::new(
-                meter!(0.0, 0.0, 0.0),
-                J_per_cm2!(1.0),
-            )?),
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?,
             1,
             Uuid::new_v4(),
             None,
@@ -657,10 +501,7 @@ mod test_hit_map {
         let mut hm = HitMap::default();
         assert!(hm.is_empty());
         hm.add_to_hitmap(
-            HitPoint::Fluence(FluenceHitPoint::new(
-                meter!(0.0, 0.0, 0.0),
-                J_per_cm2!(1.0),
-            )?),
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?,
             1,
             Uuid::new_v4(),
             None,
@@ -674,28 +515,19 @@ mod test_hit_map {
         let uuid1 = Uuid::new_v4();
         let uuid2 = Uuid::new_v4();
         hm.add_to_hitmap(
-            HitPoint::Fluence(FluenceHitPoint::new(
-                meter!(0.0, 0.0, 0.0),
-                J_per_cm2!(1.0),
-            )?),
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?,
             1,
             uuid1,
             None,
         )?;
         hm.add_to_hitmap(
-            HitPoint::Fluence(FluenceHitPoint::new(
-                meter!(0.0, 0.0, 0.0),
-                J_per_cm2!(1.0),
-            )?),
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?,
             1,
             uuid2,
             None,
         )?;
         hm.add_to_hitmap(
-            HitPoint::Fluence(FluenceHitPoint::new(
-                meter!(0.0, 0.0, 0.0),
-                J_per_cm2!(1.0),
-            )?),
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?,
             0,
             uuid1,
             None,
@@ -710,66 +542,24 @@ mod test_hit_map {
         let uuid1 = Uuid::new_v4();
         let uuid2 = Uuid::new_v4();
         hm.add_to_hitmap(
-            HitPoint::Fluence(FluenceHitPoint::new(
-                meter!(0.0, 0.0, 0.0),
-                J_per_cm2!(1.0),
-            )?),
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?,
             1,
             uuid1,
             None,
         )?;
         hm.add_to_hitmap(
-            HitPoint::Fluence(FluenceHitPoint::new(
-                meter!(0.0, 0.0, 0.0),
-                J_per_cm2!(1.0),
-            )?),
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?,
             1,
             uuid2,
             None,
         )?;
         hm.add_to_hitmap(
-            HitPoint::Fluence(FluenceHitPoint::new(
-                meter!(0.0, 0.0, 0.0),
-                J_per_cm2!(1.0),
-            )?),
+            HitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?,
             0,
             uuid1,
             None,
         )?;
-        assert_eq!(hm.get_merged_rays_hit_map()?.hit_map().len(), 3);
-        Ok(())
-    }
-
-    #[test]
-    fn get_merged_rays_hit_map_mixed() -> OpmResult<()> {
-        let mut hm = HitMap::default();
-        let uuid1 = Uuid::new_v4();
-        let uuid2 = Uuid::new_v4();
-        hm.add_to_hitmap(
-            HitPoint::Fluence(FluenceHitPoint::new(
-                meter!(0.0, 0.0, 0.0),
-                J_per_cm2!(1.0),
-            )?),
-            1,
-            uuid1,
-            None,
-        )?;
-        hm.add_to_hitmap(
-            HitPoint::Energy(EnergyHitPoint::new(meter!(0.0, 0.0, 0.0), joule!(1.0))?),
-            1,
-            uuid2,
-            None,
-        )?;
-        hm.add_to_hitmap(
-            HitPoint::Fluence(FluenceHitPoint::new(
-                meter!(0.0, 0.0, 0.0),
-                J_per_cm2!(1.0),
-            )?),
-            0,
-            uuid1,
-            None,
-        )?;
-        assert!(hm.get_merged_rays_hit_map().is_err());
+        assert_eq!(hm.get_merged_rays_hit_map().hit_points().len(), 3);
         Ok(())
     }
     #[test]
@@ -782,19 +572,19 @@ mod test_hit_map {
     fn get_bounding_box() -> OpmResult<()> {
         let mut hm = HitMap::default();
         hm.add_to_hitmap(
-            HitPoint::Energy(EnergyHitPoint::new(meter!(0.1, 1.0, 0.0), joule!(1.0))?),
+            HitPoint::new(meter!(0.1, 1.0, 0.0), joule!(1.0))?,
             1,
             Uuid::new_v4(),
             None,
         )?;
         hm.add_to_hitmap(
-            HitPoint::Energy(EnergyHitPoint::new(meter!(-20.0, 20.0, 0.0), joule!(1.0))?),
+            HitPoint::new(meter!(-20.0, 20.0, 0.0), joule!(1.0))?,
             1,
             Uuid::new_v4(),
             None,
         )?;
         hm.add_to_hitmap(
-            HitPoint::Energy(EnergyHitPoint::new(meter!(3.210, 0.0, 0.0), joule!(1.0))?),
+            HitPoint::new(meter!(3.210, 0.0, 0.0), joule!(1.0))?,
             0,
             Uuid::new_v4(),
             None,
@@ -812,7 +602,7 @@ mod test_hit_map {
     fn get_first_hitpoints() -> OpmResult<()> {
         let mut hm = HitMap::default();
         hm.add_to_hitmap(
-            HitPoint::Energy(EnergyHitPoint::new(meter!(0.1, 1.0, 0.0), joule!(1.0))?),
+            HitPoint::new(meter!(0.1, 1.0, 0.0), joule!(1.0))?,
             1,
             Uuid::new_v4(),
             None,
@@ -846,17 +636,7 @@ mod test_hit_map {
     }
     /// The hit of a ray where it starts, bringing its energy of 1 J.
     fn energy_hit(ray: &Ray) -> OpmResult<HitPoint> {
-        Ok(HitPoint::Energy(EnergyHitPoint::new(
-            ray.position(),
-            ray.energy(),
-        )?))
-    }
-    /// The hit of a ray with helper rays where it starts, bringing 1 J/cm².
-    fn fluence_hit(ray: &Ray) -> OpmResult<HitPoint> {
-        Ok(HitPoint::Fluence(FluenceHitPoint::new(
-            ray.position(),
-            J_per_cm2!(1.0),
-        )?))
+        HitPoint::new(ray.position(), ray.energy())
     }
     /// The corners and the center of a square of 1 m.
     fn square_with_center() -> Vec<Point3<Length>> {
@@ -897,12 +677,7 @@ mod test_hit_map {
         let mut hm = HitMap::default();
         let uuid = Uuid::new_v4();
         for pos in [meter!(-0.5, -0.5, 0.0), meter!(0., 0., 0.0)] {
-            hm.add_to_hitmap(
-                HitPoint::Energy(EnergyHitPoint::new(pos, joule!(1.0))?),
-                1,
-                uuid,
-                None,
-            )?;
+            hm.add_to_hitmap(HitPoint::new(pos, joule!(1.0))?, 1, uuid, None)?;
         }
         for estimator in [FluenceEstimator::Voronoi] {
             assert!(
@@ -912,22 +687,6 @@ mod test_hit_map {
         }
         Ok(())
     }
-    /// Rays with helper rays bring their fluence along, whichever of the two tube estimators
-    /// draws them, and a second bundle adds as much again.
-    #[test]
-    fn a_combined_tube_map_shows_the_fluences_helper_rays_brought() -> OpmResult<()> {
-        for estimator in [FluenceEstimator::Voronoi] {
-            let mut hm = HitMap::default();
-            add_bundle_in_tubes(&mut hm, &square_with_center(), fluence_hit)?;
-            let fl_data = hm.calc_combined_fluence_with_tubes((51, 51), estimator)?;
-            assert_relative_eq!(fl_data.interp_distribution()[(25, 25)].value, 10000.);
-            add_bundle_in_tubes(&mut hm, &diamond_with_center(), fluence_hit)?;
-            let fl_data = hm.calc_combined_fluence_with_tubes((51, 51), estimator)?;
-            assert_relative_eq!(fl_data.interp_distribution()[(25, 25)].value, 20000.);
-        }
-        Ok(())
-    }
-
     #[test]
     fn calc_combined_fluence_with_kde() -> OpmResult<()> {
         let mut hm = HitMap::default();
@@ -940,12 +699,7 @@ mod test_hit_map {
             meter!(0.5, -0.5, 0.0),
         ];
         for pos in &pos1 {
-            hm.add_to_hitmap(
-                HitPoint::Energy(EnergyHitPoint::new(*pos, joule!(1.0))?),
-                1,
-                uuid,
-                None,
-            )?;
+            hm.add_to_hitmap(HitPoint::new(*pos, joule!(1.0))?, 1, uuid, None)?;
         }
         let fl_data = hm.calc_combined_fluence_with_kde((51, 51))?;
         assert_relative_eq!(
@@ -962,12 +716,7 @@ mod test_hit_map {
             meter!(0., 0., 0.),
         ];
         for pos in &pos2 {
-            hm.add_to_hitmap(
-                HitPoint::Energy(EnergyHitPoint::new(*pos, joule!(1.0))?),
-                1,
-                uuid,
-                None,
-            )?;
+            hm.add_to_hitmap(HitPoint::new(*pos, joule!(1.0))?, 1, uuid, None)?;
         }
         let fl_data = hm.calc_combined_fluence_with_kde((51, 51))?;
         assert_relative_eq!(
@@ -976,23 +725,6 @@ mod test_hit_map {
         );
         Ok(())
     }
-    /// KDE spreads energies, so it refuses the fluences rays with helper rays bring.
-    #[test]
-    fn calc_combined_fluence_with_kde_wrong_hit_point_type() -> OpmResult<()> {
-        let mut hm = HitMap::default();
-        add_bundle_in_tubes(&mut hm, &square_with_center(), fluence_hit)?;
-        let error = hm
-            .calc_combined_fluence_with_kde((51, 51))
-            .expect_err("fluences");
-        assert!(
-            error
-                .to_string()
-                .contains("KDE estimator spreads the energies"),
-            "{error}"
-        );
-        Ok(())
-    }
-
     /// The 51 points of the map lie 1 m / 50 apart over the hits, so the 1 J in the middle stands
     /// for 0.0004 m²: 2500 J/m². The second bundle reaches √2 m wide and brings another 1 J to
     /// the middle, so 2 J over 0.0008 m² show the same.
@@ -1008,12 +740,7 @@ mod test_hit_map {
             meter!(0.5, -0.5, 0.0),
         ];
         for pos in &pos1 {
-            hm.add_to_hitmap(
-                HitPoint::Energy(EnergyHitPoint::new(*pos, joule!(1.0))?),
-                1,
-                uuid,
-                None,
-            )?;
+            hm.add_to_hitmap(HitPoint::new(*pos, joule!(1.0))?, 1, uuid, None)?;
         }
         let fl_data = hm.calc_combined_fluence_with_binning((51, 51))?;
         assert_relative_eq!(fl_data.interp_distribution()[(25, 25)].value, 2500.0);
@@ -1027,12 +754,7 @@ mod test_hit_map {
             meter!(0., 0., 0.),
         ];
         for pos in &pos2 {
-            hm.add_to_hitmap(
-                HitPoint::Energy(EnergyHitPoint::new(*pos, joule!(1.0))?),
-                1,
-                uuid,
-                None,
-            )?;
+            hm.add_to_hitmap(HitPoint::new(*pos, joule!(1.0))?, 1, uuid, None)?;
         }
         let fl_data = hm.calc_combined_fluence_with_binning((51, 51))?;
         assert_relative_eq!(
@@ -1042,23 +764,6 @@ mod test_hit_map {
         );
         Ok(())
     }
-    /// Binning spreads energies, so it refuses the fluences rays with helper rays bring.
-    #[test]
-    fn calc_combined_fluence_with_binning_wrong_hit_point_type() -> OpmResult<()> {
-        let mut hm = HitMap::default();
-        add_bundle_in_tubes(&mut hm, &square_with_center(), fluence_hit)?;
-        let error = hm
-            .calc_combined_fluence_with_binning((51, 51))
-            .expect_err("fluences");
-        assert!(
-            error
-                .to_string()
-                .contains("Binning estimator spreads the energies"),
-            "{error}"
-        );
-        Ok(())
-    }
-
     #[test]
     fn calc_fluence_map() -> OpmResult<()> {
         let mut hm = HitMap::default();

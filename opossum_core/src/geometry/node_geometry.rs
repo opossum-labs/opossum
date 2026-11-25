@@ -1652,7 +1652,7 @@ mod test {
         let hits = ring
             .surface_of_mut(SurfaceGeometry::FACE)?
             .get_rays_hit_map(0, rays.uuid())
-            .map(|hit_map| hit_map.hit_map().len());
+            .map(|hit_map| hit_map.hit_points().len());
         assert_eq!(hits, Some(1), "only the ray on the material leaves a hit");
         Ok(())
     }
