@@ -1,5 +1,5 @@
 error[E0599]: no associated function or constant named `_ENSURE_VALIDATED_MARKER` found for struct `String` in the current scope
- --> tests/fail/bad_nested.rs:3:10
+ --> tests/macro_ui/fail/bad_nested.rs:3:10
   |
 3 | #[derive(EnsureValidated)]
   |          ^^^^^^^^^^^^^^^ associated function or constant not found in `String`
