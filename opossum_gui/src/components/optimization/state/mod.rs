@@ -440,13 +440,37 @@ impl OptimizationModel {
         }
     }
 
+    /// Checks whether a semantically identical operand already exists in the merit function.
+    #[must_use]
+    pub fn has_operand(&self, candidate: &StandardOperand) -> bool {
+        self.operands
+            .iter()
+            .any(|row| match (&row.operand, candidate) {
+                (StandardOperand::Metric(existing), StandardOperand::Metric(new_op)) => {
+                    existing.source == new_op.source
+                }
+                (
+                    StandardOperand::MinEdgeThickness(existing),
+                    StandardOperand::MinEdgeThickness(new_op),
+                ) => existing.node_id == new_op.node_id,
+                (StandardOperand::MaxTotalLength(_), StandardOperand::MaxTotalLength(_)) => true,
+                (
+                    StandardOperand::TransmissionPenalty(existing),
+                    StandardOperand::TransmissionPenalty(new_op),
+                ) => existing.address == new_op.address,
+                _ => false,
+            })
+    }
     /// Adds a new operand to the merit function, automatically resolving group scope.
+    /// Ignores duplicates that already exist for the same target/analyzer.
     pub fn add_operand(&mut self, operand: StandardOperand) {
+        if self.has_operand(&operand) {
+            return;
+        }
         let gid = resolve_operand_group_id(self.schema.as_ref(), &operand);
         let is_enabled = self
             .scope_group_id
             .is_none_or(|target_gid| gid == Some(target_gid));
-
         self.operands.push(UiOperandRow {
             id: Uuid::new_v4(),
             operand,
