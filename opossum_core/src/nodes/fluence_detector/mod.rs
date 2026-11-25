@@ -189,6 +189,21 @@ impl OpticNode for FluenceDetector {
                 "Peak fluence of the distribution",
                 Proptype::Fluence(fluence_data.peak()),
             )?;
+            if let (Some(uncertainty), Some(peak_uncertainty)) = (
+                fluence_data.uncertainty_map(),
+                fluence_data.peak_uncertainty(),
+            ) {
+                props.create(
+                    "Peak fluence uncertainty",
+                    "How far the peak of the fluence may lie above the peak of the map, estimated from the curvature of the fluence between the rays",
+                    Proptype::Fluence(peak_uncertainty),
+                )?;
+                props.create(
+                    "Fluence uncertainty",
+                    "Estimated size of the deviation of the fluence from the map at each point, from the curvature of the fluence between the rays",
+                    uncertainty.into(),
+                )?;
+            }
             let energy = self.recorded_hits().map_or(joule!(0.0), HitMap::energy);
             props.create(
                 "Total energy",
@@ -589,9 +604,9 @@ mod test {
         };
         Ok(report.properties().clone())
     }
-    /// A Gaussian beam of 1 J with a standard deviation of 2 mm, sampled by 7 hexapolar rings out
-    /// to 8 mm, about 1.1 mm apart.
-    fn coarse_gaussian_beam() -> OpmResult<crate::prelude::RayDataSource> {
+    /// A Gaussian beam of 1 J with a standard deviation of 2 mm, centered `center` mm along x and
+    /// sampled by hexapolar rings out to 8 mm around the axis: 7 rings lie about 1.1 mm apart.
+    fn gaussian_beam(rings: u8, center: f64) -> OpmResult<crate::prelude::RayDataSource> {
         use crate::{
             degree,
             distributions::{energy::General2DGaussian, position::Hexapolar, spectral::LaserLines},
@@ -599,10 +614,10 @@ mod test {
             prelude::{CollimatedSrc, RayDataSource},
         };
         Ok(RayDataSource::Collimated(CollimatedSrc::new(
-            Hexapolar::new(millimeter!(8.0), 7)?.into(),
+            Hexapolar::new(millimeter!(8.0), rings)?.into(),
             General2DGaussian::new(
                 joule!(1.0),
-                millimeter!(0.0, 0.0),
+                millimeter!(center, 0.0),
                 millimeter!(2.0, 2.0),
                 1.0,
                 degree!(0.0),
@@ -612,11 +627,156 @@ mod test {
             LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
         )))
     }
+    /// The fluence of [`gaussian_beam`] at the given point in mm, in J/cm², from the shape the
+    /// source samples, scaled to the given map where the middle ray of the beam arrived: each
+    /// corner of the map shows the shape there times one factor (see the handbook,
+    /// "Uncertainty").
+    fn gaussian_fluence(map: &FluenceData, center: f64) -> OpmResult<impl Fn(f64, f64) -> f64> {
+        use crate::{degree, millimeter, utils::super_gaussian::SuperGaussianShape};
+        let shape = SuperGaussianShape::new(
+            millimeter!(center, 0.0),
+            millimeter!(2.0, 2.0),
+            1.0,
+            degree!(0.0),
+            false,
+        )?;
+        let scale = fluence_near(map, 0.0, 0.0)? / shape.value_at(&millimeter!(0.0, 0.0));
+        Ok(move |x: f64, y: f64| scale * shape.value_at(&millimeter!(x, y)))
+    }
+    /// The largest distance, in J/cm², of the map of [`gaussian_beam`] and of the map plus its
+    /// estimated deviation from the fluence of the beam, over the points within two standard
+    /// deviations of its center.
+    fn gaussian_errors(rings: u8, center: f64) -> OpmResult<(f64, f64)> {
+        use uom::si::{length::millimeter, radiant_exposure::joule_per_square_centimeter};
+        let map = detector_map(
+            gaussian_beam(rings, center)?.into(),
+            FluenceEstimator::Voronoi,
+            false,
+        )?;
+        let fluence = gaussian_fluence(&map, center)?;
+        let deviation = map
+            .deviation()
+            .ok_or_else(|| crate::error::OpossumError::Other("no deviation".into()))?;
+        let (xs, ys, values) = map.get_fluence_distribution()?;
+        let (mut linear, mut corrected) = (0.0_f64, 0.0_f64);
+        for (row, y) in ys.iter().enumerate() {
+            for (column, x) in xs.iter().enumerate() {
+                let (x, y) = (x.get::<millimeter>(), y.get::<millimeter>());
+                if (x - center).hypot(y) <= 4.0 {
+                    let map = values[(row, column)].get::<joule_per_square_centimeter>();
+                    let deviation = deviation[(row, column)].get::<joule_per_square_centimeter>();
+                    linear = linear.max((map - fluence(x, y)).abs());
+                    corrected = corrected.max((map + deviation - fluence(x, y)).abs());
+                }
+            }
+        }
+        Ok((linear, corrected))
+    }
+    /// Between the rays, the map plus its estimated deviation lies closer to a Gaussian beam than
+    /// the map alone: about five times closer with rays 0.57 standard deviations apart.
+    #[test]
+    fn the_corrected_map_lies_closer_to_the_beam() -> OpmResult<()> {
+        let (linear, corrected) = gaussian_errors(7, 0.0)?;
+        assert!(
+            3.0 * corrected < linear,
+            "{corrected} J/cm², {linear} J/cm²"
+        );
+        Ok(())
+    }
+    /// Halving the spacing of the rays shrinks the deviation of the map from a Gaussian beam about
+    /// fourfold, as the second order it is of, and what the estimate leaves about eightfold, as
+    /// the third (see the handbook, "Uncertainty").
+    #[test]
+    fn the_estimated_deviation_converges_one_order_faster() -> OpmResult<()> {
+        let errors = [7, 14, 28]
+            .into_iter()
+            .map(|rings| gaussian_errors(rings, 0.0))
+            .collect::<OpmResult<Vec<_>>>()?;
+        for pair in errors.windows(2) {
+            let [(linear, corrected), (finer_linear, finer_corrected)] = pair else {
+                panic!("two spacings");
+            };
+            let (linear_ratio, corrected_ratio) =
+                (linear / finer_linear, corrected / finer_corrected);
+            assert!((2.5..4.5).contains(&linear_ratio), "{linear_ratio}");
+            assert!(corrected_ratio > 6.0, "{corrected_ratio}");
+        }
+        Ok(())
+    }
+    /// The report tells how far the peak may lie above the peak of the map: for a Gaussian beam
+    /// whose peak lies between the rays, the estimate closes most of the gap, though only as an
+    /// estimate of the second order, not a bound.
+    #[test]
+    fn the_report_tells_the_uncertainty_of_the_peak() -> OpmResult<()> {
+        use uom::si::radiant_exposure::joule_per_square_centimeter;
+        let detector = traced(
+            FluenceDetector::default(),
+            gaussian_beam(7, 1.0)?.into(),
+            false,
+        )?;
+        let report = report_of(&detector)?;
+        let fluence_in = |name: &str| -> OpmResult<f64> {
+            let Proptype::Fluence(fluence) = report.get(name)?.clone() else {
+                panic!("Expected a fluence for {name}");
+            };
+            Ok(fluence.get::<joule_per_square_centimeter>())
+        };
+        let (peak, uncertainty) = (
+            fluence_in("Peak Fluence")?,
+            fluence_in("Peak fluence uncertainty")?,
+        );
+        assert!(matches!(
+            report.get("Fluence uncertainty")?,
+            Proptype::FluenceData(_)
+        ));
+        let map = detector
+            .calc_fluence_data()?
+            .ok_or_else(|| crate::error::OpossumError::Other("no map".into()))?;
+        let truth = gaussian_fluence(&map, 1.0)?(1.0, 0.0);
+        let gap = truth - peak;
+        assert!(
+            gap > 0.0,
+            "the peak of the map lies between the rays, below the beam's"
+        );
+        assert!(
+            (gap - uncertainty).abs() < 0.3 * gap,
+            "{uncertainty} J/cm² of {gap} J/cm²"
+        );
+        Ok(())
+    }
+    /// A flat-top beam deviates nowhere from its map, so its peak is certain.
+    #[test]
+    fn a_flat_top_reports_no_uncertainty() -> OpmResult<()> {
+        let detector = traced(FluenceDetector::default(), grid_beam(false)?.into(), false)?;
+        let Proptype::Fluence(uncertainty) = report_of(&detector)?
+            .get("Peak fluence uncertainty")?
+            .clone()
+        else {
+            panic!("Expected the peak fluence uncertainty");
+        };
+        assert!(uncertainty.value.abs() < 1e-9, "{uncertainty:?}");
+        Ok(())
+    }
+    /// KDE and binning maps follow no ray tubes and tell no uncertainty.
+    #[test]
+    fn kde_and_binning_tell_no_uncertainty() -> OpmResult<()> {
+        use crate::core_optics::node_attr::HasNodeAttr;
+        for estimator in [FluenceEstimator::KDE, FluenceEstimator::Binning] {
+            let mut detector = FluenceDetector::default();
+            detector
+                .node_attr_mut()
+                .set_property("fluence estimator", estimator.into())?;
+            let report = report_of(&traced(detector, grid_beam(false)?.into(), false)?)?;
+            assert!(!report.contains("Fluence uncertainty"));
+            assert!(!report.contains("Peak fluence uncertainty"));
+        }
+        Ok(())
+    }
     /// The report and the metric of a detector tell the energy that hit it, which is the energy of
     /// the source: neither the points of the map nor the interpolation between its rays bend it.
     #[test]
     fn the_report_tells_the_energy_that_hit_the_detector() -> OpmResult<()> {
-        for source in [grid_beam(false)?, coarse_gaussian_beam()?] {
+        for source in [grid_beam(false)?, gaussian_beam(7, 0.0)?] {
             let detector = traced(FluenceDetector::default(), source.into(), false)?;
             let Proptype::Energy(energy) = report_of(&detector)?.get("Total energy")?.clone()
             else {
@@ -697,7 +857,7 @@ mod test {
         assert!(deviation_of(&flat)?.abs() < 1e-9);
         let gaussian = traced(
             FluenceDetector::default(),
-            coarse_gaussian_beam()?.into(),
+            gaussian_beam(7, 0.0)?.into(),
             false,
         )?;
         let fine = gaussian
