@@ -169,7 +169,7 @@ fn a_fold() -> OpmResult<()> {
             .filter_map(|step| {
                 let (a, b) = (at(step), at(step + 1));
                 ((fold(a) - to) * (fold(b) - to) <= 0.0).then(|| {
-                    let x = 0.5 * (a + b);
+                    let x = f64::midpoint(a, b);
                     1.0 / (1.0 - x * x / 16.0).abs()
                 })
             })
@@ -192,7 +192,7 @@ fn a_fold() -> OpmResult<()> {
 fn as_sent_out(mut rays: Rays) -> OpmResult<Rays> {
     let mesh = Arc::new(RayMesh::new(&rays)?);
     rays.spread_energy_over_cells(&mesh)?;
-    rays.attach(mesh);
+    rays.attach(&mesh);
     Ok(rays)
 }
 /// A collimated Gaussian beam of 1 J with a standard deviation of 2 mm, its peak `center` mm
@@ -239,7 +239,7 @@ fn hits(
     place: impl Fn(Point3<Length>) -> Option<Point3<Length>>,
 ) -> OpmResult<RaysHitMap> {
     let mut hits = RaysHitMap::default();
-    for ray in rays.iter() {
+    for ray in rays {
         if let Some(at) = place(ray.position()) {
             hits.add_hit_point(
                 HitPoint::Energy(EnergyHitPoint::new(at, ray.energy())?),

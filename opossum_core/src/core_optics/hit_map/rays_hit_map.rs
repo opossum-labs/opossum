@@ -254,7 +254,7 @@ impl RaysHitMap {
         Ok(())
     }
     /// Returns whether every hit of this map stands in the ray tubes of its source.
-    fn follows_tubes(&self) -> bool {
+    const fn follows_tubes(&self) -> bool {
         !self.hit_points.is_empty() && self.vertices.len() == self.hit_points.len()
     }
     /// Add an intersection point to the hit points of this map and widen its limits.
@@ -569,7 +569,7 @@ impl RaysHitMap {
                 sheets.extend(
                     mesh.sheets()
                         .iter()
-                        .map(|sheet| ArrivedSheet::new(sheet, &arrival_of)),
+                        .map(|sheet| ArrivedSheet::new(sheet, arrival_of)),
                 );
             }
         }

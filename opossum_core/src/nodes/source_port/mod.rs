@@ -94,7 +94,7 @@ impl SourcePort {
                 rays.spread_energy_over_cells(&mesh)?;
             }
             if strategy.needs_ray_tubes() {
-                rays.attach(mesh);
+                rays.attach(&mesh);
             }
         }
         rays.set_refractive_index(&strategy.ambient_refractive_index())?;

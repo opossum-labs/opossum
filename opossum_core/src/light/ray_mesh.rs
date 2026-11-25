@@ -459,9 +459,10 @@ impl fmt::Debug for RayMesh {
                 &self
                     .sheets
                     .iter()
-                    .map(|sheet| sheet.num_inner_faces())
+                    .map(Triangulation::num_inner_faces)
                     .sum::<usize>(),
             )
+            .field("nr_of_rays", &self.nr_of_rays)
             .finish()
     }
 }

@@ -246,8 +246,12 @@ pub fn draw_map(
             "light folds over itself on this surface (caustic): the fluence near the fold is unreliable"
         );
     }
-    let x = x.cloned().unwrap_or(meter!(lower.x)..meter!(upper.x));
-    let y = y.cloned().unwrap_or(meter!(lower.y)..meter!(upper.y));
+    let x = x
+        .cloned()
+        .unwrap_or_else(|| meter!(lower.x)..meter!(upper.x));
+    let y = y
+        .cloned()
+        .unwrap_or_else(|| meter!(lower.y)..meter!(upper.y));
     let mut grid = FluenceGrid::new(
         &(x.start.value..x.end.value),
         &(y.start.value..y.end.value),
@@ -318,6 +322,9 @@ impl Axis {
     }
     /// The indices of the points from `from` to `to`, both included.
     fn within(&self, from: f64, to: f64) -> Range<usize> {
+        // A point on the border of the range may be off by rounding; which side of an edge it
+        // lies on is decided when the triangle is drawn.
+        const ROUNDING: f64 = 1e-9;
         if self.count == 0 {
             return 0..0;
         }
@@ -328,9 +335,6 @@ impl Axis {
                 0..0
             };
         }
-        // A point on the border of the range may be off by rounding; which side of an edge it
-        // lies on is decided when the triangle is drawn.
-        const ROUNDING: f64 = 1e-9;
         let first = ((from - self.start) / self.step - ROUNDING).ceil().max(0.0);
         let last = ((to - self.start) / self.step + ROUNDING)
             .floor()
@@ -386,7 +390,8 @@ impl FluenceGrid {
                     .zip(top_left)
                     .all(|(w, top_left)| *w > 0.0 || (top_left && *w >= 0.0));
                 if covered && let Some(cell) = self.values.get_mut((row, column)) {
-                    *cell += weights.iter().zip(values).map(|(w, v)| w * v).sum::<f64>() * per_area;
+                    let value = weights.iter().zip(values).map(|(w, v)| w * v).sum::<f64>();
+                    *cell = value.mul_add(per_area, *cell);
                 }
             }
         }

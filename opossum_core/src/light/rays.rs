@@ -864,14 +864,14 @@ impl Rays {
     ///
     /// This function returns an error if the bundle cannot be triangulated (see [`RayMesh::new`]).
     pub fn attach_mesh(&mut self) -> OpmResult<()> {
-        self.attach(Arc::new(RayMesh::new(self)?));
+        self.attach(&Arc::new(RayMesh::new(self)?));
         Ok(())
     }
     /// Gives every ray of this bundle its place in the given ray tubes, which the bundle spans
     /// (see [`RayMesh::new`]).
-    pub fn attach(&mut self, mesh: Arc<RayMesh>) {
+    pub fn attach(&mut self, mesh: &Arc<RayMesh>) {
         for (index, ray) in (0..).zip(self.ray_bundle.iter_mut()) {
-            ray.set_source(RaySource::new(Arc::clone(&mesh), index));
+            ray.set_source(RaySource::new(Arc::clone(mesh), index));
         }
     }
     /// Spreads the energy of each sheet of this bundle over its rays by the area each stands for

@@ -57,17 +57,13 @@ pub struct RayTraceConfig {
     /// throwaway copies; not saved to disk.
     #[serde(skip)]
     collect_ray_ends: bool,
-    /// Whether the sources span ray tubes, because a node of the model follows them in a fluence
-    /// map. Set by the analysis for its run; not saved to file.
+    /// What the light of the run is traced for, which decides how much its sources prepare it. Set
+    /// for the run by [`RayTracingAnalyzer::trace_positioned`]; not saved to file.
     #[serde(skip)]
-    ray_tubes: bool,
-    /// Whether the sources spread the energy they sample over the area each ray stands for, as
-    /// they do in an analysis. Set for the run (see [`TracePurpose`]); not saved to file.
-    #[serde(skip)]
-    energy_over_cells: bool,
+    purpose: TracePurpose,
 }
 /// What the light of a ray trace is traced for, which decides how much its sources prepare it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum TracePurpose {
     /// An analysis: the sources spread the energy they sample over the area each ray stands for,
     /// and span ray tubes if a fluence map follows them.
@@ -76,6 +72,7 @@ pub enum TracePurpose {
         ray_tubes: bool,
     },
     /// Drawing the light, as the 3D view does: the sources send it out as they build it.
+    #[default]
     Drawing,
 }
 impl Default for RayTraceConfig {
@@ -96,8 +93,7 @@ impl Default for RayTraceConfig {
             active_pump_scenario: ActiveScenario::default(),
             positioning_run: false,
             collect_ray_ends: false,
-            ray_tubes: false,
-            energy_over_cells: false,
+            purpose: TracePurpose::Drawing,
         }
     }
 }
@@ -257,8 +253,7 @@ impl RayTraceConfig {
             ambient_material: self.ambient_material().clone(),
             positioning_run: true,
             collect_ray_ends: false,
-            ray_tubes: false,
-            energy_over_cells: false,
+            purpose: TracePurpose::Drawing,
         }
     }
 }
@@ -278,12 +273,12 @@ impl PropagationStrategy for RayTraceConfig {
     }
     /// Set for the run by [`RayTracingAnalyzer::trace_positioned`]; positioning never spans them.
     fn needs_ray_tubes(&self) -> bool {
-        self.ray_tubes
+        matches!(self.purpose, TracePurpose::Analysis { ray_tubes: true })
     }
     /// Set for the run by [`RayTracingAnalyzer::trace_positioned`]: in an analysis, not when the
     /// light is drawn or the nodes are positioned.
     fn spreads_energy_over_cells(&self) -> bool {
-        self.energy_over_cells
+        matches!(self.purpose, TracePurpose::Analysis { .. })
     }
     fn on_surface_interaction(
         &self,
@@ -332,17 +327,9 @@ impl RayTracingAnalyzer {
         scenery: &mut NodeGroup,
         purpose: TracePurpose,
     ) -> OpmResult<()> {
-        let config = match purpose {
-            TracePurpose::Analysis { ray_tubes } => RayTraceConfig {
-                ray_tubes,
-                energy_over_cells: true,
-                ..self.config.clone()
-            },
-            TracePurpose::Drawing => RayTraceConfig {
-                ray_tubes: false,
-                energy_over_cells: false,
-                ..self.config.clone()
-            },
+        let config = RayTraceConfig {
+            purpose,
+            ..self.config.clone()
         };
         scenery.reset_data();
         scenery.prepare_volume(&config)?;
@@ -553,7 +540,7 @@ mod test {
     #[test]
     fn the_positioning_run_spans_no_ray_tubes() {
         let mut rt_conf = RayTraceConfig::default();
-        rt_conf.ray_tubes = true;
+        rt_conf.purpose = TracePurpose::Analysis { ray_tubes: true };
         assert!(rt_conf.needs_ray_tubes());
         assert!(!rt_conf.for_positioning().needs_ray_tubes());
     }
@@ -635,7 +622,7 @@ mod test {
     fn config_debug() {
         assert_eq!(
             format!("{:?}", RayTraceConfig::default()),
-            "RayTraceConfig { min_energy_per_ray: 1e-12 m^2 kg^1 s^-2, max_number_of_bounces: 1000, max_number_of_refractions: 1000, missed_surface_strategy: Stop, source_map: {}, ambient_material: Material { header: AssetHeader { schema_version: 1, id: 00000000-0000-0000-0000-000000000000, version: 0, name: \"vacuum\", manufacturer: None, description: None }, optical: OpticalProperties { refractive_index: Const(RefrIndexConst { refractive_index: Validated { value: 1.0, validator: AndValidator { v1: AllFinite, v2: StaticInRange { _marker: PhantomData<(f64, opossum_core::refractive_index::refr_index_const::RefIndBounds)> }, _marker: PhantomData<f64> } } }), absorption: None }, thermal: None, mechanical: None }, active_pump_scenario: ActiveScenario(None), positioning_run: false, collect_ray_ends: false, ray_tubes: false, energy_over_cells: false }"
+            "RayTraceConfig { min_energy_per_ray: 1e-12 m^2 kg^1 s^-2, max_number_of_bounces: 1000, max_number_of_refractions: 1000, missed_surface_strategy: Stop, source_map: {}, ambient_material: Material { header: AssetHeader { schema_version: 1, id: 00000000-0000-0000-0000-000000000000, version: 0, name: \"vacuum\", manufacturer: None, description: None }, optical: OpticalProperties { refractive_index: Const(RefrIndexConst { refractive_index: Validated { value: 1.0, validator: AndValidator { v1: AllFinite, v2: StaticInRange { _marker: PhantomData<(f64, opossum_core::refractive_index::refr_index_const::RefIndBounds)> }, _marker: PhantomData<f64> } } }), absorption: None }, thermal: None, mechanical: None }, active_pump_scenario: ActiveScenario(None), positioning_run: false, collect_ray_ends: false, purpose: Drawing }"
         );
     }
     #[test]
