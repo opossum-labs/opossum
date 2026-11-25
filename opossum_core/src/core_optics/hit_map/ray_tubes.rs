@@ -89,23 +89,24 @@ impl<'a> ArrivedSheet<'a> {
     /// One value per vertex of the sheet, `None` for a corner without an alive tube.
     pub fn fluences_from_energies(&self) -> Vec<Option<f64>> {
         // the area of the alive tubes around each corner, at the source and on the surface
-        let mut areas = vec![(0.0, 0.0); self.arrivals.len()];
+        let mut around = vec![(0.0, 0.0); self.arrivals.len()];
         for (tube, points) in self.alive_tubes() {
-            let (source, surface) = (tube.area(), signed_area(points).abs());
+            let (tube_at_source, tube_on_surface) = (tube.area(), signed_area(points).abs());
             for corner in tube.vertices() {
-                if let Some((s, d)) = areas.get_mut(corner.index()) {
-                    *s += source;
-                    *d += surface;
+                if let Some((at_source, on_surface)) = around.get_mut(corner.index()) {
+                    *at_source += tube_at_source;
+                    *on_surface += tube_on_surface;
                 }
             }
         }
         self.sheet
             .vertices()
             .zip(&self.arrivals)
-            .zip(areas)
-            .map(|((corner, arrival), (source, surface))| {
+            .zip(around)
+            .map(|((corner, arrival), (at_source, on_surface))| {
                 let (arrival, cell) = ((*arrival)?, corner.data().cell_area());
-                (surface > 0.0 && cell > 0.0).then(|| arrival.value / cell * source / surface)
+                (on_surface > 0.0 && cell > 0.0)
+                    .then(|| arrival.value / cell * at_source / on_surface)
             })
             .collect()
     }
