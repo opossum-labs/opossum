@@ -222,19 +222,23 @@ fn triangulate(
 fn source_cell_area(corner: VertexHandle<'_, RayVertex>) -> f64 {
     let position = |v: VertexHandle<'_, RayVertex>| Point2::new(v.position().x, v.position().y);
     let at = |v: VertexHandle<'_, RayVertex>| Some(position(v));
-    let all = |_: Tube<'_>| true;
     corner
         .out_edges()
         .map(|edge| {
             // Every tube around the corner lies left of one of its edges, every outer edge
             // of the sheet through it is one of them.
-            let inside = edge.opposite_vertex().map_or(0.0, |third| {
-                voronoi_part(position(corner), position(edge.to()), position(third))
-            });
-            let margin = if let Some([start, end, end_out, start_out]) = margin(edge, &all, &at) {
+            let inside = edge
+                .face()
+                .as_inner()
+                .filter(|face| spans(*face))
+                .and_then(|_| edge.opposite_vertex())
+                .map_or(0.0, |third| {
+                    voronoi_part(position(corner), position(edge.to()), position(third))
+                });
+            let margin = if let Some([start, end, end_out, start_out]) = margin(edge, &spans, &at) {
                 let (middle, middle_out) = halfway([start, end, end_out, start_out]);
                 quadrilateral_area([start, middle, middle_out, start_out])
-            } else if let Some([start, end, end_out, start_out]) = margin(edge.rev(), &all, &at) {
+            } else if let Some([start, end, end_out, start_out]) = margin(edge.rev(), &spans, &at) {
                 let (middle, middle_out) = halfway([start, end, end_out, start_out]);
                 quadrilateral_area([middle, end, end_out, middle_out])
             } else {
@@ -262,8 +266,25 @@ fn halfway([start, end, end_out, start_out]: [Point2<f64>; 4]) -> (Point2<f64>, 
 fn quadrilateral_area([a, b, c, d]: [Point2<f64>; 4]) -> f64 {
     (c - a).perp(&(d - b)).abs() / 2.0
 }
-/// A ray tube: an inner face of the triangulation of a sheet.
+/// A ray tube: an inner face of the triangulation of a sheet, which counts only if it spans an
+/// area (see [`spans`]).
 pub(crate) type Tube<'a> = FaceHandle<'a, InnerTag, RayVertex, (), (), ()>;
+/// Returns whether the given face of a sheet spans an area and so is a ray tube.
+///
+/// Rays along a straight edge of a sheet often lie on one line only up to rounding, as those of a
+/// turned grid do. spade decides exactly and lays a flat triangle between them, whose half height
+/// would leave the edge without a margin. Such a face is no tube, as it would not be had the rays
+/// lain on the line exactly (see the handbook, "Fluence").
+pub(crate) fn spans(face: Tube<'_>) -> bool {
+    // far below any triangle of real rays, far above rounding
+    const FLAT: f64 = 1e-9;
+    let [a, b, c] = face.positions().map(|p| Point2::new(p.x, p.y));
+    let longest = [b - a, c - b, a - c]
+        .iter()
+        .map(Vector2::norm_squared)
+        .fold(0.0, f64::max);
+    face.area() > FLAT * longest
+}
 /// An edge between two corners of the ray tubes of a sheet, running one way.
 pub(crate) type TubeEdge<'a> = DirectedEdgeHandle<'a, RayVertex, (), (), ()>;
 /// Returns the margin beyond the given edge of the alive tubes of a sheet, if no alive tube
@@ -459,7 +480,7 @@ impl fmt::Debug for RayMesh {
                 &self
                     .sheets
                     .iter()
-                    .map(Triangulation::num_inner_faces)
+                    .map(|sheet| sheet.inner_faces().filter(|face| spans(*face)).count())
                     .sum::<usize>(),
             )
             .field("nr_of_rays", &self.nr_of_rays)
@@ -782,6 +803,26 @@ mod test {
         assert_eq!(areas.len(), 9);
         for area in areas {
             approx::assert_relative_eq!(area, 1.0, max_relative = 1e-9);
+        }
+        Ok(())
+    }
+    /// The corners of a turned grid stand for their squares too: turned, the rays along an edge
+    /// lie on one line only up to rounding, and the flat triangles spade lays between them are no
+    /// tubes, so the edge keeps its margin.
+    #[test]
+    fn the_corners_of_a_turned_grid_stand_for_their_squares() -> OpmResult<()> {
+        let rays = Rays::new_uniform_collimated(
+            nanometer!(1000.0),
+            joule!(1.0),
+            &Grid::new(millimeter!(10.0, 10.0), nalgebra::Point2::new(11, 11))?,
+        )?
+        .transformed_by_iso(&Isometry::new_rotation(degree!(10.0, 20.0, 30.0))?);
+        let mesh = RayMesh::new(&rays)?;
+        let sheet = only_sheet(&mesh);
+        assert_eq!(sheet.num_vertices(), 121);
+        assert_eq!(sheet.inner_faces().filter(|face| spans(*face)).count(), 200);
+        for corner in sheet.vertices() {
+            approx::assert_relative_eq!(corner.data().cell_area() * 1e6, 1.0, max_relative = 1e-9);
         }
         Ok(())
     }

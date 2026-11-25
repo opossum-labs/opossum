@@ -15,7 +15,7 @@ use super::fluence_estimator::FluenceEstimator;
 use crate::{
     J_per_m2,
     error::{OpmResult, OpossumError},
-    light::ray_mesh::{RayVertex, Tube, margin},
+    light::ray_mesh::{RayVertex, Tube, margin, spans},
     meter,
     nodes::fluence_detector::fluence_data::FluenceData,
     utils::{to_f64, try_f64_to_usize},
@@ -56,8 +56,12 @@ impl<'a> ArrivedSheet<'a> {
     fn arrival(&self, vertex: VertexHandle<'_, RayVertex>) -> Option<Arrival> {
         self.arrivals.get(vertex.index()).copied().flatten()
     }
-    /// Returns where the three corners of the given tube arrived, if all of them did.
+    /// Returns where the three corners of the given tube arrived, if all of them did and the tube
+    /// spans an area (see [`spans`]).
     fn positions(&self, tube: Tube<'_>) -> Option<[Point2<f64>; 3]> {
+        if !spans(tube) {
+            return None;
+        }
         let [Some(a), Some(b), Some(c)] = tube
             .vertices()
             .map(|v| self.arrival(v).map(|arrival| arrival.position))

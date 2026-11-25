@@ -689,6 +689,74 @@ mod test {
         }
         Ok(())
     }
+    /// A flat-top beam of 1 J on a grid of 31 × 31 rays over 16 mm, which fits the window of a
+    /// detector also turned, sent out collimated or, with `point`, from a point whose rays reach the
+    /// grid 150 mm away.
+    fn grid_beam(point: bool) -> OpmResult<crate::prelude::RayDataSource> {
+        use crate::{
+            distributions::{energy::UniformDist, position::Grid, spectral::LaserLines},
+            joule, millimeter,
+            prelude::{CollimatedSrc, PointSrc, RayDataSource},
+        };
+        let (grid, energy, lines) = (
+            Grid::new(millimeter!(16.0, 16.0), nalgebra::Point2::new(31, 31))?.into(),
+            UniformDist::new(joule!(1.0))?.into(),
+            LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+        );
+        Ok(if point {
+            RayDataSource::PointSrc(PointSrc::new(grid, energy, lines, millimeter!(150.0))?)
+        } else {
+            RayDataSource::Collimated(CollimatedSrc::new(grid, energy, lines))
+        })
+    }
+    /// A grid shows the same fluence from a point source as from a collimated one, its edges with
+    /// the same margins: across the directions of a point source, the rays along an edge lie on
+    /// one line only up to rounding, and the flat triangles spade lays between them are no tubes.
+    #[test]
+    fn a_grid_from_a_point_source_shows_the_fluence_of_a_collimated_one() -> OpmResult<()> {
+        let collimated = detector_map(grid_beam(false)?.into(), FluenceEstimator::Voronoi, false)?;
+        let point = detector_map(grid_beam(true)?.into(), FluenceEstimator::Voronoi, false)?;
+        approx::assert_relative_eq!(
+            fluence_near(&point, 0.0, 0.0)?,
+            fluence_near(&collimated, 0.0, 0.0)?,
+            max_relative = 1e-6
+        );
+        let share = |map: &FluenceData| map.edge_share().expect("a share of the margins");
+        approx::assert_relative_eq!(share(&point), share(&collimated), max_relative = 1e-6);
+        Ok(())
+    }
+    /// A grid turned about the axis shows the map of an upright one, its edges with the same
+    /// margins and without folding over itself, though its rays along an edge then lie on one line
+    /// only up to rounding.
+    #[test]
+    fn a_turned_grid_shows_the_map_of_an_upright_one() -> OpmResult<()> {
+        use crate::{degree, utils::geom_transformation::Isometry};
+        let upright = detector_map(grid_beam(false)?.into(), FluenceEstimator::Voronoi, false)?;
+        let mut light =
+            crate::light::lightdata::ray_data_builder::RayDataBuilder::from(grid_beam(false)?);
+        light.set_isometry(Some(Isometry::new_rotation(degree!(0.0, 0.0, 30.0))?));
+        testing_logger::setup();
+        let turned = detector_map(light, FluenceEstimator::Voronoi, false)?;
+        testing_logger::validate(|logs| {
+            let folds = logs
+                .iter()
+                .filter(|log| log.body.contains("folds over itself"));
+            assert_eq!(
+                folds.count(),
+                0,
+                "{:?}",
+                logs.iter().map(|l| &l.body).collect::<Vec<_>>()
+            );
+        });
+        approx::assert_relative_eq!(
+            fluence_near(&turned, 0.0, 0.0)?,
+            fluence_near(&upright, 0.0, 0.0)?,
+            max_relative = 1e-6
+        );
+        let share = |map: &FluenceData| map.edge_share().expect("a share of the margins");
+        approx::assert_relative_eq!(share(&turned), share(&upright), max_relative = 1e-6);
+        Ok(())
+    }
     /// A Gaussian beam on a Fibonacci pattern shows its exact peak: each ray carries the beam
     /// over the area it stands for, which the innermost rays of the pattern stand for less of.
     #[test]
