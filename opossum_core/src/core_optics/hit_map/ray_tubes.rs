@@ -244,12 +244,15 @@ pub fn draw_map(
             "light folds over itself on this surface (caustic): the fluence near the fold is unreliable"
         );
     }
-    let x = x
-        .cloned()
-        .unwrap_or_else(|| meter!(lower.x)..meter!(upper.x));
-    let y = y
-        .cloned()
-        .unwrap_or_else(|| meter!(lower.y)..meter!(upper.y));
+    // without a given range, the map is square and reaches 5 % beyond the light along its longer
+    // side, so the edges of the light lie inside it rather than on its outermost points
+    let (side, center) = (
+        1.05 * (upper - lower).max(),
+        nalgebra::center(&lower, &upper),
+    );
+    let around = |middle: f64| meter!(middle - side / 2.0)..meter!(middle + side / 2.0);
+    let x = x.cloned().unwrap_or_else(|| around(center.x));
+    let y = y.cloned().unwrap_or_else(|| around(center.y));
     let mut grid = FluenceGrid::new(
         &(x.start.value..x.end.value),
         &(y.start.value..y.end.value),

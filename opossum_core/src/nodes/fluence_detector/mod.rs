@@ -647,6 +647,38 @@ mod test {
         approx::assert_relative_eq!(energy.value, within, max_relative = 1e-9);
         Ok(())
     }
+    /// Without a given range, a map is square, centered on its light and 5 % wider than the light
+    /// along its longer side, so its points do not lie on the edges of the light and a square
+    /// beam is drawn alike on all four sides.
+    #[test]
+    fn a_map_is_square_and_reaches_a_little_beyond_its_light() -> OpmResult<()> {
+        let map = detector_map(grid_beam(false)?.into(), FluenceEstimator::Voronoi, false)?;
+        // the light reaches half a ray spacing beyond the 16 mm of the grid
+        let side = 1.05 * (16.0 + 16.0 / 30.0) * 1e-3;
+        for range in [map.x_range(), map.y_range()] {
+            approx::assert_relative_eq!((range.end - range.start).value, side, max_relative = 1e-9);
+            approx::assert_abs_diff_eq!((range.start + range.end).value, 0.0, epsilon = 1e-12);
+        }
+        let values = map.interp_distribution().map(|fluence| fluence.value);
+        let (last_row, last_column) = (values.nrows() - 1, values.ncols() - 1);
+        let tolerance = 1e-9 * values.max();
+        for row in 0..=last_row {
+            for column in 0..=last_column {
+                let value = values[(row, column)];
+                approx::assert_abs_diff_eq!(
+                    value,
+                    values[(row, last_column - column)],
+                    epsilon = tolerance
+                );
+                approx::assert_abs_diff_eq!(
+                    value,
+                    values[(last_row - row, column)],
+                    epsilon = tolerance
+                );
+            }
+        }
+        Ok(())
+    }
     /// The report tells how far the energy the map holds misses the energy that hit: not at all for
     /// a flat-top beam, and for a coarsely sampled Gaussian as much as the map itself holds more,
     /// which a finely rastered map of it confirms.
