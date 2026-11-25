@@ -20,11 +20,9 @@ This method behaves like a pixelated representation of the detector. It is simpl
 
 However, the result strongly depends on grid resolution. A coarse grid smooths out details and can hide peak fluence regions, while a fine grid requires a high number of rays to avoid noise. As a result, binning is often used for fast but lower-resolution analysis.
 
-Binning spreads the energy of plain rays. Rays with helper rays bring a fluence instead of an energy, so binning refuses them (see [Helper rays](#helper-rays)).
-
 ## Fluence from ray tubes
 
-The Voronoi and the helper ray estimators follow the light from where it starts. At the source, every three neighboring rays span a triangle, a *ray tube*. The light inside a tube stays inside it: wherever its three rays go, the tube goes with them, stretched, shrunk or turned over.
+The Voronoi estimator follows the light from where it starts. At the source, every three neighboring rays span a triangle, a *ray tube*. The light inside a tube stays inside it: wherever its three rays go, the tube goes with them, stretched, shrunk or turned over.
 
 On a surface, a tube is *alive* if all three of its rays arrived there. The map is drawn over the alive tubes only. A bore, an edge or an aperture that cuts the light tears the tubes across the cut: their rays arrive on different surfaces, and neither surface draws them. So where light was cut away, the map stays dark.
 
@@ -44,7 +42,7 @@ So that `E / A_src` shows the light the source describes, a source that samples 
 
 ![The fluence at a corner of the ray tubes](../images/fluence_tube_vertex_value.svg)
 
-*`D_det / D_src` says how much the light around the corner spread out on its way. Rays with helper rays measure this themselves and bring their fluence along.*
+*`D_det / D_src` says how much the light around the corner spread out on its way.*
 
 Between its corners a tube runs linearly. Where tubes overlap, their values add up: two beams crossing each other, or light that folds over itself (see [Folds and caustics](#folds-and-caustics)).
 
@@ -84,8 +82,8 @@ Light that turns over as a whole does not fold. Behind a clean focus, or after a
 
 A source spans the tubes only when an analysis needs them, since building them costs time and memory:
 
-- a ghost focus analysis with the Voronoi or the helper ray estimator, and
-- a ray tracing or ghost focus analysis whose model holds a fluence detector with one of these estimators, also inside a group.
+- a ghost focus analysis with the Voronoi estimator, and
+- a ray tracing or ghost focus analysis whose model holds a fluence detector with this estimator, also inside a group.
 
 The tubes are built on whatever the source sends out, raw rays included. The alignment run and the 3D view never build them.
 
@@ -94,14 +92,6 @@ The tubes are built on whatever the source sends out, raw rays included. The ali
 - A hole smaller than about two ray spacings is not resolved: no tube tears across it.
 - A bundle with a gap already at the source, such as raw rays laid out as a ring, is bridged there: its tubes span the gap from the start.
 - A ray all of whose tubes tore, such as a single stray ray, shows nowhere on the map.
-
-## Helper rays
-
-A ray can carry three helper rays very close to it, spanning a tiny triangle. The triangle stretches like the light around the ray, so on any surface it tells the fluence right at the ray: the energy of the triangle over its area. A source of rays with helper rays gives each ray the energy its fluence carries over the area the ray stands for in the ray tubes.
-
-The helper ray estimator draws its map over the same ray tubes as the Voronoi estimator, with the fluence the helper rays measured at the corners. Holes and cuts therefore stay dark here as well. The peak fluence is the largest fluence the helper rays brought.
-
-The helper rays of a ray tear when they do not all go its way, at the edge of a bore for instance; the ray then records no fluence from there on (see [Surface effects](./background/component_geometry.md#surface-effects)).
 
 ## KDE (Kernel Density Estimation)
 
@@ -113,7 +103,7 @@ The smoothing strength is controlled by the kernel width. If the width is too sm
 
 To balance this, the kernel width is chosen by an established statistical rule from the spread and the number of the hits; it cannot be set by hand. The rule errs on the smooth side: with few rays the kernel is wide, and the peak comes out low (see [Peak Fluence and Interpretation](#peak-fluence-and-interpretation)).
 
-This method provides the smoothest representation of fluence and is especially useful when a continuous interpretation of the beam profile is required. Like binning, it spreads the energy of plain rays and refuses rays with helper rays.
+This method provides the smoothest representation of fluence and is especially useful when a continuous interpretation of the beam profile is required.
 
 ## Peak Fluence and Interpretation
 
@@ -173,7 +163,7 @@ Fluence reconstruction converts discrete ray energy into a continuous spatial re
 
 Binning uses fixed grid cells and is fast but resolution-dependent.
 
-Voronoi and helper rays follow the ray tubes the source spans: holes and cuts stay dark, overlapping light adds up, and light folding over itself is warned about. An edge is known to half a tube.
+Voronoi follows the ray tubes the source spans: holes and cuts stay dark, overlapping light adds up, and light folding over itself is warned about. An edge is known to half a tube.
 
 KDE produces a smooth continuous distribution by spreading each ray’s energy over space.
 

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="760" height="440" viewBox="0 0 760 440"
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="422" viewBox="0 0 760 422"
      font-family="Helvetica, Arial, sans-serif">
   <title>The fluence at a corner of the ray tubes</title>
   <desc>Left, at the source: a corner C with its six neighbors and the six tubes they span around
@@ -18,7 +18,7 @@
   </defs>
 
   <!-- A background of its own keeps the figure readable on the dark book themes. -->
-  <rect x="0" y="0" width="760" height="440" rx="8" fill="#ffffff"/>
+  <rect x="0" y="0" width="760" height="422" rx="8" fill="#ffffff"/>
 
   <!-- ── at the source ───────────────────────────────────────────────────── -->
   <text x="170" y="44" font-size="14" font-weight="bold" text-anchor="middle"
@@ -82,13 +82,11 @@
   </g>
 
   <!-- ── the formula ─────────────────────────────────────────────────────── -->
-  <rect x="40" y="318" width="680" height="104" rx="8" fill="#f7fafc" stroke="#cbd5e0"/>
+  <rect x="40" y="318" width="680" height="86" rx="8" fill="#f7fafc" stroke="#cbd5e0"/>
   <text x="380" y="350" font-size="18" text-anchor="middle" fill="#1a202c">F = E / A_src · D_src
     / D_det</text>
   <text x="380" y="376" font-size="12" text-anchor="middle" fill="#4a5568">E: the energy the rays
     of C brought to the surface</text>
   <text x="380" y="394" font-size="12" text-anchor="middle" fill="#4a5568">m = D_det / D_src: how
     much the light around C spread out on its way, so F = E / (A_src · m)</text>
-  <text x="380" y="412" font-size="12" text-anchor="middle" fill="#4a5568">with helper rays, each
-    ray measures its own m and brings its fluence along</text>
 </svg>
