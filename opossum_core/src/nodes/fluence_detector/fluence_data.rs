@@ -35,10 +35,10 @@ pub struct FluenceData {
     y_range: Range<Length>,
     /// the estimator which has been used to calculate this fluence
     estimator: FluenceEstimator,
-    /// the share of the energy in the margins at the edges of the light, for a map that follows
-    /// ray tubes (see [`FluenceData::with_edge_share`])
+    /// for a map that follows ray tubes, the energy it draws in the tubes and in the margins at the
+    /// edges of the light (see [`FluenceData::with_drawn_energy`])
     #[serde(default)]
-    edge_share: Option<f64>,
+    drawn_energy: Option<(Energy, Energy)>,
 }
 impl FluenceData {
     /// Constructs a new [`FluenceData`] struct
@@ -65,26 +65,37 @@ impl FluenceData {
             x_range,
             y_range,
             estimator,
-            edge_share: None,
+            drawn_energy: None,
         }
     }
-    /// Returns this [`FluenceData`] with the given share of its energy in the margins at the
-    /// edges of the light: the energy that a map following ray tubes places only to within half a
-    /// tube (see the handbook, "Fluence").
+    /// Returns this [`FluenceData`] with the energy it draws, summed over its triangles exactly:
+    /// in the ray tubes, and in the margins at the edges of the light, which a map following ray
+    /// tubes places only to within half a tube (see the handbook, "Fluence"). It is the energy of
+    /// all the triangles, also where a given range of the map cuts them off.
     ///
     /// # Arguments
     ///
-    /// * `share` - the share, from 0 to 1.
+    /// * `in_tubes` - the energy in the ray tubes.
+    /// * `in_margins` - the energy in the margins.
     #[must_use]
-    pub const fn with_edge_share(mut self, share: f64) -> Self {
-        self.edge_share = Some(share);
+    pub const fn with_drawn_energy(mut self, in_tubes: Energy, in_margins: Energy) -> Self {
+        self.drawn_energy = Some((in_tubes, in_margins));
         self
     }
-    /// Returns the share of the energy of this [`FluenceData`] in the margins at the edges of the
-    /// light, `None` for a map that does not follow ray tubes.
+    /// Returns the energy this [`FluenceData`] draws, summed over its triangles exactly (see
+    /// [`FluenceData::with_drawn_energy`]), `None` for a map that does not follow ray tubes.
     #[must_use]
-    pub const fn edge_share(&self) -> Option<f64> {
-        self.edge_share
+    pub fn drawn_energy(&self) -> Option<Energy> {
+        self.drawn_energy
+            .map(|(in_tubes, in_margins)| in_tubes + in_margins)
+    }
+    /// Returns the share of the energy of this [`FluenceData`] in the margins at the edges of the
+    /// light, `None` for a map that does not follow ray tubes or draws no energy.
+    #[must_use]
+    pub fn edge_share(&self) -> Option<f64> {
+        let (in_tubes, in_margins) = self.drawn_energy?;
+        let total = in_tubes + in_margins;
+        (total.value > 0.0).then(|| (in_margins / total).value)
     }
     /// Returns the [`FluenceEstimator`] that was used to calculate this [`FluenceData`]
     #[must_use]
@@ -346,5 +357,24 @@ mod test {
             FluenceEstimator::Voronoi,
         );
         approx::assert_relative_eq!(fluence_data.total_energy().value, 1.0);
+    }
+    /// A map tells the energy it draws and the share of it in the margins, and a map that draws
+    /// none tells no share.
+    #[test]
+    fn a_map_tells_its_drawn_energy_and_the_share_in_its_margins() {
+        let map = || {
+            FluenceData::new(
+                dmatrix![J_per_cm2!(0.0)],
+                meter!(0.0)..meter!(1.0),
+                meter!(0.0)..meter!(1.0),
+                FluenceEstimator::Voronoi,
+            )
+        };
+        assert!(map().drawn_energy().is_none() && map().edge_share().is_none());
+        let drawn = map().with_drawn_energy(joule!(3.0), joule!(1.0));
+        assert_eq!(drawn.drawn_energy(), Some(joule!(4.0)));
+        approx::assert_relative_eq!(drawn.edge_share().unwrap_or(f64::NAN), 0.25);
+        let empty = map().with_drawn_energy(joule!(0.0), joule!(0.0));
+        assert!(empty.edge_share().is_none());
     }
 }

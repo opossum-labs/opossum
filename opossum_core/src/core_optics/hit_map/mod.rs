@@ -21,17 +21,19 @@ pub mod rays_hit_map;
 
 use crate::{
     error::OpmResult,
+    joule,
     light::RaySource,
     meter,
     nodes::fluence_detector::{Fluence, fluence_data::FluenceData},
     properties::Proptype,
 };
 use fluence_estimator::FluenceEstimator;
+use itertools::Itertools;
 use ray_tubes::draw_map;
 use rays_hit_map::{HitPoint, RaysHitMap};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, ops::Range};
-use uom::si::f64::Length;
+use uom::si::f64::{Energy, Length};
 use uuid::Uuid;
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -132,6 +134,18 @@ impl HitMap {
     #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.hit_map.is_empty()
+    }
+    /// Returns the energy of the light that hit this surface: the energy of all its hits, of all
+    /// bounces and bundles. The bundles of a bounce are summed in the order of their ids, so the
+    /// sum does not depend on the order they are stored in.
+    #[must_use]
+    pub fn energy(&self) -> Energy {
+        self.hit_map
+            .iter()
+            .flat_map(|bounced| bounced.hit_map.iter().sorted_by_key(|(uuid, _)| **uuid))
+            .flat_map(|(_, rays)| rays.hit_points())
+            .map(HitPoint::energy)
+            .fold(joule!(0.0), |total, energy| total + energy)
     }
     /// returns a reference to the `critical_fluence` field of this [`HitMap`] which contains:
     /// - the uuid of the ray bundle that causes this critical fluence on this surface as key

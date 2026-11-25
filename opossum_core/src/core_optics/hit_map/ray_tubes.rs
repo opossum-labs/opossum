@@ -15,6 +15,7 @@ use super::fluence_estimator::FluenceEstimator;
 use crate::{
     J_per_m2,
     error::{OpmResult, OpossumError},
+    joule,
     light::ray_mesh::{RayVertex, Tube, margin, spans},
     meter,
     nodes::fluence_detector::fluence_data::FluenceData,
@@ -207,8 +208,9 @@ fn margin_triangles(
 ///
 /// Where tubes overlap, their values add up. If the light of a sheet folds over itself (see
 /// [`ArrivedSheet::folds`]), a warning says that the map is unreliable near the fold. The map
-/// tells which share of its energy lies in the margins (see [`FluenceData::edge_share`]), summed
-/// over the triangles exactly rather than over the points of the map.
+/// tells the energy it draws in the tubes and in the margins (see
+/// [`FluenceData::with_drawn_energy`]), summed over the triangles exactly rather than over the
+/// points of the map.
 ///
 /// # Arguments
 ///
@@ -266,18 +268,13 @@ pub fn draw_map(
             grid.add_triangle(corners, values);
         });
     }
-    let map = FluenceData::new(
+    Ok(FluenceData::new(
         grid.values.map(|fluence| J_per_m2!(fluence)),
         x,
         y,
         estimator,
-    );
-    let total = in_tubes + in_margins;
-    Ok(if total > 0.0 {
-        map.with_edge_share(in_margins / total)
-    } else {
-        map
-    })
+    )
+    .with_drawn_energy(joule!(in_tubes), joule!(in_margins)))
 }
 /// The signed area of a triangle: positive if its corners run counterclockwise.
 fn signed_area([a, b, c]: [Point2<f64>; 3]) -> f64 {

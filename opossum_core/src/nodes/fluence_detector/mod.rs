@@ -9,7 +9,7 @@ use crate::{
     },
     core_optics::{
         NodeAttr, NodeAttrExt, OpticNode, OpticNodeExt, SurfacePorts,
-        hit_map::fluence_estimator::FluenceEstimator,
+        hit_map::{HitMap, fluence_estimator::FluenceEstimator},
         observable::{MetricDimension, ObservableDescriptor},
         optic_node::APERTURE_LIMIT_NOTE,
         optic_surface::OpticSurface,
@@ -19,6 +19,7 @@ use crate::{
         Geometry, SurfaceShape,
         body::{OPTIC_SHAPE, default_square_optic_shape},
     },
+    joule,
     light::LightData,
     nodes::NodeRegistration,
     properties::{Properties, Proptype, validator::Validator},
@@ -113,17 +114,19 @@ impl FluenceDetector {
     /// This function returns an error if the estimator cannot compute the map, e.g. a Voronoi map
     /// of rays that span no ray tubes.
     pub fn calc_fluence_data(&self) -> OpmResult<Option<FluenceData>> {
-        let Some(hit_map) = self
-            .get_optic_surface("input_1")
-            .map(OpticSurface::hit_map)
-            .filter(|hit_map| !hit_map.is_empty())
-        else {
+        let Some(hit_map) = self.recorded_hits() else {
             return Ok(None);
         };
         let Some(estimator) = self.estimator() else {
             return Ok(None);
         };
         hit_map.calc_fluence_map((101, 101), &estimator).map(Some)
+    }
+    /// Returns the hits this detector recorded, `None` if no light reached it.
+    fn recorded_hits(&self) -> Option<&HitMap> {
+        self.get_optic_surface("input_1")
+            .map(OpticSurface::hit_map)
+            .filter(|hit_map| !hit_map.is_empty())
     }
     /// Returns the estimator this detector computes its fluence map with, Voronoi if its property
     /// holds none, or `None` if it has no such property.
@@ -186,11 +189,21 @@ impl OpticNode for FluenceDetector {
                 "Peak fluence of the distribution",
                 Proptype::Fluence(fluence_data.peak()),
             )?;
+            let energy = self.recorded_hits().map_or(joule!(0.0), HitMap::energy);
             props.create(
                 "Total energy",
-                "Total energy of the distribution",
-                Proptype::Energy(fluence_data.total_energy()),
+                "Energy of the light that hit the detector",
+                Proptype::Energy(energy),
             )?;
+            if let Some(drawn) = fluence_data.drawn_energy()
+                && energy.value > 0.0
+            {
+                props.create(
+                    "Energy deviation of the map",
+                    "Share by which the energy the map holds misses the energy that hit the detector",
+                    Proptype::F64((drawn / energy).value - 1.0),
+                )?;
+            }
             // Explizite Angabe der verwendeten Schätzmethode
             props.create(
                 "Estimator",
@@ -244,7 +257,7 @@ impl OpticNode for FluenceDetector {
                 .with_default_target(0.0),
                 ObservableDescriptor::new(
                     "total energy",
-                    "Total integrated energy across the fluence distribution (J)",
+                    "Energy of the light that hit the detector (J)",
                     MetricDimension::Energy,
                 )
                 .with_default_target(0.0),
@@ -254,13 +267,16 @@ impl OpticNode for FluenceDetector {
     }
 
     fn read_observable(&self, metric_name: &str) -> Option<f64> {
-        let fluence_data = self.calc_fluence_data().ok().flatten()?;
         let lower = metric_name.to_lowercase();
         match lower.as_str() {
             // SI-Basiseinheit: J / m² (1 J/cm² = 10.000 J/m²)
-            "peak fluence" | "peak" | "peak_fluence" => Some(fluence_data.peak().value),
+            "peak fluence" | "peak" | "peak_fluence" => {
+                Some(self.calc_fluence_data().ok().flatten()?.peak().value)
+            }
             // SI-Basiseinheit: Joule (J)
-            "total energy" | "energy" | "total_energy" => Some(fluence_data.total_energy().value),
+            "total energy" | "energy" | "total_energy" => {
+                Some(self.recorded_hits()?.energy().value)
+            }
             _ => None,
         }
     }
@@ -522,18 +538,30 @@ mod test {
         estimator: FluenceEstimator,
         bored_mirror: bool,
     ) -> OpmResult<FluenceData> {
+        use crate::core_optics::node_attr::HasNodeAttr;
+        let mut detector = FluenceDetector::default();
+        detector
+            .node_attr_mut()
+            .set_property("fluence estimator", estimator.into())?;
+        traced(detector, light, bored_mirror)?
+            .calc_fluence_data()?
+            .ok_or_else(|| crate::error::OpossumError::Other("the detector has no map".into()))
+    }
+    /// Traces the given light into the given detector 150 mm from the source and returns the
+    /// detector with what it recorded. With `bored_mirror`, a default bored mirror 100 mm from the
+    /// source reflects the light back onto the detector 50 mm in front of it.
+    fn traced(
+        detector: FluenceDetector,
+        light: crate::light::lightdata::ray_data_builder::RayDataBuilder,
+        bored_mirror: bool,
+    ) -> OpmResult<FluenceDetector> {
         use crate::{
             analyzers::{Analyzer, RayTraceConfig, raytrace::RayTracingAnalyzer},
-            core_optics::node_attr::HasNodeAttr,
             millimeter,
             nodes::{BoredMirror, NodeGroup, SourcePort},
         };
         let mut scenery = NodeGroup::default();
         let source = scenery.add_node(SourcePort::default())?;
-        let mut detector = FluenceDetector::default();
-        detector
-            .node_attr_mut()
-            .set_property("fluence estimator", estimator.into())?;
         let detector = scenery.add_node(detector)?;
         if bored_mirror {
             let mirror = scenery.add_node(BoredMirror::default())?;
@@ -549,9 +577,106 @@ mod test {
             .node(detector)?
             .as_any()
             .downcast_ref::<FluenceDetector>()
-            .ok_or_else(|| crate::error::OpossumError::Other("no fluence detector".into()))?
-            .calc_fluence_data()?
-            .ok_or_else(|| crate::error::OpossumError::Other("the detector has no map".into()))
+            .cloned()
+            .ok_or_else(|| crate::error::OpossumError::Other("no fluence detector".into()))
+    }
+    /// The properties of the ray trace report of the given detector.
+    fn report_of(detector: &FluenceDetector) -> OpmResult<crate::properties::Properties> {
+        let NodeReportResult::Report(report) =
+            detector.node_report("test_uuid", AnalyzerKind::RayTrace)?
+        else {
+            return Err(crate::error::OpossumError::Other("no report".into()));
+        };
+        Ok(report.properties().clone())
+    }
+    /// A Gaussian beam of 1 J with a standard deviation of 2 mm, sampled by 7 hexapolar rings out
+    /// to 8 mm, about 1.1 mm apart.
+    fn coarse_gaussian_beam() -> OpmResult<crate::prelude::RayDataSource> {
+        use crate::{
+            degree,
+            distributions::{energy::General2DGaussian, position::Hexapolar, spectral::LaserLines},
+            joule, millimeter,
+            prelude::{CollimatedSrc, RayDataSource},
+        };
+        Ok(RayDataSource::Collimated(CollimatedSrc::new(
+            Hexapolar::new(millimeter!(8.0), 7)?.into(),
+            General2DGaussian::new(
+                joule!(1.0),
+                millimeter!(0.0, 0.0),
+                millimeter!(2.0, 2.0),
+                1.0,
+                degree!(0.0),
+                false,
+            )?
+            .into(),
+            LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+        )))
+    }
+    /// The report and the metric of a detector tell the energy that hit it, which is the energy of
+    /// the source: neither the points of the map nor the interpolation between its rays bend it.
+    #[test]
+    fn the_report_tells_the_energy_that_hit_the_detector() -> OpmResult<()> {
+        for source in [grid_beam(false)?, coarse_gaussian_beam()?] {
+            let detector = traced(FluenceDetector::default(), source.into(), false)?;
+            let Proptype::Energy(energy) = report_of(&detector)?.get("Total energy")?.clone()
+            else {
+                panic!("Expected the total energy");
+            };
+            approx::assert_relative_eq!(energy.value, 1.0, max_relative = 1e-9);
+            let metric = detector.read_observable("total energy").unwrap_or(f64::NAN);
+            approx::assert_relative_eq!(metric, 1.0, max_relative = 1e-9);
+        }
+        Ok(())
+    }
+    /// A detector with a window smaller than the beam tells the energy of the rays within it: 19 ×
+    /// 19 of the 31 × 31 rays of the grid, each standing for a square of 0.533 mm, of a beam
+    /// reaching half a ray spacing beyond its 16 mm.
+    #[test]
+    fn a_detector_tells_the_energy_within_its_window() -> OpmResult<()> {
+        use crate::{apertures::RectangleShape, millimeter};
+        let mut detector = FluenceDetector::default();
+        let window: crate::apertures::OpticShape =
+            RectangleShape::new(millimeter!(10.0), millimeter!(10.0))?.into();
+        detector.set_property(OPTIC_SHAPE, window.into())?;
+        let detector = traced(detector, grid_beam(false)?.into(), false)?;
+        let Proptype::Energy(energy) = report_of(&detector)?.get("Total energy")?.clone() else {
+            panic!("Expected the total energy");
+        };
+        let spacing: f64 = 16.0 / 30.0;
+        let within = (19.0 * spacing / (16.0 + spacing)).powi(2);
+        approx::assert_relative_eq!(energy.value, within, max_relative = 1e-9);
+        Ok(())
+    }
+    /// The report tells how far the energy the map holds misses the energy that hit: not at all for
+    /// a flat-top beam, and for a coarsely sampled Gaussian as much as the map itself holds more,
+    /// which a finely rastered map of it confirms.
+    #[test]
+    fn the_report_tells_how_far_the_map_misses_that_energy() -> OpmResult<()> {
+        let deviation_of = |detector: &FluenceDetector| -> OpmResult<f64> {
+            let Proptype::F64(deviation) = report_of(detector)?
+                .get("Energy deviation of the map")?
+                .clone()
+            else {
+                panic!("Expected the energy deviation of the map");
+            };
+            Ok(deviation)
+        };
+        let flat = traced(FluenceDetector::default(), grid_beam(false)?.into(), false)?;
+        assert!(deviation_of(&flat)?.abs() < 1e-9);
+        let gaussian = traced(
+            FluenceDetector::default(),
+            coarse_gaussian_beam()?.into(),
+            false,
+        )?;
+        let fine = gaussian
+            .get_optic_surface("input_1")
+            .ok_or_else(|| crate::error::OpossumError::Other("no surface".into()))?
+            .hit_map()
+            .calc_fluence_map((1001, 1001), &FluenceEstimator::Voronoi)?
+            .total_energy()
+            .value;
+        approx::assert_abs_diff_eq!(deviation_of(&gaussian)?, fine - 1.0, epsilon = 1e-4);
+        Ok(())
     }
     /// A flat-top beam shows its fluence across the map.
     #[test]
