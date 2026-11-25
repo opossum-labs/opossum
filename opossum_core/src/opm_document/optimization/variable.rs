@@ -220,7 +220,6 @@ impl FreeVariable {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use uuid::Uuid;
     #[test]
     fn box_bounds_validation_and_penalty() -> OpmResult<()> {
         assert!(BoxBounds::new(10.0, 5.0).is_err());

@@ -101,36 +101,25 @@ impl MeritFunction {
     /// Evaluates the scalar cost Phi(x).
     #[must_use]
     pub fn evaluate(&self, x: &[f64]) -> f64 {
+        let clamped_x = self.clamp_params(x);
         let mut total_cost = 0.0;
-        for (var, &val) in self.free_variables.iter().zip(x.iter()) {
-            let violation = var.bounds.penalty(val);
-            if violation > 0.0 {
-                total_cost = self.bounds_penalty_weight.mul_add(violation, total_cost);
-            }
-        }
-
         let mut working_doc = self.blueprint.clone();
-
         let Ok(parameter_map) =
-            ParameterResolver::resolve(&self.free_variables, &self.couplings, x)
+            ParameterResolver::resolve(&self.free_variables, &self.couplings, &clamped_x)
         else {
             return self.fatal_penalty;
         };
-
         for (address, value) in parameter_map {
             if ParameterApplier::set_value(&mut working_doc, &address, value).is_err() {
                 return self.fatal_penalty;
             }
         }
-
         if ParameterApplier::finalize_update(&mut working_doc).is_err() {
             return self.fatal_penalty;
         }
-
         if working_doc.analyze_headless().is_err() {
             return self.fatal_penalty;
         }
-
         let context = EvaluationContext::new(&working_doc);
         for operand in &self.operands {
             match operand.evaluate(&context) {
@@ -150,44 +139,29 @@ impl MeritFunction {
     /// The sum of squares `||R(x)||^2` strictly equals the scalar cost `Phi(x)`.
     #[must_use]
     pub fn evaluate_residuals(&self, x: &[f64]) -> DVector<f64> {
+        let clamped_x = self.clamp_params(x);
         let n_vars = self.free_variables.len();
         let mut residuals = Vec::new();
 
-        // 1. Box bounds penalty residuals
-        let mut bound_residuals = Vec::with_capacity(n_vars);
-        for (var, &val) in self.free_variables.iter().zip(x.iter()) {
-            let bounds = var.bounds;
-            let res = if val < bounds.min {
-                (bounds.min - val) * self.bounds_penalty_weight.sqrt()
-            } else if val > bounds.max {
-                (val - bounds.max) * self.bounds_penalty_weight.sqrt()
-            } else {
-                0.0
-            };
-            bound_residuals.push(res);
-        }
-
-        // 2. Clone blueprint and apply candidate parameters
+        // Clone blueprint and apply clamped candidate parameters
         let mut working_doc = self.blueprint.clone();
         let Ok(parameter_map) =
-            ParameterResolver::resolve(&self.free_variables, &self.couplings, x)
+            ParameterResolver::resolve(&self.free_variables, &self.couplings, &clamped_x)
         else {
             return DVector::from_element(n_vars + 1, self.fatal_penalty.sqrt());
         };
-
         for (address, value) in parameter_map {
             if ParameterApplier::set_value(&mut working_doc, &address, value).is_err() {
                 return DVector::from_element(n_vars + 1, self.fatal_penalty.sqrt());
             }
         }
-
         if ParameterApplier::finalize_update(&mut working_doc).is_err()
             || working_doc.analyze_headless().is_err()
         {
             return DVector::from_element(n_vars + 1, self.fatal_penalty.sqrt());
         }
 
-        // 3. Evaluate individual operand residuals (flattened)
+        // Evaluate individual operand residuals (flattened)
         let context = EvaluationContext::new(&working_doc);
         for operand in &self.operands {
             match operand.residuals(&context) {
@@ -199,9 +173,6 @@ impl MeritFunction {
                 }
             }
         }
-
-        // 4. Append bound violation residuals
-        residuals.extend(bound_residuals);
         DVector::from_vec(residuals)
     }
 
@@ -250,6 +221,15 @@ impl MeritFunction {
             jacobian.set_column(j, &col);
         }
         jacobian
+    }
+    /// Clamps each free variable value to its configured [`BoxBounds`].
+    #[must_use]
+    fn clamp_params(&self, x: &[f64]) -> Vec<f64> {
+        self.free_variables
+            .iter()
+            .zip(x.iter())
+            .map(|(var, &val)| var.bounds.clamp(val))
+            .collect()
     }
 }
 
