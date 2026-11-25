@@ -1146,7 +1146,7 @@ impl PlotData {
     ) -> OpmResult<Self> {
         if xyz_dat.is_empty() {
             return Err(OpossumError::Other(
-                "No z-data provided! Cannot create `PlotData::TriangulatedSurface`!".into(),
+                "No xyz-data provided! Cannot create `PlotData::TriangulatedSurface`!".into(),
             ));
         }
         if let (Some(triangle_idx), Some(triangle_face_normals)) =

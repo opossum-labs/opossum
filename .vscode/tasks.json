@@ -1,0 +1,30 @@
+{
+  // Ablegen als .vscode/tasks.json — Build-Schritte, die launch.json vor dem Start ausführt.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "cargo build opossum_cli",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["build", "-p", "opossum_cli"],
+      "problemMatcher": ["$rustc"],
+      "group": "build"
+    },
+    {
+      "label": "cargo build opossum_backend",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["build", "-p", "opossum_backend"],
+      "problemMatcher": ["$rustc"],
+      "group": "build"
+    },
+    {
+      "label": "cargo build opossum_gui",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["build", "-p", "opossum_gui"],
+      "problemMatcher": ["$rustc"],
+      "group": "build"
+    }
+  ]
+}

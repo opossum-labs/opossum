@@ -123,7 +123,7 @@ impl FluenceDetector {
         let Some(estimator) = self.estimator() else {
             return Ok(None);
         };
-        hit_map.calc_fluence_map((95, 83), &estimator).map(Some)
+        hit_map.calc_fluence_map((101, 101), &estimator).map(Some)
     }
     /// Returns the estimator this detector computes its fluence map with, Voronoi if its property
     /// holds none, or `None` if it has no such property.

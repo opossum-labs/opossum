@@ -1,5 +1,7 @@
 {
   "files.associations": {
     "*.opm": "ron"
-  }
+  },
+  "debug.allowBreakpointsEverywhere": true,
+  "rust-analyzer.debug.engine": "ms-vscode.cpptools"
 }
