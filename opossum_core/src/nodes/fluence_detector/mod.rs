@@ -665,16 +665,28 @@ mod test {
         }
         Ok(())
     }
-    /// A flat-top beam is even in its middle too, where the middle ray of the hexapolar pattern
-    /// stands for less area than the rays of its rings and so carries less energy.
+    /// A flat-top beam is even all over: in its middle, where the middle ray of the hexapolar
+    /// pattern stands for less area than the rays of its rings and so carries less energy, and
+    /// between its rings, whose rays stand for unequal areas.
     #[test]
-    fn a_flat_top_beam_is_even_in_its_middle() -> OpmResult<()> {
+    fn a_flat_top_beam_is_even_all_over() -> OpmResult<()> {
+        use uom::si::{length::millimeter, radiant_exposure::joule_per_square_centimeter};
         let map = map_of_a_flat_top(vec![(nanometer!(1000.0), 1.0)], false)?;
-        approx::assert_relative_eq!(
-            fluence_near(&map, 0.0, 0.0)?,
-            flat_top_fluence(),
-            max_relative = 0.02
-        );
+        let middle = fluence_near(&map, 0.0, 0.0)?;
+        approx::assert_relative_eq!(middle, flat_top_fluence(), max_relative = 0.02);
+        let (xs, ys, values) = map.get_fluence_distribution()?;
+        for (row, y) in ys.iter().enumerate() {
+            for (column, x) in xs.iter().enumerate() {
+                let (x, y) = (x.get::<millimeter>(), y.get::<millimeter>());
+                if x.hypot(y) <= BEAM_RADIUS {
+                    let value = values[(row, column)].get::<joule_per_square_centimeter>();
+                    assert!(
+                        (value / middle - 1.0).abs() < 1e-9,
+                        "{value} J/cm² at ({x:.2}, {y:.2}) mm, {middle} J/cm² in the middle"
+                    );
+                }
+            }
+        }
         Ok(())
     }
     /// A Gaussian beam on a Fibonacci pattern shows its exact peak: each ray carries the beam
