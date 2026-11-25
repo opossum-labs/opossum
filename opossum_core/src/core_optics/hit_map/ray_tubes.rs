@@ -7,7 +7,7 @@
 use std::{cmp::Ordering, ops::Range};
 
 use log::warn;
-use nalgebra::{DMatrix, Point2, Vector2};
+use nalgebra::{DMatrix, DVector, Matrix2, Point2, Vector2};
 use spade::{DelaunayTriangulation, Triangulation, handles::VertexHandle};
 use uom::si::f64::Length;
 
@@ -111,6 +111,71 @@ impl<'a> ArrivedSheet<'a> {
                 let (arrival, cell) = ((*arrival)?, corner.data().cell_area());
                 (on_surface > 0.0 && cell > 0.0)
                     .then(|| arrival.energy / cell * at_source / on_surface)
+            })
+            .collect()
+    }
+    /// Returns the curvature of the fluence at each corner of this sheet: the Hessian `H` of
+    /// `Δ = g·d + ½ dᵀ H d`, fitted by least squares to the steps `d` to the neighbors the corner
+    /// shares an alive tube with and the changes `Δ` of the value along them (see the handbook,
+    /// "Uncertainty", which also states when the fit is exact).
+    ///
+    /// # Arguments
+    ///
+    /// * `values` - the value of each corner, indexed like the vertices of the sheet.
+    ///
+    /// # Returns
+    ///
+    /// One curvature per vertex of the sheet, `None` for a corner without a value or whose steps do
+    /// not fix all five coefficients of the fit, as with fewer than five neighbors.
+    pub fn curvatures(&self, values: &[Option<f64>]) -> Vec<Option<Matrix2<f64>>> {
+        let value_of = |v: VertexHandle<'_, RayVertex>| values.get(v.index()).copied().flatten();
+        let alive = |tube: Option<Tube<'_>>| tube.is_some_and(|tube| self.alive(tube));
+        self.sheet
+            .vertices()
+            .map(|corner| {
+                let (at, value) = (self.arrival(corner)?.position, value_of(corner)?);
+                let steps = corner
+                    .out_edges()
+                    .filter(|edge| {
+                        alive(edge.face().as_inner()) || alive(edge.rev().face().as_inner())
+                    })
+                    .filter_map(|edge| {
+                        let neighbor = edge.to();
+                        Some((
+                            self.arrival(neighbor)?.position - at,
+                            value_of(neighbor)? - value,
+                        ))
+                    })
+                    .collect::<Vec<_>>();
+                fitted_curvature(&steps)
+            })
+            .collect()
+    }
+    /// Returns, for each alive tube of this sheet with a corner that tells the curvature of the
+    /// fluence (see [`ArrivedSheet::curvatures`]), its corners on the surface and the curvature
+    /// along each of its edges, `eᵀ H e`, the edge opposite the corner of the same index. `H` is
+    /// the mean of the curvatures its corners tell (see the handbook, "Uncertainty").
+    ///
+    /// # Arguments
+    ///
+    /// * `values` - the value of each corner, indexed like the vertices of the sheet.
+    pub fn deviations(&self, values: &[Option<f64>]) -> Vec<([Point2<f64>; 3], [f64; 3])> {
+        let curvatures = self.curvatures(values);
+        self.alive_tubes()
+            .filter_map(|(tube, points)| {
+                let known = tube
+                    .vertices()
+                    .iter()
+                    .filter_map(|v| curvatures.get(v.index()).copied().flatten())
+                    .collect::<Vec<_>>();
+                if known.is_empty() {
+                    return None;
+                }
+                let curvature =
+                    known.iter().fold(Matrix2::zeros(), |sum, h| sum + h) / to_f64(known.len());
+                let along = |edge: Vector2<f64>| edge.dot(&(curvature * edge));
+                let [p0, p1, p2] = points;
+                Some((points, [along(p2 - p1), along(p0 - p2), along(p1 - p0)]))
             })
             .collect()
     }
@@ -270,6 +335,9 @@ pub fn draw_map(
             }
             grid.add_triangle(corners, values);
         });
+        for (corners, along_edges) in sheet.deviations(values) {
+            grid.add_deviation(corners, along_edges);
+        }
     }
     Ok(FluenceData::new(
         grid.values.map(|fluence| J_per_m2!(fluence)),
@@ -277,7 +345,35 @@ pub fn draw_map(
         y,
         estimator,
     )
-    .with_drawn_energy(joule!(in_tubes), joule!(in_margins)))
+    .with_drawn_energy(joule!(in_tubes), joule!(in_margins))
+    .with_deviation(grid.deviation.map(|deviation| J_per_m2!(deviation))))
+}
+/// Fits `Δ = g·d + ½ dᵀ H d` by least squares to the given steps `d` from a corner to its
+/// neighbors and the changes `Δ` of the value along them, and returns `H`; `None` if the steps
+/// do not fix all five coefficients, its singular values spreading by more than 10¹⁰ (see the
+/// handbook, "Uncertainty").
+fn fitted_curvature(steps: &[(Vector2<f64>, f64)]) -> Option<Matrix2<f64>> {
+    // the steps measured in the longest of them, so that the columns of the fit are alike in size
+    let scale = steps.iter().map(|(d, _)| d.norm()).fold(0.0, f64::max);
+    if steps.len() < 5 || scale <= 0.0 {
+        return None;
+    }
+    let rows = steps.iter().flat_map(|(d, _)| {
+        let d = d / scale;
+        [d.x, d.y, d.x * d.x / 2.0, d.x * d.y, d.y * d.y / 2.0]
+    });
+    let fit = DMatrix::from_row_iterator(steps.len(), 5, rows);
+    let changes = DVector::from_iterator(steps.len(), steps.iter().map(|(_, change)| *change));
+    let svd = fit.svd(true, true);
+    if svd.singular_values.min() <= 1e-10 * svd.singular_values.max() {
+        return None;
+    }
+    let coefficients = svd.solve(&changes, 0.0).ok()?;
+    let &[_, _, xx, xy, yy] = coefficients.as_slice() else {
+        return None;
+    };
+    // a curvature measured in steps of `scale` is `scale²` times that measured in meters
+    Some(Matrix2::new(xx, xy, xy, yy) / (scale * scale))
 }
 /// The signed area of a triangle: positive if its corners run counterclockwise.
 fn signed_area([a, b, c]: [Point2<f64>; 3]) -> f64 {
@@ -290,6 +386,9 @@ pub struct FluenceGrid {
     y: Axis,
     /// The values, with a row per point along y and a column per point along x.
     values: DMatrix<f64>,
+    /// The estimated deviation of the fluence from the values, at the same points (see
+    /// [`FluenceGrid::add_deviation`]).
+    deviation: DMatrix<f64>,
 }
 /// The evenly spaced points of a grid along one axis.
 struct Axis {
@@ -355,40 +454,76 @@ impl FluenceGrid {
             x: Axis::new(x, nr_of_points.0),
             y: Axis::new(y, nr_of_points.1),
             values: DMatrix::zeros(nr_of_points.1, nr_of_points.0),
+            deviation: DMatrix::zeros(nr_of_points.1, nr_of_points.0),
         }
     }
     /// Adds a triangle to the grid, linearly between the values at its corners.
-    ///
-    /// A point on an edge two triangles share is added once only: it belongs to the triangle for
-    /// which the edge is a top or left one.
-    fn add_triangle(&mut self, mut corners: [Point2<f64>; 3], mut values: [f64; 3]) {
-        let twice_area = 2.0 * signed_area(corners);
-        match twice_area.partial_cmp(&0.0) {
-            Some(Ordering::Greater) => {}
-            Some(Ordering::Less) => {
-                corners.swap(1, 2);
-                values.swap(1, 2);
+    fn add_triangle(&mut self, corners: [Point2<f64>; 3], values: [f64; 3]) {
+        for_each_covered(&self.x, &self.y, corners, |cell, lambda| {
+            if let Some(value) = self.values.get_mut(cell) {
+                *value += lambda.iter().zip(values).map(|(l, v)| l * v).sum::<f64>();
             }
-            _ => return,
-        }
-        let per_area = twice_area.abs().recip();
-        let [p0, p1, p2] = corners;
-        // each edge lies opposite the corner of the same index
-        let edges = [(p1, p2), (p2, p0), (p0, p1)];
-        let top_left = edges.map(|(a, b)| is_top_left(b - a));
-        let (lower, upper) = (p0.inf(&p1).inf(&p2), p0.sup(&p1).sup(&p2));
-        for column in self.x.within(lower.x, upper.x) {
-            for row in self.y.within(lower.y, upper.y) {
-                let point = Point2::new(self.x.at(column), self.y.at(row));
-                let weights = edges.map(|(a, b)| edge_weight(a, b, point));
-                let covered = weights
-                    .iter()
-                    .zip(top_left)
-                    .all(|(w, top_left)| *w > 0.0 || (top_left && *w >= 0.0));
-                if covered && let Some(cell) = self.values.get_mut((row, column)) {
-                    let value = weights.iter().zip(values).map(|(w, v)| w * v).sum::<f64>();
-                    *cell = value.mul_add(per_area, *cell);
+        });
+    }
+    /// Adds the deviation of a quadratic fluence from its linear interpolation over a triangle:
+    /// `−½ Σ_{i<j} λ_i λ_j eᵀ H e` over the edges `e` of the triangle, with the barycentric
+    /// coordinates `λ` of each point (see the handbook, "Uncertainty").
+    ///
+    /// # Arguments
+    ///
+    /// * `corners` - the corners of the triangle.
+    /// * `along_edges` - `eᵀ H e` along each edge, the edge opposite the corner of the same index.
+    fn add_deviation(&mut self, corners: [Point2<f64>; 3], along_edges: [f64; 3]) {
+        let [w0, w1, w2] = along_edges;
+        for_each_covered(&self.x, &self.y, corners, |cell, [l0, l1, l2]| {
+            if let Some(deviation) = self.deviation.get_mut(cell) {
+                *deviation -= 0.5 * (l1 * l2 * w0 + l2 * l0 * w1 + l0 * l1 * w2);
+            }
+        });
+    }
+}
+/// Calls `at` for each point of the grid along `x` and `y` that the given triangle covers, with
+/// the row and the column of the point and its barycentric coordinates, one per corner in the
+/// given order.
+///
+/// A point on an edge two triangles share is covered by one of them only: the one for which the
+/// edge is a top or left one.
+fn for_each_covered(
+    x: &Axis,
+    y: &Axis,
+    mut corners: [Point2<f64>; 3],
+    mut at: impl FnMut((usize, usize), [f64; 3]),
+) {
+    let twice_area = 2.0 * signed_area(corners);
+    let turned = match twice_area.partial_cmp(&0.0) {
+        Some(Ordering::Greater) => false,
+        Some(Ordering::Less) => true,
+        _ => return,
+    };
+    // the corners run counterclockwise from here on
+    if turned {
+        corners.swap(1, 2);
+    }
+    let per_area = twice_area.abs().recip();
+    let [p0, p1, p2] = corners;
+    // each edge lies opposite the corner of the same index
+    let edges = [(p1, p2), (p2, p0), (p0, p1)];
+    let top_left = edges.map(|(a, b)| is_top_left(b - a));
+    let (lower, upper) = (p0.inf(&p1).inf(&p2), p0.sup(&p1).sup(&p2));
+    for column in x.within(lower.x, upper.x) {
+        for row in y.within(lower.y, upper.y) {
+            let point = Point2::new(x.at(column), y.at(row));
+            let weights = edges.map(|(a, b)| edge_weight(a, b, point));
+            let covered = weights
+                .iter()
+                .zip(top_left)
+                .all(|(w, top_left)| *w > 0.0 || (top_left && *w >= 0.0));
+            if covered {
+                let mut lambda = weights.map(|w| w * per_area);
+                if turned {
+                    lambda.swap(1, 2);
                 }
+                at((row, column), lambda);
             }
         }
     }

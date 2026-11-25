@@ -667,17 +667,95 @@ mod test_rays_hit_map {
     /// 1 J/cm² more per cm along x and 3 J/cm² more per cm along y over the area the ray stands
     /// for.
     fn linear_hit(ray: &Ray) -> OpmResult<HitPoint> {
+        hit_showing(ray, linear_fluence)
+    }
+    /// 10 J/cm² on the axis, 1 J/cm² more per cm along x and 3 J/cm² more per cm along y, at the
+    /// given point in cm.
+    fn linear_fluence(x: f64, y: f64) -> f64 {
+        10.0 + x + 3.0 * y
+    }
+    /// The hit of the given ray where it starts, with the energy that shows the given fluence in
+    /// J/cm², of the point in cm, over the area the ray stands for.
+    fn hit_showing(ray: &Ray, fluence: impl Fn(f64, f64) -> f64) -> OpmResult<HitPoint> {
         let p = ray.position();
-        let fluence = 10.0 + p.x.get::<centimeter>() + 3.0 * p.y.get::<centimeter>();
-        HitPoint::new(p, joule!(fluence * cell_area_of(ray)))
+        let value = fluence(p.x.get::<centimeter>(), p.y.get::<centimeter>());
+        HitPoint::new(p, joule!(value * cell_area_of(ray)))
     }
     /// A map of the hits of [`linear_hit`] of [`ray_grid`].
     fn linear_hit_map(n_x: usize, n_y: usize) -> OpmResult<RaysHitMap> {
+        hit_map_showing(n_x, n_y, linear_fluence)
+    }
+    /// A map of the hits of [`ray_grid`] that show the given fluence (see [`hit_showing`]).
+    fn hit_map_showing(
+        n_x: usize,
+        n_y: usize,
+        fluence: impl Fn(f64, f64) -> f64,
+    ) -> OpmResult<RaysHitMap> {
         let mut map = RaysHitMap::default();
         for ray in ray_grid(n_x, n_y)?.iter() {
-            map.add_hit_point(linear_hit(ray)?, ray.source())?;
+            map.add_hit_point(hit_showing(ray, &fluence)?, ray.source())?;
         }
         Ok(map)
+    }
+    /// The map of the given hits on 41 × 41 points over the square of ±2 cm, with the map, the
+    /// deviation it estimates and the given fluence, all in J/cm², at each point. On a grid of
+    /// 7 × 7 rays 1 cm apart, every corner of the tubes there has neighbors all around.
+    fn deviation_check(
+        hits: &RaysHitMap,
+        fluence: impl Fn(f64, f64) -> f64,
+    ) -> OpmResult<Vec<(f64, f64, f64)>> {
+        let range = centimeter!(-2.0)..centimeter!(2.0);
+        let map = hits.calc_fluence_with_tubes(
+            (41, 41),
+            Some(&range),
+            Some(&range),
+            FluenceEstimator::Voronoi,
+        )?;
+        let deviation = map
+            .deviation()
+            .ok_or_else(|| crate::error::OpossumError::Other("no deviation".into()))?;
+        let (xs, ys, values) = map.get_fluence_distribution()?;
+        let mut points = Vec::new();
+        for (row, y) in ys.iter().enumerate() {
+            for (column, x) in xs.iter().enumerate() {
+                points.push((
+                    values[(row, column)].get::<joule_per_square_centimeter>(),
+                    deviation[(row, column)].get::<joule_per_square_centimeter>(),
+                    fluence(x.get::<centimeter>(), y.get::<centimeter>()),
+                ));
+            }
+        }
+        Ok(points)
+    }
+    /// For a quadratic fluence the estimated deviation is exact: the map plus it shows the fluence
+    /// itself, between the rays too (see the handbook, "Uncertainty").
+    #[test]
+    fn the_deviation_of_a_quadratic_fluence_is_exact() -> OpmResult<()> {
+        let quadratic = |x: f64, y: f64| 0.5f64.mul_add(x * y, 50.0 - 2.0 * x * x - y * y);
+        for (map, deviation, fluence) in
+            deviation_check(&hit_map_showing(7, 7, quadratic)?, quadratic)?
+        {
+            assert_relative_eq!(map + deviation, fluence, max_relative = 1e-9);
+        }
+        Ok(())
+    }
+    /// A linear fluence deviates nowhere from its map.
+    #[test]
+    fn a_linear_fluence_deviates_nowhere() -> OpmResult<()> {
+        let linear = |x: f64, y: f64| 20.0 + x + 3.0 * y;
+        for (_, deviation, fluence) in deviation_check(&hit_map_showing(7, 7, linear)?, linear)? {
+            assert!(deviation.abs() < 1e-9 * fluence, "{deviation} J/cm²");
+        }
+        Ok(())
+    }
+    /// An even fluence deviates nowhere from its map.
+    #[test]
+    fn a_flat_top_deviates_nowhere() -> OpmResult<()> {
+        let even = |_: f64, _: f64| 10.0;
+        for (_, deviation, _) in deviation_check(&hit_map_showing(7, 7, even)?, even)? {
+            assert!(deviation.abs() < 1e-9, "{deviation} J/cm²");
+        }
+        Ok(())
     }
     #[test]
     fn lims() -> OpmResult<()> {
@@ -922,6 +1000,22 @@ mod test_ray_tubes {
         )
     }
 
+    /// A corner needs five neighbors around it to tell the curvature of the fluence: those of the
+    /// outermost ring of a hexapolar bundle have fewer and tell none, all others tell one.
+    #[test]
+    fn a_corner_with_too_few_neighbors_has_no_curvature() -> OpmResult<()> {
+        let rays = bundle_in_tubes(3)?;
+        let hits = hits_of(&rays, 1.0, 0.0)?;
+        let sheets = hits.tube_sheets()?;
+        let [(sheet, values)] = sheets.as_slice() else {
+            panic!("one sheet");
+        };
+        let curvatures = sheet.curvatures(values);
+        let outermost = rays.iter().filter(|ray| !starts_within(ray, 4.9)).count();
+        assert_eq!(outermost, 18);
+        assert_eq!(curvatures.iter().filter(|c| c.is_none()).count(), outermost);
+        Ok(())
+    }
     /// Hits of rays that span no tubes leave the map without them, and a Voronoi map says it
     /// needs them.
     #[test]

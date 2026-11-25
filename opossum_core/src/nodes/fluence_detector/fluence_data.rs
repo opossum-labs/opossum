@@ -39,6 +39,11 @@ pub struct FluenceData {
     /// edges of the light (see [`FluenceData::with_drawn_energy`])
     #[serde(default)]
     drawn_energy: Option<(Energy, Energy)>,
+    /// for a map that follows ray tubes, the estimated deviation of the fluence from the map at
+    /// each of its points (see [`FluenceData::with_deviation`]); derived for the report, not
+    /// written to file
+    #[serde(skip)]
+    deviation: Option<DMatrix<Fluence>>,
 }
 impl FluenceData {
     /// Constructs a new [`FluenceData`] struct
@@ -66,7 +71,57 @@ impl FluenceData {
             y_range,
             estimator,
             drawn_energy: None,
+            deviation: None,
         }
+    }
+    /// Returns this [`FluenceData`] with the estimated deviation of the fluence from it at each
+    /// of its points, from the curvature of the fluence between the rays: positive where the
+    /// fluence lies above the map (see the handbook, "Uncertainty").
+    ///
+    /// # Arguments
+    ///
+    /// * `deviation` - the deviation, with the shape of the map.
+    #[must_use]
+    pub fn with_deviation(mut self, deviation: DMatrix<Fluence>) -> Self {
+        self.deviation = Some(deviation);
+        self
+    }
+    /// Returns the estimated deviation of the fluence from this [`FluenceData`] at each of its
+    /// points (see [`FluenceData::with_deviation`]), `None` for a map that does not follow ray
+    /// tubes.
+    #[must_use]
+    pub const fn deviation(&self) -> Option<&DMatrix<Fluence>> {
+        self.deviation.as_ref()
+    }
+    /// Returns a map of how far the fluence may lie from this [`FluenceData`] at each of its
+    /// points: the size of the estimated deviation (see [`FluenceData::with_deviation`]), `None`
+    /// for a map that does not follow ray tubes.
+    #[must_use]
+    pub fn uncertainty_map(&self) -> Option<Self> {
+        let deviation = self.deviation.as_ref()?;
+        Some(Self::new(
+            deviation.map(Fluence::abs),
+            self.x_range.clone(),
+            self.y_range.clone(),
+            self.estimator,
+        ))
+    }
+    /// Returns how far the peak of the fluence may lie above the peak of this [`FluenceData`]:
+    /// the highest value of the map plus its estimated deviation, less the peak of the map, and
+    /// zero if that is negative (see the handbook, "Uncertainty", for when the peak of the map
+    /// cannot lie above that of the fluence). `None` for a map that does not follow ray tubes.
+    #[must_use]
+    pub fn peak_uncertainty(&self) -> Option<Fluence> {
+        let deviation = self.deviation.as_ref()?;
+        let corrected_peak = self
+            .interp_distribution
+            .zip_map(deviation, |fluence, deviation| fluence + deviation)
+            .iter()
+            .filter(|fluence| fluence.is_finite())
+            .fold(J_per_cm2!(f64::NEG_INFINITY), |peak, fluence| {
+                peak.max(*fluence)
+            });
+        Some((corrected_peak - self.peak).max(J_per_cm2!(0.0)))
     }
     /// Returns this [`FluenceData`] with the energy it draws, summed over its triangles exactly:
     /// in the ray tubes, and in the margins at the edges of the light, which a map following ray
@@ -376,5 +431,40 @@ mod test {
         approx::assert_relative_eq!(drawn.edge_share().unwrap_or(f64::NAN), 0.25);
         let empty = map().with_drawn_energy(joule!(0.0), joule!(0.0));
         assert!(empty.edge_share().is_none());
+    }
+    /// The uncertainty of a map is the size of its estimated deviation at each point, and its
+    /// peak may lie as far above the peak of the map as the map plus the deviation reaches beyond
+    /// it, but not below.
+    #[test]
+    fn a_map_tells_its_uncertainty_from_its_deviation() {
+        let map = || {
+            FluenceData::new(
+                dmatrix![
+                    J_per_cm2!(1.0), J_per_cm2!(2.0);
+                    J_per_cm2!(3.0), J_per_cm2!(4.0)],
+                meter!(0.0)..meter!(1.0),
+                meter!(0.0)..meter!(1.0),
+                FluenceEstimator::Voronoi,
+            )
+        };
+        assert!(map().uncertainty_map().is_none() && map().peak_uncertainty().is_none());
+        let deviating = map().with_deviation(dmatrix![
+            J_per_cm2!(0.0), J_per_cm2!(-0.5);
+            J_per_cm2!(1.5), J_per_cm2!(0.25)]);
+        let uncertainty = deviating.uncertainty_map().expect("an uncertainty map");
+        assert_eq!(uncertainty.interp_distribution()[(0, 1)], J_per_cm2!(0.5));
+        assert_eq!(uncertainty.peak(), J_per_cm2!(1.5));
+        // 3 + 1.5 J/cm² reach 0.5 J/cm² beyond the peak of 4 J/cm²
+        approx::assert_relative_eq!(
+            deviating
+                .peak_uncertainty()
+                .expect("a peak uncertainty")
+                .value,
+            J_per_cm2!(0.5).value
+        );
+        let lower = map().with_deviation(dmatrix![
+            J_per_cm2!(0.0), J_per_cm2!(0.0);
+            J_per_cm2!(0.0), J_per_cm2!(-1.0)]);
+        assert_eq!(lower.peak_uncertainty(), Some(J_per_cm2!(0.0)));
     }
 }
