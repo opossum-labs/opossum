@@ -48,7 +48,7 @@ Between its corners a tube runs linearly. Where tubes overlap, their values add 
 
 ### Edges
 
-Beyond each edge that no alive tube continues, the map draws a margin of half a tube height, carrying the values of the edge across: the light ends somewhere inside the torn tube, halfway on average. The same rule holds at the outer edge of a beam and at a cut. Where the margins of two edges meet at a corner, both end on the bisector of that corner, as picture frames are mitered: at the edge of a hole they do not overlap, and at an outer corner they leave no gap. The area each ray stands for at the source follows the same rule. Rays along a straight edge, as of a grid that is turned or sent out from a point, often lie on one line only up to rounding; the flat triangles between them are no tubes, so the edge keeps its margin.
+Beyond each edge that no alive tube continues, the map draws a margin of half a tube height, carrying the values of the edge across: the light ends somewhere inside the torn tube, halfway on average. The same rule holds at the outer edge of a beam and at a cut. Where the margins of two edges meet at a corner, both end on the bisector of that corner, as picture frames are mitered: at the edge of a hole they do not overlap, and at an outer corner they leave no gap. The area each ray stands for at the source follows the same rule. Rays along a straight edge, as of a grid that is turned or sent out from a point, often lie on one line only up to rounding; the flat triangles between them are no tubes, so the edge keeps its margin. Unless a range is given, the map is square, centered on the light and 5 % wider than its longer side, so the edges of the light lie inside the map rather than on its outermost points.
 
 ![The margin at an edge of the light](../images/fluence_edge_margin.svg)
 
@@ -153,7 +153,9 @@ Near a fold, more rays do not bring the peak closer to a true value, because in 
 
 ### Energy
 
-The methods do not hold the same energy either. Binning and KDE spread the energy of every ray that hit the surface. A map that follows ray tubes holds the energy of the tubes that arrived complete and of their margins: the margins estimate where the light ends, and a ray all of whose tubes tore shows nowhere.
+The methods do not hold the same energy either. Binning and KDE spread the energy of every ray that hit the surface. A map that follows ray tubes holds the energy of the tubes that arrived complete and of their margins: the margins estimate where the light ends, and a ray all of whose tubes tore shows nowhere. Between its rays such a map runs linearly, so a curved profile sampled by few rays holds slightly more or less energy than its rays brought: a Gaussian sampled 0.57 σ apart about 0.2 % more (see [Too few rays](#too-few-rays)).
+
+The report of a fluence detector therefore tells the energy that hit it, whatever the estimator, and for Voronoi how far the energy of the map misses it (see [Fluence detector](../reference/nodes/fluence_detector.md)).
 
 For this reason, fluence reconstruction should always be interpreted together with ray density and system geometry.
 
