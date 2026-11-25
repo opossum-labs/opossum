@@ -234,6 +234,7 @@ fn dfs_find_cycle<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use opossum_core::opm_document::optimization::ParameterUnit;
     use uuid::Uuid;
 
     #[test]
@@ -262,6 +263,7 @@ mod tests {
                 coupling: Some(CouplingType::Opposite {
                     source: addr_b.clone(),
                 }),
+                unit: Some(ParameterUnit::length()),
             },
             UiVariableRow {
                 address: addr_b.clone(),
@@ -274,6 +276,7 @@ mod tests {
                 min_bound: None,
                 max_bound: None,
                 coupling: Some(CouplingType::Opposite { source: addr_a }),
+                unit: Some(ParameterUnit::length()),
             },
         ];
 
@@ -304,6 +307,7 @@ mod tests {
             min_bound: None,
             max_bound: None,
             coupling: Some(CouplingType::Identical { source: addr }),
+            unit: Some(ParameterUnit::length()),
         }];
 
         let issues = run_validation(&rows, None);
@@ -342,6 +346,7 @@ mod tests {
                 min_bound: Some(10.0),
                 max_bound: Some(100.0),
                 coupling: None,
+                unit: Some(ParameterUnit::length()),
             },
             UiVariableRow {
                 address: addr_b.clone(),
@@ -354,6 +359,7 @@ mod tests {
                 min_bound: None,
                 max_bound: None,
                 coupling: Some(CouplingType::Opposite { source: addr_c }),
+                unit: Some(ParameterUnit::length()),
             },
             UiVariableRow {
                 address: addr_a,
@@ -366,6 +372,7 @@ mod tests {
                 min_bound: None,
                 max_bound: None,
                 coupling: Some(CouplingType::Identical { source: addr_b }),
+                unit: Some(ParameterUnit::length()),
             },
         ];
 

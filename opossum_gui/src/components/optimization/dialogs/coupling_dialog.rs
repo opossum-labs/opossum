@@ -1,10 +1,14 @@
 use super::super::state::OptimizationModel;
-use crate::components::primitives::{
-    alert_dialog::{
-        AlertDialog, AlertDialogActions, AlertDialogCancel, AlertDialogDescription,
-        AlertDialogTitle,
+use crate::components::{
+    node_editor::inputs::input_components::{NumericUnitMode, OptionalNumericInput},
+    optimization::state::UiVariableRow,
+    primitives::{
+        alert_dialog::{
+            AlertDialog, AlertDialogActions, AlertDialogCancel, AlertDialogDescription,
+            AlertDialogTitle,
+        },
+        button::{Button, ButtonSize, ButtonVariant},
     },
-    button::{Button, ButtonSize, ButtonVariant},
 };
 use dioxus::prelude::*;
 use dioxus_primitives::alert_dialog::AlertDialogContent;
@@ -58,7 +62,10 @@ pub fn CouplingDialog(mut model: Signal<OptimizationModel>, mut open: Signal<boo
             open.set(false);
         }
     };
-
+    let target_offset_mode = model.read().variable_rows.get(target_idx()).map_or(
+        NumericUnitMode::Dimensionless,
+        UiVariableRow::bound_input_mode,
+    );
     rsx! {
       AlertDialog {
         open: open(),
@@ -124,13 +131,15 @@ pub fn CouplingDialog(mut model: Signal<OptimizationModel>, mut open: Signal<boo
                       label { class: "form-label small text-info mb-1",
                         "Scale Factor"
                       }
-                      input {
-                        r#type: "number",
-                        step: "any",
-                        class: "form-control form-control-sm bg-black text-light border-secondary font-monospace text-end",
-                        value: "{affine_factor}",
-                        oninput: move |e| {
-                            if let Ok(v) = e.value().parse::<f64>() {
+                      OptionalNumericInput {
+                        value: Some(affine_factor()),
+                        mode: NumericUnitMode::Dimensionless,
+                        allow_empty: false,
+                        class: "form-control form-control-sm bg-black text-light border-secondary font-monospace text-end"
+                            .to_string(),
+                        style: "font-size: 12px;".to_string(),
+                        on_commit: move |opt: Option<f64>| {
+                            if let Some(v) = opt {
                                 affine_factor.set(v);
                             }
                         },
@@ -140,13 +149,15 @@ pub fn CouplingDialog(mut model: Signal<OptimizationModel>, mut open: Signal<boo
                       label { class: "form-label small text-info mb-1",
                         "Offset"
                       }
-                      input {
-                        r#type: "number",
-                        step: "any",
-                        class: "form-control form-control-sm bg-black text-light border-secondary font-monospace text-end",
-                        value: "{affine_offset}",
-                        oninput: move |e| {
-                            if let Ok(v) = e.value().parse::<f64>() {
+                      OptionalNumericInput {
+                        value: Some(affine_offset()),
+                        mode: target_offset_mode,
+                        allow_empty: false,
+                        class: "form-control form-control-sm bg-black text-light border-secondary font-monospace text-end"
+                            .to_string(),
+                        style: "font-size: 12px;".to_string(),
+                        on_commit: move |opt: Option<f64>| {
+                            if let Some(v) = opt {
                                 affine_offset.set(v);
                             }
                         },

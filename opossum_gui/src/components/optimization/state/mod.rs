@@ -7,15 +7,20 @@ pub use validation::{ValidationIssue, ValidationSeverity};
 pub use variable_row::{UiVariableRow, format_parameter_value};
 
 use operand_row::{describe_operand, resolve_operand_group_id};
-use opossum_core::opm_document::{
-    OptimizationConfig,
-    optimization::{
-        CouplingType, DiscoveredVariable, FreeVariable, ModelOptimizationSchema,
-        OptimizationAlgorithm, ParameterAddress, ParameterCoupling, StandardOperand,
+use opossum_core::{
+    core_optics::observable::MetricDimension,
+    opm_document::{
+        OptimizationConfig,
+        optimization::{
+            CouplingType, DiscoveredVariable, FreeVariable, MetricSource, ModelOptimizationSchema,
+            OptimizationAlgorithm, ParameterAddress, ParameterCoupling, StandardOperand,
+        },
     },
 };
 use uuid::Uuid;
 use validation::run_validation;
+
+use crate::components::node_editor::inputs::input_components::{NumericUnitMode, UnitHandling};
 
 /// Central reactive state model driving the Optimization UI.
 #[derive(Clone, PartialEq, Debug)]
@@ -53,7 +58,6 @@ impl OptimizationModel {
         self.algorithm = config.algorithm.clone();
         self.variable_rows.clear();
         self.operands.clear();
-
         for var in &config.free_variables {
             let (min_b, max_b) = UiVariableRow::ui_bounds_from_box_bounds(&var.address, var.bounds);
             let (default_node_name, default_prop_name) = match &var.address {
@@ -68,7 +72,6 @@ impl OptimizationModel {
                     ("Distance".to_string(), "Distance".to_string())
                 }
             };
-
             let mut row = UiVariableRow {
                 address: var.address.clone(),
                 group_id: None,
@@ -80,8 +83,8 @@ impl OptimizationModel {
                 min_bound: min_b,
                 max_bound: max_b,
                 coupling: None,
+                unit: None,
             };
-
             if let Some(schema) = &self.schema
                 && let Some(discovered) = schema
                     .controllable_variables
@@ -93,11 +96,10 @@ impl OptimizationModel {
                 row.node_name.clone_from(&discovered.node_name);
                 row.property_name.clone_from(&discovered.display_name);
                 row.current_value = discovered.initial_value;
+                row.unit.clone_from(&discovered.unit);
             }
-
             self.variable_rows.push(row);
         }
-
         for coupling in &config.couplings {
             let mut row = UiVariableRow {
                 address: coupling.target.clone(),
@@ -110,8 +112,8 @@ impl OptimizationModel {
                 min_bound: None,
                 max_bound: None,
                 coupling: Some(coupling.rule.clone()),
+                unit: None,
             };
-
             if let Some(schema) = &self.schema
                 && let Some(discovered) = schema
                     .controllable_variables
@@ -123,11 +125,10 @@ impl OptimizationModel {
                 row.node_name.clone_from(&discovered.node_name);
                 row.property_name.clone_from(&discovered.display_name);
                 row.current_value = discovered.initial_value;
+                row.unit.clone_from(&discovered.unit);
             }
-
             self.variable_rows.push(row);
         }
-
         for operand in &config.operands {
             let group_id = resolve_operand_group_id(self.schema.as_ref(), operand);
             self.operands.push(UiOperandRow {
@@ -137,7 +138,6 @@ impl OptimizationModel {
                 is_enabled: true,
             });
         }
-
         self.run_preflight_validation();
     }
 
@@ -170,6 +170,7 @@ impl OptimizationModel {
                 row.current_value = discovered.initial_value;
                 row.node_name.clone_from(&discovered.node_name);
                 row.property_name.clone_from(&discovered.display_name);
+                row.unit.clone_from(&discovered.unit);
             }
         }
     }
@@ -189,33 +190,36 @@ impl OptimizationModel {
         if self.variable_rows.iter().any(|r| r.address == var.address) {
             return;
         }
-
         let is_curv = matches!(var.address, ParameterAddress::SurfaceCurvature { .. });
         let is_dist = matches!(var.address, ParameterAddress::ConnectionDistance { .. });
-
         let (min_b, max_b) = if is_curv {
             if var.initial_value.abs() > 1e-6 {
-                let r_mm = 1000.0 / var.initial_value;
-                if r_mm > 0.0 {
-                    (Some(r_mm * 0.5), Some(r_mm * 2.0))
+                let r_m = 1.0 / var.initial_value;
+                if r_m > 0.0 {
+                    (Some(r_m * 0.5), Some(r_m * 2.0))
                 } else {
-                    (Some(r_mm * 2.0), Some(r_mm * 0.5))
+                    (Some(r_m * 2.0), Some(r_m * 0.5))
                 }
             } else {
-                (Some(-100.0), Some(100.0))
+                (Some(-0.1), Some(0.1))
             }
         } else if is_dist {
-            let d_mm = var.initial_value * 1000.0;
-            (Some((d_mm * 0.7).max(1.0)), Some(d_mm * 1.5))
+            (
+                Some((var.initial_value * 0.7).max(1e-3)),
+                Some(var.initial_value * 1.5),
+            )
         } else {
             let val = var.initial_value;
             if val.abs() > 1e-6 {
-                (Some(val * 0.7), Some(val * 1.5))
+                if val > 0.0 {
+                    (Some(val * 0.7), Some(val * 1.5))
+                } else {
+                    (Some(val * 1.5), Some(val * 0.7))
+                }
             } else {
                 (Some(-0.1), Some(0.1))
             }
         };
-
         self.variable_rows.push(UiVariableRow {
             address: var.address.clone(),
             group_id: var.group_id,
@@ -227,8 +231,8 @@ impl OptimizationModel {
             min_bound: min_b,
             max_bound: max_b,
             coupling: None,
+            unit: var.unit.clone(),
         });
-
         self.run_preflight_validation();
     }
 
@@ -331,23 +335,27 @@ impl OptimizationModel {
     pub fn apply_default_bounds(&mut self, factor: f64) {
         for row in &mut self.variable_rows {
             if row.is_curvature() {
-                if let Some(r_mm) = row.current_radius_mm() {
-                    if r_mm > 0.0 {
-                        row.min_bound = Some(r_mm * (1.0 - factor));
-                        row.max_bound = Some(r_mm * (1.0 + factor));
+                if let Some(r_m) = row.current_radius_m() {
+                    if r_m > 0.0 {
+                        row.min_bound = Some(r_m * (1.0 - factor));
+                        row.max_bound = Some(r_m * (1.0 + factor));
                     } else {
-                        row.min_bound = Some(r_mm * (1.0 + factor));
-                        row.max_bound = Some(r_mm * (1.0 - factor));
+                        row.min_bound = Some(r_m * (1.0 + factor));
+                        row.max_bound = Some(r_m * (1.0 - factor));
                     }
                 }
             } else if matches!(row.address, ParameterAddress::ConnectionDistance { .. }) {
-                let d_mm = row.current_value * 1000.0;
-                row.min_bound = Some((d_mm * (1.0 - factor)).max(0.1));
-                row.max_bound = Some(d_mm * (1.0 + factor));
+                row.min_bound = Some((row.current_value * (1.0 - factor)).max(1e-4));
+                row.max_bound = Some(row.current_value * (1.0 + factor));
             } else {
                 let val = row.current_value;
-                row.min_bound = Some(val * (1.0 - factor));
-                row.max_bound = Some(val * (1.0 + factor));
+                if val >= 0.0 {
+                    row.min_bound = Some(val * (1.0 - factor));
+                    row.max_bound = Some(val * (1.0 + factor));
+                } else {
+                    row.min_bound = Some(val * (1.0 + factor));
+                    row.max_bound = Some(val * (1.0 - factor));
+                }
             }
         }
         self.run_preflight_validation();
@@ -493,23 +501,6 @@ impl OptimizationModel {
             }
         }
         self.run_preflight_validation();
-    }
-
-    /// Updates the operand target value from UI input, converting `mm` to `m` for geometric constraints.
-    pub fn update_operand_target_ui(&mut self, id: Uuid, ui_value: f64) {
-        let is_geometric = matches!(
-            self.operands
-                .iter()
-                .find(|op| op.id == id)
-                .map(|r| &r.operand),
-            Some(StandardOperand::MinEdgeThickness(_) | StandardOperand::MaxTotalLength(_))
-        );
-        let model_val = if is_geometric {
-            ui_value * 1e-3
-        } else {
-            ui_value
-        };
-        self.update_operand_target(id, model_val);
     }
 
     /// Returns human-readable display components: `(badge_text, detail_text, operator_symbol)`.
@@ -683,12 +674,64 @@ impl OptimizationModel {
         }
         self.run_preflight_validation();
     }
+    /// Resolves the [`NumericUnitMode`] for editing an operand's target or limit in SI base units.
+    #[must_use]
+    pub fn operand_unit_mode(&self, operand: &StandardOperand) -> NumericUnitMode {
+        match operand {
+            StandardOperand::MinEdgeThickness(_) | StandardOperand::MaxTotalLength(_) => {
+                NumericUnitMode::Unit(UnitHandling::new("m", true))
+            }
+            StandardOperand::TransmissionPenalty(_) => NumericUnitMode::Dimensionless,
+            StandardOperand::Metric(m) => match &m.source {
+                MetricSource::Observable(obs_addr) => {
+                    let dim = self.schema.as_ref().and_then(|s| {
+                        s.observable_metrics
+                            .iter()
+                            .find(|o| o.address == *obs_addr)
+                            .map(|o| o.descriptor.dimension)
+                    });
+                    match dim {
+                        Some(MetricDimension::Length) => {
+                            NumericUnitMode::Unit(UnitHandling::new("m", true))
+                        }
+                        Some(MetricDimension::Angle) => NumericUnitMode::Unit(
+                            UnitHandling::new("°", false)
+                                .with_display_scale(180.0 / std::f64::consts::PI),
+                        ),
+                        Some(MetricDimension::Energy) => {
+                            NumericUnitMode::Unit(UnitHandling::new("J", true))
+                        }
+                        Some(MetricDimension::Fluence) => {
+                            NumericUnitMode::Unit(UnitHandling::new("J/m²", true))
+                        }
+                        Some(MetricDimension::Dimensionless) | None => {
+                            NumericUnitMode::Dimensionless
+                        }
+                    }
+                }
+                MetricSource::Parameter(param_addr) => self
+                    .schema
+                    .as_ref()
+                    .and_then(|s| {
+                        s.controllable_variables
+                            .iter()
+                            .find(|v| v.address == *param_addr)
+                            .and_then(|v| v.unit.as_ref())
+                    })
+                    .map_or(NumericUnitMode::Dimensionless, |u| {
+                        NumericUnitMode::Unit(UnitHandling::from(u))
+                    }),
+            },
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use opossum_core::opm_document::optimization::{BoxBounds, MetricOperand, OperandMode};
+    use opossum_core::opm_document::optimization::{
+        BoxBounds, MetricOperand, OperandMode, ParameterUnit,
+    };
 
     #[test]
     fn test_populate_from_schema_with_saved_config() {
@@ -722,6 +765,7 @@ mod tests {
             display_name: "Thickness".to_string(),
             initial_value: 0.02,
             is_read_only: false,
+            unit: Some(ParameterUnit::length()),
         });
 
         let mut model = OptimizationModel::default();

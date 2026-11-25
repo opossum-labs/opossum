@@ -1,3 +1,7 @@
+use crate::components::node_editor::inputs::input_components::{
+    NumericUnitMode, OptionalNumericInput,
+};
+
 use super::state::OptimizationModel;
 use dioxus::prelude::*;
 use dioxus_free_icons::{Icon, icons::fa_solid_icons::FaGears};
@@ -82,15 +86,13 @@ pub fn LiveMonitorPanel(mut props: LiveMonitorProps) -> Element {
                   style: "font-size: 10px;",
                   "Initial Temp (T₀)"
                 }
-                input {
-                  r#type: "number",
-                  step: "0.1",
-                  class: "form-control form-control-sm bg-black text-light border-secondary font-monospace text-end",
-                  style: "font-size: 11px;",
+                OptionalNumericInput {
+                  value: Some(props.model.read().sa_initial_temperature()),
+                  mode: NumericUnitMode::Dimensionless,
                   disabled: props.is_running,
-                  value: "{props.model.read().sa_initial_temperature()}",
-                  oninput: move |e| {
-                      if let Ok(val) = e.value().parse::<f64>() {
+                  allow_empty: false,
+                  on_commit: move |opt: Option<f64>| {
+                      if let Some(val) = opt {
                           props.model.write().set_sa_initial_temperature(val);
                       }
                   },
@@ -102,17 +104,13 @@ pub fn LiveMonitorPanel(mut props: LiveMonitorProps) -> Element {
                   style: "font-size: 10px;",
                   "Cooling Rate (α)"
                 }
-                input {
-                  r#type: "number",
-                  step: "0.01",
-                  min: "0.50",
-                  max: "0.999",
-                  class: "form-control form-control-sm bg-black text-light border-secondary font-monospace text-end",
-                  style: "font-size: 11px;",
+                OptionalNumericInput {
+                  value: Some(props.model.read().sa_cooling_rate()),
+                  mode: NumericUnitMode::Dimensionless,
                   disabled: props.is_running,
-                  value: "{props.model.read().sa_cooling_rate()}",
-                  oninput: move |e| {
-                      if let Ok(val) = e.value().parse::<f64>() {
+                  allow_empty: false,
+                  on_commit: move |opt: Option<f64>| {
+                      if let Some(val) = opt {
                           props.model.write().set_sa_cooling_rate(val);
                       }
                   },
