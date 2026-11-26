@@ -1029,9 +1029,42 @@ mod test {
         approx::assert_relative_eq!(share(&point), share(&collimated), max_relative = 1e-6);
         Ok(())
     }
-    /// A grid turned about the axis shows the map of an upright one, its edges with the same
-    /// margins and without folding over itself, though its rays along an edge then lie on one line
-    /// only up to rounding.
+    /// A uniform point source shows a flat map whatever pattern its rays follow: its tubes are
+    /// spanned across the axis of the source, where its distribution lies, also for patterns whose
+    /// mean direction leans off that axis.
+    #[test]
+    fn a_uniform_point_source_shows_a_flat_map_for_any_pattern() -> OpmResult<()> {
+        use crate::{
+            distributions::{
+                energy::UniformDist,
+                position::{FibonacciEllipse, PosDistType, Random},
+                spectral::LaserLines,
+            },
+            joule, millimeter,
+            prelude::{PointSrc, RayDataSource},
+        };
+        let patterns: [PosDistType; 2] = [
+            Random::new(millimeter!(8.0), millimeter!(8.0), 800)?.into(),
+            FibonacciEllipse::new(millimeter!(8.0), millimeter!(8.0), 800)?.into(),
+        ];
+        for pattern in patterns {
+            let source = RayDataSource::PointSrc(PointSrc::new(
+                pattern.clone(),
+                UniformDist::new(joule!(1.0))?.into(),
+                LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+                millimeter!(150.0),
+            )?);
+            let map = detector_map(source.into(), FluenceEstimator::Voronoi, false)?;
+            let middle = fluence_near(&map, 0.0, 0.0)?;
+            for (x, y) in [(3.0, 0.0), (-4.0, 2.0), (1.0, -5.0), (-2.5, -3.5)] {
+                approx::assert_relative_eq!(fluence_near(&map, x, y)?, middle, max_relative = 1e-9);
+            }
+        }
+        Ok(())
+    }
+    /// A grid its builder turns about the axis shows the map of an upright one, its edges with the
+    /// same margins and without folding over itself, though its rays along an edge arrive on one
+    /// line only up to rounding.
     #[test]
     fn a_turned_grid_shows_the_map_of_an_upright_one() -> OpmResult<()> {
         use crate::{degree, utils::geom_transformation::Isometry};

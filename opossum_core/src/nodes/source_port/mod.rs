@@ -70,7 +70,8 @@ impl SourcePort {
     /// Builds the rays this source sends out into a run: their energy spread over the area each
     /// ray stands for if the run asks so and the source samples its energy (see
     /// [`Rays::spread_energy_over_cells`]), spanning the ray tubes the run needs, in its ambient
-    /// medium, placed at the output of the source. One mesh serves both.
+    /// medium, placed by the builder and at the output of the source. One mesh serves both, built
+    /// before the rays are placed, where the axis of their source is z (see [`RayMesh::new`]).
     ///
     /// # Arguments
     ///
@@ -86,7 +87,7 @@ impl SourcePort {
         builder: &RayDataBuilder,
         strategy: &dyn PropagationStrategy,
     ) -> OpmResult<Rays> {
-        let mut rays = builder.build()?;
+        let mut rays = builder.source().clone().build()?;
         let spread = strategy.spreads_energy_over_cells() && builder.source().samples_its_energy();
         if spread || strategy.needs_ray_tubes() {
             let mesh = Arc::new(RayMesh::new(&rays)?);
@@ -98,7 +99,9 @@ impl SourcePort {
             }
         }
         rays.set_refractive_index(&strategy.ambient_refractive_index())?;
-        Ok(rays.transformed_by_iso(&self.effective_surface_iso("output_1")?))
+        Ok(builder
+            .placed(rays)
+            .transformed_by_iso(&self.effective_surface_iso("output_1")?))
     }
 }
 
@@ -238,6 +241,49 @@ mod test {
             );
             assert!(middle < 0.9 * ring, "{middle} J against {ring} J");
         }
+        Ok(())
+    }
+    /// A point source its builder turns spans the tubes of an upright one: they are spanned before
+    /// the rays are placed, where the axis of the source is z.
+    #[test]
+    fn a_turned_point_source_spans_the_tubes_of_an_upright_one() -> OpmResult<()> {
+        use crate::{
+            degree,
+            distributions::{energy::UniformDist, position::Hexapolar, spectral::LaserLines},
+            nanometer,
+            prelude::{PointSrc, RayDataSource},
+            utils::geom_transformation::Isometry,
+        };
+        let upright = RayDataBuilder::from(RayDataSource::PointSrc(PointSrc::new(
+            Hexapolar::new(millimeter!(5.0), 3)?.into(),
+            UniformDist::new(joule!(1.0))?.into(),
+            LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
+            millimeter!(100.0),
+        )?));
+        let mut turned = upright.clone();
+        turned.set_isometry(Some(Isometry::new_rotation(degree!(10.0, 20.0, 0.0))?));
+        let mut config = crate::analyzers::GhostFocusConfig::default();
+        config.set_ray_tubes(true);
+        let sent_out =
+            |builder: &RayDataBuilder| SourcePort::default().sent_out_rays(builder, &config);
+        let (upright, turned) = (sent_out(&upright)?, sent_out(&turned)?);
+        let first = |rays: &Rays| {
+            rays.iter()
+                .next()
+                .map(|ray| (ray.direction(), ray.source().cloned()))
+        };
+        let (
+            Some((upright_direction, Some(upright_tubes))),
+            Some((turned_direction, Some(turned_tubes))),
+        ) = (first(&upright), first(&turned))
+        else {
+            panic!("the rays span no tubes");
+        };
+        assert!(
+            (upright_direction - turned_direction).norm() > 0.1,
+            "the builder turns the rays"
+        );
+        assert_eq!(upright_tubes.mesh(), turned_tubes.mesh());
         Ok(())
     }
     /// Light drawn in the 3D view is sent out as its source builds it: every ray of a flat top

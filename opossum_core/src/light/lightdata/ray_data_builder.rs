@@ -54,14 +54,24 @@ impl RayDataBuilder {
     /// Returns an error if the underlying [`RayDataSource`] fails to build the rays
     /// (e.g., due to invalid distributions or file paths).
     pub fn build(&self) -> OpmResult<Rays> {
-        // 1. Build the raw rays from the specific source type
-        let mut rays = self.source.clone().build()?;
-
-        // 2. Apply the isometry if it is defined
+        Ok(self.placed(self.source.clone().build()?))
+    }
+    /// Places the given rays, sent out by the source of this builder in its own frame, with the
+    /// isometry of this builder, if it has one.
+    ///
+    /// # Arguments
+    ///
+    /// * `rays` - the rays as the [`RayDataSource`] of this builder builds them.
+    ///
+    /// # Returns
+    ///
+    /// The rays where this builder puts its light.
+    #[must_use]
+    pub fn placed(&self, mut rays: Rays) -> Rays {
         if let Some(iso) = &self.isometry {
             rays = rays.transformed_by_iso(iso);
         }
-        Ok(rays)
+        rays
     }
 
     /// Sets the underlying [`RayDataSource`].

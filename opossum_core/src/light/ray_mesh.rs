@@ -2,13 +2,14 @@
 //!
 //! A source sends out its rays in sheets. A collimated beam is one sheet of rays side by side, a
 //! point source one sheet of directions, and every wavelength is a sheet of its own. Each sheet is
-//! triangulated once, where the source sends it out; its triangles are the ray tubes. A fluence
-//! map follows a tube only where all three of its rays arrived (see the handbook, "Fluence").
+//! triangulated once, where the source sends it out, seen along the axis of the source; its
+//! triangles are the ray tubes. A fluence map follows a tube only where all three of its rays
+//! arrived (see the handbook, "Fluence").
 use std::{cmp::Ordering, fmt, sync::Arc};
 
 use itertools::Itertools;
 use log::warn;
-use nalgebra::{Point2, Vector2, Vector3};
+use nalgebra::{Point2, Vector2};
 use spade::{
     DelaunayTriangulation, HasPosition, Point2 as SheetPoint, Triangulation,
     handles::{DirectedEdgeHandle, FaceHandle, InnerTag, VertexHandle},
@@ -59,19 +60,20 @@ pub struct RayMesh {
     nr_of_rays: usize,
 }
 impl RayMesh {
-    /// Triangulates the sheets of the given bundle.
+    /// Triangulates the sheets of the given bundle, seen along the axis of its source, z.
     ///
     /// The rays are grouped by wavelength first. Of one wavelength, the rays that start alone at
     /// their position, or together with rays of the same direction, form one sheet: it is
-    /// triangulated by where they start, seen along their mean direction. Rays that start at one
-    /// position in different directions form a sheet of their own, triangulated by their
-    /// directions; a ray of it pointing back against the mean direction is left out. Identical
-    /// rays share a corner. A sheet of fewer than three corners, or of corners on one line, has no
-    /// tubes.
+    /// triangulated by where they start, seen along z. Rays that start at one position in
+    /// different directions form a sheet of their own, triangulated by where their directions
+    /// cross a plane across z, as the distribution of a point source lies; a ray of it that does
+    /// not point forward along z is left out. Identical rays share a corner. A sheet of fewer than
+    /// three corners, or of corners on one line, has no tubes.
     ///
     /// # Arguments
     ///
-    /// * `rays` - the bundle, as its source sends it out. All its rays count, valid or not.
+    /// * `rays` - the bundle, as its source sends it out, in the frame of the source, before it
+    ///   is placed. All its rays count, valid or not.
     ///
     /// # Errors
     ///
@@ -126,58 +128,31 @@ impl RayMesh {
     pub const fn nr_of_rays(&self) -> usize {
         self.nr_of_rays
     }
-    /// Triangulates rays side by side by where they start, seen along their mean direction.
+    /// Triangulates rays side by side by where they start, seen along z.
     fn side_by_side(rays: &[(u32, &Ray)]) -> OpmResult<DelaunayTriangulation<RayVertex>> {
-        let axis = mean_direction(rays);
-        let (u, v) = across(&axis);
         triangulate(rays.iter().map(|(index, ray)| {
-            let start = ray.position().map(|c| c.value).coords;
-            (SheetPoint::new(start.dot(&u), start.dot(&v)), *index)
+            let start = ray.position();
+            (SheetPoint::new(start.x.value, start.y.value), *index)
         }))
     }
-    /// Triangulates rays fanning out from one point by their directions, projected onto a plane
-    /// across their mean direction. A ray pointing back against it is left out.
+    /// Triangulates rays fanning out from one point by where their directions cross the plane
+    /// z = 1. A ray that does not point forward along z is left out.
     fn fan(rays: &[(u32, &Ray)]) -> OpmResult<DelaunayTriangulation<RayVertex>> {
-        let axis = mean_direction(rays);
-        let (u, v) = across(&axis);
         let corners = rays
             .iter()
             .filter_map(|(index, ray)| {
-                let direction = ray.direction().normalize();
-                let along = direction.dot(&axis);
-                (along > 0.0).then(|| {
-                    let point = direction / along;
-                    (SheetPoint::new(point.dot(&u), point.dot(&v)), *index)
+                let direction = ray.direction();
+                (direction.z > 0.0).then(|| {
+                    let crossing = direction / direction.z;
+                    (SheetPoint::new(crossing.x, crossing.y), *index)
                 })
             })
             .collect::<Vec<_>>();
         if corners.len() < rays.len() {
-            warn!("a ray pointing back against the rays of its point source spans no ray tubes");
+            warn!("a ray pointing back against the axis of its point source spans no ray tubes");
         }
         triangulate(corners)
     }
-}
-/// The mean direction of the given rays, or the direction of the first one where they cancel out.
-fn mean_direction(rays: &[(u32, &Ray)]) -> Vector3<f64> {
-    let first = rays
-        .first()
-        .map_or_else(Vector3::z, |(_, ray)| ray.direction().normalize());
-    rays.iter()
-        .map(|(_, ray)| ray.direction().normalize())
-        .sum::<Vector3<f64>>()
-        .try_normalize(f64::EPSILON)
-        .unwrap_or(first)
-}
-/// Two unit vectors across the given unit vector and across each other.
-fn across(axis: &Vector3<f64>) -> (Vector3<f64>, Vector3<f64>) {
-    let helper = if axis.x.abs() < 0.9 {
-        Vector3::x()
-    } else {
-        Vector3::y()
-    };
-    let u = axis.cross(&helper).normalize();
-    let v = axis.cross(&u);
-    (u, v)
 }
 /// Triangulates the given corners of a sheet, each with the index of its ray, and gives each
 /// corner the area it stands for (see [`source_cell_area`]). Corners at the same place become one.
@@ -539,13 +514,14 @@ mod test {
         degree,
         distributions::{
             energy::UniformDist,
-            position::{Grid, Hexapolar},
+            position::{Grid, Hexapolar, PositionDistribution, Random},
             spectral::LaserLines,
         },
         joule, millimeter, nanometer,
         nodes::test_helper::helper::rays_along_z_from,
         utils::{geom_transformation::Isometry, test_helper::helper::assert_warned},
     };
+    use nalgebra::Vector3;
 
     use crate::utils::test_helper::helper::hexapolar_bundle as hexapolar;
     /// The number of triangles of any triangulation of a pattern of `rings` hexapolar rings: its
@@ -697,19 +673,40 @@ mod test {
         assert_eq!(only_sheet(&RayMesh::new(&rays)?).num_inner_faces(), 0);
         Ok(())
     }
-    /// A beam running along x spans the same tubes as one along z: the sheet is seen across
-    /// whatever direction the rays run in.
+    /// The rays of a point source span the tubes of their pattern across the axis of the source,
+    /// however they lean as a whole: each corner stands for the area its ray stands for where the
+    /// pattern lies, shrunk by the square of the distance of the pattern.
     #[test]
-    fn a_beam_along_x_spans_its_tubes_across_x() -> OpmResult<()> {
-        let along_x = hexapolar(3)?.transformed_by_iso(&Isometry::new(
-            millimeter!(0.0, 0.0, 0.0),
-            degree!(0.0, 90.0, 0.0),
-        )?);
-        assert!(along_x.iter().all(|ray| ray.direction().x > 0.99));
-        assert_eq!(
-            only_sheet(&RayMesh::new(&along_x)?).num_inner_faces(),
-            triangles_of_hexapolar(3)
-        );
+    fn a_point_source_spans_the_tubes_of_its_pattern_across_its_axis() -> OpmResult<()> {
+        let starts = Random::new(millimeter!(8.0), millimeter!(8.0), 50)?.generate();
+        let side_by_side = RayMesh::new(&rays_along_z_from(&starts, nanometer!(1000.0))?)?;
+        let distance = 0.1;
+        let fanned_out = starts
+            .iter()
+            .map(|start| {
+                let direction = Vector3::new(start.x.value, start.y.value, distance);
+                Ray::new(
+                    millimeter!(0.0, 0.0, 0.0),
+                    direction,
+                    nanometer!(1000.0),
+                    joule!(1.0),
+                )
+            })
+            .collect::<OpmResult<Vec<_>>>()?;
+        let fan = RayMesh::new(&Rays::from(fanned_out))?;
+        let area_of = |mesh: &RayMesh, ray: u32| {
+            only_sheet(mesh)
+                .vertices()
+                .find(|corner| corner.data().rays().contains(&ray))
+                .map(|corner| corner.data().cell_area())
+        };
+        for ray in 0..50 {
+            let (Some(fanned), Some(beside)) = (area_of(&fan, ray), area_of(&side_by_side, ray))
+            else {
+                panic!("ray {ray} stands at no corner");
+            };
+            approx::assert_relative_eq!(fanned * distance * distance, beside, max_relative = 1e-9);
+        }
         Ok(())
     }
     /// A ray that starts at no finite position cannot be triangulated, and that is an error.
@@ -806,9 +803,9 @@ mod test {
         }
         Ok(())
     }
-    /// The corners of a turned grid stand for their squares too: turned, the rays along an edge
-    /// lie on one line only up to rounding, and the flat triangles spade lays between them are no
-    /// tubes, so the edge keeps its margin.
+    /// The corners of a grid turned about the axis stand for their squares too: turned, the rays
+    /// along an edge lie on one line only up to rounding, and the flat triangles spade lays between
+    /// them are no tubes, so the edge keeps its margin.
     #[test]
     fn the_corners_of_a_turned_grid_stand_for_their_squares() -> OpmResult<()> {
         let rays = Rays::new_uniform_collimated(
@@ -816,7 +813,7 @@ mod test {
             joule!(1.0),
             &Grid::new(millimeter!(10.0, 10.0), nalgebra::Point2::new(11, 11))?,
         )?
-        .transformed_by_iso(&Isometry::new_rotation(degree!(10.0, 20.0, 30.0))?);
+        .transformed_by_iso(&Isometry::new_rotation(degree!(0.0, 0.0, 30.0))?);
         let mesh = RayMesh::new(&rays)?;
         let sheet = only_sheet(&mesh);
         assert_eq!(sheet.num_vertices(), 121);
