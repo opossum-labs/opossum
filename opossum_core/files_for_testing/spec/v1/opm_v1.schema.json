@@ -881,21 +881,6 @@
           "description": "Refractive index of the medium in which the ray is propagating.",
           "type": "number",
           "format": "double"
-        },
-        "helper_rays": {
-          "description": "Helper rays used for fluence or wavefront calculations.",
-          "anyOf": [
-            {
-              "$ref": "#/definitions/FluenceRays"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "is_helper": {
-          "description": "Indicates if this is a helper ray (true) or a primary ray (false).\n\nThis is currently a workaround until a new separate helper ray struct is available.",
-          "type": "boolean"
         }
       },
       "required": [
@@ -908,8 +893,7 @@
         "number_of_refractions",
         "valid",
         "path_length",
-        "refractive_index",
-        "is_helper"
+        "refractive_index"
       ]
     },
     "Vector3Schema": {
@@ -926,22 +910,6 @@
       "description": "Helper schema type representing a physical scalar quantity serialized as a plain `f64` in SI base units.",
       "type": "number",
       "format": "double"
-    },
-    "FluenceRays": {
-      "description": "Struct to hold a set of helper rays for fluence calculation\n\n[`FluenceRays`] is used to calculate the fluence evolution using the helper rays [`FluenceEstimator`].\nHere, three additional rays are spawned around the original ray, creating a triangle with a defined are of the square of the ray wavelength.\nDuring propagation through the system, the area of the helper rays changes, as well as the effective energy of the rays when the original is partially reflected or refracted.\nAs the local evolution of the small surface element is stored, the fluence between all the rays can later on easily be interpolated",
-      "type": "object",
-      "properties": {
-        "helper_rays": {
-          "$ref": "#/definitions/Rays"
-        },
-        "effective_energy": {
-          "$ref": "#/definitions/SiScalarSchema"
-        }
-      },
-      "required": [
-        "helper_rays",
-        "effective_energy"
-      ]
     },
     "FilterTypeBuilder": {
       "description": "Config data builder for an [`IdealFilter`](crate::nodes::IdealFilter).",
@@ -1487,6 +1455,24 @@
               "$ref": "#/definitions/FluenceEstimator"
             }
           ]
+        },
+        "drawn_energy": {
+          "description": "for a map that follows ray tubes, the energy it draws in the tubes and in the margins at the\nedges of the light (see [`FluenceData::with_drawn_energy`])",
+          "type": [
+            "array",
+            "null"
+          ],
+          "default": null,
+          "minItems": 2,
+          "maxItems": 2,
+          "items": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            },
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            }
+          ]
         }
       },
       "required": [
@@ -1511,7 +1497,7 @@
       "description": "Strategy for fluence estimation",
       "oneOf": [
         {
-          "description": "Calculate Voronoi cells of the hit points and use the cell area for calculation of the fluence.",
+          "description": "Follow the ray tubes the source spans: each corner spreads its energy over the area it\nstands for at the source, grown as much as its tubes grew on the way (see the handbook,\n\"Fluence\").",
           "type": "string",
           "const": "Voronoi"
         },
@@ -1524,11 +1510,6 @@
           "description": "Simply perform binning of the hit points on a given matrix",
           "type": "string",
           "const": "Binning"
-        },
-        {
-          "description": "Using additional \"helper rays\" for each ray to calculate the evolution of a small area element around the intial ray to calcuklate the fluence",
-          "type": "string",
-          "const": "HelperRays"
         }
       ]
     },
@@ -2195,20 +2176,15 @@
           }
         },
         "critical_fluence": {
-          "description": "Stores the fluence, position in the history of the ray bundles that create a critical fluence on this surface and the bounce level. key value is the uuid of the ray bundle",
+          "description": "Stores the fluence map and the position in the history of the ray bundles that create a critical fluence on this surface. key value is the uuid of the ray bundle",
           "type": "object",
           "additionalProperties": {
             "type": "array",
-            "maxItems": 3,
-            "minItems": 3,
+            "maxItems": 2,
+            "minItems": 2,
             "items": [
               {
-                "$ref": "#/definitions/SiScalarSchema"
-              },
-              {
-                "type": "integer",
-                "format": "uint",
-                "minimum": 0
+                "$ref": "#/definitions/FluenceData"
               },
               {
                 "type": "integer",
@@ -2225,7 +2201,7 @@
       ]
     },
     "BouncedHitMap": {
-      "description": "Storage struct for `RaysHitMap` on a surface from a single bounce",
+      "description": "Storage struct for `RaysHitMap` on a surface from a single bounce, its bundles in the order\nthey arrived.",
       "type": "object",
       "properties": {
         "hit_map": {
@@ -2244,7 +2220,10 @@
       "type": "object",
       "properties": {
         "hit_points": {
-          "$ref": "#/definitions/HitPoints"
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/HitPoint"
+          }
         },
         "x_lims": {
           "type": "array",
@@ -2279,57 +2258,20 @@
         "y_lims"
       ]
     },
-    "HitPoints": {
-      "description": "Enum to store different types of hit point quantities in a hitmap",
-      "oneOf": [
-        {
-          "description": "Energy hitpoints contain a vec of [`EnergyHitPoint`]",
-          "type": "object",
-          "properties": {
-            "Energy": {
-              "type": "array",
-              "items": {
-                "$ref": "#/definitions/BaseHitPoint"
-              }
-            }
-          },
-          "required": [
-            "Energy"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "description": "Fluence hitpoints contain a vec of [`FluenceHitPoint`]",
-          "type": "object",
-          "properties": {
-            "Fluence": {
-              "type": "array",
-              "items": {
-                "$ref": "#/definitions/BaseHitPoint"
-              }
-            }
-          },
-          "required": [
-            "Fluence"
-          ],
-          "additionalProperties": false
-        }
-      ]
-    },
-    "BaseHitPoint": {
-      "description": "A generic hit point storing a position and a generic value (e.g., Energy or Fluence).",
+    "HitPoint": {
+      "description": "Where a ray hit a surface and the energy it brought there.",
       "type": "object",
       "properties": {
         "position": {
-          "description": "Position of the intersection point",
+          "description": "Where the ray hit, in the coordinates of the surface.",
           "allOf": [
             {
               "$ref": "#/definitions/Point3Schema"
             }
           ]
         },
-        "value": {
-          "description": "Value (Energy or Fluence) of the ray that intersected the surface",
+        "energy": {
+          "description": "The energy the ray brought.",
           "allOf": [
             {
               "$ref": "#/definitions/SiScalarSchema"
@@ -2339,7 +2281,7 @@
       },
       "required": [
         "position",
-        "value"
+        "energy"
       ]
     },
     "Point3Schema": {
