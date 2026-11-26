@@ -11,6 +11,8 @@ As a detector node, incoming light data is passed unmodified through the node. I
 The report shows the fluence map, its peak fluence, the estimator and, as `Total energy`, the energy of the light that hit the detector, whatever the estimator. For Voronoi it also tells:
 
 - `Energy in edge margins`: the share of the energy in the margins at the edges of the light, whose place is known only to half a ray tube.
+- `Peak fluence uncertainty`: how far the peak of the fluence may lie above the peak of the map, estimated from the curvature of the fluence at the rays. The peak of the map never lies above that of the fluence, so the uncertainty points one way only. It is an estimate of the second order in the spacing of the rays, not a bound (see [Uncertainty](../../concepts/fluence.md#uncertainty)).
+- `Fluence uncertainty`: a map of the size of the estimated deviation of the fluence from the map at each point.
 - `Energy deviation of the map`: the share by which the energy the map holds misses the energy that hit. Between its rays the map runs linearly, so a curved profile sampled by few rays, or much light at a cut edge, makes it miss. A large deviation shows that the rays are too coarse; a small one does not promise an exact peak, since the map lies low at a peak and high on its flanks, and the two partly cancel.
 
 If the light folds over itself on the detector, as near a caustic, a warning in the log says that the fluence near the fold is unreliable. If the map cannot be computed, the report names the reason, for example rays that span no ray tubes on a Voronoi detector.

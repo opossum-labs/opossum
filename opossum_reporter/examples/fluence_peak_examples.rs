@@ -52,21 +52,33 @@ fn main() -> OpmResult<()> {
 /// many rays: with few rays the peak falls between them and comes out low, as between two rays
 /// the map runs linearly.
 fn few_and_many_rays() -> OpmResult<()> {
-    let tubes = |rays: usize| {
-        cut(
-            &hits(&gaussian_beam(rays, 1.0)?, Some)?,
-            FluenceEstimator::Voronoi,
-            8.0,
-            401,
+    let map_of = |rays: usize| -> OpmResult<FluenceData> {
+        let x = millimeter!(-8.0)..millimeter!(8.0);
+        let y = millimeter!(-0.001)..millimeter!(0.001);
+        hits(&gaussian_beam(rays, 1.0)?, Some)?.calc_fluence_map(
+            (401, 3),
+            &FluenceEstimator::Voronoi,
+            Some(&x),
+            Some(&y),
         )
     };
+    let few = map_of(50)?;
     plot(
         "fluence_peak_rays",
         (-8.0, 8.0),
         (0.0, 4.5),
         &[
-            (&tubes(50)?, BAD, "Voronoi, 50 rays"),
-            (&tubes(2000)?, GOOD, "Voronoi, 2000 rays"),
+            (&row_through_axis(&few)?, BAD, "Voronoi, 50 rays"),
+            (
+                &corrected_row_through_axis(&few)?,
+                MIDDLE,
+                "Voronoi, 50 rays, plus the estimated deviation",
+            ),
+            (
+                &row_through_axis(&map_of(2000)?)?,
+                GOOD,
+                "Voronoi, 2000 rays",
+            ),
             (&exact(|x| gaussian(x - 1.0), -8.0, 8.0), EXACT, "exact"),
         ],
     )
@@ -270,6 +282,24 @@ fn row_through_axis(map: &FluenceData) -> OpmResult<Cut> {
                 x.get::<millimeter>(),
                 values[(row, column)].get::<joule_per_square_centimeter>(),
             )
+        })
+        .collect())
+}
+/// The middle row of the given map plus the deviation of the fluence from it that the map
+/// estimates (see the handbook, "Uncertainty").
+fn corrected_row_through_axis(map: &FluenceData) -> OpmResult<Cut> {
+    let deviation = map
+        .deviation()
+        .ok_or_else(|| OpossumError::Other("the map estimates no deviation".into()))?;
+    let row = map.len_y() / 2;
+    Ok(row_through_axis(map)?
+        .into_iter()
+        .enumerate()
+        .map(|(column, (x, fluence))| {
+            let deviation = deviation
+                .get((row, column))
+                .map_or(0.0, |d| d.get::<joule_per_square_centimeter>());
+            (x, fluence + deviation)
         })
         .collect())
 }
