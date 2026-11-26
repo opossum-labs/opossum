@@ -635,6 +635,34 @@ mod test_rays_hit_map {
         assert_relative_eq!(map.total_energy().value, 4.75, max_relative = 1e-12);
         Ok(())
     }
+    /// A KDE map shows a hit where its axes put it: at the point the axes place on the hit, the
+    /// map shows the peak of the kernel, `E / (2π σ²)`, here with the 10 µm a single hit gets.
+    #[test]
+    fn a_kde_map_shows_a_hit_where_its_axes_put_it() -> OpmResult<()> {
+        let hits = RaysHitMap::new(vec![HitPoint::new(meter!(0.003, 0.001, 0.0), joule!(1.0))?]);
+        let map = hits.calc_fluence_with_kde(
+            (5, 3),
+            Some(&(meter!(0.0)..meter!(0.004))),
+            Some(&(meter!(0.0)..meter!(0.002))),
+        )?;
+        let (xs, ys) = map.grid().points();
+        let on = |at: f64| move |point: &uom::si::f64::Length| (point.value - at).abs() < 1e-12;
+        let column = xs
+            .iter()
+            .position(on(0.003))
+            .expect("a point at the hit along x");
+        let row = ys
+            .iter()
+            .position(on(0.001))
+            .expect("a point at the hit along y");
+        let sigma = 10e-6;
+        assert_relative_eq!(
+            map.interp_distribution()[(row, column)].value,
+            1.0 / (2.0 * std::f64::consts::PI * sigma * sigma),
+            max_relative = 1e-9
+        );
+        Ok(())
+    }
     /// A grid of `n_x` × `n_y` rays 1 cm apart around the axis, spanning their ray tubes.
     fn ray_grid(n_x: usize, n_y: usize) -> OpmResult<Rays> {
         let mut rays = Rays::new_uniform_collimated(

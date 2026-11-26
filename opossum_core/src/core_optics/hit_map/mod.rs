@@ -692,8 +692,21 @@ mod test_hit_map {
         }
         Ok(())
     }
+    /// The hits lie symmetrically around the origin and so does the map, whose middle point lies
+    /// on it: there the map shows the sum of the kernels of all hits, each as wide as the
+    /// bandwidth rule makes it for them (see `Kde::bandwidth_estimate`).
     #[test]
     fn calc_combined_fluence_with_kde() -> OpmResult<()> {
+        // the sum at the origin of the kernels of 1 J hits around it, in J/m²
+        let at_origin = |hits: &[Point3<Length>]| {
+            let n = crate::utils::to_f64(hits.len());
+            let squared = |p: &Point3<Length>| p.x.value.powi(2) + p.y.value.powi(2);
+            let spread = hits.iter().map(squared).sum::<f64>() / (2.0 * n);
+            let width = (0.9 * spread.sqrt() * n.powf(-0.2)).powi(2);
+            hits.iter()
+                .map(|p| (-squared(p) / (2.0 * width)).exp() / (2.0 * std::f64::consts::PI * width))
+                .sum::<f64>()
+        };
         let mut hm = HitMap::default();
         let uuid = Uuid::new_v4();
         let pos1 = vec![
@@ -709,7 +722,8 @@ mod test_hit_map {
         let fl_data = hm.calc_combined_fluence_with_kde((51, 51))?;
         assert_relative_eq!(
             fl_data.interp_distribution()[(25, 25)].value,
-            2.257264625439249
+            at_origin(&pos1),
+            max_relative = 1e-12
         );
 
         let uuid = Uuid::new_v4();
@@ -726,7 +740,8 @@ mod test_hit_map {
         let fl_data = hm.calc_combined_fluence_with_kde((51, 51))?;
         assert_relative_eq!(
             fl_data.interp_distribution()[(25, 25)].value,
-            5.296802485042948
+            at_origin(&[pos1, pos2].concat()),
+            max_relative = 1e-12
         );
         Ok(())
     }
