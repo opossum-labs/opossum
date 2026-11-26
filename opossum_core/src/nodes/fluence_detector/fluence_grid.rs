@@ -70,6 +70,12 @@ impl Axis {
             self.step()
         }
     }
+    /// Where `at` lies among the points, counted in points from the first; `None` beyond them.
+    fn position(&self, at: f64) -> Option<f64> {
+        let last = to_f64(self.count.saturating_sub(1));
+        let position = (at - self.start) / (self.end - self.start) * last;
+        (0.0..=last).contains(&position).then_some(position)
+    }
     /// The indices of the points from `from` to `to`, both included.
     fn within(&self, from: f64, to: f64) -> Range<usize> {
         // A point on the border of the range may be off by rounding; which side of an edge it
@@ -151,6 +157,16 @@ impl FluenceGrid {
         let points = |axis: Axis| DVector::from_fn(axis.count, |index, _| meter!(axis.at(index)));
         let (x, y) = self.axes();
         (points(x), points(y))
+    }
+    /// Returns where the given point lies among the points of this [`FluenceGrid`], counted in
+    /// points from the first: its column and its row as fractions, `None` beyond the grid.
+    #[must_use]
+    pub fn position_of(&self, at: Point2<Length>) -> Option<(f64, f64)> {
+        let (x, y) = self.axes();
+        Some((
+            x.position(at.x.get::<meter>())?,
+            y.position(at.y.get::<meter>())?,
+        ))
     }
     /// Returns the area each point of this [`FluenceGrid`] stands for, a row per point along y.
     ///
@@ -300,6 +316,28 @@ mod test {
         let expected = [-2.0, -1.0, 0.0, 1.0, 2.0].map(|x| meter!(x));
         assert_eq!(x.as_slice(), expected);
         assert_eq!(y.as_slice(), expected);
+    }
+    /// A point lies among the points of a grid as far from the first as it lies from the start of
+    /// each range, counted in points; beyond the grid it lies nowhere.
+    #[test]
+    fn a_point_lies_among_the_points_of_a_grid() {
+        let grid = unit_grid();
+        assert_eq!(
+            grid.position_of(Point2::new(meter!(0.5), meter!(-2.0))),
+            Some((2.5, 0.0))
+        );
+        assert_eq!(
+            grid.position_of(Point2::new(meter!(2.0), meter!(2.0))),
+            Some((4.0, 4.0))
+        );
+        assert!(
+            grid.position_of(Point2::new(meter!(2.5), meter!(0.0)))
+                .is_none()
+        );
+        assert!(
+            grid.position_of(Point2::new(meter!(0.0), meter!(-2.5)))
+                .is_none()
+        );
     }
     /// A grid writes its fluences as its schema says: column by column, then the number of rows
     /// and of columns.

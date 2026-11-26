@@ -9,7 +9,7 @@ use crate::{
     meter, micrometer,
     nodes::fluence_detector::{Fluence, fluence_data::FluenceData, fluence_grid::FluenceGrid},
     types::{SiScalarSchema, schema_helper_types::Point3Schema},
-    utils::{to_f64, try_f64_to_usize},
+    utils::try_f64_to_usize,
 };
 use libm::modf;
 use nalgebra::{DMatrix, Point2, Point3};
@@ -205,22 +205,12 @@ impl RaysHitMap {
             }
             (left..right, bottom..top)
         };
-        let (columns, rows) = nr_of_points;
-        // where a hit lies, counted in points from the start of a range
-        let last = |points: usize| to_f64(points.saturating_sub(1));
-        let index = |at: Length, range: &Range<Length>, points: usize| {
-            (at - range.start).value / (range.end - range.start).value * last(points)
-        };
-        let mut energies = DMatrix::from_element(rows, columns, joule!(0.0));
+        let grid = FluenceGrid::new(&x, &y, nr_of_points);
+        let mut energies = DMatrix::from_element(nr_of_points.1, nr_of_points.0, joule!(0.0));
         for hit in &self.hit_points {
-            let (along_x, along_y) = (
-                index(hit.position.x, &x, columns),
-                index(hit.position.y, &y, rows),
-            );
-            if !((0.0..=last(columns)).contains(&along_x) && (0.0..=last(rows)).contains(&along_y))
-            {
+            let Some((along_x, along_y)) = grid.position_of(hit.position.xy()) else {
                 continue;
-            }
+            };
             let ((fx, column), (fy, row)) = (modf(along_x), modf(along_y));
             let (Some(column), Some(row)) = (try_f64_to_usize(column), try_f64_to_usize(row))
             else {
@@ -239,10 +229,7 @@ impl RaysHitMap {
                 }
             }
         }
-        let fluences = energies.zip_map(
-            &FluenceGrid::new(&x, &y, nr_of_points).point_areas(),
-            |energy, area| energy / area,
-        );
+        let fluences = energies.zip_map(&grid.point_areas(), |energy, area| energy / area);
         Ok(FluenceData::new(fluences, x, y, FluenceEstimator::Binning))
     }
 
