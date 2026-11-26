@@ -165,6 +165,10 @@ With its property `error estimates` switched on, a [fluence detector](../referen
 
 The map knows the fluence at its rays and runs straight between them, while the fluence itself is curved. At each ray, OPOSSUM fits a curved surface through the values of its neighbors and takes its curvature. From the curvature at the corners of a tube follows how far the straight map lies below or above the curved fluence inside the tube. The report shows this as a map, `Fluence uncertainty`, and tells how far the peak of the fluence may lie above the peak of the map, `Peak fluence uncertainty`.
 
+![How the map deviates from the light, and how the estimate tries to catch it](../images/fluence_uncertainty_estimate.svg)
+
+*A cut through a Gaussian beam, with rays one σ apart. The map runs straight between the rays, while the light is curved; the orange gaps are the deviation of the map. At each ray, a parabola through its value and those of its neighbors gives the curvature. In a tube, the estimate sets a parabola bent by the mean curvature of the corners onto the map. In the middle of the tube it catches 60 % of the deviation; the rest shrinks one order faster than the deviation as the rays move closer together.*
+
 What holds, derived in [Fluence uncertainty](../reference/derivations/fluence_uncertainty.md):
 
 - For a profile shaped like a quadratic surface, the estimate is exact.
