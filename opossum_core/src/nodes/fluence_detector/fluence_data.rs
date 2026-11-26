@@ -46,18 +46,8 @@ impl FluenceData {
         y_range: Range<Length>,
         estimator: FluenceEstimator,
     ) -> Self {
-        let peak_fluence =
-            interp_distribution
-                .iter()
-                .fold(J_per_cm2!(f64::NEG_INFINITY), |arg0, v| {
-                    if v.is_finite() {
-                        Fluence::max(arg0, *v)
-                    } else {
-                        arg0
-                    }
-                });
         Self {
-            peak: peak_fluence,
+            peak: peak_of(interp_distribution.iter().copied()),
             grid: FluenceGrid::with_values(x_range, y_range, interp_distribution),
             estimator,
             drawn_energy: None,
@@ -103,14 +93,12 @@ impl FluenceData {
     #[must_use]
     pub fn peak_uncertainty(&self) -> Option<Fluence> {
         let deviation = self.deviation.as_ref()?;
-        let corrected_peak = self
-            .interp_distribution()
-            .zip_map(deviation, |fluence, deviation| fluence + deviation)
-            .iter()
-            .filter(|fluence| fluence.is_finite())
-            .fold(J_per_cm2!(f64::NEG_INFINITY), |peak, fluence| {
-                peak.max(*fluence)
-            });
+        let corrected_peak = peak_of(
+            self.interp_distribution()
+                .iter()
+                .zip(deviation.iter())
+                .map(|(fluence, deviation)| *fluence + *deviation),
+        );
         Some((corrected_peak - self.peak).max(J_per_cm2!(0.0)))
     }
     /// Returns this [`FluenceData`] with the energy it draws, summed over its triangles exactly:
@@ -214,6 +202,12 @@ impl FluenceData {
             .iter()
             .fold(joule!(0.0), |total, energy| total + *energy)
     }
+}
+/// The highest of the given fluences that is finite, minus infinity if none is.
+fn peak_of(fluences: impl Iterator<Item = Fluence>) -> Fluence {
+    fluences
+        .filter(|fluence| fluence.is_finite())
+        .fold(J_per_cm2!(f64::NEG_INFINITY), Fluence::max)
 }
 
 #[cfg(test)]

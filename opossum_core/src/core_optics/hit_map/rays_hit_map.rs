@@ -7,7 +7,7 @@ use crate::{
     kde::Kde,
     light::{RayMesh, RaySource, ray_mesh::RayVertex},
     micrometer,
-    nodes::fluence_detector::{Fluence, fluence_data::FluenceData, fluence_grid::FluenceGrid},
+    nodes::fluence_detector::{fluence_data::FluenceData, fluence_grid::FluenceGrid},
     types::{SiScalarSchema, schema_helper_types::Point3Schema},
     utils::try_f64_to_usize,
 };
@@ -222,7 +222,7 @@ impl RaysHitMap {
         estimator: FluenceEstimator,
     ) -> OpmResult<FluenceData> {
         draw_map(
-            &self.tube_sheets()?,
+            &self.arrived_sheets()?,
             nr_of_points,
             ax_1_range,
             ax_2_range,
@@ -238,26 +238,10 @@ impl RaysHitMap {
     /// # Errors
     /// This function errors if the hits do not all stand in the ray tubes of their sources.
     pub fn estimate_deviation(&self, map: FluenceData) -> OpmResult<FluenceData> {
-        Ok(draw_deviation(&self.tube_sheets()?, map))
-    }
-    /// Returns the sheets of ray tubes the hits of this map stand in, each with the fluence its
-    /// corners show (see [`ArrivedSheet::fluences_from_energies`]).
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the hits do not all stand in ray tubes.
-    pub(super) fn tube_sheets(&self) -> OpmResult<Vec<(ArrivedSheet<'_>, Vec<Option<Fluence>>)>> {
-        Ok(self
-            .arrived_sheets()?
-            .into_iter()
-            .map(|sheet| {
-                let fluences = sheet.fluences_from_energies();
-                (sheet, fluences)
-            })
-            .collect())
+        Ok(draw_deviation(&self.arrived_sheets()?, map))
     }
     /// Returns the sheets of ray tubes the hits of this map stand in, each with the corners that
-    /// arrived here.
+    /// arrived here and the fluence they show.
     ///
     /// A corner arrived if all its rays hit here. It arrived where its first ray hit and brought
     /// the energy of all its rays together. A ray that hits again, as both arms of an
@@ -267,7 +251,7 @@ impl RaysHitMap {
     /// # Errors
     ///
     /// This function returns an error if the hits do not all stand in ray tubes.
-    fn arrived_sheets(&self) -> OpmResult<Vec<ArrivedSheet<'_>>> {
+    pub(super) fn arrived_sheets(&self) -> OpmResult<Vec<ArrivedSheet<'_>>> {
         // where the hit with the given index lies on the surface, in meters, and its energy
         let hit_of = |hit: usize| {
             self.hit_points.get(hit).map(|hit| {
@@ -981,11 +965,11 @@ mod test_ray_tubes {
     fn a_corner_with_too_few_neighbors_has_no_curvature() -> OpmResult<()> {
         let rays = bundle_in_tubes(3)?;
         let hits = hits_of(&rays, 1.0, 0.0)?;
-        let sheets = hits.tube_sheets()?;
-        let [(sheet, values)] = sheets.as_slice() else {
+        let sheets = hits.arrived_sheets()?;
+        let [sheet] = sheets.as_slice() else {
             panic!("one sheet");
         };
-        let curvatures = sheet.curvatures(values);
+        let curvatures = sheet.curvatures();
         let outermost = rays.iter().filter(|ray| !starts_within(ray, 4.9)).count();
         assert_eq!(outermost, 18);
         assert_eq!(curvatures.iter().filter(|c| c.is_none()).count(), outermost);

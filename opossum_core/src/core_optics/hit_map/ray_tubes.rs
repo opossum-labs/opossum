@@ -32,14 +32,17 @@ pub struct Arrival {
     pub energy: Energy,
 }
 
-/// A sheet of ray tubes, with the corners that arrived on a surface.
+/// A sheet of ray tubes, with the corners that arrived on a surface and the fluence they show.
 pub struct ArrivedSheet<'a> {
     sheet: &'a DelaunayTriangulation<RayVertex>,
     /// The arrival of each corner, indexed like the vertices of the sheet.
     arrivals: Vec<Option<Arrival>>,
+    /// The fluence each corner shows (see [`ArrivedSheet::fluences_from_energies`]), indexed like
+    /// the vertices of the sheet.
+    fluences: Vec<Option<Fluence>>,
 }
 impl<'a> ArrivedSheet<'a> {
-    /// Creates a new [`ArrivedSheet`].
+    /// Creates a new [`ArrivedSheet`], with the fluence each of its corners shows.
     ///
     /// # Arguments
     ///
@@ -51,11 +54,21 @@ impl<'a> ArrivedSheet<'a> {
     ) -> Self {
         // spade hands out the vertices in the order of their indices
         let arrivals = sheet.vertices().map(|v| arrival_of(v.data())).collect();
-        Self { sheet, arrivals }
+        let mut arrived = Self {
+            sheet,
+            arrivals,
+            fluences: Vec::new(),
+        };
+        arrived.fluences = arrived.fluences_from_energies();
+        arrived
     }
     /// Returns where the given corner arrived, if it did.
     fn arrival(&self, vertex: VertexHandle<'_, RayVertex>) -> Option<Arrival> {
         self.arrivals.get(vertex.index()).copied().flatten()
+    }
+    /// Returns the fluence the given corner shows, if it shows one.
+    fn fluence(&self, vertex: VertexHandle<'_, RayVertex>) -> Option<Fluence> {
+        self.fluences.get(vertex.index()).copied().flatten()
     }
     /// Returns where the three corners of the given tube arrived, if all of them did and the tube
     /// spans an area (see [`spans`]).
@@ -92,7 +105,7 @@ impl<'a> ArrivedSheet<'a> {
     /// # Returns
     ///
     /// One value per vertex of the sheet, `None` for a corner without an alive tube.
-    pub fn fluences_from_energies(&self) -> Vec<Option<Fluence>> {
+    fn fluences_from_energies(&self) -> Vec<Option<Fluence>> {
         // the area of the alive tubes around each corner, at the source and on the surface
         let mut around = vec![(0.0, 0.0); self.arrivals.len()];
         for (tube, points) in self.alive_tubes() {
@@ -117,24 +130,19 @@ impl<'a> ArrivedSheet<'a> {
     }
     /// Returns the curvature of the fluence at each corner of this sheet: the Hessian `H` of
     /// `Δ = g·d + ½ dᵀ H d`, fitted by least squares to the steps `d` to the neighbors the corner
-    /// shares an alive tube with and the changes `Δ` of the value along them (see the handbook,
+    /// shares an alive tube with and the changes `Δ` of the fluence along them (see the handbook,
     /// "Fluence uncertainty", which also states when the fit is exact).
-    ///
-    /// # Arguments
-    ///
-    /// * `values` - the fluence of each corner, indexed like the vertices of the sheet.
     ///
     /// # Returns
     ///
-    /// One curvature per vertex of the sheet, in J/m⁴, `None` for a corner without a value or
+    /// One curvature per vertex of the sheet, in J/m⁴, `None` for a corner without a fluence or
     /// whose steps do not fix all five coefficients of the fit, as with fewer than five neighbors.
-    pub fn curvatures(&self, values: &[Option<Fluence>]) -> Vec<Option<Matrix2<f64>>> {
-        let value_of = |v: VertexHandle<'_, RayVertex>| values.get(v.index()).copied().flatten();
+    pub fn curvatures(&self) -> Vec<Option<Matrix2<f64>>> {
         let alive = |tube: Option<Tube<'_>>| tube.is_some_and(|tube| self.alive(tube));
         self.sheet
             .vertices()
             .map(|corner| {
-                let (at, value) = (self.arrival(corner)?.position, value_of(corner)?);
+                let (at, value) = (self.arrival(corner)?.position, self.fluence(corner)?);
                 let steps = corner
                     .out_edges()
                     .filter(|edge| {
@@ -144,7 +152,7 @@ impl<'a> ArrivedSheet<'a> {
                         let neighbor = edge.to();
                         Some((
                             self.arrival(neighbor)?.position - at,
-                            (value_of(neighbor)? - value).value,
+                            (self.fluence(neighbor)? - value).value,
                         ))
                     })
                     .collect::<Vec<_>>();
@@ -156,12 +164,8 @@ impl<'a> ArrivedSheet<'a> {
     /// fluence (see [`ArrivedSheet::curvatures`]), its corners on the surface and the curvature
     /// along each of its edges, `eᵀ H e`, the edge opposite the corner of the same index. `H` is
     /// the mean of the curvatures its corners tell (see the handbook, "Fluence uncertainty").
-    ///
-    /// # Arguments
-    ///
-    /// * `values` - the fluence of each corner, indexed like the vertices of the sheet.
-    pub fn deviations(&self, values: &[Option<Fluence>]) -> Vec<([Point2<f64>; 3], [Fluence; 3])> {
-        let curvatures = self.curvatures(values);
+    pub fn deviations(&self) -> Vec<([Point2<f64>; 3], [Fluence; 3])> {
+        let curvatures = self.curvatures();
         self.alive_tubes()
             .filter_map(|(tube, points)| {
                 let known = tube
@@ -181,21 +185,15 @@ impl<'a> ArrivedSheet<'a> {
             .collect()
     }
     /// Hands each triangle this sheet covers the surface with to `draw`: its alive tubes, each
-    /// with the values of its corners, and at each edge no alive tube continues a margin of half
-    /// a tube height, carrying the values of the edge across.
+    /// with the fluences of its corners, and at each edge no alive tube continues a margin of
+    /// half a tube height, carrying the fluences of the edge across.
     ///
     /// # Arguments
     ///
-    /// * `values` - the fluence of each corner, indexed like the vertices of the sheet.
     /// * `draw` - what to do with each triangle, told whether it lies in a margin.
-    pub fn for_each_triangle(
-        &self,
-        values: &[Option<Fluence>],
-        mut draw: impl FnMut(Triangle, bool),
-    ) {
-        let value_of = |v: VertexHandle<'_, RayVertex>| values.get(v.index()).copied().flatten();
+    pub fn for_each_triangle(&self, mut draw: impl FnMut(Triangle, bool)) {
         for (tube, points) in self.alive_tubes() {
-            let [Some(fa), Some(fb), Some(fc)] = tube.vertices().map(value_of) else {
+            let [Some(fa), Some(fb), Some(fc)] = tube.vertices().map(|v| self.fluence(v)) else {
                 continue;
             };
             draw((points, [fa, fb, fc]), false);
@@ -204,8 +202,8 @@ impl<'a> ArrivedSheet<'a> {
             for edge in tube.adjacent_edges() {
                 if let (Some(corners), Some(fa), Some(fb)) = (
                     margin(edge, &alive, &at),
-                    value_of(edge.from()),
-                    value_of(edge.to()),
+                    self.fluence(edge.from()),
+                    self.fluence(edge.to()),
                 ) {
                     margin_triangles(corners, [fa, fb])
                         .into_iter()
@@ -231,15 +229,11 @@ impl<'a> ArrivedSheet<'a> {
         }
         kept && turned
     }
-    /// Returns the smallest box around everything this sheet draws with the given values, as its
-    /// lower and upper corner, `None` if it draws nothing.
-    ///
-    /// # Arguments
-    ///
-    /// * `values` - the fluence of each corner, indexed like the vertices of the sheet.
-    pub fn extent(&self, values: &[Option<Fluence>]) -> Option<(Point2<f64>, Point2<f64>)> {
+    /// Returns the smallest box around everything this sheet draws, as its lower and upper
+    /// corner, `None` if it draws nothing.
+    pub fn extent(&self) -> Option<(Point2<f64>, Point2<f64>)> {
         let mut extent: Option<(Point2<f64>, Point2<f64>)> = None;
-        self.for_each_triangle(values, |(corners, _), _| {
+        self.for_each_triangle(|(corners, _), _| {
             for corner in corners {
                 extent = Some(extent.map_or((corner, corner), |(lower, upper)| {
                     (lower.inf(&corner), upper.sup(&corner))
@@ -274,9 +268,9 @@ fn margin_triangles(
         Some(([start, end_out, start_out], [fs, fe, fs])),
     ]
 }
-/// Draws sheets of ray tubes, each with the values of its corners, into one fluence map.
+/// Draws sheets of ray tubes, each with the fluences of its corners, into one fluence map.
 ///
-/// Where tubes overlap, their values add up. If the light of a sheet folds over itself (see
+/// Where tubes overlap, their fluences add up. If the light of a sheet folds over itself (see
 /// [`ArrivedSheet::folds`]), a warning says that the map is unreliable near the fold. The map
 /// tells the energy it draws in the tubes and in the margins (see
 /// [`FluenceData::with_drawn_energy`]), summed over the triangles exactly rather than over the
@@ -284,7 +278,7 @@ fn margin_triangles(
 ///
 /// # Arguments
 ///
-/// * `sheets` - the sheets, each with the fluence at each of its corners.
+/// * `sheets` - the sheets to draw.
 /// * `nr_of_points` - the number of points of the map along x and y.
 /// * `x`, `y` - the ranges the map covers; if `None`, it covers all the sheets draw.
 /// * `estimator` - the estimator the map stands for.
@@ -293,7 +287,7 @@ fn margin_triangles(
 ///
 /// This function returns an error if no tube arrived complete, so that the sheets draw nothing.
 pub fn draw_map(
-    sheets: &[(ArrivedSheet<'_>, Vec<Option<Fluence>>)],
+    sheets: &[ArrivedSheet<'_>],
     nr_of_points: (usize, usize),
     x: Option<&Range<Length>>,
     y: Option<&Range<Length>>,
@@ -301,7 +295,7 @@ pub fn draw_map(
 ) -> OpmResult<FluenceData> {
     let (lower, upper) = sheets
         .iter()
-        .filter_map(|(sheet, values)| sheet.extent(values))
+        .filter_map(ArrivedSheet::extent)
         .reduce(|(lower, upper), (l, u)| (lower.inf(&l), upper.sup(&u)))
         .ok_or_else(|| {
             OpossumError::Analysis(
@@ -309,7 +303,7 @@ pub fn draw_map(
                     .into(),
             )
         })?;
-    if sheets.iter().any(|(sheet, _)| sheet.folds()) {
+    if sheets.iter().any(ArrivedSheet::folds) {
         warn!(
             "light folds over itself on this surface (caustic): the fluence near the fold is unreliable"
         );
@@ -326,8 +320,8 @@ pub fn draw_map(
     let mut grid = FluenceGrid::new(&x, &y, nr_of_points);
     // the energy of the tubes and of the margins: a linear triangle holds its area times its mean
     let (mut in_tubes, mut in_margins) = (joule!(0.0), joule!(0.0));
-    for (sheet, values) in sheets {
-        sheet.for_each_triangle(values, |(corners, values), in_margin| {
+    for sheet in sheets {
+        sheet.for_each_triangle(|(corners, values), in_margin| {
             let energy = square_meter!(signed_area(corners).abs())
                 * values.into_iter().sum::<Fluence>()
                 / 3.0;
@@ -343,22 +337,18 @@ pub fn draw_map(
         .with_drawn_energy(in_tubes, in_margins))
 }
 /// Returns the given map with the estimated deviation of the fluence from it at each of its
-/// points, drawn from sheets of ray tubes, each with the fluence at each of its corners (see
-/// [`ArrivedSheet::deviations`] and the handbook, "Fluence uncertainty"). Overlapping tubes add up
-/// as in the map.
+/// points, drawn from sheets of ray tubes (see [`ArrivedSheet::deviations`] and the handbook,
+/// "Fluence uncertainty"). Overlapping tubes add up as in the map.
 ///
 /// # Arguments
 ///
-/// * `sheets` - the sheets the map was drawn from, each with the fluence at each of its corners.
+/// * `sheets` - the sheets the map was drawn from.
 /// * `map` - the map, whose points the deviation is drawn onto.
 #[must_use]
-pub fn draw_deviation(
-    sheets: &[(ArrivedSheet<'_>, Vec<Option<Fluence>>)],
-    map: FluenceData,
-) -> FluenceData {
+pub fn draw_deviation(sheets: &[ArrivedSheet<'_>], map: FluenceData) -> FluenceData {
     let mut grid = FluenceGrid::new(map.x_range(), map.y_range(), (map.len_x(), map.len_y()));
-    for (sheet, values) in sheets {
-        for (corners, along_edges) in sheet.deviations(values) {
+    for sheet in sheets {
+        for (corners, along_edges) in sheet.deviations() {
             grid.add_deviation(corners, along_edges);
         }
     }
