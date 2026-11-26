@@ -225,7 +225,7 @@ impl OpticNode for SpotDiagram {
                 }
                 Some(residuals)
             }
-            _ => self.read_observable(metric_name).map(|v| vec![v]),
+            _ => None,
         }
     }
 
@@ -620,12 +620,9 @@ mod test {
         let mean_sq: f64 = residuals.iter().map(|r| r * r).sum::<f64>() / (residuals.len() as f64);
         assert_relative_eq!(mean_sq.sqrt(), rms_scalar, max_relative = 1e-12);
 
-        // Non-vectorized metrics fall back to a 1-element vector
-        let cx_vec = sd
-            .read_observable_vector("centroid x")
-            .expect("centroid x vector must exist");
-        assert_eq!(cx_vec.len(), 1);
-        assert_eq!(cx_vec[0], sd.read_observable("centroid x").unwrap());
+        // Non-vectorized metrics have no vector form
+        assert_eq!(sd.read_observable_vector("centroid x"), None);
+        assert!(sd.read_observable("centroid x").is_some());
 
         Ok(())
     }

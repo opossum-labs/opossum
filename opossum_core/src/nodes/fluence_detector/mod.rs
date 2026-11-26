@@ -531,6 +531,8 @@ mod test {
         let peak = detector.read_observable("peak fluence");
         assert!(peak.is_some());
         assert!(peak.unwrap() > 0.0);
+        // the peak has no vector form, so reading one computes no second map
+        assert_eq!(detector.read_observable_vector("peak fluence"), None);
 
         let energy = detector.read_observable("total energy");
         assert!(energy.is_some());

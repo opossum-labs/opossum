@@ -250,10 +250,12 @@ pub trait OpticNode: VisualNode + HasNodeAttr + OpticNodeAny {
         None
     }
 
-    /// Reads a vector of related raw residuals (e.g., individual ray OPDs or spot deviations).
-    /// Defaults to wrapping a single scalar metric if not overridden.
-    fn read_observable_vector(&self, metric_name: &str) -> Option<Vec<f64>> {
-        self.read_observable(metric_name).map(|val| vec![val])
+    /// Reads a vector of related raw residuals (e.g., individual ray OPDs or spot deviations),
+    /// one per ray, for a least-squares optimization.
+    /// Returns `None` for a metric without a vector form, which is every metric unless
+    /// overridden.
+    fn read_observable_vector(&self, _metric_name: &str) -> Option<Vec<f64>> {
+        None
     }
     /// Returns an [`OpticNode`] dowcasted to an [`EdgeThickness`] trait object
     /// if possible.
