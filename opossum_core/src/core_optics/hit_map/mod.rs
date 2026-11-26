@@ -29,7 +29,6 @@ use ray_tubes::{draw_deviation, draw_map};
 use rays_hit_map::{HitPoint, RaysHitMap};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use uom::si::f64::Energy;
 use uuid::Uuid;
 
@@ -37,7 +36,6 @@ use uuid::Uuid;
 /// Storage struct for `RaysHitMap` on a surface from a single bounce, its bundles in the order
 /// they arrived.
 pub struct BouncedHitMap {
-    #[schemars(with = "HashMap<Uuid, RaysHitMap>")]
     hit_map: IndexMap<Uuid, RaysHitMap>,
 }
 impl BouncedHitMap {
@@ -84,7 +82,6 @@ pub struct HitMap {
     /// Stores the hitpoints of the rays on this surface, separated by their bounce level and the individual ray bundle
     hit_map: Vec<BouncedHitMap>,
     /// Stores the fluence map and the position in the history of the ray bundles that create a critical fluence on this surface. key value is the uuid of the ray bundle
-    #[schemars(with = "HashMap<Uuid, (FluenceData, usize)>")]
     critical_fluence: IndexMap<Uuid, (FluenceData, usize)>,
 }
 impl HitMap {

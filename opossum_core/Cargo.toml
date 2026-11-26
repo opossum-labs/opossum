@@ -40,7 +40,7 @@ uom.workspace = true
 utoipa.workspace = true
 uuid.workspace = true
 
-schemars = { version = "1.2.3", features = ["uuid1", "preserve_order"] }
+schemars = { version = "1.2.3", features = ["uuid1", "indexmap2", "preserve_order"] }
 petgraph = { version = "0.8", features = ["serde-1"] } # the graph library
 libm = { version = "0.2" }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
