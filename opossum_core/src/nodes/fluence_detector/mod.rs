@@ -1049,7 +1049,7 @@ mod test {
         ];
         for pattern in patterns {
             let source = RayDataSource::PointSrc(PointSrc::new(
-                pattern.clone(),
+                pattern,
                 UniformDist::new(joule!(1.0))?.into(),
                 LaserLines::new(vec![(nanometer!(1000.0), 1.0)])?.into(),
                 millimeter!(150.0),

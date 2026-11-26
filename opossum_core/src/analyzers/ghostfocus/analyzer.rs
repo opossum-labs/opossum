@@ -36,14 +36,16 @@ impl GhostFocusAnalyzer {
         &self.config
     }
 
-    fn node_group_report(
-        &self,
-        group: &NodeGroup,
-        analysis_report: &mut AnalysisReport,
-    ) -> OpmResult<()> {
+    /// Adds a report for every critical fluence on the surfaces of the given group, its nested
+    /// groups included, to the given analysis report.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if a report property cannot be created.
+    fn node_group_report(group: &NodeGroup, analysis_report: &mut AnalysisReport) -> OpmResult<()> {
         for node_ref in group.graph().nodes() {
             if let Some(g) = node_ref.as_any().downcast_ref::<NodeGroup>() {
-                self.node_group_report(g, analysis_report)?;
+                Self::node_group_report(g, analysis_report)?;
             } else {
                 let node_name = &node_ref.name().to_string();
                 for (surface_name, surface) in node_ref.surfaces_with_hits() {
@@ -176,7 +178,7 @@ impl Analyzer for GhostFocusAnalyzer {
         node_report.set_show_item(true);
         analysis_report.add_node_report(node_report);
 
-        self.node_group_report(scenery, &mut analysis_report)?;
+        Self::node_group_report(scenery, &mut analysis_report)?;
         analysis_report.set_analysis_type("Ghost Focus Analysis");
         Ok(analysis_report)
     }
@@ -684,7 +686,7 @@ mod test_ghost_analysis_nested_groups_inversion {
             .iter()
             .filter(|node_report| node_report.node_type() == "surface")
             .collect::<Vec<_>>();
-        assert!(!critical.is_empty());
+        assert_ne!(critical.len(), 0, "a critical fluence report");
         for node_report in critical {
             let props = node_report.properties();
             let Proptype::FluenceData(map) = props.get("Fluence")? else {

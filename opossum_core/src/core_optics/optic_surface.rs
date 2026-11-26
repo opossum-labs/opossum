@@ -320,7 +320,7 @@ mod test {
             ],
             nanometer!(1000.0),
         )?;
-        for ray in rays.iter() {
+        for ray in &rays {
             let hit = HitPoint::new(ray.position(), ray.energy())?;
             os.add_to_hit_map(hit, rays.bounce_lvl(), rays.uuid(), None)?;
         }
@@ -332,7 +332,7 @@ mod test {
             .hit_map()
             .critical_fluences()
             .get(&rays.uuid())
-            .ok_or(OpossumError::Other("no critical fluence".into()))?;
+            .ok_or_else(|| OpossumError::Other("no critical fluence".into()))?;
         assert!(map.peak() > J_per_cm2!(1e-9));
         assert_eq!(*map.estimator(), FluenceEstimator::Binning);
         assert_eq!(*history_position, rays.ray_history_len());
