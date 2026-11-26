@@ -7,7 +7,7 @@ use crate::{
     kde::Kde,
     light::{RayMesh, RaySource, ray_mesh::RayVertex},
     meter, micrometer,
-    nodes::fluence_detector::fluence_data::FluenceData,
+    nodes::fluence_detector::{Fluence, fluence_data::FluenceData},
     types::{SiScalarSchema, schema_helper_types::Point3Schema},
     utils::{to_f64, try_f64_to_usize},
 };
@@ -16,10 +16,7 @@ use nalgebra::{DMatrix, Point2, Point3};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{ops::Range, sync::Arc};
-use uom::si::{
-    energy::joule,
-    f64::{Energy, Length},
-};
+use uom::si::f64::{Energy, Length};
 
 use super::{
     fluence_estimator::FluenceEstimator,
@@ -292,13 +289,13 @@ impl RaysHitMap {
     pub fn estimate_deviation(&self, map: FluenceData) -> OpmResult<FluenceData> {
         Ok(draw_deviation(&self.tube_sheets()?, map))
     }
-    /// Returns the sheets of ray tubes the hits of this map stand in, each with the fluence, in
-    /// J/m², its corners show (see [`ArrivedSheet::fluences_from_energies`]).
+    /// Returns the sheets of ray tubes the hits of this map stand in, each with the fluence its
+    /// corners show (see [`ArrivedSheet::fluences_from_energies`]).
     ///
     /// # Errors
     ///
     /// This function returns an error if the hits do not all stand in ray tubes.
-    pub(super) fn tube_sheets(&self) -> OpmResult<Vec<(ArrivedSheet<'_>, Vec<Option<f64>>)>> {
+    pub(super) fn tube_sheets(&self) -> OpmResult<Vec<(ArrivedSheet<'_>, Vec<Option<Fluence>>)>> {
         Ok(self
             .arrived_sheets()?
             .into_iter()
@@ -320,12 +317,12 @@ impl RaysHitMap {
     ///
     /// This function returns an error if the hits do not all stand in ray tubes.
     fn arrived_sheets(&self) -> OpmResult<Vec<ArrivedSheet<'_>>> {
-        // where the hit with the given index lies on the surface, in meters, and its energy, in J
+        // where the hit with the given index lies on the surface, in meters, and its energy
         let hit_of = |hit: usize| {
             self.hit_points.get(hit).map(|hit| {
                 (
                     Point2::new(hit.position.x.value, hit.position.y.value),
-                    hit.energy.get::<joule>(),
+                    hit.energy,
                 )
             })
         };

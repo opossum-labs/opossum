@@ -20,7 +20,10 @@ mod ray_tubes;
 pub mod rays_hit_map;
 
 use crate::{
-    error::OpmResult, joule, light::RaySource, nodes::fluence_detector::fluence_data::FluenceData,
+    error::OpmResult,
+    joule,
+    light::RaySource,
+    nodes::fluence_detector::{Fluence, fluence_data::FluenceData},
     properties::Proptype,
 };
 use fluence_estimator::FluenceEstimator;
@@ -238,7 +241,7 @@ impl HitMap {
     }
     /// Returns the sheets of ray tubes the hits of all bundles of this [`HitMap`] stand in, each
     /// with the fluence its corners show (see [`RaysHitMap::tube_sheets`]).
-    fn tube_sheets(&self) -> OpmResult<Vec<(ray_tubes::ArrivedSheet<'_>, Vec<Option<f64>>)>> {
+    fn tube_sheets(&self) -> OpmResult<Vec<(ray_tubes::ArrivedSheet<'_>, Vec<Option<Fluence>>)>> {
         let mut sheets = Vec::new();
         for rays_hit_map in self
             .hit_map

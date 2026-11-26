@@ -4,14 +4,16 @@ use std::{cmp::Ordering, ops::Range};
 use nalgebra::{DMatrix, Point2, Vector2};
 use uom::si::{f64::Length, length::meter};
 
+use super::Fluence;
 use crate::utils::{math_utils::signed_area, to_f64, try_f64_to_usize};
 
-/// A regular grid of points that tubes are drawn onto, the values of overlapping tubes adding up.
+/// A regular grid of points that tubes are drawn onto, the fluences of overlapping tubes adding
+/// up.
 pub struct FluenceGrid {
     x: Axis,
     y: Axis,
-    /// The values, with a row per point along y and a column per point along x.
-    values: DMatrix<f64>,
+    /// The fluences, with a row per point along y and a column per point along x.
+    values: DMatrix<Fluence>,
 }
 /// The evenly spaced points of a grid along one axis, in meters.
 struct Axis {
@@ -76,22 +78,26 @@ impl FluenceGrid {
             values: DMatrix::zeros(nr_of_points.1, nr_of_points.0),
         }
     }
-    /// Returns the values of this [`FluenceGrid`], with a row per point along y and a column per
+    /// Returns the fluences of this [`FluenceGrid`], with a row per point along y and a column per
     /// point along x.
     #[must_use]
-    pub fn into_values(self) -> DMatrix<f64> {
+    pub fn into_values(self) -> DMatrix<Fluence> {
         self.values
     }
-    /// Adds a triangle to the grid, linearly between the values at its corners.
+    /// Adds a triangle to the grid, linearly between the fluences at its corners.
     ///
     /// # Arguments
     ///
     /// * `corners` - the corners of the triangle, in meters.
-    /// * `values` - the values at the corners.
-    pub(crate) fn add_triangle(&mut self, corners: [Point2<f64>; 3], values: [f64; 3]) {
+    /// * `values` - the fluences at the corners.
+    pub(crate) fn add_triangle(&mut self, corners: [Point2<f64>; 3], values: [Fluence; 3]) {
         for_each_covered(&self.x, &self.y, corners, |cell, lambda| {
             if let Some(value) = self.values.get_mut(cell) {
-                *value += lambda.iter().zip(values).map(|(l, v)| l * v).sum::<f64>();
+                *value += lambda
+                    .iter()
+                    .zip(values)
+                    .map(|(l, v)| v * *l)
+                    .sum::<Fluence>();
             }
         });
     }
@@ -103,12 +109,11 @@ impl FluenceGrid {
     ///
     /// * `corners` - the corners of the triangle, in meters.
     /// * `along_edges` - `eᵀ H e` along each edge, the edge opposite the corner of the same index.
-    pub(crate) fn add_deviation(&mut self, corners: [Point2<f64>; 3], along_edges: [f64; 3]) {
+    pub(crate) fn add_deviation(&mut self, corners: [Point2<f64>; 3], along_edges: [Fluence; 3]) {
         let [w0, w1, w2] = along_edges;
         for_each_covered(&self.x, &self.y, corners, |cell, [l0, l1, l2]| {
             if let Some(value) = self.values.get_mut(cell) {
-                let curvature = (l1 * l2).mul_add(w0, (l2 * l0).mul_add(w1, l0 * l1 * w2));
-                *value = curvature.mul_add(-0.5, *value);
+                *value -= (w0 * (l1 * l2) + w1 * (l2 * l0) + w2 * (l0 * l1)) * 0.5;
             }
         });
     }
@@ -184,7 +189,7 @@ fn is_top_left(direction: Vector2<f64>) -> bool {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::meter;
+    use crate::{J_per_m2, meter};
     use approx::assert_relative_eq;
 
     /// A grid of 1 m spacing from -2 m to 2 m in x and y.
@@ -194,6 +199,10 @@ mod test {
             &(meter!(-2.0)..meter!(2.0)),
             (5, 5),
         )
+    }
+    /// The fluences of a grid, in J/m².
+    fn in_j_per_m2(grid: FluenceGrid) -> DMatrix<f64> {
+        grid.into_values().map(|fluence| fluence.value)
     }
     /// The two triangles of a square cover the point on their shared diagonal once, and of the
     /// points on the border of the square those on its bottom and left edges: the others belong
@@ -207,9 +216,9 @@ mod test {
             Point2::new(1.0, 1.0),
             Point2::new(-1.0, 1.0),
         );
-        grid.add_triangle([bottom_left, bottom_right, top_right], [1.0; 3]);
-        grid.add_triangle([bottom_left, top_right, top_left], [1.0; 3]);
-        let values = grid.values;
+        grid.add_triangle([bottom_left, bottom_right, top_right], [J_per_m2!(1.0); 3]);
+        grid.add_triangle([bottom_left, top_right, top_left], [J_per_m2!(1.0); 3]);
+        let values = in_j_per_m2(grid);
         assert_relative_eq!(values.iter().sum::<f64>(), 4.0);
         assert!(values.iter().all(|v| *v <= 1.0), "{values}");
         assert_relative_eq!(values[(2, 2)], 1.0);
@@ -227,11 +236,11 @@ mod test {
                     Point2::new(x + 1.0, y + 1.0),
                     Point2::new(x, y + 1.0),
                 );
-                grid.add_triangle([bottom_left, bottom_right, top_right], [1.0; 3]);
-                grid.add_triangle([top_right, top_left, bottom_left], [1.0; 3]);
+                grid.add_triangle([bottom_left, bottom_right, top_right], [J_per_m2!(1.0); 3]);
+                grid.add_triangle([top_right, top_left, bottom_left], [J_per_m2!(1.0); 3]);
             }
         }
-        assert!(grid.values.iter().all(|v| (*v - 1.0).abs() < 1e-12));
+        assert!(in_j_per_m2(grid).iter().all(|v| (*v - 1.0).abs() < 1e-12));
     }
     /// Inside a triangle the value runs linearly between its corners, whichever way they run.
     #[test]
@@ -248,8 +257,8 @@ mod test {
                 corners.swap(1, 2);
                 values.swap(1, 2);
             }
-            grid.add_triangle(corners, values);
-            let values = grid.values;
+            grid.add_triangle(corners, values.map(|value| J_per_m2!(value)));
+            let values = in_j_per_m2(grid);
             // the value is x + 2 y + 7.5: 7.5 at the origin, 8.5 one step along x
             assert_relative_eq!(values[(2, 2)], 7.5, epsilon = 1e-12);
             assert_relative_eq!(values[(2, 3)], 8.5, epsilon = 1e-12);
