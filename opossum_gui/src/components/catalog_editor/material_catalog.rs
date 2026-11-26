@@ -19,12 +19,12 @@ use dioxus_free_icons::{
 use dioxus_primitives::alert_dialog::AlertDialogContent;
 use opossum_core::{material::Material, refractive_index::RefrIndexSellmeier1};
 use opossum_registry::{
-    AssetRegistry,
+    AssetRegistry, CatalogSource,
     index::{IndexEntry, MaterialIndexData},
 };
 use uuid::Uuid;
 
-/// Metadata of an asset queued for deletion confirmation.
+/// Metadata of an asset queued for deletion confirmation (user catalog only).
 #[derive(Debug, Clone, PartialEq)]
 struct DeleteTarget {
     id: Uuid,
@@ -71,34 +71,28 @@ pub fn MaterialCatalog(
     #[props(default)]
     on_action: EventHandler<MaterialCatalogEvent>,
 ) -> Element {
-    // Shared registry facade accessed directly via Dioxus context
     let mut registry = use_context::<Signal<AssetRegistry<Material>>>();
 
     let is_select_mode = on_select.is_some();
 
-    // Local UI states
     let mut open_materialeditor = use_signal(|| false);
     let mut material_state = use_signal(Material::default);
     let mut show_delete_dialog = use_signal(|| false);
     let mut pending_delete = use_signal(|| Option::<DeleteTarget>::None);
     let mut show_synchronizer = use_signal(|| false);
 
-    // Search and filter inputs
     let mut search_text = use_signal(String::new);
     let mut min_nd = use_signal(|| Option::<f64>::None);
     let mut max_nd = use_signal(|| Option::<f64>::None);
 
-    // Formatted string values for input elements to ensure controlled inputs
     let min_nd_str = min_nd().map_or_default(|v| v.to_string());
     let max_nd_str = max_nd().map_or_default(|v| v.to_string());
 
-    // Reactive filter pipeline reading from the in-memory registry index
     let filtered_entries = use_memo(move || {
         let text_query = search_text.read();
         let reg = registry.read();
         let trimmed_query = text_query.trim();
 
-        // 1. Filter entries via registry index
         let mut results: Vec<IndexEntry<MaterialIndexData>> = if trimmed_query.is_empty() {
             reg.all_entries().into_iter().cloned().collect()
         } else {
@@ -108,7 +102,6 @@ pub fn MaterialCatalog(
                 .collect()
         };
 
-        // 2. Apply refractive index (n_d) bounds
         if let Some(min) = *min_nd.read() {
             results.retain(|e| e.specific.nd.is_some_and(|nd| nd >= min));
         }
@@ -116,30 +109,29 @@ pub fn MaterialCatalog(
             results.retain(|e| e.specific.nd.is_some_and(|nd| nd <= max));
         }
 
-        // 3. Sort entries alphabetically by name (case-insensitive)
         results.sort_by_cached_key(|entry| entry.common.name.to_lowercase());
         results
     });
 
-    // Callback: Handle inline edits from MaterialEditor
     let on_material_changed = use_callback(move |e: MaterialChangeEvent| {
         e.action.apply(&mut material_state.write());
     });
 
-    // Callback: Publish draft to disk (automatically synchronizes in-memory index)
-    let on_material_save =
-        use_callback(
-            move |()| match registry.write().publish(&mut *material_state.write()) {
-                Ok(_) => {
-                    on_action.call(MaterialCatalogEvent::MaterialAdded);
-                }
-                Err(e) => {
-                    log::error!("Failed to publish material to registry: {e}");
-                }
-            },
-        );
+    let on_material_save = use_callback(move |()| {
+        let mut mat_guard = material_state.write();
+        match registry
+            .write()
+            .publish_to(CatalogSource::User, &mut *mat_guard)
+        {
+            Ok(_) => {
+                on_action.call(MaterialCatalogEvent::MaterialAdded);
+            }
+            Err(e) => {
+                log::error!("Failed to publish material to user catalog: {e}");
+            }
+        }
+    });
 
-    // Callback: Initialize a fresh draft
     let on_create_new = use_callback(move |_| {
         material_state.set(Material::new_draft(
             "New Material",
@@ -150,30 +142,36 @@ pub fn MaterialCatalog(
         open_materialeditor.set(true);
     });
 
-    // Callback: Load an existing asset and prepare a new draft version
-    let on_edit_material = use_callback(move |id: Uuid| match registry.read().load(id, None) {
-        Ok(loaded_material) => {
-            material_state.set(loaded_material.new_draft_from());
-            open_materialeditor.set(true);
-        }
-        Err(err) => {
-            log::error!("Failed to load material from registry: {err}");
-        }
-    });
+    // Delegates draft creation to AssetRegistry:
+    // - Official material -> new UUID + version 0 (fork to user catalog)
+    // - User material -> same UUID + version 0 (next version in user catalog)
+    let on_edit_material =
+        use_callback(
+            move |id: Uuid| match registry.read().prepare_user_draft(id, None) {
+                Ok(draft) => {
+                    material_state.set(draft);
+                    open_materialeditor.set(true);
+                }
+                Err(err) => {
+                    log::error!("Failed to prepare user draft from registry: {err}");
+                }
+            },
+        );
 
-    // Callback: Delete latest version and update the in-memory cache
     let handle_execute_delete = use_callback(move |target: DeleteTarget| {
-        match registry.write().delete_latest_version(target.id) {
+        match registry
+            .write()
+            .delete_latest_version_from(CatalogSource::User, target.id)
+        {
             Ok(_) => {
                 on_action.call(MaterialCatalogEvent::MaterialDeleted);
             }
             Err(e) => {
-                log::error!("Failed to delete material version: {e}");
+                log::error!("Failed to delete user material version: {e}");
             }
         }
     });
 
-    // Callback: Confirm deletion modal
     let handle_confirm_delete = use_callback(move |_| {
         if let Some(target) = pending_delete.read().clone() {
             handle_execute_delete.call(target);
@@ -181,195 +179,272 @@ pub fn MaterialCatalog(
         show_delete_dialog.set(false);
     });
 
-    // Callback: Cancel deletion modal
     let handle_cancel_delete = use_callback(move |_| {
         show_delete_dialog.set(false);
     });
 
+    let snapshot_rows: Vec<(IndexEntry<MaterialIndexData>, bool, bool)> = {
+        let reg = registry.read();
+        filtered_entries
+            .read()
+            .iter()
+            .cloned()
+            .map(|entry| {
+                let is_off = reg.is_official(entry.common.id);
+                let is_usr = reg.in_user_catalog(entry.common.id);
+                (entry, is_off, is_usr)
+            })
+            .collect()
+    };
+    let has_rows = !snapshot_rows.is_empty();
+
+    let delete_prompt_text = pending_delete.read().as_ref().map_or_else(
+        String::new,
+        |target| {
+            let prev_v = target.latest_version.saturating_sub(1);
+            if target.total_versions_count <= 1 {
+                format!(
+                    "Warning: This is the only version of '{}' in the user catalog. Deleting version v{} will permanently remove this user material.",
+                    target.name, target.latest_version
+                )
+            } else {
+                format!(
+                    "Are you sure you want to delete the latest version (v{}) of '{}' from the user catalog? The material will revert to v{prev_v}.",
+                    target.name, target.latest_version
+                )
+            }
+        },
+    );
+
     rsx! {
-        // 1. Main Catalog Modal Dialog
         AlertDialog {
             open: open(),
             on_open_change: move |v: bool| open.set(v),
-            max_width: "60rem".to_string(),
+            max_width: "64rem".to_string(),
             AlertDialogDescription {
-                Card {
-                    CardHeader {
-                        CardTitle {
-                            if is_select_mode {
-                                "Select Material"
-                            } else {
-                                "Material Catalog"
-                            }
-                        }
-                        if !is_select_mode {
-                            CardAction {
-                                div { class: "d-flex gap-2",
-                                    Button {
-                                        title: "Compare and synchronize model assets with the catalog",
-                                        variant: ButtonVariant::Outline,
-                                        onclick: move |_| show_synchronizer.set(true),
-                                        Icon { icon: FaArrowsRotate }
-                                        "Sync with Model"
-                                    }
-                                    Button {
-                                        variant: ButtonVariant::Success,
-                                        onclick: on_create_new,
-                                        Icon { icon: FaPlus }
-                                        "New Material"
-                                    }
+                div {
+                    Card {
+                        CardHeader {
+                            CardTitle {
+                                if is_select_mode {
+                                    "Select Material"
+                                } else {
+                                    "Material Catalog"
                                 }
                             }
-                        }
-                    }
-                    CardContent {
-                        // Search & Filter Toolbar (Optimized 3-column layout)
-                        div { class: "row mb-4 align-items-end",
-                            div { class: "col-md-6",
-                                label { class: "form-label fw-bold small", "Search Name / Manufacturer" }
-                                input {
-                                    class: "form-control form-control-sm",
-                                    r#type: "text",
-                                    placeholder: "e.g., N-BK7 or Schott",
-                                    value: "{search_text}",
-                                    oninput: move |e| search_text.set(e.value()),
-                                }
-                            }
-                            div { class: "col-md-3",
-                                label { class: "form-label fw-bold small",
-                                    "Min "
-                                    span {
-                                        "n"
-                                        sub { "d" }
-                                    }
-                                }
-                                input {
-                                    class: "form-control form-control-sm",
-                                    r#type: "number",
-                                    step: "0.01",
-                                    value: "{min_nd_str}",
-                                    oninput: move |e| min_nd.set(e.value().parse().ok()),
-                                }
-                            }
-                            div { class: "col-md-3",
-                                label { class: "form-label fw-bold small",
-                                    "Max "
-                                    span {
-                                        "n"
-                                        sub { "d" }
-                                    }
-                                }
-                                input {
-                                    class: "form-control form-control-sm",
-                                    r#type: "number",
-                                    step: "0.01",
-                                    value: "{max_nd_str}",
-                                    oninput: move |e| max_nd.set(e.value().parse().ok()),
-                                }
-                            }
-                        }
-
-                        // Results Table View
-                        ScrollArea { height: "25rem",
-                            div { class: "table-responsive",
-                                table { class: "table table-hover table-sm align-middle mb-0",
-                                    thead { class: "table-light sticky-top",
-                                        tr {
-                                            th { "Name" }
-                                            th { "Manufacturer" }
-                                            th { "Description" }
-                                            th {
-                                                "Refractive Index ("
-                                                span {
-                                                    "n"
-                                                    sub { "d" }
-                                                }
-                                                ")"
-                                            }
-                                            th { "Latest Version" }
-                                            th { class: "text-end", "Actions" }
+                            if !is_select_mode {
+                                CardAction {
+                                    div { class: "d-flex gap-2",
+                                        Button {
+                                            title: "Compare and synchronize model assets with the catalog",
+                                            variant: ButtonVariant::Outline,
+                                            onclick: move |_| show_synchronizer.set(true),
+                                            Icon { icon: FaArrowsRotate }
+                                            "Sync with Model"
+                                        }
+                                        Button {
+                                            variant: ButtonVariant::Success,
+                                            onclick: on_create_new,
+                                            Icon { icon: FaPlus }
+                                            "New Material"
                                         }
                                     }
-                                    tbody {
-                                        for entry in filtered_entries.read().iter() {
-                                            tr { key: "{entry.common.id}",
-                                                td { class: "fw-bold", "{entry.common.name}" }
-                                                td {
-                                                    "{entry.common.manufacturer.as_deref().unwrap_or(\"-\")}"
-                                                }
-                                                td {
-                                                    title: "{entry.common.description.as_deref().unwrap_or_default()}",
-                                                    class: "text-muted small",
-                                                    "{truncate_description(entry.common.description.as_deref(), 35)}"
-                                                }
-                                                td {
-                                                    if let Some(nd) = entry.specific.nd {
-                                                        "{nd:.4}"
-                                                    } else {
-                                                        "-"
+                                }
+                            }
+                        }
+                        CardContent {
+                            div { class: "row mb-4 align-items-end",
+                                div { class: "col-md-6",
+                                    label { class: "form-label fw-bold small",
+                                        "Search Name / Manufacturer"
+                                    }
+                                    input {
+                                        class: "form-control form-control-sm",
+                                        r#type: "text",
+                                        placeholder: "e.g., N-BK7 or Schott",
+                                        value: "{search_text}",
+                                        oninput: move |e| search_text.set(e.value()),
+                                    }
+                                }
+                                div { class: "col-md-3",
+                                    label { class: "form-label fw-bold small",
+                                        "Min "
+                                        span {
+                                            "n"
+                                            sub { "d" }
+                                        }
+                                    }
+                                    input {
+                                        class: "form-control form-control-sm",
+                                        r#type: "number",
+                                        step: "0.01",
+                                        value: "{min_nd_str}",
+                                        oninput: move |e| min_nd.set(e.value().parse().ok()),
+                                    }
+                                }
+                                div { class: "col-md-3",
+                                    label { class: "form-label fw-bold small",
+                                        "Max "
+                                        span {
+                                            "n"
+                                            sub { "d" }
+                                        }
+                                    }
+                                    input {
+                                        class: "form-control form-control-sm",
+                                        r#type: "number",
+                                        step: "0.01",
+                                        value: "{max_nd_str}",
+                                        oninput: move |e| max_nd.set(e.value().parse().ok()),
+                                    }
+                                }
+                            }
+
+                            ScrollArea { height: "25rem",
+                                div { class: "table-responsive",
+                                    table { class: "table table-hover table-sm align-middle mb-0",
+                                        thead { class: "table-light sticky-top",
+                                            tr {
+                                                th { "Name" }
+                                                th { "Catalog" }
+                                                th { "Manufacturer" }
+                                                th { "Description" }
+                                                th {
+                                                    "Refractive Index ("
+                                                    span {
+                                                        "n"
+                                                        sub { "d" }
                                                     }
+                                                    ")"
                                                 }
-                                                td {
-                                                    span { class: "badge bg-secondary",
-                                                        "v{entry.common.latest_version}"
-                                                    }
-                                                }
-                                                td { class: "text-end d-flex justify-content-end gap-1",
-                                                    // In Select Mode: Render only the Select button
-                                                    if let Some(select_handler) = on_select {
-                                                        Button {
-                                                            title: "Select this material for the current node",
-                                                            variant: ButtonVariant::Primary,
-                                                            onclick: {
-                                                                let id = entry.common.id;
-                                                                let version = entry.common.latest_version;
-                                                                move |_| {
-                                                                    if let Ok(loaded) = registry.read().load(id, Some(version)) {
-                                                                        select_handler.call(loaded);
-                                                                        open.set(false);
+                                                th { "Latest Version" }
+                                                th { class: "text-end", "Actions" }
+                                            }
+                                        }
+                                        tbody {
+                                            if has_rows {
+                                                for (entry , is_off , is_usr) in &snapshot_rows {
+                                                    {
+                                                        let row_key = if *is_usr {
+                                                            format!("user-{}", entry.common.id)
+                                                        } else {
+                                                            format!("official-{}", entry.common.id)
+                                                        };
+                                                        let preferred_source = if *is_off {
+                                                            CatalogSource::Official
+                                                        } else {
+                                                            CatalogSource::User
+                                                        };
+                                                        let edit_title = if *is_off {
+                                                            "Fork official material into user catalog"
+                                                        } else {
+                                                            "Create new version in user catalog"
+                                                        };
+                                                        let desc_title = entry
+                                                            .common
+                                                            .description
+                                                            .as_deref()
+                                                            .unwrap_or_default()
+                                                            .to_string();
+                                                        let desc_short = truncate_description(entry.common.description.as_deref(), 35);
+                                                        let mfg_display = entry
+                                                            .common
+                                                            .manufacturer
+                                                            .as_deref()
+                                                            .unwrap_or("-")
+                                                            .to_string();
+                                                        let nd_display = entry
+                                                            .specific
+                                                            .nd
+                                                            .map_or_else(|| "-".to_string(), |nd| format!("{nd:.4}"));
+                                                        let ver_display = format!("v{}", entry.common.latest_version);
+
+                                                        rsx! {
+                                                            tr { key: "{row_key}",
+                                                                td { class: "fw-bold", "{entry.common.name}" }
+                                                                td {
+                                                                    div { class: "d-inline-flex gap-1 align-items-center",
+                                                                        if *is_off {
+                                                                            span { class: "badge bg-primary", "Official" }
+                                                                        }
+                                                                        if *is_usr {
+                                                                            span { class: "badge bg-info text-dark", "User" }
+                                                                        }
+                                                                        if !*is_off && !*is_usr {
+                                                                            span { class: "badge bg-secondary", "-" }
+                                                                        }
                                                                     }
                                                                 }
-                                                            },
-                                                            Icon { icon: FaCheck }
-                                                            "Select"
-                                                        }
-                                                    } else {
-                                                        // In Catalog Management Mode: Render Edit & Delete actions
-                                                        Button {
-                                                            title: "Add new version of the material",
-                                                            onclick: {
-                                                                let id = entry.common.id;
-                                                                move |_| on_edit_material.call(id)
-                                                            },
-                                                            Icon { icon: FaPencil }
-                                                        }
-                                                        Button {
-                                                            title: "Delete latest version",
-                                                            variant: ButtonVariant::Destructive,
-                                                            onclick: {
-                                                                let target = DeleteTarget {
-                                                                    id: entry.common.id,
-                                                                    name: entry.common.name.clone(),
-                                                                    latest_version: entry.common.latest_version,
-                                                                    total_versions_count: entry.common.available_versions.len(),
-                                                                };
-                                                                move |_| {
-                                                                    pending_delete.set(Some(target.clone()));
-                                                                    show_delete_dialog.set(true);
+                                                                td { "{mfg_display}" }
+                                                                td { title: "{desc_title}", class: "text-muted small", "{desc_short}" }
+                                                                td { "{nd_display}" }
+                                                                td {
+                                                                    span { class: "badge bg-secondary", "{ver_display}" }
                                                                 }
-                                                            },
-                                                            Icon { icon: FaTrash }
+                                                                td { class: "text-end",
+                                                                    div { class: "d-inline-flex justify-content-end gap-1",
+                                                                        if let Some(select_handler) = on_select {
+                                                                            Button {
+                                                                                title: "Select this material for the current node",
+                                                                                variant: ButtonVariant::Primary,
+                                                                                onclick: {
+                                                                                    let id = entry.common.id;
+                                                                                    let version = entry.common.latest_version;
+                                                                                    move |_| {
+                                                                                        if let Ok(loaded) = registry
+                                                                                            .read()
+                                                                                            .load_from(preferred_source, id, Some(version))
+                                                                                        {
+                                                                                            select_handler.call(loaded);
+                                                                                            open.set(false);
+                                                                                        }
+                                                                                    }
+                                                                                },
+                                                                                Icon { icon: FaCheck }
+                                                                                "Select"
+                                                                            }
+                                                                        } else {
+                                                                            Button {
+                                                                                title: "{edit_title}",
+                                                                                onclick: {
+                                                                                    let id = entry.common.id;
+                                                                                    move |_| on_edit_material.call(id)
+                                                                                },
+                                                                                Icon { icon: FaPencil }
+                                                                            }
+                                                                            if *is_usr {
+                                                                                Button {
+                                                                                    title: "Delete latest version from user catalog",
+                                                                                    variant: ButtonVariant::Destructive,
+                                                                                    onclick: {
+                                                                                        let target = DeleteTarget {
+                                                                                            id: entry.common.id,
+                                                                                            name: entry.common.name.clone(),
+                                                                                            latest_version: entry.common.latest_version,
+                                                                                            total_versions_count: entry.common.available_versions.len(),
+                                                                                        };
+                                                                                        move |_| {
+                                                                                            pending_delete.set(Some(target.clone()));
+                                                                                            show_delete_dialog.set(true);
+                                                                                        }
+                                                                                    },
+                                                                                    Icon { icon: FaTrash }
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
                                                         }
                                                     }
                                                 }
-                                            }
-                                        }
-                                        if filtered_entries.read().is_empty() {
-                                            tr {
-                                                td {
-                                                    colspan: 6,
-                                                    class: "text-center text-muted py-4",
-                                                    "No materials found matching the current filters."
+                                            } else {
+                                                tr {
+                                                    td {
+                                                        colspan: "7",
+                                                        class: "text-center text-muted py-4",
+                                                        "No materials found matching the current filters."
+                                                    }
                                                 }
                                             }
                                         }
@@ -385,7 +460,6 @@ pub fn MaterialCatalog(
             }
         }
 
-        // 2. Material Editor Dialog (only mounted when in Management Mode)
         if !is_select_mode {
             MaterialEditor {
                 open: open_materialeditor,
@@ -396,30 +470,14 @@ pub fn MaterialCatalog(
             }
         }
 
-        // 3. Deletion Confirmation Dialog
         AlertDialog {
             open: show_delete_dialog(),
-            on_open_change: move |open: bool| {
-                show_delete_dialog.set(open);
+            on_open_change: move |open_val: bool| {
+                show_delete_dialog.set(open_val);
             },
             AlertDialogContent {
-                AlertDialogTitle { "Delete Material Version" }
-                AlertDialogDescription {
-                    if let Some(target) = pending_delete.read().as_ref() {
-                        if target.total_versions_count <= 1 {
-                            p { class: "text-danger fw-bold mb-1",
-                                "⚠️ Warning: This is the only version of '{target.name}'."
-                            }
-                            p { class: "mb-0",
-                                "Deleting version v{target.latest_version} will permanently remove the entire material from the catalog. Are you sure you want to proceed?"
-                            }
-                        } else {
-                            p { class: "mb-0",
-                                "Are you sure you want to delete the latest version (v{target.latest_version}) of '{target.name}'? The material will revert to v{target.latest_version - 1}."
-                            }
-                        }
-                    }
-                }
+                AlertDialogTitle { "Delete User Material Version" }
+                AlertDialogDescription { "{delete_prompt_text}" }
                 AlertDialogActions {
                     AlertDialogCancel { on_click: handle_cancel_delete, "Cancel" }
                     AlertDialogAction { on_click: handle_confirm_delete, "Delete Version" }

@@ -127,11 +127,12 @@ pub fn collect_files_recursive(dir: &Path) -> OpmResult<Vec<PathBuf>> {
 pub fn clone_repository(remote_url: &str, target_path: &Path) -> OpmResult<()> {
     let normalized_url = normalize_git_url_or_path(remote_url);
     let should_interrupt = AtomicBool::new(false);
-    let mut prepare_clone = gix::prepare_clone(normalized_url.as_str(), target_path).map_err(|e| {
-        OpossumError::Registry(format!(
-            "Failed to prepare clone from {normalized_url}: {e}"
-        ))
-    })?;
+    let mut prepare_clone =
+        gix::prepare_clone(normalized_url.as_str(), target_path).map_err(|e| {
+            OpossumError::Registry(format!(
+                "Failed to prepare clone from {normalized_url}: {e}"
+            ))
+        })?;
     let (mut prepare_checkout, _fetch_outcome) = prepare_clone
         .fetch_then_checkout(Discard, &should_interrupt)
         .map_err(|e| {
@@ -216,9 +217,7 @@ fn remove_empty_dirs_recursive(root_dir: &Path, current_dir: &Path) -> OpmResult
                 continue;
             }
             remove_empty_dirs_recursive(root_dir, &path)?;
-            let is_empty = fs::read_dir(&path)
-                .map(|mut it| it.next().is_none())
-                .unwrap_or(false);
+            let is_empty = fs::read_dir(&path).is_ok_and(|mut it| it.next().is_none());
             if is_empty && path != root_dir {
                 fs::remove_dir(&path).map_err(|e| {
                     OpossumError::Registry(format!(

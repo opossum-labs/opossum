@@ -1,5 +1,6 @@
 //! High-level asset registry facade managing both the shared official catalog (`official/`)
 //! and the local user catalog (`user/`).
+
 use crate::{
     index::{AssetIndex, IndexEntry, IndexableAsset},
     loader::AssetLoader,
@@ -163,11 +164,37 @@ impl<T: IndexableAsset> AssetRegistry<T> {
         Ok(official_count + user_count)
     }
 
+    /// Prepares an editable draft (`version = 0`) targeting the user catalog:
+    /// - If `id` belongs to the `Official` catalog, clones the asset with a brand-new UUID
+    ///   so official UUIDs never collide with user catalog assets.
+    /// - If `id` belongs to the `User` catalog, preserves the existing UUID and resets
+    ///   `version = 0` so publishing creates the next incremental version (`v2`, `v3`, ...).
+    ///
+    /// # Errors
+    /// Returns an error if `id` is not found in either catalog or cannot be loaded.
+    pub fn prepare_user_draft(&self, id: Uuid, version: Option<u32>) -> OpmResult<T> {
+        if self.is_official(id) {
+            let mut forked: T = self.official_loader.load(id, version)?;
+            forked.header_mut().id = Uuid::new_v4();
+            forked.header_mut().version = 0;
+            Ok(forked)
+        } else if self.in_user_catalog(id) {
+            let mut next_ver_draft: T = self.user_loader.load(id, version)?;
+            next_ver_draft.header_mut().version = 0;
+            Ok(next_ver_draft)
+        } else {
+            Err(OpossumError::Registry(format!(
+                "Cannot prepare user draft: asset UUID {id} not found in official or user catalog"
+            )))
+        }
+    }
+
     /// Publishes an asset draft into the user catalog (`<root>/user`), updates the user index,
     /// and commits locally to the user catalog's `main` branch.
     ///
     /// # Errors
-    /// Returns an error if writing, indexing, or local Git commit fails.
+    /// Returns an error if the asset UUID collides with an official catalog asset,
+    /// or if writing, indexing, or local Git commit fails.
     pub fn publish(&mut self, asset: &mut T) -> OpmResult<PathBuf> {
         self.publish_to(CatalogSource::User, asset)
     }
@@ -175,9 +202,20 @@ impl<T: IndexableAsset> AssetRegistry<T> {
     /// Publishes an asset draft to the target catalog (`User` or `Official`), updates its index,
     /// and commits to that repository's `main` branch if initialized.
     ///
+    /// Enforces the invariant that an asset sharing a UUID with an `Official` catalog entry
+    /// cannot be published into `CatalogSource::User`.
+    ///
     /// # Errors
-    /// Returns an error if writing, indexing, or Git commit fails.
+    /// Returns an error if invariant validation, writing, indexing, or Git commit fails.
     pub fn publish_to(&mut self, source: CatalogSource, asset: &mut T) -> OpmResult<PathBuf> {
+        if source == CatalogSource::User && self.is_official(asset.id()) {
+            return Err(OpossumError::Registry(format!(
+                "Cannot publish asset '{}' ({}) into user catalog: UUID belongs to the official catalog. Fork it first via prepare_user_draft or copy_to_user_catalog.",
+                asset.name(),
+                asset.id()
+            )));
+        }
+
         let (loader, index) = match source {
             CatalogSource::Official => (&self.official_loader, &mut self.official_index),
             CatalogSource::User => (&self.user_loader, &mut self.user_index),
@@ -215,8 +253,7 @@ impl<T: IndexableAsset> AssetRegistry<T> {
         version: Option<u32>,
         new_name: Option<String>,
     ) -> OpmResult<T> {
-        let source_loader = self.loader_for(source);
-        let mut copied: T = source_loader.load(id, version)?;
+        let mut copied: T = self.loader_for(source).load(id, version)?;
         copied.header_mut().id = Uuid::new_v4();
         copied.header_mut().version = 0;
         if let Some(name) = new_name {
@@ -252,19 +289,25 @@ impl<T: IndexableAsset> AssetRegistry<T> {
 
     /// Deletes the latest version of an asset from the specified catalog source and updates its index.
     ///
+    /// Deleting from `CatalogSource::Official` is forbidden because the official catalog
+    /// is read-only/synchronized from upstream.
+    ///
     /// # Errors
-    /// Returns an error if file deletion or index reversion fails.
+    /// Returns an error if attempting to delete from `CatalogSource::Official`,
+    /// or if file deletion or index reversion fails.
     pub fn delete_latest_version_from(
         &mut self,
         source: CatalogSource,
         id: Uuid,
     ) -> OpmResult<Option<u32>> {
-        let (loader, index) = match source {
-            CatalogSource::Official => (&self.official_loader, &mut self.official_index),
-            CatalogSource::User => (&self.user_loader, &mut self.user_index),
-        };
-        let remaining_latest = loader.delete_latest_version::<T>(id)?;
-        index.remove_or_revert_entry(id, remaining_latest, loader)?;
+        if source == CatalogSource::Official {
+            return Err(OpossumError::Registry(format!(
+                "Cannot delete asset {id} from official catalog: official assets are read-only."
+            )));
+        }
+        let remaining_latest = self.user_loader.delete_latest_version::<T>(id)?;
+        self.user_index
+            .remove_or_revert_entry(id, remaining_latest, &self.user_loader)?;
         Ok(remaining_latest)
     }
 
@@ -292,157 +335,160 @@ impl<T: IndexableAsset> AssetRegistry<T> {
         entries
     }
 }
-#[cfg(test)]
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod dual_catalog_tests {
     use super::*;
-    use crate::sync::{DEFAULT_BRANCH, DEFAULT_CATALOG_REMOTE_URL, RegistrySync};
-    use opossum_core::error::{OpmResult, OpossumError};
-    use opossum_core::material::Material;
-    use opossum_core::refractive_index::RefrIndexConst;
+    use crate::{
+        asset::RegisterableAsset,
+        sync::{DEFAULT_BRANCH, RegistrySync},
+    };
+    use gix::objs::{
+        Commit, Tree,
+        tree::{Entry, EntryKind},
+    };
+    use opossum_core::{material::Material, refractive_index::RefrIndexConst};
     use std::fs;
-    use std::path::Path;
     use tempfile::TempDir;
 
-    /// Helper to write a Git tree recursively for a temporary remote repository.
+    /// Recursively writes a directory tree (excluding `.git`) into `repo` and returns the root tree OID.
     fn write_test_tree(repo: &gix::Repository, dir: &Path) -> OpmResult<gix::ObjectId> {
         let mut entries = Vec::new();
-        let dir_entries = fs::read_dir(dir)
-            .map_err(|e| OpossumError::Registry(format!("Failed to read test dir: {e}")))?;
+        let read_dir = fs::read_dir(dir).map_err(|e| OpossumError::Registry(e.to_string()))?;
 
-        for entry_res in dir_entries {
-            let entry = entry_res
-                .map_err(|e| OpossumError::Registry(format!("Failed to read entry: {e}")))?;
-            if entry.file_name() == ".git" {
-                continue;
-            }
+        for entry_res in read_dir {
+            let entry = entry_res.map_err(|e| OpossumError::Registry(e.to_string()))?;
             let path = entry.path();
             let file_name = entry.file_name().to_string_lossy().to_string();
+            if file_name == ".git" {
+                continue;
+            }
             if path.is_dir() {
-                let subtree_id = write_test_tree(repo, &path)?;
-                entries.push(gix::objs::tree::Entry {
-                    mode: gix::objs::tree::EntryKind::Tree.into(),
+                let child_oid = write_test_tree(repo, &path)?;
+                entries.push(Entry {
+                    mode: EntryKind::Tree.into(),
                     filename: file_name.into(),
-                    oid: subtree_id,
+                    oid: child_oid,
                 });
             } else if path.is_file() {
-                let bytes = fs::read(&path)
-                    .map_err(|e| OpossumError::Registry(format!("Failed to read file: {e}")))?;
-                let blob_id = repo
+                let bytes = fs::read(&path).map_err(|e| OpossumError::Registry(e.to_string()))?;
+                let blob_oid = repo
                     .write_blob(&bytes)
-                    .map_err(|e| OpossumError::Registry(format!("Failed to write blob: {e}")))?
+                    .map_err(|e| OpossumError::Registry(e.to_string()))?
                     .detach();
-                entries.push(gix::objs::tree::Entry {
-                    mode: gix::objs::tree::EntryKind::Blob.into(),
+                entries.push(Entry {
+                    mode: EntryKind::Blob.into(),
                     filename: file_name.into(),
-                    oid: blob_id,
+                    oid: blob_oid,
                 });
             }
         }
 
-        entries.sort_by(|a, b| {
-            let a_name = if a.mode == gix::objs::tree::EntryKind::Tree.into() {
-                format!("{}/", a.filename)
-            } else {
-                a.filename.to_string()
-            };
-            let b_name = if b.mode == gix::objs::tree::EntryKind::Tree.into() {
-                format!("{}/", b.filename)
-            } else {
-                b.filename.to_string()
-            };
-            a_name.cmp(&b_name)
-        });
-
-        let tree = gix::objs::Tree { entries };
-        let tree_id = repo
+        entries.sort();
+        let tree = Tree { entries };
+        let tree_oid = repo
             .write_object(&tree)
-            .map_err(|e| OpossumError::Registry(format!("Failed to write tree: {e}")))?
+            .map_err(|e| OpossumError::Registry(e.to_string()))?
             .detach();
-        Ok(tree_id)
+        Ok(tree_oid)
     }
 
-    /// Creates a simulated remote repository with an initial commit on `refs/heads/main`.
-    fn init_test_remote(remote_dir: &Path) -> OpmResult<(Uuid, Uuid)> {
-        let repo = gix::init(remote_dir)
+    /// Initializes a local Git remote repository with two official materials (`N-BK7` and `SF11`) on `main`.
+    fn init_test_remote(remote_path: &Path) -> OpmResult<(Uuid, Uuid)> {
+        let repo = gix::init(remote_path)
             .map_err(|e| OpossumError::Registry(format!("Failed to init remote repo: {e}")))?;
-        fs::write(
-            repo.git_dir().join("HEAD"),
-            format!("ref: refs/heads/{DEFAULT_BRANCH}\n"),
-        )
-        .map_err(|e| OpossumError::Registry(format!("Failed to set remote HEAD: {e}")))?;
+        let head_file = remote_path.join(".git").join("HEAD");
+        fs::write(&head_file, format!("ref: refs/heads/{DEFAULT_BRANCH}\n"))
+            .map_err(|e| OpossumError::Registry(format!("Failed to write HEAD: {e}")))?;
 
-        let remote_loader = AssetLoader::new(remote_dir);
+        let loader = AssetLoader::new(remote_path);
         let mut mat_a = Material::new_draft(
             "N-BK7",
             Some("Schott".to_string()),
-            Some("Official crown glass".to_string()),
+            Some("Standard borosilicate crown glass".to_string()),
             RefrIndexConst::new(1.5168)?.into(),
         );
-        let id_a = mat_a.id();
-        remote_loader.publish(&mut mat_a)?;
+        loader.publish(&mut mat_a)?;
 
         let mut mat_b = Material::new_draft(
-            "B270",
+            "SF11",
             Some("Schott".to_string()),
-            Some("Official plate glass".to_string()),
-            RefrIndexConst::new(1.5230)?.into(),
+            Some("Dense flint glass".to_string()),
+            RefrIndexConst::new(1.7847)?.into(),
         );
-        let id_b = mat_b.id();
-        remote_loader.publish(&mut mat_b)?;
+        loader.publish(&mut mat_b)?;
 
-        let tree_id = write_test_tree(&repo, remote_dir)?;
+        let tree_id = write_test_tree(&repo, remote_path)?;
         let sig = gix::actor::Signature {
             name: "Test Maintainer".into(),
-            email: "test@opossum.local".into(),
+            email: "maintainer@opossum.local".into(),
             time: gix::date::Time::now_local_or_utc(),
         };
-        let commit = gix::objs::Commit {
+        let commit = Commit {
             tree: tree_id,
             parents: Default::default(),
             author: sig.clone(),
             committer: sig,
             encoding: None,
-            message: "Initial official catalog".into(),
+            message: "Initial official catalog commit".into(),
             extra_headers: Vec::new(),
         };
         let commit_id = repo
             .write_object(&commit)
             .map_err(|e| OpossumError::Registry(format!("Failed to write commit: {e}")))?
             .detach();
-
         let ref_name = format!("refs/heads/{DEFAULT_BRANCH}");
         repo.reference(
             ref_name.as_str(),
             commit_id,
             gix::refs::transaction::PreviousValue::Any,
-            "test: initial main commit",
+            "test: initial commit",
         )
-        .map_err(|e| OpossumError::Registry(format!("Failed to create main ref: {e}")))?;
+        .map_err(|e| OpossumError::Registry(format!("Failed to create branch ref: {e}")))?;
 
-        Ok((id_a, id_b))
+        let mut index = repo
+            .index_from_tree(&tree_id)
+            .map_err(|e| OpossumError::Registry(format!("Failed to build index: {e}")))?;
+        index
+            .write(gix::index::write::Options::default())
+            .map_err(|e| OpossumError::Registry(format!("Failed to write index: {e}")))?;
+
+        Ok((mat_a.id(), mat_b.id()))
     }
 
     #[test]
     fn test_dual_catalog_initialization_and_main_branch() -> OpmResult<()> {
-        let temp_dir = TempDir::new().map_err(|e| OpossumError::Registry(e.to_string()))?;
-        let registry = AssetRegistry::<Material>::new(temp_dir.path())?;
+        let reg_dir = TempDir::new().map_err(|e| OpossumError::Registry(e.to_string()))?;
+        let mut registry =
+            AssetRegistry::<Material>::with_official_remote(reg_dir.path(), Some(""))?;
 
-        // Both official and user subdirectories must exist
-        assert!(registry.official_path().exists());
-        assert!(registry.user_path().exists());
+        assert!(registry.official_path().join(".git").exists());
+        assert!(registry.user_path().join(".git").exists());
 
-        // Both repositories must point HEAD to refs/heads/main
         let official_head = fs::read_to_string(registry.official_path().join(".git/HEAD"))
             .map_err(|e| OpossumError::Registry(e.to_string()))?;
         let user_head = fs::read_to_string(registry.user_path().join(".git/HEAD"))
             .map_err(|e| OpossumError::Registry(e.to_string()))?;
-        assert_eq!(official_head.trim(), "ref: refs/heads/main");
-        assert_eq!(user_head.trim(), "ref: refs/heads/main");
+        assert_eq!(
+            official_head.trim(),
+            format!("ref: refs/heads/{DEFAULT_BRANCH}")
+        );
+        assert_eq!(
+            user_head.trim(),
+            format!("ref: refs/heads/{DEFAULT_BRANCH}")
+        );
 
-        // Official catalog must default to DEFAULT_CATALOG_REMOTE_URL
-        let official_cfg = fs::read_to_string(registry.official_path().join(".git/config"))
-            .map_err(|e| OpossumError::Registry(e.to_string()))?;
-        assert!(official_cfg.contains(DEFAULT_CATALOG_REMOTE_URL));
+        let mut custom = Material::new_draft(
+            "Custom Glass",
+            Some("Lab".to_string()),
+            None,
+            RefrIndexConst::new(1.6000)?.into(),
+        );
+        registry.publish(&mut custom)?;
+
+        assert!(registry.in_user_catalog(custom.id()));
+        assert!(!registry.is_official(custom.id()));
+        assert_eq!(custom.version(), 1);
         Ok(())
     }
 
@@ -523,7 +569,6 @@ mod dual_catalog_tests {
             email: "test@opossum.local".into(),
             time: gix::date::Time::now_local_or_utc(),
         };
-        // Orphan/divergent commit to force non-fast-forward alignment
         let migrated_commit = gix::objs::Commit {
             tree: new_tree_id,
             parents: Default::default(),
@@ -561,6 +606,86 @@ mod dual_catalog_tests {
         assert_eq!(registry.official_index().len(), 1);
         let entry_a = registry.official_index().get(&id_a).expect("id_a present");
         assert_eq!(entry_a.specific.nd, Some(1.5200));
+        Ok(())
+    }
+
+    #[test]
+    fn test_prepare_user_draft_forks_official_and_increments_user_version() -> OpmResult<()> {
+        let remote_dir = TempDir::new().map_err(|e| OpossumError::Registry(e.to_string()))?;
+        let (official_id, _) = init_test_remote(remote_dir.path())?;
+
+        let reg_dir = TempDir::new().map_err(|e| OpossumError::Registry(e.to_string()))?;
+        let remote_url = remote_dir.path().to_string_lossy().to_string();
+        let mut registry =
+            AssetRegistry::<Material>::with_official_remote(reg_dir.path(), Some(&remote_url))?;
+
+        // 1. Preparing a draft from an official material must generate a new UUID and version 0
+        let mut forked_draft = registry.prepare_user_draft(official_id, None)?;
+        assert_ne!(forked_draft.id(), official_id);
+        assert_eq!(forked_draft.version(), 0);
+
+        let user_id = forked_draft.id();
+        registry.publish(&mut forked_draft)?;
+        assert_eq!(forked_draft.version(), 1);
+        assert!(registry.is_official(official_id));
+        assert!(registry.in_user_catalog(user_id));
+
+        // 2. Preparing a draft from a user material must keep the SAME UUID and reset version to 0
+        let mut next_ver_draft = registry.prepare_user_draft(user_id, None)?;
+        assert_eq!(next_ver_draft.id(), user_id);
+        assert_eq!(next_ver_draft.version(), 0);
+
+        next_ver_draft.optical.refractive_index = RefrIndexConst::new(1.5500)?.into();
+        registry.publish(&mut next_ver_draft)?;
+        assert_eq!(next_ver_draft.version(), 2);
+
+        let user_entry = registry
+            .user_index()
+            .get(&user_id)
+            .expect("user material indexed");
+        assert_eq!(user_entry.common.latest_version, 2);
+        assert_eq!(user_entry.common.available_versions, vec![1, 2]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_publish_to_user_rejects_official_uuid() -> OpmResult<()> {
+        let remote_dir = TempDir::new().map_err(|e| OpossumError::Registry(e.to_string()))?;
+        let (official_id, _) = init_test_remote(remote_dir.path())?;
+
+        let reg_dir = TempDir::new().map_err(|e| OpossumError::Registry(e.to_string()))?;
+        let remote_url = remote_dir.path().to_string_lossy().to_string();
+        let mut registry =
+            AssetRegistry::<Material>::with_official_remote(reg_dir.path(), Some(&remote_url))?;
+
+        let mut collision_draft = registry.load_from(CatalogSource::Official, official_id, None)?;
+        collision_draft.header_mut().version = 0;
+
+        let res = registry.publish_to(CatalogSource::User, &mut collision_draft);
+        assert!(
+            res.is_err(),
+            "Publishing an official UUID into the user catalog must fail"
+        );
+        assert!(!registry.in_user_catalog(official_id));
+        Ok(())
+    }
+
+    #[test]
+    fn test_delete_from_official_catalog_is_forbidden() -> OpmResult<()> {
+        let remote_dir = TempDir::new().map_err(|e| OpossumError::Registry(e.to_string()))?;
+        let (official_id, _) = init_test_remote(remote_dir.path())?;
+
+        let reg_dir = TempDir::new().map_err(|e| OpossumError::Registry(e.to_string()))?;
+        let remote_url = remote_dir.path().to_string_lossy().to_string();
+        let mut registry =
+            AssetRegistry::<Material>::with_official_remote(reg_dir.path(), Some(&remote_url))?;
+
+        let del_res = registry.delete_latest_version_from(CatalogSource::Official, official_id);
+        assert!(
+            del_res.is_err(),
+            "Deleting an asset from the official catalog must be forbidden"
+        );
+        assert!(registry.is_official(official_id));
         Ok(())
     }
 }

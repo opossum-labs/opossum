@@ -3,19 +3,17 @@ mod commit;
 mod config;
 mod utils;
 
-pub use commit::commit_asset_file;
 use self::{
     commit::upsert_path_in_tree,
-    config::{
-        ensure_committer_configured, ensure_head_points_to_main, ensure_remote_configured,
-    },
+    config::{ensure_committer_configured, ensure_head_points_to_main, ensure_remote_configured},
     utils::{
         checkout_worktree, clone_repository, collect_files_recursive, directory_contains_assets,
         format_error_chain, is_asset_file, is_directory_empty, open_registry_repo,
         resolve_signature,
     },
 };
-use gix::{objs::Commit, progress::Discard, remote::Direction};
+pub use commit::commit_asset_file;
+use gix::{Repository, objs::Commit, progress::Discard, remote::Direction};
 use opossum_core::error::{OpmResult, OpossumError};
 use std::{fs, path::PathBuf, sync::atomic::AtomicBool};
 
@@ -132,73 +130,75 @@ impl RegistrySync {
 
         // 4. Create initial commit on `main` if existing assets are present on disk
         if directory_contains_assets(&self.local_path) {
-            let files = collect_files_recursive(&self.local_path)?;
-            let mut root_tree_oid = None;
-            for file_path in files {
-                if let Ok(rel_path) = file_path.strip_prefix(&self.local_path)
-                    && is_asset_file(rel_path)
-                {
-                    let rel_path_str = rel_path.to_string_lossy().replace('\\', "/");
-                    let segments: Vec<&str> = rel_path_str
-                        .split('/')
-                        .filter(|segment| !segment.is_empty())
-                        .collect();
-                    if let Ok(file_bytes) = fs::read(&file_path)
-                        && let Ok(blob) = repo.write_blob(&file_bytes)
-                    {
-                        root_tree_oid = Some(upsert_path_in_tree(
-                            &repo,
-                            root_tree_oid,
-                            &segments,
-                            blob.detach(),
-                        )?);
-                    }
-                }
-            }
-            if let Some(tree_oid) = root_tree_oid {
-                let author = resolve_signature(&repo);
-                let committer = author.clone();
-                let commit = Commit {
-                    tree: tree_oid,
-                    #[allow(clippy::default_trait_access)]
-                    parents: Default::default(),
-                    author,
-                    committer,
-                    encoding: None,
-                    message: "Initial catalog commit: import existing assets".into(),
-                    extra_headers: Vec::new(),
-                };
-                let commit_id = repo
-                    .write_object(&commit)
-                    .map_err(|e| {
-                        OpossumError::Registry(format!("Failed to write initial commit: {e}"))
-                    })?
-                    .detach();
-                let local_ref_name = format!("refs/heads/{DEFAULT_BRANCH}");
-                repo.reference(
-                    local_ref_name.as_str(),
-                    commit_id,
-                    gix::refs::transaction::PreviousValue::MustNotExist,
-                    "registry: initial main branch setup",
-                )
-                .map_err(|e| {
-                    OpossumError::Registry(format!("Failed to create branch '{DEFAULT_BRANCH}': {e}"))
-                })?;
-                let mut index = repo.index_from_tree(&tree_oid).map_err(|e| {
-                    OpossumError::Registry(format!("Failed to build initial index: {e}"))
-                })?;
-                index
-                    .write(gix::index::write::Options::default())
-                    .map_err(|e| {
-                        OpossumError::Registry(format!("Failed to write initial index: {e}"))
-                    })?;
-            }
+            self.commit_existing_assets(&repo)?;
         }
 
         // 5. Ensure `origin` remote is configured for official catalogs
         if self.role == CatalogRole::Official && !self.remote_url.trim().is_empty() {
             ensure_remote_configured(&self.local_path, &self.remote_url)?;
         }
+        Ok(())
+    }
+
+    fn commit_existing_assets(&self, repo: &Repository) -> OpmResult<()> {
+        let files = collect_files_recursive(&self.local_path)?;
+        let mut root_tree_oid = None;
+        for file_path in files {
+            if let Ok(rel_path) = file_path.strip_prefix(&self.local_path)
+                && is_asset_file(rel_path)
+            {
+                let rel_path_str = rel_path.to_string_lossy().replace('\\', "/");
+                let segments: Vec<&str> = rel_path_str
+                    .split('/')
+                    .filter(|segment| !segment.is_empty())
+                    .collect();
+                if let Ok(file_bytes) = fs::read(&file_path)
+                    && let Ok(blob) = repo.write_blob(&file_bytes)
+                {
+                    root_tree_oid = Some(upsert_path_in_tree(
+                        repo,
+                        root_tree_oid,
+                        &segments,
+                        blob.detach(),
+                    )?);
+                }
+            }
+        }
+        let Some(tree_oid) = root_tree_oid else {
+            return Ok(());
+        };
+        let author = resolve_signature(repo);
+        let committer = author.clone();
+        let commit = Commit {
+            tree: tree_oid,
+            #[allow(clippy::default_trait_access)]
+            parents: Default::default(),
+            author,
+            committer,
+            encoding: None,
+            message: "Initial catalog commit: import existing assets".into(),
+            extra_headers: Vec::new(),
+        };
+        let commit_id = repo
+            .write_object(&commit)
+            .map_err(|e| OpossumError::Registry(format!("Failed to write initial commit: {e}")))?
+            .detach();
+        let local_ref_name = format!("refs/heads/{DEFAULT_BRANCH}");
+        repo.reference(
+            local_ref_name.as_str(),
+            commit_id,
+            gix::refs::transaction::PreviousValue::MustNotExist,
+            "registry: initial main branch setup",
+        )
+        .map_err(|e| {
+            OpossumError::Registry(format!("Failed to create branch '{DEFAULT_BRANCH}': {e}"))
+        })?;
+        let mut index = repo
+            .index_from_tree(&tree_oid)
+            .map_err(|e| OpossumError::Registry(format!("Failed to build initial index: {e}")))?;
+        index
+            .write(gix::index::write::Options::default())
+            .map_err(|e| OpossumError::Registry(format!("Failed to write initial index: {e}")))?;
         Ok(())
     }
 
@@ -277,9 +277,7 @@ impl RegistrySync {
             repo.reference(
                 local_ref_name.as_str(),
                 remote_commit_id.detach(),
-                gix::refs::transaction::PreviousValue::MustExistAndMatch(
-                    local_cid.detach().into(),
-                ),
+                gix::refs::transaction::PreviousValue::MustExistAndMatch(local_cid.detach().into()),
                 reason,
             )
             .map_err(|e| {
@@ -287,7 +285,6 @@ impl RegistrySync {
                     "Failed to update local '{DEFAULT_BRANCH}' branch: {e}"
                 ))
             })?;
-            checkout_worktree(&repo, remote_commit_id)?;
         } else {
             repo.reference(
                 local_ref_name.as_str(),
@@ -296,10 +293,12 @@ impl RegistrySync {
                 "registry: initial checkout from origin/main",
             )
             .map_err(|e| {
-                OpossumError::Registry(format!("Failed to initialize '{DEFAULT_BRANCH}' branch: {e}"))
+                OpossumError::Registry(format!(
+                    "Failed to initialize '{DEFAULT_BRANCH}' branch: {e}"
+                ))
             })?;
-            checkout_worktree(&repo, remote_commit_id)?;
         }
+        checkout_worktree(&repo, remote_commit_id)?;
         Ok(())
     }
 }

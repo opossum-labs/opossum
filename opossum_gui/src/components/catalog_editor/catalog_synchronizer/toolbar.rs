@@ -20,20 +20,28 @@ pub struct CatalogToolbarProps {
     pub total_count: usize,
     /// Number of assets that are outdated compared to the catalog.
     pub outdated_count: usize,
-    /// Number of regular assets missing in the catalog.
+    /// Number of regular assets missing in both catalogs.
     pub missing_regular_count: usize,
     /// Number of ad-hoc draft assets in the model.
     pub adhoc_count: usize,
+    /// Number of assets with a user catalog conflict.
+    pub conflict_count: usize,
+    /// Number of official assets recommending a pull of the official catalog.
+    pub official_sync_count: usize,
     /// Callback triggered when the user initiates a batch update of outdated assets.
     pub on_update_all: EventHandler<()>,
-    /// Callback triggered when the user initiates a batch import of missing regular assets.
+    /// Callback triggered when the user initiates a batch import of missing regular assets into user catalog.
     pub on_import_all: EventHandler<()>,
 }
 
 /// Renders the toolbar containing category pills, status filter dropdown, search input, and batch buttons.
 #[component]
 pub fn CatalogToolbar(mut props: CatalogToolbarProps) -> Element {
-    let needs_action_count = props.outdated_count + props.missing_regular_count + props.adhoc_count;
+    let needs_action_count = props.outdated_count
+        + props.missing_regular_count
+        + props.adhoc_count
+        + props.conflict_count
+        + props.official_sync_count;
     let missing_total_count = props.missing_regular_count + props.adhoc_count;
 
     rsx! {
@@ -72,6 +80,7 @@ pub fn CatalogToolbar(mut props: CatalogToolbarProps) -> Element {
                         StatusFilter::Outdated => "outdated",
                         StatusFilter::Missing => "missing",
                         StatusFilter::AdHocOnly => "adhoc",
+                        StatusFilter::ConflictsOnly => "conflicts",
                         StatusFilter::UpToDate => "uptodate",
                     },
                     onchange: move |e| {
@@ -80,6 +89,7 @@ pub fn CatalogToolbar(mut props: CatalogToolbarProps) -> Element {
                             "outdated" => StatusFilter::Outdated,
                             "missing" => StatusFilter::Missing,
                             "adhoc" => StatusFilter::AdHocOnly,
+                            "conflicts" => StatusFilter::ConflictsOnly,
                             "uptodate" => StatusFilter::UpToDate,
                             _ => StatusFilter::All,
                         };
@@ -88,8 +98,9 @@ pub fn CatalogToolbar(mut props: CatalogToolbarProps) -> Element {
                     option { value: "all", "All Statuses" }
                     option { value: "needs_action", "Needs Action ({needs_action_count})" }
                     option { value: "outdated", "Outdated in Model ({props.outdated_count})" }
-                    option { value: "missing", "Missing in Catalog ({missing_total_count})" }
+                    option { value: "missing", "Missing in Catalogs ({missing_total_count})" }
                     option { value: "adhoc", "Ad-Hoc Drafts ({props.adhoc_count})" }
+                    option { value: "conflicts", "User Conflicts ({props.conflict_count})" }
                     option { value: "uptodate", "Up to date" }
                 }
             }
@@ -111,7 +122,7 @@ pub fn CatalogToolbar(mut props: CatalogToolbarProps) -> Element {
                     Button {
                         variant: ButtonVariant::Primary,
                         size: ButtonSize::Sm,
-                        title: "Update all outdated materials to the latest catalog version",
+                        title: "Update all outdated materials to their latest catalog versions",
                         onclick: move |_| props.on_update_all.call(()),
                         Icon { icon: FaCloudArrowDown }
                         "Update All ({props.outdated_count})"
@@ -121,10 +132,10 @@ pub fn CatalogToolbar(mut props: CatalogToolbarProps) -> Element {
                     Button {
                         variant: ButtonVariant::Success,
                         size: ButtonSize::Sm,
-                        title: "Import all missing regular materials into the local catalog",
+                        title: "Import all missing regular materials into the user catalog",
                         onclick: move |_| props.on_import_all.call(()),
                         Icon { icon: FaCloudArrowUp }
-                        "Import All ({props.missing_regular_count})"
+                        "Import All to User ({props.missing_regular_count})"
                     }
                 }
             }
