@@ -80,7 +80,7 @@ pub struct RaysHitMap {
 impl RaysHitMap {
     /// Creates a new [`RaysHitMap`] of the given hits, which follow no ray tubes.
     #[must_use]
-    pub fn new(hit_points: Vec<HitPoint>) -> Self {
+    pub const fn new(hit_points: Vec<HitPoint>) -> Self {
         Self {
             hit_points,
             meshes: Vec::new(),

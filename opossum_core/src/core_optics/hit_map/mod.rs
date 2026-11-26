@@ -697,7 +697,7 @@ mod test_hit_map {
         // the sum at the origin of the kernels of 1 J hits around it, in J/m²
         let at_origin = |hits: &[Point3<Length>]| {
             let n = crate::utils::to_f64(hits.len());
-            let squared = |p: &Point3<Length>| p.x.value.powi(2) + p.y.value.powi(2);
+            let squared = |p: &Point3<Length>| p.x.value.mul_add(p.x.value, p.y.value.powi(2));
             let spread = hits.iter().map(squared).sum::<f64>() / (2.0 * n);
             let width = (0.9 * spread.sqrt() * n.powf(-0.2)).powi(2);
             hits.iter()
