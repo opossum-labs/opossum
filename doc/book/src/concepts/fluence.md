@@ -133,7 +133,7 @@ As a rule of thumb, some ten rays or more should fall into each cell of the grid
 
 ![A Gaussian beam by KDE from 100, 1000 and 10000 rays](../images/fluence_peak_kde.svg)
 
-*The same beam by KDE, from 100, 1000 and 10000 rays. The kernel follows the spread of the hits, which is that of the whole beam, and narrows only slowly with more rays: the peak comes out 33 %, 17 % and 8 % low.*
+*The same beam by KDE, from 100, 1000 and 10000 rays. The kernel follows the spread of the hits, which is that of the whole beam, and narrows only slowly with more rays: the peak comes out 33 %, 17 % and 7 % low.*
 
 KDE never shows noise, and its peak is a lower bound. A small hot spot in a large beam suffers most, as the kernel is set by the large beam.
 
