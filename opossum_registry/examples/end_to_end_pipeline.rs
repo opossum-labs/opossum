@@ -1,7 +1,3 @@
-use std::path::Path;
-use tempfile::TempDir;
-
-// Imports from opossum_core
 use opossum_core::{
     analyzers::{AnalyzerType, raytrace::RayTraceConfig},
     error::OpmResult,
@@ -12,9 +8,11 @@ use opossum_core::{
     opm_document::OpmDocument,
     refractive_index::{RefrIndexConst, RefrIndexSellmeier1},
 };
-
-// Imports from opossum_registry
-use opossum_registry::{AssetRegistry, sync::RegistrySync};
+use opossum_registry::{
+    AssetRegistry, CatalogSource, DEFAULT_BRANCH, OFFICIAL_CATALOG_SUBDIR, sync::RegistrySync,
+};
+use std::path::Path;
+use tempfile::TempDir;
 
 /// Recursively traverses a directory, writes blobs for all files, and constructs Git tree objects.
 ///
@@ -26,13 +24,10 @@ fn write_tree_recursive(repo: &gix::Repository, dir: &Path) -> gix::ObjectId {
         .filter_map(|e| e.ok())
         .filter(|e| e.file_name() != ".git")
         .collect();
-
     for entry in dir_entries {
         let path = entry.path();
         let file_name = entry.file_name().to_string_lossy().to_string();
-
         if path.is_dir() {
-            // Recurse into subdirectories
             let subtree_id = write_tree_recursive(repo, &path);
             entries.push(gix::objs::tree::Entry {
                 mode: gix::objs::tree::EntryKind::Tree.into(),
@@ -40,7 +35,6 @@ fn write_tree_recursive(repo: &gix::Repository, dir: &Path) -> gix::ObjectId {
                 oid: subtree_id,
             });
         } else if path.is_file() {
-            // Read file content and write blob object into the Object Database (ODB)
             let data = std::fs::read(&path).expect("Failed to read file");
             let blob_id = repo
                 .write_blob(&data)
@@ -53,8 +47,6 @@ fn write_tree_recursive(repo: &gix::Repository, dir: &Path) -> gix::ObjectId {
             });
         }
     }
-
-    // Git canonical sort order: directory names are sorted as if ending with '/'
     entries.sort_by(|a, b| {
         let a_name = if a.mode == gix::objs::tree::EntryKind::Tree.into() {
             format!("{}/", a.filename)
@@ -68,22 +60,22 @@ fn write_tree_recursive(repo: &gix::Repository, dir: &Path) -> gix::ObjectId {
         };
         a_name.cmp(&b_name)
     });
-
     let tree = gix::objs::Tree { entries };
     repo.write_object(&tree)
         .expect("Failed to write tree")
         .detach()
 }
 
-/// Helper function to simulate a remote Git repository on the local filesystem.
-/// Initializes the repository with a basic README on the `main` branch.
+/// Initializes a simulated remote Git repository on `refs/heads/main`.
 fn setup_dummy_remote(repo_path: &Path) {
     let repo = gix::init(repo_path).expect("Failed to init remote dummy repo");
+    let main_ref = format!("refs/heads/{DEFAULT_BRANCH}");
+    std::fs::write(repo.git_dir().join("HEAD"), format!("ref: {main_ref}\n"))
+        .expect("Failed to point HEAD to main");
+
     let file_path = repo_path.join("README.md");
     std::fs::write(&file_path, "# OPOSSUM Remote Registry\n").expect("Failed to write README.md");
-
     let tree_oid = write_tree_recursive(&repo, repo_path);
-
     let commit = gix::objs::Commit {
         tree: tree_oid,
         parents: Default::default(),
@@ -101,34 +93,23 @@ fn setup_dummy_remote(repo_path: &Path) {
         message: "Initial commit: Registry creation".into(),
         extra_headers: Vec::new(),
     };
-
     let commit_id = repo
         .write_object(&commit)
         .expect("Failed to write initial commit")
         .detach();
-
-    // Create refs/heads/main pointing to initial commit
     repo.reference(
-        "refs/heads/main",
+        main_ref.as_str(),
         commit_id,
         gix::refs::transaction::PreviousValue::Any,
         "Initial commit: Registry creation",
     )
     .expect("Failed to create main branch reference");
-
-    // Ensure HEAD points symbolically to the main branch
-    std::fs::write(repo.git_dir().join("HEAD"), "ref: refs/heads/main\n")
-        .expect("Failed to point HEAD to main");
 }
 
-/// Helper function to simulate a community update on the remote repository.
-/// Creates a new material ("F2"), publishes it to disk, and commits it on `main`.
+/// Simulates a remote catalog update adding material "F2" on `main`.
 fn simulate_remote_catalog_update(repo_path: &Path) -> OpmResult<()> {
     let repo = gix::open(repo_path).expect("Failed to open remote repo");
-    let mut remote_registry =
-        AssetRegistry::<Material>::new(repo_path).expect("Failed to open remote asset registry");
-
-    // Create new material on the "server"
+    let remote_loader = opossum_registry::loader::AssetLoader::new(repo_path);
     let refr_index = RefrIndexConst::new(1.62)?.into();
     let mut f2_mat = Material::new_draft(
         "F2",
@@ -136,22 +117,19 @@ fn simulate_remote_catalog_update(repo_path: &Path) -> OpmResult<()> {
         Some("Flint glass".to_string()),
         refr_index,
     );
-    remote_registry
+    remote_loader
         .publish(&mut f2_mat)
         .expect("Failed to publish F2 remotely");
 
-    // Build the updated tree containing the newly published material files
     let tree_oid = write_tree_recursive(&repo, repo_path);
-
-    // Find parent commit on refs/heads/main
+    let main_ref = format!("refs/heads/{DEFAULT_BRANCH}");
     let parent_ref = repo
-        .find_reference("refs/heads/main")
+        .find_reference(main_ref.as_str())
         .expect("Failed to find main reference");
     let parent_commit_id = parent_ref
         .into_fully_peeled_id()
         .expect("Failed to peel main ref to commit")
         .detach();
-
     let commit = gix::objs::Commit {
         tree: tree_oid,
         parents: vec![parent_commit_id].into(),
@@ -169,15 +147,12 @@ fn simulate_remote_catalog_update(repo_path: &Path) -> OpmResult<()> {
         message: "Add F2 material to catalog".into(),
         extra_headers: Vec::new(),
     };
-
     let commit_id = repo
         .write_object(&commit)
         .expect("Failed to write catalog commit")
         .detach();
-
-    // Fast-forward refs/heads/main to new commit
     repo.reference(
-        "refs/heads/main",
+        main_ref.as_str(),
         commit_id,
         gix::refs::transaction::PreviousValue::MustExistAndMatch(parent_commit_id.into()),
         "Add F2 material to catalog",
@@ -187,115 +162,60 @@ fn simulate_remote_catalog_update(repo_path: &Path) -> OpmResult<()> {
 }
 
 fn main() -> OpmResult<()> {
-    println!("=== OPOSSUM End-to-End Workflow Demonstration ===\n");
+    println!("=== OPOSSUM Dual-Catalog Workflow Demonstration ===\n");
 
-    // -------------------------------------------------------------------------
-    // Phase 0: Setup a local "Remote" Git Repository (Simulating GitHub/GitLab)
-    // -------------------------------------------------------------------------
-    println!("[1/8] Setting up dummy remote repository...");
+    println!("[1/7] Setting up dummy remote repository...");
     let temp_remote_dir = TempDir::new().expect("Failed to create temp remote dir");
     setup_dummy_remote(temp_remote_dir.path());
     let remote_url = temp_remote_dir.path().to_string_lossy().to_string();
-    println!("  -> Remote server simulated at: {}", remote_url);
 
-    // -------------------------------------------------------------------------
-    // Phase 1: Clone registry from "Remote" and initialize AssetRegistry
-    // -------------------------------------------------------------------------
-    println!("\n[2/8] Cloning registry via RegistrySync...");
+    println!("\n[2/7] Initializing dual-catalog AssetRegistry (official + user)...");
     let temp_registry_dir = TempDir::new().expect("Failed to create temp registry dir");
+    let mut registry = AssetRegistry::<Material>::with_official_remote(
+        temp_registry_dir.path(),
+        Some(&remote_url),
+    )?;
 
-    let sync = RegistrySync::new(temp_registry_dir.path(), &remote_url);
-    sync.ensure_repository_initialized()?;
-
-    // Initialize the unified AssetRegistry (builds in-memory index automatically)
-    let mut registry = AssetRegistry::<Material>::new(temp_registry_dir.path())?;
-    println!("  -> Cloned successfully and initialized AssetRegistry.");
-
-    // -------------------------------------------------------------------------
-    // Phase 2: Create a local material (persisted & indexed automatically)
-    // -------------------------------------------------------------------------
-    println!("\n[3/8] Creating local custom material (untracked by Git)...");
-
-    let refr_index = RefrIndexSellmeier1::default().into();
+    println!("\n[3/7] Creating custom material in user catalog...");
     let mut bk7_material = Material::new_draft(
         "N-BK7",
         Some("Schott".to_string()),
-        Some("Local custom crown glass".to_string()),
-        refr_index,
+        Some("User catalog crown glass".to_string()),
+        RefrIndexSellmeier1::default().into(),
     );
+    let saved_path = registry.publish_to(CatalogSource::User, &mut bk7_material)?;
+    println!("  -> Saved user material 'N-BK7' to: {:?}", saved_path);
 
-    // Publishing atomically saves to disk and inserts into the RAM index
-    let saved_path = registry.publish(&mut bk7_material)?;
-    println!("  -> Saved local material 'N-BK7' to: {:?}", saved_path);
-    println!(
-        "  -> In-memory index size: {} asset(s)",
-        registry.index().len()
-    );
-
-    // -------------------------------------------------------------------------
-    // Phase 3: Simulate community adding a material to the remote repository
-    // -------------------------------------------------------------------------
-    println!("\n[4/8] Simulating community update on the remote server...");
+    println!("\n[4/7] Simulating remote catalog update ('F2')...");
     simulate_remote_catalog_update(temp_remote_dir.path())?;
-    println!("  -> Remote repository has been updated with material 'F2'.");
 
-    // -------------------------------------------------------------------------
-    // Phase 4: Pull updates from the remote repository
-    // -------------------------------------------------------------------------
-    println!("\n[5/8] Pulling updates from remote repository...");
-    sync.pull_updates()?;
-    println!("  -> Successfully pulled changes. Local files updated via Git.");
-
-    // -------------------------------------------------------------------------
-    // Phase 5: Rebuild index after external Git pull and verify availability
-    // -------------------------------------------------------------------------
-    println!("\n[6/8] Rebuilding registry index from disk after Git pull...");
-    let item_count = registry.rebuild_index()?;
-    println!("  -> Indexed {} material(s) in RAM.", item_count);
-
-    // Verify remote material
-    let search_remote = registry.search_text("F2");
-    assert!(
-        !search_remote.is_empty(),
-        "Material search should return F2 from remote"
+    println!("\n[5/7] Pulling updates into official catalog and rebuilding index...");
+    let official_sync = RegistrySync::new_official(
+        temp_registry_dir.path().join(OFFICIAL_CATALOG_SUBDIR),
+        Some(&remote_url),
     );
-    println!(
-        "  -> Found remote catalog item: '{}'",
-        search_remote[0].common.name
-    );
+    official_sync.pull_updates()?;
+    let total_indexed = registry.rebuild_index()?;
+    println!("  -> Indexed {total_indexed} material(s) across official and user catalogs.");
 
-    // Verify local material
+    assert!(!registry.search_text("F2").is_empty());
     let search_local = registry.search_text("BK7");
-    assert!(
-        !search_local.is_empty(),
-        "Material search should return N-BK7 from local"
-    );
-    println!(
-        "  -> Found local custom item:   '{}'",
-        search_local[0].common.name
-    );
-
-    // Load full material model directly from registry
+    assert!(!search_local.is_empty());
     let catalog_material: Material = registry.load(search_local[0].common.id, None)?;
 
-    // -------------------------------------------------------------------------
-    // Phase 6: Construct optical model in opossum_core using the local material
-    // -------------------------------------------------------------------------
-    println!("\n[7/8] Building optical scenery in opossum_core...");
+    println!("\n[6/7] Building optical scenery in opossum_core...");
     let mut scenery = NodeGroup::new("Demo Telescope Scenery");
-
     let src_id = scenery.add_node(SourcePort::default())?;
     let lens_node = Lens::new(
         "Focusing Lens",
         millimeter!(100.0),
         millimeter!(-100.0),
         millimeter!(10.0),
-        catalog_material.clone(),
+        catalog_material,
     )?;
     let lens_id = scenery.add_node(lens_node)?;
     let detector_node = RayPropagationVisualizer::new("Ray Plot", None)?;
     let detector_id = scenery.add_node(detector_node)?;
-
     scenery.connect_nodes(src_id, "output_1", lens_id, "input_1", millimeter!(20.0))?;
     scenery.connect_nodes(
         lens_id,
@@ -304,35 +224,20 @@ fn main() -> OpmResult<()> {
         "input_1",
         millimeter!(90.0),
     )?;
-
     let mut doc = OpmDocument::new(scenery);
     let mut ray_config = RayTraceConfig::default();
     let ray_builder = round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 5)?;
     ray_config.map_source(src_id, ray_builder);
     doc.add_analyzer(AnalyzerType::RayTrace(ray_config));
-    println!("  -> Optical scenery created with 3 nodes.");
 
-    // -------------------------------------------------------------------------
-    // Phase 7: Serialize OpmDocument to .opm File (Vendoring Check)
-    // -------------------------------------------------------------------------
-    println!("\n[8/8] Serializing model to .opm document file...");
+    println!("\n[7/7] Serializing model to .opm document file...");
     let temp_opm_file = TempDir::new().expect("Failed to create temp opm dir");
     let opm_file_path = temp_opm_file.path().join("model.opm");
-
     doc.save_to_file(&opm_file_path)?;
-    println!("  -> Document saved to: {:?}", opm_file_path);
-
     let raw_opm_content = std::fs::read_to_string(&opm_file_path).expect("Read OPM file");
-    assert!(
-        raw_opm_content.contains("embedded_materials:"),
-        "OPM file must contain embedded_materials section"
-    );
-    assert!(
-        raw_opm_content.contains("N-BK7"),
-        "Embedded materials must store the glass name"
-    );
-    println!("  -> Verified: Local Material was automatically embedded in OPM document.");
+    assert!(raw_opm_content.contains("embedded_materials:"));
+    assert!(raw_opm_content.contains("N-BK7"));
+    println!("  -> Verified: User material was embedded in OPM document.");
 
-    println!("\n=== All pipeline checks passed successfully! ===");
     Ok(())
 }

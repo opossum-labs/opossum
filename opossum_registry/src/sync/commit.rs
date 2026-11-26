@@ -1,3 +1,7 @@
+use super::{
+    DEFAULT_BRANCH,
+    utils::{format_error_chain, open_registry_repo, resolve_signature},
+};
 use gix::{
     ObjectId, Repository,
     objs::{
@@ -7,11 +11,6 @@ use gix::{
 };
 use opossum_core::error::{OpmResult, OpossumError};
 use std::{fs, path::Path};
-
-use super::{
-    DEFAULT_BRANCH,
-    utils::{format_error_chain, resolve_signature},
-};
 
 /// Automatically commits a newly published or updated asset file to the local Git repository.
 ///
@@ -23,12 +22,7 @@ pub fn commit_asset_file(
     file_path: &Path,
     commit_message: &str,
 ) -> OpmResult<()> {
-    let repo = gix::open(repo_root).map_err(|e| {
-        OpossumError::Registry(format!(
-            "Failed to open registry repository for commit: {e}"
-        ))
-    })?;
-
+    let repo = open_registry_repo(repo_root)?;
     let rel_path = file_path.strip_prefix(repo_root).map_err(|e| {
         OpossumError::Registry(format!("File path is not within registry root: {e}"))
     })?;
@@ -36,7 +30,6 @@ pub fn commit_asset_file(
         .to_str()
         .ok_or_else(|| OpossumError::Registry("Path contains invalid UTF-8 characters".into()))?
         .replace('\\', "/");
-
     let path_segments: Vec<&str> = rel_path_str
         .split('/')
         .filter(|segment| !segment.is_empty())
@@ -53,7 +46,6 @@ pub fn commit_asset_file(
             file_path.display()
         ))
     })?;
-
     let blob_id = repo
         .write_blob(&file_bytes)
         .map_err(|e| OpossumError::Registry(format!("Failed to write blob object: {e}")))?
@@ -91,7 +83,6 @@ pub fn commit_asset_file(
         message: commit_message.into(),
         extra_headers: Vec::new(),
     };
-
     let commit_id = repo
         .write_object(&commit)
         .map_err(|e| OpossumError::Registry(format!("Failed to write commit object: {e}")))?
@@ -118,13 +109,11 @@ pub fn commit_asset_file(
     let mut index = repo.index_from_tree(&new_root_tree_oid).map_err(|e| {
         OpossumError::Registry(format_error_chain("Failed to build index from tree", &e))
     })?;
-
     index
         .write(gix::index::write::Options::default())
         .map_err(|e| {
             OpossumError::Registry(format_error_chain("Failed to write index file", &e))
         })?;
-
     Ok(())
 }
 
@@ -140,14 +129,12 @@ pub fn upsert_path_in_tree(
             "Path segments cannot be empty".into(),
         ));
     }
-
     let mut entries = if let Some(oid) = tree_oid {
         let tree_obj = repo
             .find_object(oid)
             .map_err(|e| OpossumError::Registry(format!("Failed to find tree object: {e}")))?
             .peel_to_tree()
             .map_err(|e| OpossumError::Registry(format!("Failed to peel tree: {e}")))?;
-
         tree_obj
             .iter()
             .map(|e_res| {
@@ -164,7 +151,6 @@ pub fn upsert_path_in_tree(
     } else {
         Vec::new()
     };
-
     if path_segments.len() == 1 {
         let leaf_name = path_segments[0];
         entries.retain(|e| e.filename != leaf_name);
@@ -179,10 +165,8 @@ pub fn upsert_path_in_tree(
             .iter()
             .find(|e| e.filename == dir_name)
             .map(|e| e.oid);
-
         let child_tree_oid =
             upsert_path_in_tree(repo, existing_child_oid, &path_segments[1..], blob_oid)?;
-
         entries.retain(|e| e.filename != dir_name);
         entries.push(Entry {
             mode: EntryKind::Tree.into(),
@@ -190,14 +174,11 @@ pub fn upsert_path_in_tree(
             oid: child_tree_oid,
         });
     }
-
     entries.sort();
-
     let tree = Tree { entries };
     let new_tree_oid = repo
         .write_object(&tree)
         .map_err(|e| OpossumError::Registry(format!("Failed to write tree object: {e}")))?
         .detach();
-
     Ok(new_tree_oid)
 }
