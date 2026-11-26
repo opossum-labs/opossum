@@ -586,14 +586,14 @@ mod test {
     #[test]
     fn two_triangles_of_a_square_cover_each_point_once() {
         let mut grid = unit_grid();
-        let (a, b, c, d) = (
+        let (bottom_left, bottom_right, top_right, top_left) = (
             Point2::new(-1.0, -1.0),
             Point2::new(1.0, -1.0),
             Point2::new(1.0, 1.0),
             Point2::new(-1.0, 1.0),
         );
-        grid.add_triangle([a, b, c], [1.0; 3]);
-        grid.add_triangle([a, c, d], [1.0; 3]);
+        grid.add_triangle([bottom_left, bottom_right, top_right], [1.0; 3]);
+        grid.add_triangle([bottom_left, top_right, top_left], [1.0; 3]);
         let values = grid.values;
         assert_relative_eq!(values.iter().sum::<f64>(), 4.0);
         assert!(values.iter().all(|v| *v <= 1.0), "{values}");
@@ -606,14 +606,14 @@ mod test {
         for x in -3..3 {
             for y in -3..3 {
                 let (x, y) = (f64::from(x), f64::from(y));
-                let (a, b, c, d) = (
+                let (bottom_left, bottom_right, top_right, top_left) = (
                     Point2::new(x, y),
                     Point2::new(x + 1.0, y),
                     Point2::new(x + 1.0, y + 1.0),
                     Point2::new(x, y + 1.0),
                 );
-                grid.add_triangle([a, b, c], [1.0; 3]);
-                grid.add_triangle([c, d, a], [1.0; 3]);
+                grid.add_triangle([bottom_left, bottom_right, top_right], [1.0; 3]);
+                grid.add_triangle([top_right, top_left, bottom_left], [1.0; 3]);
             }
         }
         assert!(grid.values.iter().all(|v| (*v - 1.0).abs() < 1e-12));

@@ -112,7 +112,7 @@ impl RaysHitMap {
         hit_point: HitPoint,
         source: Option<&RaySource>,
     ) -> OpmResult<()> {
-        let in_tubes = self.follows_tubes() || self.hit_points.is_empty();
+        let in_tubes = self.follows_tubes();
         self.push_hit_point(hit_point);
         match source {
             Some(source) if in_tubes => {
@@ -138,7 +138,7 @@ impl RaysHitMap {
     }
     /// Returns whether every hit of this map stands in the ray tubes of its source.
     const fn follows_tubes(&self) -> bool {
-        !self.hit_points.is_empty() && self.vertices.len() == self.hit_points.len()
+        self.vertices.len() == self.hit_points.len()
     }
     /// Add an intersection point to the hit points of this map and widen its limits.
     fn push_hit_point(&mut self, hit_point: HitPoint) {
@@ -931,9 +931,7 @@ mod test_ray_tubes {
         light::{Ray, Rays},
         millimeter, nanometer,
         nodes::fluence_detector::fluence_data::FluenceData,
-        utils::test_helper::helper::{
-            assert_warned, check_logs, energy_of, fluence_near, hexapolar_bundle,
-        },
+        utils::test_helper::helper::{assert_warned, check_logs, fluence_near, hexapolar_bundle},
     };
     use approx::assert_relative_eq;
     use nalgebra::{Point2, Point3};
@@ -1033,6 +1031,15 @@ mod test_ray_tubes {
         assert!(error.to_string().contains("span no ray tubes"), "{error}");
         Ok(())
     }
+    /// A map without hits shows no Voronoi map: no tube arrived to draw.
+    #[test]
+    fn a_map_without_hits_shows_no_voronoi_map() {
+        let map = RaysHitMap::default();
+        assert!(
+            map.calc_fluence_with_tubes((11, 11), None, None, FluenceEstimator::Voronoi)
+                .is_err()
+        );
+    }
     /// A bundle that arrives twice, as both arms of a Mach-Zehnder interferometer do at its
     /// output, adds up: the second arrival of each ray is a second copy of its sheet.
     #[test]
@@ -1046,7 +1053,7 @@ mod test_ray_tubes {
             2.0 * flat_top_fluence(10),
             max_relative = 0.03
         );
-        assert_relative_eq!(energy_of(&map), 2.0, max_relative = 0.03);
+        assert_relative_eq!(map.total_energy().value, 2.0, max_relative = 0.03);
         Ok(())
     }
     /// Without a given range a map reaches as far as the light it draws: the margins beyond the
@@ -1066,7 +1073,7 @@ mod test_ray_tubes {
             "{:?}",
             map.y_range()
         );
-        assert_relative_eq!(energy_of(&map), 1.0, max_relative = 0.03);
+        assert_relative_eq!(map.total_energy().value, 1.0, max_relative = 0.03);
         Ok(())
     }
     /// One hit outside the tubes ends them for the whole map.
@@ -1112,7 +1119,7 @@ mod test_ray_tubes {
                 max_relative = 0.03
             );
         }
-        assert_relative_eq!(energy_of(&map), 1.0, max_relative = 0.03);
+        assert_relative_eq!(map.total_energy().value, 1.0, max_relative = 0.03);
         Ok(())
     }
     /// A beam twice as wide spreads its energy over four times the area.
@@ -1126,7 +1133,7 @@ mod test_ray_tubes {
                 max_relative = 0.03
             );
         }
-        assert_relative_eq!(energy_of(&map), 1.0, max_relative = 0.03);
+        assert_relative_eq!(map.total_energy().value, 1.0, max_relative = 0.03);
         Ok(())
     }
     /// Light cut away in the middle leaves the map dark there, and right next to the cut it shows
@@ -1153,7 +1160,7 @@ mod test_ray_tubes {
             .filter(|ray| !starts_within(ray, 2.2))
             .map(|ray| ray.energy().get::<joule>())
             .sum::<f64>();
-        assert_relative_eq!(energy_of(&map), left, max_relative = 0.03);
+        assert_relative_eq!(map.total_energy().value, left, max_relative = 0.03);
         Ok(())
     }
     /// The rays of a square grid show an even fluence, however the squares between them are cut
@@ -1203,7 +1210,7 @@ mod test_ray_tubes {
             );
             assert!(fluence_near(&map, -x, y)?.abs() < 1e-12);
         }
-        assert_relative_eq!(energy_of(&map), 1.0, max_relative = 0.03);
+        assert_relative_eq!(map.total_energy().value, 1.0, max_relative = 0.03);
         Ok(())
     }
     /// Light turned over as a whole, as behind a focus or a mirror, does not fold.

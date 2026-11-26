@@ -777,7 +777,7 @@ mod test {
         for (corner, part) in [
             (voronoi_part(p, q, r), beside),
             (voronoi_part(q, r, p), beside),
-            (voronoi_part(r, p, q), 1.0 - 2.0 * beside),
+            (voronoi_part(r, p, q), (-2.0_f64).mul_add(beside, 1.0)),
         ] {
             approx::assert_relative_eq!(corner, part, max_relative = 1e-12);
         }

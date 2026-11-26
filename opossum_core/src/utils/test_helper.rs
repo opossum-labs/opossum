@@ -15,7 +15,7 @@ pub mod helper {
         nodes::fluence_detector::fluence_data::FluenceData,
         properties::Proptype,
         reporting::analysis_report::AnalysisReport,
-        utils::{geom_transformation::Isometry, to_f64},
+        utils::geom_transformation::Isometry,
     };
     use nalgebra::DVector;
     use uom::si::{f64::Length, length::millimeter, radiant_exposure::joule_per_square_centimeter};
@@ -145,19 +145,5 @@ pub mod helper {
     /// This function returns an error if the axes of the map cannot be built.
     pub fn fluence_near(map: &FluenceData, x: f64, y: f64) -> OpmResult<f64> {
         Ok(point_near(map, x, y)?.2)
-    }
-    /// The energy of the given map, in J: its values summed over the cells between its points,
-    /// which [`FluenceData::total_energy`] counts one too many of along each axis.
-    #[must_use]
-    pub fn energy_of(map: &FluenceData) -> f64 {
-        let (columns, rows) = (to_f64(map.len_x() - 1), to_f64(map.len_y() - 1));
-        let width = (map.x_range().end - map.x_range().start).value / columns;
-        let height = (map.y_range().end - map.y_range().start).value / rows;
-        map.interp_distribution()
-            .iter()
-            .map(|fluence| fluence.value)
-            .sum::<f64>()
-            * width
-            * height
     }
 }
