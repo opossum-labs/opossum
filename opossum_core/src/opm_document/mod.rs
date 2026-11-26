@@ -23,8 +23,10 @@ pub use analyzer_info::AnalyzerInfo;
 use indexmap::IndexMap;
 pub use optimization::OptimizationConfig;
 pub use positioning_run::PositioningRun;
+use schemars::{JsonSchema, generate::SchemaSettings};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use serde_json::Value;
+use std::collections::{BTreeSet, HashMap};
 use uuid::Uuid;
 /// Current version of the `.opm` file format schema.
 pub const CURRENT_OPM_FILE_VERSION: u32 = 0;
@@ -34,23 +36,29 @@ pub type MetricStoreKey = (Uuid, Uuid, String);
 pub type MetricStore = HashMap<MetricStoreKey, f64>;
 /// Map for storing analyzer-specific vector detector metrics (e.g., per-ray OPDs).
 pub type VectorMetricStore = HashMap<MetricStoreKey, Vec<f64>>;
+
 /// The main structure of an OPOSSUM model.
 ///
 /// It contains the [`NodeGroup`] representing the optical model, a list of analyzers,
 /// optional pump scenarios, embedded materials, and an optional optimization configuration.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[schemars(title = "OPOSSUM Model Document v1", deny_unknown_fields)]
 pub struct OpmDocument {
+    /// File format version. MUST be `1` for this specification.
     pub(crate) opm_file_version: u32,
     #[serde(default)]
     pub(crate) scenery: NodeGroup,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    #[schemars(with = "HashMap<Uuid, AnalyzerInfo>")]
     pub(crate) analyzers: IndexMap<Uuid, AnalyzerInfo>,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    #[schemars(with = "HashMap<Uuid, PumpScenario>")]
     pub(crate) pump_scenarios: IndexMap<Uuid, PumpScenario>,
     /// Nodes marked as amplifier candidates, independent of any [`PumpScenario`].
-    #[serde(default, skip_serializing_if = "HashSet::is_empty")]
-    pub(crate) amplifier_nodes: HashSet<Uuid>,
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub(crate) amplifier_nodes: BTreeSet<Uuid>,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    #[schemars(with = "HashMap<Uuid, Material>")]
     pub(crate) embedded_materials: IndexMap<Uuid, Material>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) optimization_config: Option<OptimizationConfig>,
@@ -66,7 +74,7 @@ impl Default for OpmDocument {
             scenery: NodeGroup::default(),
             analyzers: IndexMap::default(),
             pump_scenarios: IndexMap::default(),
-            amplifier_nodes: HashSet::default(),
+            amplifier_nodes: BTreeSet::default(),
             embedded_materials: IndexMap::default(),
             optimization_config: None,
             metric_store: HashMap::new(),
@@ -91,6 +99,16 @@ impl OpmDocument {
     /// Returns a mutable reference to the scenery of this [`OpmDocument`].
     pub const fn scenery_mut(&mut self) -> &mut NodeGroup {
         &mut self.scenery
+    }
+    /// Returns the schema file version of this [`OpmDocument`].
+    #[must_use]
+    pub const fn opm_file_version(&self) -> u32 {
+        self.opm_file_version
+    }
+    /// Returns a reference to the embedded materials map of this [`OpmDocument`].
+    #[must_use]
+    pub const fn embedded_materials(&self) -> &IndexMap<Uuid, Material> {
+        &self.embedded_materials
     }
     /// Returns a cloned map of all analyzers registered in this [`OpmDocument`].
     #[must_use]
@@ -207,7 +225,7 @@ impl OpmDocument {
     }
     /// Returns the set of node [`Uuid`]s marked as amplifier candidates in this [`OpmDocument`].
     #[must_use]
-    pub const fn amplifier_nodes(&self) -> &HashSet<Uuid> {
+    pub const fn amplifier_nodes(&self) -> &BTreeSet<Uuid> {
         &self.amplifier_nodes
     }
     /// Returns whether the node with the given [`Uuid`] is marked as an amplifier candidate.
@@ -234,7 +252,7 @@ impl OpmDocument {
         self.amplifier_nodes.retain(|id| scenery.exists(*id));
     }
     /// Replaces the entire amplifier candidate set at once (e.g., for undo/redo) without modifying scenarios.
-    pub fn set_amplifier_nodes(&mut self, nodes: HashSet<Uuid>) {
+    pub fn set_amplifier_nodes(&mut self, nodes: BTreeSet<Uuid>) {
         self.amplifier_nodes = nodes;
     }
     /// Returns the cached scalar metrics collected during the last [`analyze_headless`](Self::analyze_headless) run.
@@ -256,4 +274,40 @@ impl OpmDocument {
     pub fn set_optimization_config(&mut self, config: Option<OptimizationConfig>) {
         self.optimization_config = config;
     }
+}
+
+/// Generates the canonical JSON Schema (Draft-07) for `OpmDocument` v1 as a pretty-printed string.
+///
+/// # Errors
+/// Returns a `serde_json::Error` if the generated schema cannot be serialized.
+pub fn generate_opm_v1_schema_json() -> Result<String, serde_json::Error> {
+    let mut settings = SchemaSettings::draft07();
+    settings.inline_subschemas = false;
+
+    let generator = settings.into_generator();
+    let mut root_schema = generator.into_root_schema_for::<OpmDocument>();
+
+    // Attach a canonical URI identifier directly to the root schema object
+    root_schema.insert(
+        "$id".to_owned(),
+        Value::String(
+            "https://opossum-labs.github.io/opossum/spec/v1/opm_v1.schema.json".to_owned(),
+        ),
+    );
+
+    // Remove dynamically generated defaults (which contain random v4 UUIDs)
+    if let Some(scenery) = root_schema
+        .pointer_mut("/properties/scenery")
+        .and_then(Value::as_object_mut)
+    {
+        scenery.remove("default");
+    }
+    if let Some(graph) = root_schema
+        .pointer_mut("/definitions/OpticNode/properties/graph")
+        .and_then(Value::as_object_mut)
+    {
+        graph.remove("default");
+    }
+
+    serde_json::to_string_pretty(&root_schema)
 }

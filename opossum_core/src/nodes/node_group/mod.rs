@@ -4,6 +4,7 @@
 //! A node group is a special type of optical node that can contain other optical nodes (including other groups) and connections between them. It allows to build up complex optical systems in a hierarchical way. The internal structure of a node group can be hidden or shown in the dot format by setting the `expand view` property of the group node. To use a node group from the outside, internal nodes / ports must be mapped to be visible (see [`map_input_port`](NodeGroup::map_input_port()) & [`map_output_port`](NodeGroup::map_output_port()) functions).
 
 use opm_macros_lib::OpmNode;
+use schemars::JsonSchema;
 mod analysis_energy;
 mod analysis_ghostfocus;
 mod analysis_raytrace;
@@ -33,6 +34,7 @@ use crate::{
         node_report::{NodeReport, NodeReportResult},
         report_note::{ReportLevel, ReportNote},
     },
+    types::SiScalarSchema,
 };
 pub use optic_graph::{ConnectionInfo, OpticGraph};
 use serde::{Deserialize, Serialize};
@@ -44,21 +46,17 @@ inventory::submit! {
     NodeRegistration::new::<NodeGroup>("group", "group node containing other nodes or groups")
 }
 
-#[derive(OpmNode, Debug, Clone, Serialize, Deserialize)]
+#[derive(OpmNode, Debug, Clone, JsonSchema)]
 #[opm_node("yellow")]
 #[manual_analyzable]
 /// The basic building block of an optical system. It represents a group of other optical
 /// nodes ([`OpticNode`]s) arranged in a (sub)graph.
 pub struct NodeGroup {
-    #[serde(flatten)]
     node_attr: NodeAttr,
-    #[serde(default, skip_serializing_if = "OpticGraph::is_empty")]
     graph: OpticGraph,
-    #[serde(skip)]
+    #[schemars(with = "HashMap<String, SiScalarSchema>")]
     input_port_distances: BTreeMap<String, Length>,
-    #[serde(skip)]
     accumulated_rays: Vec<HashMap<Uuid, Rays>>,
-    #[serde(skip)]
     ray_ends: Vec<Rays>,
 }
 
@@ -890,7 +888,42 @@ impl OpticNode for NodeGroup {
         Ok(())
     }
 }
+impl Serialize for NodeGroup {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        crate::core_optics::optic_ref::serialize_node_flat(
+            &self.node_attr,
+            Some(&self.graph),
+            serializer,
+        )
+    }
+}
 
+impl<'de> Deserialize<'de> for NodeGroup {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = crate::core_optics::optic_ref::DeserializedNode::deserialize(deserializer)?;
+        if raw.node_type != "group" {
+            return Err(serde::de::Error::custom(format!(
+                "expected node_type 'group', found '{}'",
+                raw.node_type
+            )));
+        }
+        let mut group = Self::default();
+        let default_props = group.node_attr.properties().clone();
+        let (attr, graph) = raw.into_node_attr(default_props);
+        group.node_attr = attr;
+        group.graph = graph;
+        group
+            .after_deserialization_hook()
+            .map_err(|e| serde::de::Error::custom(e.to_string()))?;
+        Ok(group)
+    }
+}
 #[cfg(test)]
 mod test {
     use super::*;

@@ -6,12 +6,12 @@ use opossum_core::{
 };
 #[cfg(not(target_arch = "wasm32"))]
 use opossum_registry::RegistrySync;
-use opossum_registry::{AssetRegistry, asset::RegisterableAsset};
+use opossum_registry::{AssetRegistry, CatalogSource, asset::RegisterableAsset};
 use std::collections::HashMap;
 use std::path::Path;
 use uuid::Uuid;
 
-use super::types::{AssetCategory, AssetSyncRow, NodeUsageInfo, determine_sync_status};
+use super::types::{AssetCategory, AssetSyncRow, NodeUsageInfo, determine_dual_catalog_status};
 
 /// Extracts all inline materials and their node usage occurrences from an optical document.
 #[must_use]
@@ -43,26 +43,37 @@ pub fn extract_materials_from_document(
     materials_map
 }
 
-/// Compares a map of extracted model materials against the catalog index and generates sorted sync rows.
+/// Compares extracted model materials against both the `official` and `user` catalog indices.
 pub fn build_sync_rows(
     materials_map: HashMap<Uuid, (Material, Vec<NodeUsageInfo>)>,
     registry: &AssetRegistry<Material>,
 ) -> Vec<AssetSyncRow> {
     let mut rows = Vec::with_capacity(materials_map.len());
-    let reg_index = registry.index();
+    let official_idx = registry.official_index();
+    let user_idx = registry.user_index();
 
     for (mat_id, (mat, usages)) in materials_map {
-        let cat_entry = reg_index.get(&mat_id);
-        let cat_version = cat_entry.map(|e| e.common.latest_version);
-        let status = determine_sync_status(mat.version(), cat_version);
+        let is_official = registry.is_official(mat_id);
+        let official_version = official_idx.get(&mat_id).map(|e| e.common.latest_version);
+        let in_user_catalog = registry.in_user_catalog(mat_id);
+        let user_version = user_idx.get(&mat_id).map(|e| e.common.latest_version);
+
+        let (origin, catalog_version, status) = determine_dual_catalog_status(
+            mat.version(),
+            is_official,
+            official_version,
+            in_user_catalog,
+            user_version,
+        );
 
         rows.push(AssetSyncRow {
             id: mat_id,
             name: mat.name().to_string(),
             category: AssetCategory::Material,
             manufacturer: mat.manufacturer().map(str::to_string),
+            origin,
             model_version: mat.version(),
-            catalog_version: cat_version,
+            catalog_version,
             status,
             used_by_nodes: usages,
             material: Some(mat),
@@ -73,7 +84,7 @@ pub fn build_sync_rows(
     rows
 }
 
-/// Fetches the active document from the backend API, parses it, and compares all assets with the catalog.
+/// Fetches the active document from the backend API, parses it, and compares all assets with the dual catalog.
 pub async fn fetch_and_scan_model(
     registry: &AssetRegistry<Material>,
 ) -> Result<Vec<AssetSyncRow>, String> {
@@ -111,18 +122,57 @@ pub async fn update_material_in_nodes(
     }
 }
 
-/// Executes a Git pull on a background thread and rebuilds the catalog index.
+/// Resolves a user catalog conflict by overwriting with a new version in the user catalog,
+/// saving as a renamed copy with a fresh UUID in the user catalog, or canceling.
+pub fn resolve_user_catalog_conflict_overwrite(
+    material: &mut Material,
+    registry: &mut AssetRegistry<Material>,
+) -> Result<std::path::PathBuf, String> {
+    material.header_mut().version = 0;
+    registry
+        .publish_to(CatalogSource::User, material)
+        .map_err(|e| format!("Failed to overwrite material in user catalog: {e}"))
+}
+
+/// Saves a conflicting model material as a new entry (new UUID, new name) in the user catalog.
+pub fn resolve_user_catalog_conflict_rename(
+    material: &Material,
+    new_name: String,
+    registry: &mut AssetRegistry<Material>,
+) -> Result<Material, String> {
+    let trimmed = new_name.trim();
+    if trimmed.is_empty() {
+        return Err("New material name cannot be empty.".to_string());
+    }
+    let mut cloned = material.clone();
+    cloned.header_mut().id = Uuid::new_v4();
+    cloned.header_mut().version = 0;
+    cloned.header_mut().name = trimmed.to_string();
+    registry
+        .publish_to(CatalogSource::User, &mut cloned)
+        .map_err(|e| format!("Failed to save renamed copy in user catalog: {e}"))?;
+    Ok(cloned)
+}
+
+/// Executes a Git pull on the official catalog directory on a background thread and rebuilds indices.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn sync_git_catalog(
     catalog_dir: &Path,
     remote_url: &str,
     registry: &mut AssetRegistry<Material>,
 ) -> Result<String, String> {
-    let cat_path_buf = catalog_dir.to_path_buf();
+    let official_dir = catalog_dir.join("official");
     let remote_url_str = remote_url.to_string();
 
     let sync_task = std::thread::spawn(move || {
-        let sync = RegistrySync::new(&cat_path_buf, &remote_url_str);
+        let sync = RegistrySync::new_official(
+            &official_dir,
+            if remote_url_str.trim().is_empty() {
+                None
+            } else {
+                Some(remote_url_str.as_str())
+            },
+        );
         sync.ensure_repository_initialized()
             .and_then(|()| sync.pull_updates())
     });
@@ -130,7 +180,7 @@ pub fn sync_git_catalog(
     match sync_task.join() {
         Ok(Ok(())) => match registry.rebuild_index() {
             Ok(count) => Ok(format!(
-                "Git sync completed successfully. Catalog index refreshed ({count} assets indexed)."
+                "Official catalog Git sync completed. Indices refreshed ({count} total assets indexed)."
             )),
             Err(e) => Ok(format!(
                 "Git pull succeeded, but rebuilding index returned: {e}"

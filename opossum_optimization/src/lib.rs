@@ -8,7 +8,6 @@
 //! - Supported numerical solvers via `argmin`:
 //!   - Damped Least Squares (Levenberg-Marquardt with Nielsen adaptive damping)
 //!   - Nelder-Mead Downhill Simplex (derivative-free direct search)
-//!   - L-BFGS with backtracking line search (Armijo condition)
 //!   - Adaptive Simulated Annealing (Corana 1/5th acceptance adaptation)
 //! - Introspection and schema discovery for interactive GUI bindings.
 pub mod applier;

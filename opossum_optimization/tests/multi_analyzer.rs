@@ -12,7 +12,7 @@ use opossum_optimization::{MetricReader, OpticOptimizer};
 use crate::common::build_kepler_setup;
 
 #[test]
-fn test_optimize_kepler_focal_position_lbfgs() -> OpmResult<()> {
+fn test_optimize_kepler_focal_position_dls() -> OpmResult<()> {
     let (mut doc, analyzer_id, lens2_id, spot_id) = build_kepler_setup(millimeter!(45.0))?;
 
     let dist_address = ParameterAddress::ConnectionDistance {
@@ -37,7 +37,7 @@ fn test_optimize_kepler_focal_position_lbfgs() -> OpmResult<()> {
             OperandMode::Equal,
             1.0,
         ))
-        .with_algorithm(OptimizationAlgorithm::lbfgs().with_max_iterations(25))
+        .with_algorithm(OptimizationAlgorithm::dls().with_max_iterations(25))
         .optimize()?;
 
     let best_distance = summary.value(&dist_address).unwrap();

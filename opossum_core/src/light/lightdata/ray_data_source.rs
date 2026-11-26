@@ -10,11 +10,13 @@ use crate::{
     joule,
     light::Rays,
     meter, nanometer,
+    types::SiScalarSchema,
     utils::default_from_name::DefaultFromName,
     validated, validated_type,
 };
 use num_traits::Zero;
 use opm_macros_lib::EnsureValidated;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, path::PathBuf};
 use strum::EnumIter;
@@ -24,7 +26,7 @@ use uom::si::{
 };
 
 /// Builder for the generation of [`LightData::Geometric`](crate::light::lightdata::LightData::Geometric).
-#[derive(Clone, Serialize, Deserialize, PartialEq, EnumIter, EnsureValidated)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, EnumIter, EnsureValidated, JsonSchema)]
 pub enum RayDataSource {
     /// Raw [`Rays`] data.
     #[validate(skip)]
@@ -74,11 +76,12 @@ impl DefaultFromName for RayDataSource {}
 /// * `pos` - Position distribution (`PosDistType`) describing spatial distribution.
 /// * `energy` - Energy distribution (`EnergyDistType`) describing energy values of the rays.
 /// * `spect` - Spectral distribution (`SpecDistType`) defining wavelength properties.
-#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, EnsureValidated)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, EnsureValidated, JsonSchema)]
+#[allow(clippy::struct_field_names)]
 pub struct CollimatedSrc {
-    pos: PosDistType,
-    energy: EnergyDistType,
-    spect: SpecDistType,
+    pos_dist: PosDistType,
+    energy_dist: EnergyDistType,
+    spect_dist: SpecDistType,
 }
 
 impl CollimatedSrc {
@@ -94,41 +97,49 @@ impl CollimatedSrc {
     ///
     /// A new instance of `CollimatedSrc`.
     #[must_use]
-    pub const fn new(pos: PosDistType, energy: EnergyDistType, spect: SpecDistType) -> Self {
-        Self { pos, energy, spect }
+    pub const fn new(
+        pos_dist: PosDistType,
+        energy_dist: EnergyDistType,
+        spect_dist: SpecDistType,
+    ) -> Self {
+        Self {
+            pos_dist,
+            energy_dist,
+            spect_dist,
+        }
     }
 
     /// Returns a reference to the position distribution.
     #[must_use]
     pub const fn pos_dist(&self) -> &PosDistType {
-        &self.pos
+        &self.pos_dist
     }
 
     /// Returns a reference to the energy distribution.
     #[must_use]
     pub const fn energy_dist(&self) -> &EnergyDistType {
-        &self.energy
+        &self.energy_dist
     }
 
     /// Returns a reference to the spectral distribution.
     #[must_use]
     pub const fn spect_dist(&self) -> &SpecDistType {
-        &self.spect
+        &self.spect_dist
     }
 
     /// Returns a mutable reference to the position distribution.
     pub const fn pos_dist_mut(&mut self) -> &mut PosDistType {
-        &mut self.pos
+        &mut self.pos_dist
     }
 
     /// Returns a mutable reference to the energy distribution.
     pub const fn energy_dist_mut(&mut self) -> &mut EnergyDistType {
-        &mut self.energy
+        &mut self.energy_dist
     }
 
     /// Returns a mutable reference to the spectral distribution.
     pub const fn spect_dist_mut(&mut self) -> &mut SpecDistType {
-        &mut self.spect
+        &mut self.spect_dist
     }
 
     /// Sets the position distribution.
@@ -141,7 +152,7 @@ impl CollimatedSrc {
     ///
     /// Overwrites the current position distribution.
     pub const fn set_pos_dist(&mut self, pos_dist: PosDistType) {
-        self.pos = pos_dist;
+        self.pos_dist = pos_dist;
     }
 
     /// Sets the energy distribution.
@@ -154,7 +165,7 @@ impl CollimatedSrc {
     ///
     /// Overwrites the current energy distribution.
     pub const fn set_energy_dist(&mut self, energy_dist: EnergyDistType) {
-        self.energy = energy_dist;
+        self.energy_dist = energy_dist;
     }
 
     /// Sets the spectral distribution.
@@ -167,7 +178,7 @@ impl CollimatedSrc {
     ///
     /// Overwrites the current spectral distribution.
     pub fn set_spect_dist(&mut self, spect_dist: SpecDistType) {
-        self.spect = spect_dist;
+        self.spect_dist = spect_dist;
     }
 }
 
@@ -181,11 +192,12 @@ impl CollimatedSrc {
 /// * `energy` - Energy distribution (`EnergyDistType`) describing energy values for the rays.
 /// * `spect` - Spectral distribution (`SpecDistType`) defining wavelength properties of the rays.
 /// * `reference_length` - A length scale used as a reference in calculations (`Length`).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnsureValidated)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnsureValidated, JsonSchema)]
 pub struct PointSrc {
     pos_dist: PosDistType,
     energy_dist: EnergyDistType,
     spect_dist: SpecDistType,
+    #[schemars(with = "SiScalarSchema")]
     reference_length: validated_type!(Length, AllPositive && AllNormal),
 }
 
@@ -362,17 +374,22 @@ type ValidatedAngle = validated_type!(Angle, AllFinite && StaticInRange<Angle, A
 /// - `wave_length`: Wavelength of emitted light.
 /// - `cone_angle`: Angular spread of rays emitted from each pixel.
 ///
-#[derive(Debug, Clone, PartialEq, Serialize, EnsureValidated)]
+#[derive(Debug, Clone, PartialEq, Serialize, EnsureValidated, JsonSchema)]
 pub struct ImageSrc {
     /// path to the image file
+    #[schemars(with = "PathBuf")]
     file_path: validated_type!(PathBuf, PathValid),
     /// x & y dimensions of the image
+    #[schemars(with = "SiScalarSchema")]
     pixel_size: validated_type!(Length, AllPositive && AllNormal),
     /// total energy
+    #[schemars(with = "SiScalarSchema")]
     total_energy: validated_type!(Energy, AllPositive && AllNormal),
     /// wavelength
+    #[schemars(with = "SiScalarSchema")]
     wave_length: validated_type!(Length, AllPositive && AllNormal),
     /// cone angle of each point src per pixel
+    #[schemars(with = "SiScalarSchema")]
     cone_angle: ValidatedAngle,
 }
 #[derive(Deserialize)]

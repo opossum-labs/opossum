@@ -1,6 +1,7 @@
 use std::collections::{HashMap, hash_map::Values};
 
 use nalgebra::{MatrixXx2, MatrixXx3, Vector3};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 use uom::si::length::millimeter;
@@ -13,10 +14,11 @@ use crate::{
     millimeter,
     nodes::OpticGraph,
     prelude::Proptype,
+    types::Vector3Schema,
 };
 
 /// Struct to store the node origin uuid and parent ray bundle Uuid of a ray bundle
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq, JsonSchema)]
 pub struct RaysOrigin {
     parent_rays: Option<Uuid>,
     node_origin: Option<Uuid>,
@@ -33,7 +35,7 @@ impl RaysOrigin {
 }
 
 /// Struct to store the correlation between a ray bundle and its parent ray bundle as well as its node origin
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq, JsonSchema)]
 pub struct RaysNodeCorrelation {
     correlation: HashMap<Uuid, RaysOrigin>,
 }
@@ -56,11 +58,13 @@ impl RaysNodeCorrelation {
     }
 }
 /// struct that holds the history of the ray positions that is needed for report generation
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, JsonSchema)]
 pub struct GhostFocusHistory {
     /// vector of ray positions for each raybundle at a specifc spectral position
+    #[schemars(with = "Vec<Vec<Vec<Vector3Schema>>>")]
     pub rays_pos_history: Vec<Vec<Vec<MatrixXx3<Length>>>>,
     /// view direction if the ray position history is plotted
+    #[schemars(with = "Option<Vec<Vector3Schema>>")]
     pub plot_view_direction: Option<Vector3<f64>>,
     /// stores the corrleation between a rays bundle and its parent node as well as parent
     /// ray bundle for each bounce in a vector

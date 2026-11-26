@@ -2,10 +2,11 @@
 pub mod property;
 pub mod proptype;
 pub mod validator;
-
 use log::warn;
 pub use property::Property;
 pub use proptype::Proptype;
+use schemars::JsonSchema;
+use std::collections::HashMap;
 
 use crate::{
     error::{OpmResult, OpossumError},
@@ -18,9 +19,10 @@ use std::fmt::Debug;
 /// A general set of optical properties.
 ///
 /// Properties keep the order in which they were created.
-#[derive(Default, Serialize, Debug, Clone, PartialEq)]
+#[derive(Default, Serialize, Debug, Clone, PartialEq, JsonSchema)]
 #[serde(transparent)]
 pub struct Properties {
+    #[schemars(with = "HashMap<String, Property>")]
     props: IndexMap<String, Property>,
 }
 
@@ -462,15 +464,19 @@ mod test {
         // order a node author declares its properties in is the order the user sees. Sorting by
         // name would put e.g. a lens' `material` between its `front curvature` and `rear curvature`.
         let mut props = Properties::default();
-        props.create("front curvature", "", 1.0.into())?;
-        props.create("rear curvature", "", 2.0.into())?;
+        props.create("front radius of curvature", "", 1.0.into())?;
+        props.create("rear radius of curvature", "", 2.0.into())?;
         props.create("material", "", 3.0.into())?;
         assert_eq!(
             props
                 .iter()
                 .map(|(name, _)| name.as_str())
                 .collect::<Vec<_>>(),
-            vec!["front curvature", "rear curvature", "material"]
+            vec![
+                "front radius of curvature",
+                "rear radius of curvature",
+                "material"
+            ]
         );
         Ok(())
     }

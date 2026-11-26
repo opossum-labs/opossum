@@ -156,7 +156,7 @@ fn PolygonPointList(
 ) -> Element {
     rsx! {
         ul { class: "list-group border-start", id: "polygonPointList",
-            for (i, point) in polygon_config.clone().points().iter().enumerate() {
+            for (i , point) in polygon_config.clone().points().iter().enumerate() {
                 {
                     let class = if i % 2 == 0 {
                         "list-group-item d-grid text-secondary"
@@ -174,6 +174,7 @@ fn PolygonPointList(
                                             &UnitHandling {
                                                 base_unit: "m".to_string(),
                                                 handle_prefix: true,
+                                                display_scale: 1.0,
                                             },
                                             false,
                                         ),
@@ -189,6 +190,7 @@ fn PolygonPointList(
                                             &UnitHandling {
                                                 base_unit: "m".to_string(),
                                                 handle_prefix: true,
+                                                display_scale: 1.0,
                                             },
                                             false,
                                         ),

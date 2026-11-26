@@ -6,6 +6,7 @@
 //! or applying energy thresholds—directly into the propagation pipeline without modifying the optical nodes themselves.
 use std::fmt::Display;
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use strum::EnumIter;
 
@@ -20,7 +21,9 @@ use crate::{
 use uuid::Uuid;
 
 /// Strategy to use if a [`Ray`] misses a surface
-#[derive(Default, PartialEq, Eq, Debug, Clone, Copy, Serialize, Deserialize, EnumIter)]
+#[derive(
+    Default, PartialEq, Eq, Debug, Clone, Copy, Serialize, Deserialize, EnumIter, JsonSchema,
+)]
 pub enum MissedSurfaceStrategy {
     /// The [`Ray`] it is set as invalid and does no longer propagate.
     #[default]

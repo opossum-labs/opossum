@@ -1,5 +1,5 @@
 use argmin::{
-    core::{CostFunction, Error, Gradient},
+    core::{CostFunction, Error},
     solver::simulatedannealing::Anneal,
 };
 use nalgebra::{DMatrix, DVector};
@@ -15,7 +15,7 @@ use opossum_core::{
     error::OpmResult,
     opm_document::{
         OpmDocument,
-        optimization::{FiniteDifferenceMethod, FreeVariable, ParameterAddress, ParameterCoupling},
+        optimization::{FreeVariable, ParameterAddress, ParameterCoupling},
     },
 };
 use rayon::prelude::*;
@@ -38,7 +38,6 @@ pub struct MeritFunction {
     operands: Vec<Arc<dyn Operand>>,
     fatal_penalty: f64,
     bounds_penalty_weight: f64,
-    gradient_method: FiniteDifferenceMethod,
 }
 
 impl MeritFunction {
@@ -66,15 +65,7 @@ impl MeritFunction {
             operands,
             fatal_penalty: DEFAULT_FATAL_PENALTY,
             bounds_penalty_weight: DEFAULT_BOUNDS_PENALTY_WEIGHT,
-            gradient_method: FiniteDifferenceMethod::default(),
         })
-    }
-
-    /// Configures the finite difference approximation method for gradients.
-    #[must_use]
-    pub const fn with_gradient_method(mut self, method: FiniteDifferenceMethod) -> Self {
-        self.gradient_method = method;
-        self
     }
 
     /// Sets a custom penalty value for fatal simulation crashes
@@ -110,38 +101,25 @@ impl MeritFunction {
     /// Evaluates the scalar cost Phi(x).
     #[must_use]
     pub fn evaluate(&self, x: &[f64]) -> f64 {
+        let clamped_x = self.clamp_params(x);
         let mut total_cost = 0.0;
-        for (var, &val) in self.free_variables.iter().zip(x.iter()) {
-            if let Some(bounds) = &var.bounds {
-                let violation = bounds.penalty(val);
-                if violation > 0.0 {
-                    total_cost = self.bounds_penalty_weight.mul_add(violation, total_cost);
-                }
-            }
-        }
-
         let mut working_doc = self.blueprint.clone();
-
         let Ok(parameter_map) =
-            ParameterResolver::resolve(&self.free_variables, &self.couplings, x)
+            ParameterResolver::resolve(&self.free_variables, &self.couplings, &clamped_x)
         else {
             return self.fatal_penalty;
         };
-
         for (address, value) in parameter_map {
             if ParameterApplier::set_value(&mut working_doc, &address, value).is_err() {
                 return self.fatal_penalty;
             }
         }
-
         if ParameterApplier::finalize_update(&mut working_doc).is_err() {
             return self.fatal_penalty;
         }
-
         if working_doc.analyze_headless().is_err() {
             return self.fatal_penalty;
         }
-
         let context = EvaluationContext::new(&working_doc);
         for operand in &self.operands {
             match operand.evaluate(&context) {
@@ -156,99 +134,34 @@ impl MeritFunction {
         }
         total_cost
     }
-    /// Computes the numerical gradient vector using adaptive finite differences.
-    ///
-    /// Evaluates parameter perturbations in parallel across available CPU cores via Rayon.
-    #[must_use]
-    pub fn compute_gradient(&self, x: &[f64]) -> Vec<f64> {
-        let n = self.free_variables.len();
-
-        match self.gradient_method {
-            FiniteDifferenceMethod::Central => (0..n)
-                .into_par_iter()
-                .map(|i| {
-                    let h = self.free_variables[i].finite_difference_step(x[i]);
-                    let mut x_plus = x.to_vec();
-                    x_plus[i] += h;
-                    let mut x_minus = x.to_vec();
-                    x_minus[i] -= h;
-                    // Physical connection distances cannot be negative; clamp backward step to 0.0
-                    // so finite differences do not hit the fatal_penalty wall near zero distance.
-                    if matches!(
-                        self.free_variables[i].address,
-                        ParameterAddress::ConnectionDistance { .. }
-                    ) && x[i] >= 0.0
-                        && x_minus[i] < 0.0
-                    {
-                        x_minus[i] = 0.0;
-                    }
-                    let actual_span = x_plus[i] - x_minus[i];
-                    let f_plus = self.evaluate(&x_plus);
-                    let f_minus = self.evaluate(&x_minus);
-                    (f_plus - f_minus) / actual_span
-                })
-                .collect(),
-            FiniteDifferenceMethod::Forward => {
-                let f_base = self.evaluate(x);
-                (0..n)
-                    .into_par_iter()
-                    .map(|i| {
-                        let h = self.free_variables[i].finite_difference_step(x[i]);
-
-                        let mut x_plus = x.to_vec();
-                        x_plus[i] += h;
-
-                        let f_plus = self.evaluate(&x_plus);
-                        (f_plus - f_base) / h
-                    })
-                    .collect()
-            }
-        }
-    }
     /// Evaluates the signed residual vector R(x) for all operands and box bounds.
     ///
     /// The sum of squares `||R(x)||^2` strictly equals the scalar cost `Phi(x)`.
     #[must_use]
     pub fn evaluate_residuals(&self, x: &[f64]) -> DVector<f64> {
+        let clamped_x = self.clamp_params(x);
         let n_vars = self.free_variables.len();
         let mut residuals = Vec::new();
 
-        // 1. Box bounds penalty residuals
-        let mut bound_residuals = Vec::with_capacity(n_vars);
-        for (var, &val) in self.free_variables.iter().zip(x.iter()) {
-            let res = var.bounds.as_ref().map_or(0.0, |bounds| {
-                if val < bounds.min {
-                    (bounds.min - val) * self.bounds_penalty_weight.sqrt()
-                } else if val > bounds.max {
-                    (val - bounds.max) * self.bounds_penalty_weight.sqrt()
-                } else {
-                    0.0
-                }
-            });
-            bound_residuals.push(res);
-        }
-
-        // 2. Clone blueprint and apply candidate parameters
+        // Clone blueprint and apply clamped candidate parameters
         let mut working_doc = self.blueprint.clone();
         let Ok(parameter_map) =
-            ParameterResolver::resolve(&self.free_variables, &self.couplings, x)
+            ParameterResolver::resolve(&self.free_variables, &self.couplings, &clamped_x)
         else {
             return DVector::from_element(n_vars + 1, self.fatal_penalty.sqrt());
         };
-
         for (address, value) in parameter_map {
             if ParameterApplier::set_value(&mut working_doc, &address, value).is_err() {
                 return DVector::from_element(n_vars + 1, self.fatal_penalty.sqrt());
             }
         }
-
         if ParameterApplier::finalize_update(&mut working_doc).is_err()
             || working_doc.analyze_headless().is_err()
         {
             return DVector::from_element(n_vars + 1, self.fatal_penalty.sqrt());
         }
 
-        // 3. Evaluate individual operand residuals (flattened)
+        // Evaluate individual operand residuals (flattened)
         let context = EvaluationContext::new(&working_doc);
         for operand in &self.operands {
             match operand.residuals(&context) {
@@ -260,9 +173,6 @@ impl MeritFunction {
                 }
             }
         }
-
-        // 4. Append bound violation residuals
-        residuals.extend(bound_residuals);
         DVector::from_vec(residuals)
     }
 
@@ -279,8 +189,8 @@ impl MeritFunction {
                 // Determine step size based on parameter bounds or fallback scale
                 let span = var
                     .bounds
-                    .as_ref()
-                    .map_or_else(|| (x[j].abs() * 0.1).max(1e-3), |b| b.max - b.min);
+                    .finite_span()
+                    .unwrap_or_else(|| (x[j].abs() * 0.1).max(1e-3));
 
                 // 0.01% of total range is optimal for raytracing stability
                 let h = (span * 1e-4).clamp(1e-7, 1e-3);
@@ -312,6 +222,15 @@ impl MeritFunction {
         }
         jacobian
     }
+    /// Clamps each free variable value to its configured [`BoxBounds`].
+    #[must_use]
+    fn clamp_params(&self, x: &[f64]) -> Vec<f64> {
+        self.free_variables
+            .iter()
+            .zip(x.iter())
+            .map(|(var, &val)| var.bounds.clamp(val))
+            .collect()
+    }
 }
 
 impl CostFunction for MeritFunction {
@@ -320,15 +239,6 @@ impl CostFunction for MeritFunction {
 
     fn cost(&self, param: &Self::Param) -> Result<Self::Output, Error> {
         Ok(self.evaluate(param))
-    }
-}
-
-impl Gradient for MeritFunction {
-    type Param = Vec<f64>;
-    type Gradient = Vec<f64>;
-
-    fn gradient(&self, param: &Self::Param) -> Result<Self::Gradient, Error> {
-        Ok(self.compute_gradient(param))
     }
 }
 
@@ -350,16 +260,13 @@ impl Anneal for MeritFunction {
         let var = &self.free_variables[idx];
 
         // 2. Base range of the selected parameter
-        let total_span = var.bounds.as_ref().map_or_else(
-            || {
-                if param[idx].abs() > 1e-7 {
-                    param[idx].abs() * 0.5
-                } else {
-                    1e-2
-                }
-            },
-            |bounds| bounds.max - bounds.min,
-        );
+        let total_span = var.bounds.finite_span().unwrap_or_else(|| {
+            if param[idx].abs() > 1e-7 {
+                param[idx].abs() * 0.5
+            } else {
+                1e-2
+            }
+        });
 
         // 3. Temperature-dependent step contraction
         // We assume an initial temperature reference or normalize temp.
@@ -371,14 +278,8 @@ impl Anneal for MeritFunction {
         let max_step = total_span * 0.2 * temp_scale;
         let offset = rng.random_range(-1.0..=1.0) * max_step;
 
-        let mut candidate = param[idx] + offset;
-
         // 5. Strictly enforce box bounds
-        if let Some(bounds) = &var.bounds {
-            candidate = bounds.clamp(candidate);
-        }
-
-        next_param[idx] = candidate;
+        next_param[idx] = var.bounds.clamp(param[idx] + offset);
         Ok(next_param)
     }
 }

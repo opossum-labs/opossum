@@ -1,3 +1,7 @@
+use crate::components::node_editor::inputs::input_components::{
+    NumericUnitMode, OptionalNumericInput,
+};
+
 use super::state::OptimizationModel;
 use dioxus::prelude::*;
 use dioxus_free_icons::{Icon, icons::fa_solid_icons::FaGears};
@@ -47,9 +51,8 @@ pub fn LiveMonitorPanel(mut props: LiveMonitorProps) -> Element {
                 props.model.write().set_algorithm_kind(&e.value());
             },
             option { value: "DLS", "Damped Least Squares (Levenberg-Marquardt)" }
-            option { value: "LBFGS", "L-BFGS (Quasi-Newton)" }
             option { value: "NelderMead", "Nelder-Mead (Simplex)" }
-            option { value: "SimulatedAnnealing", "Simulated Annealing" }
+            option { value: "AdaptiveSimulatedAnnealing", "Simulated Annealing" }
           }
         }
         // Combined Solver Hyperparameters Box (Iterations & optional SA Parameters)
@@ -75,22 +78,20 @@ pub fn LiveMonitorPanel(mut props: LiveMonitorProps) -> Element {
               }
             }
             // Optional Annealing Parameters embedded within the same container
-            if current_algo_kind == "SimulatedAnnealing" {
+            if current_algo_kind == "AdaptiveSimulatedAnnealing" {
               div { class: "col-6 mt-2 pt-2 border-top border-secondary border-opacity-50",
                 label {
                   class: "form-label text-warning mb-0",
                   style: "font-size: 10px;",
                   "Initial Temp (T₀)"
                 }
-                input {
-                  r#type: "number",
-                  step: "0.1",
-                  class: "form-control form-control-sm bg-black text-light border-secondary font-monospace text-end",
-                  style: "font-size: 11px;",
+                OptionalNumericInput {
+                  value: Some(props.model.read().sa_initial_temperature()),
+                  mode: NumericUnitMode::Dimensionless,
                   disabled: props.is_running,
-                  value: "{props.model.read().sa_initial_temperature()}",
-                  oninput: move |e| {
-                      if let Ok(val) = e.value().parse::<f64>() {
+                  allow_empty: false,
+                  on_commit: move |opt: Option<f64>| {
+                      if let Some(val) = opt {
                           props.model.write().set_sa_initial_temperature(val);
                       }
                   },
@@ -102,17 +103,13 @@ pub fn LiveMonitorPanel(mut props: LiveMonitorProps) -> Element {
                   style: "font-size: 10px;",
                   "Cooling Rate (α)"
                 }
-                input {
-                  r#type: "number",
-                  step: "0.01",
-                  min: "0.50",
-                  max: "0.999",
-                  class: "form-control form-control-sm bg-black text-light border-secondary font-monospace text-end",
-                  style: "font-size: 11px;",
+                OptionalNumericInput {
+                  value: Some(props.model.read().sa_cooling_rate()),
+                  mode: NumericUnitMode::Dimensionless,
                   disabled: props.is_running,
-                  value: "{props.model.read().sa_cooling_rate()}",
-                  oninput: move |e| {
-                      if let Ok(val) = e.value().parse::<f64>() {
+                  allow_empty: false,
+                  on_commit: move |opt: Option<f64>| {
+                      if let Some(val) = opt {
                           props.model.write().set_sa_cooling_rate(val);
                       }
                   },

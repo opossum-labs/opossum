@@ -13,9 +13,9 @@ use dioxus_free_icons::{
 };
 use dioxus_primitives::alert_dialog::AlertDialogContent;
 use opossum_core::opm_document::optimization::{
-    DiscoveredObservable, MaxTotalLengthOperand, MetricOperand, MinEdgeThicknessOperand,
-    OperandMode, ParameterAddress, StandardOperand, TransmissionPenaltyOperand,
-    default_scale_for_metric,
+    DiscoveredObservable, MaxTotalLengthOperand, MetricOperand, MetricSource,
+    MinEdgeThicknessOperand, OperandMode, ParameterAddress, StandardOperand,
+    TransmissionPenaltyOperand, default_scale_for_metric,
 };
 
 type DiscoveredObservableHierarchy =
@@ -140,36 +140,57 @@ pub fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<b
                                   for obs in metrics {
                                     {
                                         let obs_clone = obs.clone();
+                                        let is_already_added = model
+                                            .read()
+                                            .operands
+                                            .iter()
+                                            .any(|row| {
+                                                matches!(
+                                                    &row.operand,
+                                                    StandardOperand::Metric(m)
+                                                    if m.source == MetricSource::Observable(obs.address.clone())
+                                                )
+                                            });
                                         let scale = default_scale_for_metric(
                                             obs.descriptor.dimension,
                                             &obs.descriptor.name,
                                         );
                                         rsx! {
-                                          div { class: "list-group-item bg-transparent text-light py-1 px-2 d-flex justify-content-between align-items-center border-0",
-                                            div { class: "font-monospace text-light", "{obs.descriptor.name}" }
-                                            button {
-                                              r#type: "button",
-                                              class: "btn btn-outline-primary btn-sm py-0 px-2 font-monospace",
-                                              style: "font-size: 10px;",
-                                              title: "Add metric operand (mode and target can be changed in the table)",
-                                              onclick: move |e: MouseEvent| {
-                                                  e.stop_propagation();
-                                                  model
-                                                      .write()
-                                                      .add_operand(
-                                                          StandardOperand::Metric(
-                                                              MetricOperand::new(
-                                                                  obs_clone.address.clone(),
-                                                                  0.0,
-                                                                  OperandMode::Equal,
-                                                                  1.0,
-                                                                  scale,
-                                                              ),
-                                                          ),
-                                                      );
-                                                  open.set(false);
-                                              },
-                                              "+ Add"
+                                          div { class: if is_already_added { "list-group-item bg-transparent text-muted py-1 px-2 d-flex justify-content-between align-items-center border-0 opacity-50" } else { "list-group-item bg-transparent text-light py-1 px-2 d-flex justify-content-between align-items-center border-0" },
+                                            div { class: if is_already_added { "font-monospace text-muted" } else { "font-monospace text-light" },
+                                              "{obs.descriptor.name}"
+                                            }
+                                            if is_already_added {
+                                              span {
+                                                class: "badge bg-secondary font-monospace",
+                                                style: "font-size: 9px;",
+                                                "Added"
+                                              }
+                                            } else {
+                                              button {
+                                                r#type: "button",
+                                                class: "btn btn-outline-primary btn-sm py-0 px-2 font-monospace",
+                                                style: "font-size: 10px;",
+                                                title: "Add metric operand (mode and target can be changed in the table)",
+                                                onclick: move |e: MouseEvent| {
+                                                    e.stop_propagation();
+                                                    model
+                                                        .write()
+                                                        .add_operand(
+                                                            StandardOperand::Metric(
+                                                                MetricOperand::new(
+                                                                    obs_clone.address.clone(),
+                                                                    0.0,
+                                                                    OperandMode::Equal,
+                                                                    1.0,
+                                                                    scale,
+                                                                ),
+                                                            ),
+                                                        );
+                                                    open.set(false);
+                                                },
+                                                "+ Add"
+                                              }
                                             }
                                           }
                                         }
@@ -200,29 +221,48 @@ pub fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<b
                                 {
                                     let node_id = node.node_id;
                                     let node_name = node.node_name.clone();
+                                    let is_already_added = model
+                                        .read()
+                                        .operands
+                                        .iter()
+                                        .any(|row| {
+                                            matches!(
+                                                &row.operand,
+                                                StandardOperand::MinEdgeThickness(t)
+                                                if t.node_id == node_id
+                                            )
+                                        });
                                     rsx! {
-                                      div { class: "list-group-item bg-transparent text-light py-1 px-2 d-flex justify-content-between align-items-center border-0",
+                                      div { class: if is_already_added { "list-group-item bg-transparent text-muted py-1 px-2 d-flex justify-content-between align-items-center border-0 opacity-50" } else { "list-group-item bg-transparent text-light py-1 px-2 d-flex justify-content-between align-items-center border-0" },
                                         div {
                                           span { class: "fw-bold me-2", "{node_name}" }
                                           span { class: "text-muted small", "({node.node_type})" }
                                         }
-                                        button {
-                                          r#type: "button",
-                                          class: "btn btn-outline-warning btn-sm py-0 px-2 font-monospace",
-                                          style: "font-size: 10px;",
-                                          title: "Enforces edge thickness >= 1.0 mm to prevent self-intersecting lens bodies",
-                                          onclick: move |e: MouseEvent| {
-                                              e.stop_propagation();
-                                              model
-                                                  .write()
-                                                  .add_operand(
-                                                      StandardOperand::MinEdgeThickness(
-                                                          MinEdgeThicknessOperand::new(node_id, 1.0e-3, 5.0),
-                                                      ),
-                                                  );
-                                              open.set(false);
-                                          },
-                                          "+ Edge Constraint (≥ 1.0 mm)"
+                                        if is_already_added {
+                                          span {
+                                            class: "badge bg-secondary font-monospace",
+                                            style: "font-size: 9px;",
+                                            "Added"
+                                          }
+                                        } else {
+                                          button {
+                                            r#type: "button",
+                                            class: "btn btn-outline-warning btn-sm py-0 px-2 font-monospace",
+                                            style: "font-size: 10px;",
+                                            title: "Enforces edge thickness >= 1.0 mm to prevent self-intersecting lens bodies",
+                                            onclick: move |e: MouseEvent| {
+                                                e.stop_propagation();
+                                                model
+                                                    .write()
+                                                    .add_operand(
+                                                        StandardOperand::MinEdgeThickness(
+                                                            MinEdgeThicknessOperand::new(node_id, 1.0e-3, 5.0),
+                                                        ),
+                                                    );
+                                                open.set(false);
+                                            },
+                                            "+ Edge Constraint (≥ 1.0 mm)"
+                                          }
                                         }
                                       }
                                     }
@@ -236,50 +276,66 @@ pub fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<b
                           }
                         }
                       }
-                      div { class: "border border-secondary rounded p-2 bg-dark d-flex justify-content-between align-items-center",
-                        div {
-                          div { class: "fw-bold text-warning small",
-                            "Overall Track Length Constraint"
-                          }
-                          div { class: "text-muted small",
-                            "Penalizes if the sum of all distance segments exceeds a maximum limit."
-                          }
-                        }
-                        button {
-                          r#type: "button",
-                          class: "btn btn-outline-warning btn-sm py-1 px-2 font-monospace",
-                          style: "font-size: 11px;",
-                          onclick: move |e: MouseEvent| {
-                              e.stop_propagation();
-                              let distance_segments: Vec<ParameterAddress> = model
-                                  .read()
-                                  .schema
-                                  .as_ref()
-                                  .map(|s| {
-                                      s.controllable_variables
-                                          .iter()
-                                          .filter_map(|v| match &v.address {
-                                              ParameterAddress::ConnectionDistance { .. } => {
-                                                  Some(v.address.clone())
-                                              }
-                                              _ => None,
-                                          })
-                                          .collect()
-                                  })
-                                  .unwrap_or_default();
-                              if !distance_segments.is_empty() {
-                                  model
-                                      .write()
-                                      .add_operand(
-                                          StandardOperand::MaxTotalLength(
-                                              MaxTotalLengthOperand::new(distance_segments, 0.5, 1.0),
-                                          ),
-                                      );
-                                  open.set(false);
+                      {
+                          let has_track_length = model
+                              .read()
+                              .operands
+                              .iter()
+                              .any(|row| matches!(&row.operand, StandardOperand::MaxTotalLength(_)));
+                          rsx! {
+                            div { class: if has_track_length { "border border-secondary rounded p-2 bg-dark d-flex justify-content-between align-items-center opacity-50" } else { "border border-secondary rounded p-2 bg-dark d-flex justify-content-between align-items-center" },
+                              div {
+                                div { class: if has_track_length { "fw-bold text-muted small" } else { "fw-bold text-warning small" },
+                                  "Overall Track Length Constraint"
+                                }
+                                div { class: "text-muted small",
+                                  "Penalizes if the sum of all distance segments exceeds a maximum limit."
+                                }
                               }
-                          },
-                          "+ Add Track Length Limit"
-                        }
+                              if has_track_length {
+                                span {
+                                  class: "badge bg-secondary font-monospace",
+                                  style: "font-size: 9px;",
+                                  "Added"
+                                }
+                              } else {
+                                button {
+                                  r#type: "button",
+                                  class: "btn btn-outline-warning btn-sm py-1 px-2 font-monospace",
+                                  style: "font-size: 11px;",
+                                  onclick: move |e: MouseEvent| {
+                                      e.stop_propagation();
+                                      let distance_segments: Vec<ParameterAddress> = model
+                                          .read()
+                                          .schema
+                                          .as_ref()
+                                          .map_or_default(|s| {
+                                              s.controllable_variables
+                                                  .iter()
+                                                  .filter_map(|v| match &v.address {
+                                                      ParameterAddress::ConnectionDistance { .. } => {
+                                                          Some(v.address.clone())
+                                                      }
+                                                      _ => None,
+                                                  })
+                                                  .collect()
+                                          });
+                                      if !distance_segments.is_empty() {
+                                          model
+                                              .write()
+                                              .add_operand(
+                                                  StandardOperand::MaxTotalLength(
+                                                      MaxTotalLengthOperand::new(distance_segments, 0.5, 1.0),
+                                                  ),
+                                              );
+                                          open.set(false);
+                                      }
+                                  },
+                                  "+ Add Track Length Limit"
+                                }
+                              }
+                            }
+                          }
                       }
                     }
                   }
@@ -298,31 +354,52 @@ pub fn AddOperandDialog(mut model: Signal<OptimizationModel>, mut open: Signal<b
                           {
                             {
                                 let obs_pen = obs.clone();
+                                let is_already_added = model
+                                    .read()
+                                    .operands
+                                    .iter()
+                                    .any(|row| {
+                                        matches!(
+                                            &row.operand,
+                                            StandardOperand::TransmissionPenalty(t)
+                                            if t.address == obs.address
+                                        )
+                                    });
                                 rsx! {
-                                  div { class: "border border-secondary rounded p-2 bg-dark d-flex justify-content-between align-items-center",
+                                  div { class: if is_already_added { "border border-secondary rounded p-2 bg-dark d-flex justify-content-between align-items-center opacity-50" } else { "border border-secondary rounded p-2 bg-dark d-flex justify-content-between align-items-center" },
                                     div {
-                                      div { class: "fw-bold text-light", "{obs_pen.node_name}" }
+                                      div { class: if is_already_added { "fw-bold text-muted" } else { "fw-bold text-light" },
+                                        "{obs_pen.node_name}"
+                                      }
                                       div { class: "text-muted font-monospace small",
                                         "{obs_pen.analyzer_name} → {obs_pen.descriptor.name}"
                                       }
                                     }
-                                    button {
-                                      r#type: "button",
-                                      class: "btn btn-outline-danger btn-sm py-0 px-2 font-monospace",
-                                      style: "font-size: 10px;",
-                                      title: "Penalizes ray losses: weight * ((expected - valid) / expected)^2",
-                                      onclick: move |e: MouseEvent| {
-                                          e.stop_propagation();
-                                          model
-                                              .write()
-                                              .add_operand(
-                                                  StandardOperand::TransmissionPenalty(
-                                                      TransmissionPenaltyOperand::new(obs_pen.address.clone(), 100, 2.0),
-                                                  ),
-                                              );
-                                          open.set(false);
-                                      },
-                                      "+ Transmission Guard"
+                                    if is_already_added {
+                                      span {
+                                        class: "badge bg-secondary font-monospace",
+                                        style: "font-size: 9px;",
+                                        "Added"
+                                      }
+                                    } else {
+                                      button {
+                                        r#type: "button",
+                                        class: "btn btn-outline-danger btn-sm py-0 px-2 font-monospace",
+                                        style: "font-size: 10px;",
+                                        title: "Penalizes ray losses: weight * ((expected - valid) / expected)^2",
+                                        onclick: move |e: MouseEvent| {
+                                            e.stop_propagation();
+                                            model
+                                                .write()
+                                                .add_operand(
+                                                    StandardOperand::TransmissionPenalty(
+                                                        TransmissionPenaltyOperand::new(obs_pen.address.clone(), 100, 2.0),
+                                                    ),
+                                                );
+                                            open.set(false);
+                                        },
+                                        "+ Transmission Guard"
+                                      }
                                     }
                                   }
                                 }

@@ -1,22 +1,25 @@
 //! Circular, hexapolar distribution
+use super::PositionDistribution;
 use crate::{
     error::OpmResult,
     generic_validators::{AllFinite, AllPositive},
-    millimeter, validated, validated_type,
+    millimeter,
+    types::SiScalarSchema,
+    validated, validated_type,
 };
-
-use super::PositionDistribution;
 use nalgebra::{Point3, point};
 use num_traits::Zero;
 use opm_macros_lib::EnsureValidated;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 /// Circular, hexapolar distribution
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy, EnsureValidated)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Copy, EnsureValidated, JsonSchema)]
 pub struct Hexapolar {
     #[validate(skip)]
     nr_of_rings: u8,
+    #[schemars(with = "SiScalarSchema")]
     radius: validated_type!(Length, AllPositive && AllFinite),
 }
 impl Hexapolar {

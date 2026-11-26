@@ -18,11 +18,11 @@ fn test_optimize_kepler_lens_curvature_coupled() -> OpmResult<()> {
 
     let front_curvature_addr = ParameterAddress::NodeProperty {
         node_id: lens2_id,
-        property_name: "front curvature".into(),
+        property_name: "front radius of curvature".into(),
     };
     let rear_curvature_addr = ParameterAddress::NodeProperty {
         node_id: lens2_id,
-        property_name: "rear curvature".into(),
+        property_name: "rear radius of curvature".into(),
     };
     let spot_observable_addr = ObservableAddress {
         analyzer_id,
@@ -69,11 +69,11 @@ fn test_optimize_kepler_best_form_lens_curvature() -> OpmResult<()> {
     // Use SurfaceCurvature in [1/m]
     let front_c_addr = ParameterAddress::SurfaceCurvature {
         node_id: lens2_id,
-        property_name: "front curvature".into(),
+        property_name: "front radius of curvature".into(),
     };
     let rear_c_addr = ParameterAddress::SurfaceCurvature {
         node_id: lens2_id,
-        property_name: "rear curvature".into(),
+        property_name: "rear radius of curvature".into(),
     };
     let spot_observable_addr = ObservableAddress {
         analyzer_id,
@@ -95,7 +95,7 @@ fn test_optimize_kepler_best_form_lens_curvature() -> OpmResult<()> {
             OperandMode::Equal,
             1.0,
         ))
-        .with_algorithm(OptimizationAlgorithm::lbfgs().with_max_iterations(30))
+        .with_algorithm(OptimizationAlgorithm::dls().with_max_iterations(30))
         .optimize()?;
 
     let best_c1 = summary.value(&front_c_addr).unwrap();

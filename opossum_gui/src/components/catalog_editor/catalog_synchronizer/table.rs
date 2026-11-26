@@ -5,10 +5,12 @@ use crate::components::primitives::{
 use dioxus::prelude::*;
 use dioxus_free_icons::{
     Icon,
-    icons::fa_solid_icons::{FaBook, FaCheck, FaCloudArrowDown, FaCloudArrowUp, FaPlus},
+    icons::fa_solid_icons::{
+        FaBook, FaCheck, FaCloudArrowDown, FaCloudArrowUp, FaPlus, FaTriangleExclamation,
+    },
 };
 
-use super::types::{AssetSyncRow, AssetSyncStatus};
+use super::types::{AssetSyncRow, AssetSyncStatus, CatalogOrigin};
 
 /// Props for the catalog synchronizer table.
 #[derive(Props, Clone, PartialEq)]
@@ -19,13 +21,17 @@ pub struct CatalogTableProps {
     pub total_model_assets: usize,
     /// Callback triggered when an outdated asset should be updated in the model.
     pub on_update_in_model: EventHandler<AssetSyncRow>,
-    /// Callback triggered when a regular missing or newer asset should be imported/exported to the catalog.
-    pub on_import_to_catalog: EventHandler<AssetSyncRow>,
-    /// Callback triggered when an ad-hoc asset needs to be edited before catalog publishing.
+    /// Callback triggered when a missing regular asset should be imported into the user catalog.
+    pub on_import_to_user_catalog: EventHandler<AssetSyncRow>,
+    /// Callback triggered when an ad-hoc asset needs to be edited before publishing to the user catalog.
     pub on_edit_adhoc: EventHandler<AssetSyncRow>,
+    /// Callback triggered when the user should pull the official catalog for a newer model version.
+    pub on_sync_official_catalog: EventHandler<()>,
+    /// Callback triggered when a user catalog conflict must be resolved (overwrite / rename / cancel).
+    pub on_resolve_user_conflict: EventHandler<AssetSyncRow>,
 }
 
-/// Renders a scrollable comparison table showing model assets alongside their catalog status.
+/// Renders a scrollable comparison table showing model assets alongside their official/user catalog status.
 #[component]
 pub fn CatalogTable(props: CatalogTableProps) -> Element {
     rsx! {
@@ -36,9 +42,10 @@ pub fn CatalogTable(props: CatalogTableProps) -> Element {
                         tr {
                             th { "Asset Name" }
                             th { "Category" }
+                            th { "Source" }
                             th { "Manufacturer" }
-                            th { "Model Version" }
-                            th { "Catalog Version" }
+                            th { "Model Ver." }
+                            th { "Catalog Ver." }
                             th { "Used In Nodes" }
                             th { "Status" }
                             th { class: "text-end", "Actions" }
@@ -50,14 +57,16 @@ pub fn CatalogTable(props: CatalogTableProps) -> Element {
                                 key: "{row.id}",
                                 row: row.clone(),
                                 on_update_in_model: props.on_update_in_model,
-                                on_import_to_catalog: props.on_import_to_catalog,
+                                on_import_to_user_catalog: props.on_import_to_user_catalog,
                                 on_edit_adhoc: props.on_edit_adhoc,
+                                on_sync_official_catalog: props.on_sync_official_catalog,
+                                on_resolve_user_conflict: props.on_resolve_user_conflict,
                             }
                         }
                         if props.rows.is_empty() {
                             tr {
                                 td {
-                                    colspan: "8",
+                                    colspan: "9",
                                     class: "text-center text-muted py-4",
                                     if props.total_model_assets == 0 {
                                         "No assets found in the currently loaded model."
@@ -81,18 +90,21 @@ pub struct CatalogTableRowProps {
     pub row: AssetSyncRow,
     /// Callback triggered when an outdated asset should be updated in the model.
     pub on_update_in_model: EventHandler<AssetSyncRow>,
-    /// Callback triggered when a regular missing or newer asset should be imported/exported to the catalog.
-    pub on_import_to_catalog: EventHandler<AssetSyncRow>,
-    /// Callback triggered when an ad-hoc asset needs to be edited before catalog publishing.
+    /// Callback triggered when a missing regular asset should be imported into the user catalog.
+    pub on_import_to_user_catalog: EventHandler<AssetSyncRow>,
+    /// Callback triggered when an ad-hoc asset needs to be edited before publishing to the user catalog.
     pub on_edit_adhoc: EventHandler<AssetSyncRow>,
+    /// Callback triggered when the user should pull the official catalog for a newer model version.
+    pub on_sync_official_catalog: EventHandler<()>,
+    /// Callback triggered when a user catalog conflict must be resolved (overwrite / rename / cancel).
+    pub on_resolve_user_conflict: EventHandler<AssetSyncRow>,
 }
 
-/// Renders a single row representing an asset, its versions, node usages, and context actions.
+/// Renders a single row representing an asset, its catalog origin, versions, usages, and actions.
 #[component]
 pub fn CatalogTableRow(props: CatalogTableRowProps) -> Element {
     let row = &props.row;
 
-    // Concatenate node names for tooltip and truncated display
     let node_names = if row.used_by_nodes.is_empty() {
         "-".to_string()
     } else {
@@ -111,6 +123,21 @@ pub fn CatalogTableRow(props: CatalogTableRowProps) -> Element {
             // Category Badge
             td {
                 span { class: "badge bg-dark", "{row.category.label()}" }
+            }
+
+            // Catalog Origin Badge (Official / User / None)
+            td {
+                match row.origin {
+                    CatalogOrigin::Official => rsx! {
+                        span { class: "badge bg-primary", "Official" }
+                    },
+                    CatalogOrigin::User => rsx! {
+                        span { class: "badge bg-info text-dark", "User" }
+                    },
+                    CatalogOrigin::None => rsx! {
+                        span { class: "badge bg-light text-dark border", "Unlisted" }
+                    },
+                }
             }
 
             // Manufacturer
@@ -138,7 +165,7 @@ pub fn CatalogTableRow(props: CatalogTableRowProps) -> Element {
             td {
                 div {
                     class: "small text-truncate",
-                    style: "max-width: 14rem;",
+                    style: "max-width: 12rem;",
                     title: "{node_names}",
                     "{node_names}"
                 }
@@ -159,10 +186,16 @@ pub fn CatalogTableRow(props: CatalogTableRowProps) -> Element {
                             "Update available"
                         }
                     },
+                    AssetSyncStatus::OfficialSyncRecommended => rsx! {
+                        span { class: "badge bg-info text-dark d-inline-flex align-items-center gap-1",
+                            Icon { icon: FaCloudArrowDown }
+                            "Pull Official Catalog"
+                        }
+                    },
                     AssetSyncStatus::MissingInCatalogRegular => rsx! {
                         span { class: "badge bg-primary d-inline-flex align-items-center gap-1",
                             Icon { icon: FaCloudArrowUp }
-                            "Missing in catalog"
+                            "New for User Catalog"
                         }
                     },
                     AssetSyncStatus::MissingInCatalogAdHoc => rsx! {
@@ -171,8 +204,11 @@ pub fn CatalogTableRow(props: CatalogTableRowProps) -> Element {
                             "Ad-Hoc Draft"
                         }
                     },
-                    AssetSyncStatus::ModelNewer => rsx! {
-                        span { class: "badge bg-info text-dark", "Model newer" }
+                    AssetSyncStatus::UserConflict => rsx! {
+                        span { class: "badge bg-danger d-inline-flex align-items-center gap-1",
+                            Icon { icon: FaTriangleExclamation }
+                            "User Conflict"
+                        }
                     },
                 }
             }
@@ -193,16 +229,26 @@ pub fn CatalogTableRow(props: CatalogTableRowProps) -> Element {
                             }
                         }
                     }
+                    AssetSyncStatus::OfficialSyncRecommended => rsx! {
+                        Button {
+                            title: "Model has a higher version of this official material; sync the official catalog",
+                            variant: ButtonVariant::Primary,
+                            size: ButtonSize::Sm,
+                            onclick: move |_| props.on_sync_official_catalog.call(()),
+                            Icon { icon: FaCloudArrowDown }
+                            "Sync Official"
+                        }
+                    },
                     AssetSyncStatus::MissingInCatalogRegular => {
                         let row_clone = row.clone();
                         rsx! {
                             Button {
-                                title: "Import this regular material into the local catalog",
+                                title: "Import this material into the local user catalog",
                                 variant: ButtonVariant::Success,
                                 size: ButtonSize::Sm,
-                                onclick: move |_| props.on_import_to_catalog.call(row_clone.clone()),
+                                onclick: move |_| props.on_import_to_user_catalog.call(row_clone.clone()),
                                 Icon { icon: FaPlus }
-                                "Add to Catalog"
+                                "Add to User Catalog"
                             }
                         }
                     }
@@ -210,12 +256,25 @@ pub fn CatalogTableRow(props: CatalogTableRowProps) -> Element {
                         let row_clone = row.clone();
                         rsx! {
                             Button {
-                                title: "Open in Material Editor to review and publish to catalog",
+                                title: "Open in Material Editor to review and publish to the user catalog",
                                 variant: ButtonVariant::Primary,
                                 size: ButtonSize::Sm,
                                 onclick: move |_| props.on_edit_adhoc.call(row_clone.clone()),
                                 Icon { icon: FaPlus }
-                                "Add to Catalog"
+                                "Add to User Catalog"
+                            }
+                        }
+                    }
+                    AssetSyncStatus::UserConflict => {
+                        let row_clone = row.clone();
+                        rsx! {
+                            Button {
+                                title: "Resolve conflict in user catalog (Overwrite, Save as New, or Cancel)",
+                                variant: ButtonVariant::Outline,
+                                size: ButtonSize::Sm,
+                                onclick: move |_| props.on_resolve_user_conflict.call(row_clone.clone()),
+                                Icon { icon: FaTriangleExclamation }
+                                "Resolve Conflict"
                             }
                         }
                     }
@@ -225,19 +284,6 @@ pub fn CatalogTableRow(props: CatalogTableRowProps) -> Element {
                             "In Sync"
                         }
                     },
-                    AssetSyncStatus::ModelNewer => {
-                        let row_clone = row.clone();
-                        rsx! {
-                            Button {
-                                title: "Export this newer version to the catalog",
-                                variant: ButtonVariant::Outline,
-                                size: ButtonSize::Sm,
-                                onclick: move |_| props.on_import_to_catalog.call(row_clone.clone()),
-                                Icon { icon: FaCloudArrowUp }
-                                "Update Catalog Item"
-                            }
-                        }
-                    }
                 }
             }
         }

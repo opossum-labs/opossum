@@ -1,5 +1,6 @@
 #![warn(missing_docs)]
 use opm_macros_lib::OpmNode;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::length::{meter, nanometer};
 
@@ -26,7 +27,7 @@ use crate::{
 use std::fmt::{Debug, Display};
 
 #[non_exhaustive]
-#[derive(Debug, Default, Eq, PartialEq, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Default, Eq, PartialEq, Clone, Copy, Serialize, Deserialize, JsonSchema)]
 /// Type of the [`Spectrometer`]. This is currently not used.
 pub enum SpectrometerType {
     /// an ideal energy meter

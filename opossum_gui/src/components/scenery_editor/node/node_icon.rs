@@ -1,4 +1,3 @@
-// src/components/scenery_editor/node/node_icon.rs
 use dioxus::prelude::*;
 
 #[component]

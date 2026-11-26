@@ -1,5 +1,3 @@
-use core::f64;
-
 use crate::components::{
     node_editor::inputs::input_components::{UnitHandling, UnitInput},
     scenery_editor::{
@@ -9,6 +7,7 @@ use crate::components::{
         graph_workspace::{GraphStateStoreExt, GraphStoreStoreExt},
     },
 };
+use core::f64;
 use dioxus::{html::geometry::euclid::default::Point2D, prelude::*};
 use opossum_core::{prelude::*, types::api_types::ConnectInfo};
 
@@ -32,11 +31,10 @@ pub fn EdgeComponent(edge: ReadStore<EdgeElement>, distance_places: bool) -> Ele
             graph_store
                 .nodes()
                 .get(edge.src_uuid())
-                .map(|n| {
+                .map_or_default(|n| {
                     n.read()
                         .abs_port_position(PortType::Output, edge.src_port())
                 })
-                .unwrap_or_default()
         }
     });
 
@@ -46,11 +44,10 @@ pub fn EdgeComponent(edge: ReadStore<EdgeElement>, distance_places: bool) -> Ele
             graph_store
                 .nodes()
                 .get(edge.target_uuid())
-                .map(|n| {
+                .map_or_default(|n| {
                     n.read()
                         .abs_port_position(PortType::Input, edge.target_port())
                 })
-                .unwrap_or_default()
         }
     });
 

@@ -25,7 +25,7 @@ use crate::{
 use dioxus::prelude::*;
 use dioxus_free_icons::{Icon, icons::fa_solid_icons::FaArrowsRotate};
 use opossum_core::{material::Material, refractive_index::RefrIndexSellmeier1};
-use opossum_registry::AssetRegistry;
+use opossum_registry::{AssetRegistry, CatalogSource};
 
 /// Main modal dialog component for asset catalog synchronization.
 #[component]
@@ -41,7 +41,7 @@ pub fn CatalogSynchronizer(
     let mut error_message = use_signal(|| Option::<String>::None);
     let mut status_message = use_signal(|| Option::<String>::None);
 
-    // Git sync state
+    // Git sync state (official catalog)
     let mut is_git_syncing = use_signal(|| false);
     let mut git_sync_result = use_signal(|| Option::<Result<String, String>>::None);
 
@@ -62,13 +62,16 @@ pub fn CatalogSynchronizer(
     });
     let mut editing_usages = use_signal(Vec::<NodeUsageInfo>::new);
 
+    // User catalog conflict resolution modal state
+    let mut conflict_row = use_signal(|| Option::<AssetSyncRow>::None);
+    let mut conflict_rename_input = use_signal(String::new);
+
     // Helper: Scans the model using the service layer
     let scan_model = move || {
         spawn(async move {
             is_scanning.set(true);
             error_message.set(None);
 
-            // Clone registry value so no GenerationalRef is held across the await point
             let reg = registry.cloned();
             match service::fetch_and_scan_model(&reg).await {
                 Ok(computed_rows) => rows.set(computed_rows),
@@ -86,157 +89,7 @@ pub fn CatalogSynchronizer(
         }
     });
 
-    // Action: Update a single outdated material to the catalog version
-    let update_material_in_model = move |row: AssetSyncRow| {
-        spawn(async move {
-            let latest_mat = match registry.read().load(row.id, None) {
-                Ok(m) => m,
-                Err(e) => {
-                    error_message.set(Some(format!("Failed to load material from catalog: {e}")));
-                    return;
-                }
-            };
-
-            match service::update_material_in_nodes(&latest_mat, &row.used_by_nodes).await {
-                Ok(()) => {
-                    status_message.set(Some(format!(
-                        "Updated '{}' to v{} in {} node(s).",
-                        row.name,
-                        latest_mat.version(),
-                        row.used_by_nodes.len()
-                    )));
-                    *crate::NODE_DETAILS_REFRESH.write() += 1;
-                    scan_model();
-                }
-                Err(errors) => {
-                    error_message.set(Some(format!(
-                        "Errors updating nodes: {}",
-                        errors.join("; ")
-                    )));
-                }
-            }
-        });
-    };
-
-    // Action: Import a regular material (v >= 1) into the catalog
-    let import_regular_to_catalog = use_callback(move |row: AssetSyncRow| {
-        let mut registry = registry;
-        if let Some(mut mat) = row.material {
-            match registry.write().publish(&mut mat) {
-                Ok(path) => {
-                    status_message.set(Some(format!(
-                        "Imported '{}' (v{}) into catalog at {}.",
-                        row.name,
-                        mat.version(),
-                        path.display()
-                    )));
-                    scan_model();
-                }
-                Err(e) => {
-                    error_message.set(Some(format!("Failed to publish to catalog: {e}")));
-                }
-            }
-        }
-    });
-
-    // Callback: Handle property edits from MaterialEditor
-    let on_material_changed = use_callback(move |e: MaterialChangeEvent| {
-        e.action.apply(&mut editing_material.write());
-    });
-
-    // Callback: Publish edited Ad-Hoc material and update nodes
-    let on_material_save = use_callback(move |()| {
-        let mut registry = registry;
-        let mut mat = editing_material.read().clone();
-        match registry.write().publish(&mut mat) {
-            Ok(path) => {
-                let published_version = mat.version();
-                let published_name = mat.name().to_string();
-                let usages = editing_usages.read().clone();
-
-                spawn(async move {
-                    let _ = service::update_material_in_nodes(&mat, &usages).await;
-                    *crate::NODE_DETAILS_REFRESH.write() += 1;
-                    status_message.set(Some(format!(
-                        "Published '{published_name}' as v{published_version} to catalog ({}) and updated {} model node(s).",
-                        path.display(),
-                        usages.len()
-                    )));
-                    scan_model();
-                });
-            }
-            Err(e) => {
-                error_message.set(Some(format!("Failed to publish material to catalog: {e}")));
-            }
-        }
-    });
-
-    // Action: Batch update all outdated materials
-    let update_all_outdated = move |()| {
-        let current_rows = rows.read().clone();
-        spawn(async move {
-            let outdated_rows: Vec<_> = current_rows
-                .into_iter()
-                .filter(|r| r.status == AssetSyncStatus::ModelOutdated)
-                .collect();
-
-            if outdated_rows.is_empty() {
-                return;
-            }
-
-            let mut updated_count = 0;
-            for row in outdated_rows {
-                // Load material synchronously first so the GenerationalRef is dropped before the await point
-                let load_result = registry.read().load(row.id, None);
-                if let Ok(latest_mat) = load_result
-                    && service::update_material_in_nodes(&latest_mat, &row.used_by_nodes)
-                        .await
-                        .is_ok()
-                {
-                    updated_count += 1;
-                }
-            }
-
-            *crate::NODE_DETAILS_REFRESH.write() += 1;
-            status_message.set(Some(format!(
-                "Batch updated {updated_count} material(s) to their latest catalog versions."
-            )));
-            scan_model();
-        });
-    };
-
-    // Action: Batch import all regular missing materials
-    let import_all_missing = move |()| {
-        let mut registry = registry;
-        let mut imported = 0;
-        let missing_rows: Vec<_> = rows
-            .read()
-            .iter()
-            .filter(|r| r.status == AssetSyncStatus::MissingInCatalogRegular)
-            .cloned()
-            .collect();
-
-        for row in missing_rows {
-            if let Some(mut mat) = row.material
-                && registry.write().publish(&mut mat).is_ok()
-            {
-                imported += 1;
-            }
-        }
-
-        if imported > 0 {
-            status_message.set(Some(format!(
-                "Successfully imported {imported} material(s) into the catalog."
-            )));
-            scan_model();
-        } else {
-            error_message.set(Some(
-                "No regular missing materials could be imported.".to_string(),
-            ));
-        }
-    };
-
-    // Action: Trigger Git sync
+    // Action: Synchronize official catalog via Git and rebuild indices
     let run_git_sync = move |()| {
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -271,6 +124,238 @@ pub fn CatalogSynchronizer(
         }
     };
 
+    // Action: Update a single outdated material to its latest catalog version (official or user)
+    let update_material_in_model = move |row: AssetSyncRow| {
+        spawn(async move {
+            let source = match row.origin {
+                CatalogOrigin::Official => CatalogSource::Official,
+                CatalogOrigin::User => CatalogSource::User,
+                CatalogOrigin::None => {
+                    error_message.set(Some(format!(
+                        "Cannot update '{}': asset is not present in official or user catalog.",
+                        row.name
+                    )));
+                    return;
+                }
+            };
+
+            let latest_mat = match registry.read().load_from(source, row.id, None) {
+                Ok(m) => m,
+                Err(e) => {
+                    error_message.set(Some(format!("Failed to load material from catalog: {e}")));
+                    return;
+                }
+            };
+
+            match service::update_material_in_nodes(&latest_mat, &row.used_by_nodes).await {
+                Ok(()) => {
+                    status_message.set(Some(format!(
+                        "Updated '{}' to v{} in {} node(s).",
+                        row.name,
+                        latest_mat.version(),
+                        row.used_by_nodes.len()
+                    )));
+                    *crate::NODE_DETAILS_REFRESH.write() += 1;
+                    scan_model();
+                }
+                Err(errors) => {
+                    error_message.set(Some(format!(
+                        "Errors updating nodes: {}",
+                        errors.join("; ")
+                    )));
+                }
+            }
+        });
+    };
+
+    // Action: Import a regular material (v >= 1) into the user catalog
+    let import_regular_to_user_catalog = use_callback(move |row: AssetSyncRow| {
+        let mut registry = registry;
+        if let Some(mut mat) = row.material {
+            match registry.write().publish_to(CatalogSource::User, &mut mat) {
+                Ok(path) => {
+                    status_message.set(Some(format!(
+                        "Imported '{}' (v{}) into user catalog at {}.",
+                        row.name,
+                        mat.version(),
+                        path.display()
+                    )));
+                    scan_model();
+                }
+                Err(e) => {
+                    error_message.set(Some(format!("Failed to publish to user catalog: {e}")));
+                }
+            }
+        }
+    });
+
+    // Callback: Handle property edits from MaterialEditor
+    let on_material_changed = use_callback(move |e: MaterialChangeEvent| {
+        e.action.apply(&mut editing_material.write());
+    });
+
+    // Callback: Publish edited Ad-Hoc material to the user catalog and update nodes
+    let on_material_save = use_callback(move |()| {
+        let mut registry = registry;
+        let mut mat = editing_material.read().clone();
+        match registry.write().publish_to(CatalogSource::User, &mut mat) {
+            Ok(path) => {
+                let published_version = mat.version();
+                let published_name = mat.name().to_string();
+                let usages = editing_usages.read().clone();
+
+                spawn(async move {
+                    let _ = service::update_material_in_nodes(&mat, &usages).await;
+                    *crate::NODE_DETAILS_REFRESH.write() += 1;
+                    status_message.set(Some(format!(
+                        "Published '{published_name}' as v{published_version} to user catalog ({}) and updated {} model node(s).",
+                        path.display(),
+                        usages.len()
+                    )));
+                    scan_model();
+                });
+            }
+            Err(e) => {
+                error_message.set(Some(format!(
+                    "Failed to publish material to user catalog: {e}"
+                )));
+            }
+        }
+    });
+
+    // Action: Batch update all outdated materials
+    let update_all_outdated = move |()| {
+        let current_rows = rows.read().clone();
+        spawn(async move {
+            let outdated_rows: Vec<_> = current_rows
+                .into_iter()
+                .filter(|r| r.status == AssetSyncStatus::ModelOutdated)
+                .collect();
+
+            if outdated_rows.is_empty() {
+                return;
+            }
+
+            let mut updated_count = 0;
+            for row in outdated_rows {
+                let source = match row.origin {
+                    CatalogOrigin::Official => CatalogSource::Official,
+                    CatalogOrigin::User => CatalogSource::User,
+                    CatalogOrigin::None => continue,
+                };
+                let load_result = registry.read().load_from(source, row.id, None);
+                if let Ok(latest_mat) = load_result
+                    && service::update_material_in_nodes(&latest_mat, &row.used_by_nodes)
+                        .await
+                        .is_ok()
+                {
+                    updated_count += 1;
+                }
+            }
+
+            *crate::NODE_DETAILS_REFRESH.write() += 1;
+            status_message.set(Some(format!(
+                "Batch updated {updated_count} material(s) to their latest catalog versions."
+            )));
+            scan_model();
+        });
+    };
+
+    // Action: Batch import all regular missing materials into the user catalog
+    let import_all_missing = move |()| {
+        let mut registry = registry;
+        let mut imported = 0;
+        let missing_rows: Vec<_> = rows
+            .read()
+            .iter()
+            .filter(|r| r.status == AssetSyncStatus::MissingInCatalogRegular)
+            .cloned()
+            .collect();
+
+        for row in missing_rows {
+            if let Some(mut mat) = row.material
+                && registry
+                    .write()
+                    .publish_to(CatalogSource::User, &mut mat)
+                    .is_ok()
+            {
+                imported += 1;
+            }
+        }
+
+        if imported > 0 {
+            status_message.set(Some(format!(
+                "Successfully imported {imported} material(s) into the user catalog."
+            )));
+            scan_model();
+        } else {
+            error_message.set(Some(
+                "No regular missing materials could be imported into the user catalog.".to_string(),
+            ));
+        }
+    };
+
+    // Conflict resolution handler: Overwrite (publish new version to user catalog)
+    let resolve_conflict_overwrite = move |_| {
+        let Some(mut active_row) = conflict_row.write().take() else {
+            return;
+        };
+        let Some(mut mat) = active_row.material.take() else {
+            return;
+        };
+        let usages = active_row.used_by_nodes.clone();
+        let mut reg = registry;
+
+        match service::resolve_user_catalog_conflict_overwrite(&mut mat, &mut reg.write()) {
+            Ok(path) => {
+                let new_ver = mat.version();
+                let mat_name = mat.name().to_string();
+                spawn(async move {
+                    let _ = service::update_material_in_nodes(&mat, &usages).await;
+                    *crate::NODE_DETAILS_REFRESH.write() += 1;
+                    status_message.set(Some(format!(
+                        "Overwrote '{}' in user catalog as v{new_ver} ({}) and updated {} node(s).",
+                        mat_name,
+                        path.display(),
+                        usages.len()
+                    )));
+                    scan_model();
+                });
+            }
+            Err(err) => error_message.set(Some(err)),
+        }
+    };
+
+    // Conflict resolution handler: Save as New (new UUID & new name in user catalog)
+    let resolve_conflict_rename = move |_| {
+        let Some(active_row) = conflict_row.write().take() else {
+            return;
+        };
+        let Some(mat) = active_row.material else {
+            return;
+        };
+        let new_name = conflict_rename_input.read().clone();
+        let usages = active_row.used_by_nodes.clone();
+        let mut reg = registry;
+
+        match service::resolve_user_catalog_conflict_rename(&mat, new_name, &mut reg.write()) {
+            Ok(created_mat) => {
+                let created_name = created_mat.name().to_string();
+                let created_ver = created_mat.version();
+                spawn(async move {
+                    let _ = service::update_material_in_nodes(&created_mat, &usages).await;
+                    *crate::NODE_DETAILS_REFRESH.write() += 1;
+                    status_message.set(Some(format!(
+                        "Saved new user material '{created_name}' (v{created_ver}) with a new UUID and updated {} node(s).",
+                        usages.len()
+                    )));
+                    scan_model();
+                });
+            }
+            Err(err) => error_message.set(Some(err)),
+        }
+    };
+
     // Computed filtered rows
     let filtered_rows = use_memo(move || {
         let all = rows.read();
@@ -300,99 +385,178 @@ pub fn CatalogSynchronizer(
         .iter()
         .filter(|r| r.status == AssetSyncStatus::MissingInCatalogAdHoc)
         .count();
+    let conflict_count = rows
+        .read()
+        .iter()
+        .filter(|r| r.status == AssetSyncStatus::UserConflict)
+        .count();
+    let official_sync_count = rows
+        .read()
+        .iter()
+        .filter(|r| r.status == AssetSyncStatus::OfficialSyncRecommended)
+        .count();
+
+    let is_conflict_open = conflict_row.read().is_some();
+    let active_conflict_info = conflict_row.read().as_ref().map(|r| {
+        (
+            r.name.clone(),
+            r.model_version,
+            r.catalog_version.unwrap_or(0),
+        )
+    });
 
     rsx! {
         AlertDialog {
             open: open(),
             on_open_change: move |v: bool| open.set(v),
-            max_width: "68rem".to_string(),
+            max_width: "72rem".to_string(),
             AlertDialogDescription {
-                Card {
-                    CardHeader {
-                        CardTitle {
-                            span { class: "d-flex align-items-center gap-2",
-                                Icon { icon: FaArrowsRotate }
-                                "Asset Catalog Synchronization"
+                div {
+                    Card {
+                        CardHeader {
+                            CardTitle {
+                                span { class: "d-flex align-items-center gap-2",
+                                    Icon { icon: FaArrowsRotate }
+                                    "Asset Catalog Synchronization"
+                                }
                             }
-                        }
-                        CardAction {
-                            Button {
-                                title: "Re-scan loaded model and compare with catalog",
-                                variant: ButtonVariant::Outline,
-                                size: ButtonSize::Sm,
-                                disabled: is_scanning(),
-                                onclick: move |_| scan_model(),
-                                Icon { icon: FaArrowsRotate }
-                                if is_scanning() {
-                                    "Scanning..."
-                                } else {
-                                    "Refresh"
+                            CardAction {
+                                Button {
+                                    title: "Re-scan loaded model and compare with official and user catalogs",
+                                    variant: ButtonVariant::Outline,
+                                    size: ButtonSize::Sm,
+                                    disabled: is_scanning(),
+                                    onclick: move |_| scan_model(),
+                                    Icon { icon: FaArrowsRotate }
+                                    if is_scanning() {
+                                        "Scanning..."
+                                    } else {
+                                        "Refresh"
+                                    }
                                 }
                             }
                         }
-                    }
-                    CardContent {
-                        // Git Banner subcomponent
-                        GitSyncBanner {
-                            is_syncing: is_git_syncing(),
-                            sync_result: git_sync_result.read().clone(),
-                            on_sync: run_git_sync,
-                        }
+                        CardContent {
+                            // Official Git Banner subcomponent
+                            GitSyncBanner {
+                                is_syncing: is_git_syncing(),
+                                sync_result: git_sync_result.read().clone(),
+                                on_sync: run_git_sync,
+                            }
 
-                        // Status and error banners
-                        if let Some(msg) = status_message.read().as_ref() {
-                            div { class: "alert alert-info py-2 px-3 mb-3 small d-flex justify-content-between align-items-center",
-                                span { "{msg}" }
-                                button {
-                                    r#type: "button",
-                                    class: "btn-close btn-close-white small",
-                                    onclick: move |_| status_message.set(None),
+                            // Status and error banners
+                            if let Some(msg) = status_message.read().as_ref() {
+                                div { class: "alert alert-info py-2 px-3 mb-3 small d-flex justify-content-between align-items-center",
+                                    span { "{msg}" }
+                                    button {
+                                        r#type: "button",
+                                        class: "btn-close btn-close-white small",
+                                        onclick: move |_| status_message.set(None),
+                                    }
                                 }
                             }
-                        }
-                        if let Some(err) = error_message.read().as_ref() {
-                            div { class: "alert alert-danger py-2 px-3 mb-3 small d-flex justify-content-between align-items-center",
-                                span { "{err}" }
-                                button {
-                                    r#type: "button",
-                                    class: "btn-close btn-close-white small",
-                                    onclick: move |_| error_message.set(None),
+                            if let Some(err) = error_message.read().as_ref() {
+                                div { class: "alert alert-danger py-2 px-3 mb-3 small d-flex justify-content-between align-items-center",
+                                    span { "{err}" }
+                                    button {
+                                        r#type: "button",
+                                        class: "btn-close btn-close-white small",
+                                        onclick: move |_| error_message.set(None),
+                                    }
                                 }
                             }
-                        }
 
-                        // Toolbar subcomponent
-                        CatalogToolbar {
-                            selected_category,
-                            selected_status_filter,
-                            search_query,
-                            total_count: rows.read().len(),
-                            outdated_count,
-                            missing_regular_count,
-                            adhoc_count,
-                            on_update_all: update_all_outdated,
-                            on_import_all: import_all_missing,
-                        }
+                            // Toolbar subcomponent
+                            CatalogToolbar {
+                                selected_category,
+                                selected_status_filter,
+                                search_query,
+                                total_count: rows.read().len(),
+                                outdated_count,
+                                missing_regular_count,
+                                adhoc_count,
+                                conflict_count,
+                                official_sync_count,
+                                on_update_all: update_all_outdated,
+                                on_import_all: import_all_missing,
+                            }
 
-                        // Table subcomponent
-                        CatalogTable {
-                            rows: filtered_rows.read().clone(),
-                            total_model_assets: rows.read().len(),
-                            on_update_in_model: update_material_in_model,
-                            on_import_to_catalog: move |row| import_regular_to_catalog.call(row),
-                            on_edit_adhoc: move |row: AssetSyncRow| {
-                                if let Some(mat) = &row.material {
-                                    editing_material.set(mat.clone());
-                                    editing_usages.set(row.used_by_nodes.clone());
-                                    open_material_editor.set(true);
-                                }
-                            },
+                            // Table subcomponent
+                            CatalogTable {
+                                rows: filtered_rows.read().clone(),
+                                total_model_assets: rows.read().len(),
+                                on_update_in_model: update_material_in_model,
+                                on_import_to_user_catalog: move |row| import_regular_to_user_catalog.call(row),
+                                on_edit_adhoc: move |row: AssetSyncRow| {
+                                    if let Some(mat) = &row.material {
+                                        editing_material.set(mat.clone());
+                                        editing_usages.set(row.used_by_nodes.clone());
+                                        open_material_editor.set(true);
+                                    }
+                                },
+                                on_sync_official_catalog: run_git_sync,
+                                on_resolve_user_conflict: move |row: AssetSyncRow| {
+                                    conflict_rename_input.set(format!("{} (Copy)", row.name));
+                                    conflict_row.set(Some(row));
+                                },
+                            }
                         }
                     }
                 }
             }
             AlertDialogActions {
                 AlertDialogCancel { on_click: move |_| open.set(false), "Close" }
+            }
+        }
+
+        // User Catalog Conflict Resolution Dialog (Overwrite / Save as New / Cancel)
+        AlertDialog {
+            open: is_conflict_open,
+            on_open_change: move |v: bool| {
+                if !v {
+                    conflict_row.set(None);
+                }
+            },
+            max_width: "34rem".to_string(),
+            AlertDialogDescription {
+                if let Some((c_name, c_model_v, c_cat_v)) = active_conflict_info {
+                    div { class: "d-flex flex-column gap-3",
+                        div { class: "fw-bold", "User Catalog Conflict" }
+                        div { class: "small",
+                            span { "Material " }
+                            strong { "{c_name}" }
+                            span {
+                                " (Model v{c_model_v}, User Catalog v{c_cat_v}) conflicts with the existing entry in the user catalog."
+                            }
+                        }
+                        div {
+                            label { class: "form-label small fw-bold",
+                                "New Name (for Save as New with fresh UUID)"
+                            }
+                            input {
+                                class: "form-control form-control-sm",
+                                r#type: "text",
+                                value: "{conflict_rename_input}",
+                                oninput: move |e| conflict_rename_input.set(e.value()),
+                            }
+                        }
+                    }
+                }
+            }
+            AlertDialogActions {
+                Button {
+                    variant: ButtonVariant::Primary,
+                    size: ButtonSize::Sm,
+                    onclick: resolve_conflict_overwrite,
+                    "Overwrite (New Version)"
+                }
+                Button {
+                    variant: ButtonVariant::Success,
+                    size: ButtonSize::Sm,
+                    onclick: resolve_conflict_rename,
+                    "Save as New (Rename)"
+                }
+                AlertDialogCancel { on_click: move |_| conflict_row.set(None), "Cancel" }
             }
         }
 

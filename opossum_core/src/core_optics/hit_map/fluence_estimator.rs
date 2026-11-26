@@ -1,12 +1,15 @@
 //! Strategies for fluence estimation
 
 use crate::utils::default_from_name::DefaultFromName;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use strum::EnumIter;
 
 /// Strategy for fluence estimation
-#[derive(Default, Serialize, Deserialize, Debug, Clone, PartialEq, Eq, EnumIter, Copy)]
+#[derive(
+    Default, Serialize, Deserialize, Debug, Clone, PartialEq, Eq, EnumIter, Copy, JsonSchema,
+)]
 #[non_exhaustive]
 pub enum FluenceEstimator {
     /// Follow the ray tubes the source spans: each corner spreads its energy over the area it

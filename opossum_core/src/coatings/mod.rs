@@ -7,6 +7,7 @@ use crate::{
     utils::default_from_name::DefaultFromName,
 };
 use nalgebra::Vector3;
+use schemars::JsonSchema;
 use std::fmt::Display;
 use uom::si::f64::Ratio;
 mod constant_r;
@@ -21,7 +22,7 @@ pub use separator::{SplittingConfig, SplittingConfigBuilder};
 use serde::{Deserialize, Serialize};
 use strum::{EnumIter, IntoEnumIterator};
 
-#[derive(Default, Serialize, Deserialize, Debug, Clone, PartialEq, EnumIter)]
+#[derive(Default, Serialize, Deserialize, Debug, Clone, PartialEq, EnumIter, JsonSchema)]
 /// Enum for different types of optical coatings
 pub enum CoatingType {
     /// Perfect anti-reflective coating. Reflectivity is always 0.0

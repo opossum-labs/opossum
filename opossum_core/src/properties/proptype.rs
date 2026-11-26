@@ -27,6 +27,7 @@ use crate::{
     },
     refractive_index::RefractiveIndexType,
     reporting::node_report::NodeReport,
+    types::{SiScalarSchema, Vector3Schema, schema_helper_types::Vector2Schema},
     utils::{
         geom_transformation::Isometry,
         unit_format::{get_exponent_for_base_unit_in_e3_steps, get_prefix_for_base_unit},
@@ -34,6 +35,7 @@ use crate::{
 };
 use nalgebra::{Vector2, Vector3};
 use num_traits::Float;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::{
     Dimension, Quantity, Unit, Units,
@@ -44,7 +46,8 @@ use uuid::Uuid;
 
 /// Wrapper for registry assets that can hold either the full inline data
 /// or a lightweight UUID reference for serialization.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema)]
+#[serde(untagged)]
 pub enum AssetRef<T> {
     /// Full in-memory asset struct.
     Inline(T),
@@ -113,7 +116,7 @@ impl From<AssetRef<Material>> for Proptype {
 }
 
 // #[non_exhaustive]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema)]
 /// The type of the [`Property`](crate::properties::Property).
 pub enum Proptype {
     /// A string property
@@ -133,7 +136,7 @@ pub enum Proptype {
     /// Property for storing a [`SpectrometerType`] of a [`Sepctrometer`](crate::nodes::Spectrometer) node.
     SpectrometerType(SpectrometerType),
     /// Property for storing a [`Metertype`] of an [`Energymeter`](crate::nodes::EnergyMeter) node.
-    Metertype(Metertype),
+    MeterType(Metertype),
     /// An [`Uuid`] for identifying an optical node.
     Uuid(Uuid),
     /// The optic shape of a component: an outline on its axis, possibly with a bore through it.
@@ -156,32 +159,42 @@ pub enum Proptype {
     /// A (nested set) of Properties
     NodeReport(NodeReport),
     /// linear density in `1/length_unit`
+    #[schemars(with = "SiScalarSchema")]
     LinearDensity(LinearDensity),
     /// Fluence in Units of J/cm²
+    #[schemars(with = "SiScalarSchema")]
     Fluence(Fluence),
     /// Unit of Wavelength
+    #[schemars(with = "(f64, SiScalarSchema)")]
     WfLambda(f64, Length),
     /// a geometrical length
+    #[schemars(with = "SiScalarSchema")]
     Length(Length),
-    /// a curvature
-    Curvature(Length),
+    /// a radius of curvature (e.g. for lens surfaces), This value usually is never zero ban can be `+/-Inf`.
+    #[schemars(with = "SiScalarSchema")]
+    RadiusOfCurvature(Length),
     /// an optional length parameter. used, e.g., for the alignment wavelength of the source
+    #[schemars(with = "Option<SiScalarSchema>")]
     LengthOption(Option<Length>),
     /// an energy value
+    #[schemars(with = "SiScalarSchema")]
     Energy(Energy),
     /// a (2D) geometric angle (e.g. component tilt)
+    #[schemars(with = "SiScalarSchema")]
     Angle(Angle),
     /// an optical refractive index model
     RefractiveIndex(RefractiveIndexType),
     /// a (node) location / orientation
     Isometry(Option<Isometry>),
     /// Three dimensional Vector
+    #[schemars(with = "Vector3Schema")]
     Vec3(Vector3<f64>),
     /// a hit map (position of rays hitting a given surface)
     HitMap(HitMap),
     /// 2D spot diagram data resolved by wavelength
     SpotDiagram(SpotDiagramData),
     /// 2-dimenstional vector
+    #[schemars(with = "Vector2Schema")]
     Vec2(Vector2<f64>),
     /// [`LightData`] build configuration
     LightDataBuilder(LightDataBuilder),
@@ -202,7 +215,7 @@ impl Proptype {
         match self {
             Self::F64(v) | Self::WfLambda(v, _) => Some(*v),
             Self::I32(v) => Some(f64::from(*v)),
-            Self::Length(v) | Self::Curvature(v) => Some(v.value),
+            Self::Length(v) | Self::RadiusOfCurvature(v) => Some(v.value),
             Self::Angle(v) => Some(v.value),
             Self::Energy(v) => Some(v.value),
             Self::Fluence(v) => Some(v.value),
@@ -226,7 +239,7 @@ impl Proptype {
                 *v = value.round() as i32;
                 Ok(())
             }
-            Self::Length(v) | Self::Curvature(v) => {
+            Self::Length(v) | Self::RadiusOfCurvature(v) => {
                 v.value = value;
                 Ok(())
             }

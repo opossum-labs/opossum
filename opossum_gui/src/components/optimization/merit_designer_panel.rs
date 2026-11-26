@@ -1,7 +1,10 @@
-use super::{numeric_input::NumericCommitInput, state::OptimizationModel};
-use crate::components::primitives::{
-    button::{Button, ButtonSize, ButtonVariant},
-    scroll_area::ScrollArea,
+use super::state::OptimizationModel;
+use crate::components::{
+    node_editor::inputs::input_components::{NumericUnitMode, OptionalNumericInput},
+    primitives::{
+        button::{Button, ButtonSize, ButtonVariant},
+        scroll_area::ScrollArea,
+    },
 };
 use dioxus::prelude::*;
 use dioxus_free_icons::{
@@ -104,10 +107,11 @@ fn OperandRow(mut props: OperandRowProps) -> Element {
     let op = &op_row.operand;
     let is_enabled = op_row.is_enabled;
     let (badge_text, detail_text, op_symbol) = model_read.describe_operand_full(op);
+    let target_mode = model_read.operand_unit_mode(op);
     let (target_val, weight_val) = match op {
         StandardOperand::Metric(m) => (m.target, m.weight),
-        StandardOperand::MinEdgeThickness(t) => (t.min_thickness * 1000.0, t.weight),
-        StandardOperand::MaxTotalLength(t) => (t.max_length * 1000.0, t.weight),
+        StandardOperand::MinEdgeThickness(t) => (t.min_thickness, t.weight),
+        StandardOperand::MaxTotalLength(t) => (t.max_length, t.weight),
         StandardOperand::TransmissionPenalty(t) => (t.expected_rays, t.weight),
     };
     let is_metric = matches!(op, StandardOperand::Metric(_));
@@ -163,24 +167,24 @@ fn OperandRow(mut props: OperandRowProps) -> Element {
         }
         // Target/Limit Value Input
         td { class: "px-1",
-          NumericCommitInput {
+          OptionalNumericInput {
             value: Some(target_val),
+            mode: target_mode,
             disabled: props.is_running,
-            precision: 4,
             allow_empty: false,
             on_commit: move |opt: Option<f64>| {
                 if let Some(val) = opt {
-                    props.model.write().update_operand_target_ui(op_id, val);
+                    props.model.write().update_operand_target(op_id, val);
                 }
             },
           }
         }
         // Weight Input
         td { class: "px-1",
-          NumericCommitInput {
+          OptionalNumericInput {
             value: Some(weight_val),
+            mode: NumericUnitMode::Dimensionless,
             disabled: props.is_running,
-            precision: 4,
             allow_empty: false,
             on_commit: move |opt: Option<f64>| {
                 if let Some(val) = opt {

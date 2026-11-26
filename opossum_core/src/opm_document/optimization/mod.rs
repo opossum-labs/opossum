@@ -3,7 +3,7 @@
 //! This module defines the building blocks of an [`OptimizationConfig`]:
 //! - **Addressing** ([`ParameterAddress`], [`ObservableAddress`], [`MetricSource`]): uniquely identifies
 //!   tunable optical parameters and detector metrics across the model graph.
-//! - **Variables & Bounds** ([`FreeVariable`], [`BoxBounds`], [`FiniteDifferenceMethod`]): specifies
+//! - **Variables & Bounds** ([`FreeVariable`], [`BoxBounds`]): specifies
 //!   independent parameters tuned by the solver, box constraints, and finite-difference step sizes.
 //! - **Couplings** ([`ParameterCoupling`], [`CouplingType`]): enforces deterministic relationships
 //!   (such as symmetric radii or fixed total system lengths) between parameters.
@@ -25,7 +25,7 @@ pub use config::OptimizationConfig;
 pub use coupling::{CouplingType, ParameterCoupling};
 pub use discovery::{
     DiscoveredAnalyzer, DiscoveredEdgeThicknessNode, DiscoveredObservable, DiscoveredVariable,
-    ModelOptimizationSchema,
+    ModelOptimizationSchema, ParameterUnit,
 };
 pub use operand::{
     DEFAULT_GEOMETRIC_SCALE, DEFAULT_SPOT_SCALE, DEFAULT_WAVEFRONT_SCALE, MaxTotalLengthOperand,
@@ -33,6 +33,4 @@ pub use operand::{
     TransmissionPenaltyOperand, default_scale_for_metric,
 };
 pub use progress_event::OptimizationProgressEvent;
-pub use variable::{
-    BoxBounds, DEFAULT_DELTA_ABS_MIN, DEFAULT_DELTA_REL, FiniteDifferenceMethod, FreeVariable,
-};
+pub use variable::{BoxBounds, DEFAULT_DELTA_ABS_MIN, DEFAULT_DELTA_REL, FreeVariable};

@@ -1,7 +1,5 @@
 #![warn(missing_docs)]
 //! Module for handling bundles of [`Ray`]s
-use crate::distributions::spectral::laser_lines::MIN_WAVELENGTH_DIFF_NM;
-use crate::geometry::Rim;
 use crate::{
     coatings::SplittingConfig,
     core_optics::hit_map::{
@@ -12,9 +10,10 @@ use crate::{
     distributions::{
         energy::EnergyDistribution,
         position::{Hexapolar, PositionDistribution},
-        spectral::SpectralDistribution,
+        spectral::{SpectralDistribution, laser_lines::MIN_WAVELENGTH_DIFF_NM},
     },
     error::{OpmResult, OpossumError},
+    geometry::Rim,
     joule,
     light::{Ray, RayMesh, RaySource, Spectrum},
     meter, millimeter, nanometer,
@@ -25,6 +24,7 @@ use crate::{
     prelude::EnergyLaserLines,
     properties::Proptype,
     refractive_index::RefractiveIndexType,
+    types::SiScalarSchema,
     utils::{filter_data::get_unique_finite_values_sorted, geom_transformation::Isometry, to_f64},
 };
 use approx::relative_eq;
@@ -33,6 +33,7 @@ use itertools::{Itertools, izip};
 use kahan::KahanSummator;
 use log::warn;
 use nalgebra::{DMatrix, MatrixXx2, MatrixXx3, Point2, Point3, Vector3, distance, vector};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use spade::Triangulation;
 use std::{fmt::Display, ops::Range, path::Path, sync::Arc};
@@ -46,7 +47,7 @@ use uom::{
 };
 use uuid::Uuid;
 /// Struct containing all relevant information of a ray bundle
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, JsonSchema)]
 pub struct Rays {
     /// vector containing the individual rays
     ray_bundle: Vec<Ray>,

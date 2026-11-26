@@ -1,19 +1,32 @@
 use super::Shape;
 use crate::{
-    error::OpmResult, prelude::ApertureShape, types::validated_type_definitions::ValidatedRadius,
+    error::OpmResult,
+    prelude::ApertureShape,
+    types::{SiScalarSchema, validated_type_definitions::ValidatedRadius},
 };
 use nalgebra::Point3;
 use opm_macros_lib::EnsureValidated;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::{f64::Length, length::meter};
 use utoipa::ToSchema;
 
 /// Configuration data for a circular aperture.
 #[derive(
-    Copy, Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema, EnsureValidated, Default,
+    Copy,
+    Debug,
+    Clone,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    ToSchema,
+    EnsureValidated,
+    Default,
+    JsonSchema,
 )]
 pub struct CircleShape {
     #[schema(value_type = f64)]
+    #[schemars(with = "SiScalarSchema")]
     radius: ValidatedRadius,
 }
 

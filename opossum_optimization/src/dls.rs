@@ -61,9 +61,17 @@ impl DampedLeastSquares {
             .iter()
             .map(|var| {
                 var.bounds
-                    .as_ref()
-                    .map_or(1.0, |bounds| (bounds.max - bounds.min).abs().max(1e-4))
+                    .finite_span()
+                    .map_or(1.0, |span| span.abs().max(1e-4))
             })
+            .collect()
+    }
+    fn clamp_to_bounds(&self, params: &[f64]) -> Vec<f64> {
+        self.merit
+            .free_variables()
+            .iter()
+            .zip(params.iter())
+            .map(|(var, &val)| var.bounds.clamp(val))
             .collect()
     }
 }
@@ -151,11 +159,17 @@ impl<O> Solver<O, DlsIterState> for DampedLeastSquares {
                 }
 
                 // Transform back to physical units: delta_phys = delta_scaled * scale
-                let candidate_params: Vec<f64> = params
+                let raw_candidate: Vec<f64> = params
                     .iter()
                     .enumerate()
                     .map(|(i, &val)| f64::mul_add(delta_scaled[i], scales[i], val))
                     .collect();
+                let candidate_params = self.clamp_to_bounds(&raw_candidate);
+                if candidate_params == params {
+                    self.damping = (self.damping * self.nu).min(self.max_damping);
+                    self.nu *= 2.0;
+                    continue;
+                }
 
                 let candidate_residuals = self.merit.evaluate_residuals(&candidate_params);
                 let candidate_cost = candidate_residuals.norm_squared();

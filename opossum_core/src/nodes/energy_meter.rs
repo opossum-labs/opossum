@@ -4,6 +4,7 @@
 use std::fmt::{Debug, Display};
 
 use opm_macros_lib::OpmNode;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Energy;
 
@@ -34,7 +35,7 @@ use crate::{
 };
 
 #[non_exhaustive]
-#[derive(Debug, Default, Eq, PartialEq, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Default, Eq, PartialEq, Clone, Copy, Serialize, Deserialize, JsonSchema)]
 /// Type of the [`EnergyMeter`]. This is currently not used.
 pub enum Metertype {
     /// An ideal energy meter measuring integrated pulse energy.
@@ -63,7 +64,7 @@ impl Display for Metertype {
 
 impl From<Metertype> for Proptype {
     fn from(value: Metertype) -> Self {
-        Self::Metertype(value)
+        Self::MeterType(value)
     }
 }
 
@@ -158,7 +159,7 @@ impl EnergyMeter {
             .get_property("meter type")
             .ok()
             .and_then(|prop| match prop {
-                Proptype::Metertype(meter_type) => Some(*meter_type),
+                Proptype::MeterType(meter_type) => Some(*meter_type),
                 _ => None,
             })
             .unwrap_or_default()
@@ -457,7 +458,7 @@ mod test {
         } else {
             panic!("could not read Energy property");
         }
-        if let Ok(Proptype::Metertype(t)) = report.properties().get("Model") {
+        if let Ok(Proptype::MeterType(t)) = report.properties().get("Model") {
             assert_eq!(t, &Metertype::IdealEnergyMeter);
         } else {
             panic!("could not read Model property");

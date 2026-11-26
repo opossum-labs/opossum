@@ -1,56 +1,56 @@
 #![enable(unwrap_variant_newtypes)]
 (
     opm_file_version: 0,
-    scenery: {
-        "node_type": "group",
-        "name": "OpticScenery demo",
-        "uuid": "0dd8913e-b6c1-46c1-ad0b-da1a67b750e3",
-        "props": {
+    scenery: (
+        node_type: "group",
+        name: "OpticScenery demo",
+        uuid: "a5d77c49-c034-4d74-ab75-a3ec62a0629e",
+        props: {
             "expand view": Bool(false),
         },
-        "graph": (
+        graph: (
             nodes: [
-                {
-                    "node_type": "dummy",
-                    "name": "dummy1",
-                    "uuid": "4cc84761-86d8-4fc3-af22-7b57191cbf16",
-                },
-                {
-                    "node_type": "dummy",
-                    "name": "dummy2",
-                    "uuid": "7e59ad6d-6ffb-41c0-96e0-18c5a3359ed7",
-                },
+                (
+                    node_type: "dummy",
+                    name: "dummy1",
+                    uuid: "b2c380cd-77cc-4e31-967b-fef4a6492db7",
+                    props: {
+                        "optic shape": OpticShape(Open),
+                        "surface": SurfaceConfig(
+                            coating: IdealAR,
+                        ),
+                    },
+                ),
+                (
+                    node_type: "dummy",
+                    name: "dummy2",
+                    uuid: "64d1f55d-4b04-48cf-9d1c-42adc0e5a7c1",
+                    props: {
+                        "optic shape": OpticShape(Open),
+                        "surface": SurfaceConfig(
+                            coating: IdealAR,
+                        ),
+                    },
+                ),
             ],
             edges: [
                 (
-                    src_id: "4cc84761-86d8-4fc3-af22-7b57191cbf16",
+                    src_id: "b2c380cd-77cc-4e31-967b-fef4a6492db7",
                     src_port: "output_1",
-                    target_id: "7e59ad6d-6ffb-41c0-96e0-18c5a3359ed7",
+                    target_id: "64d1f55d-4b04-48cf-9d1c-42adc0e5a7c1",
                     target_port: "input_1",
                     distance: 0.0,
                 ),
             ],
         ),
-    },
+    ),
     analyzers: {
-        "3b5bef41-1024-4965-8c0d-15929f748e56": (
+        "4bc00574-5e0b-4f27-83c4-a3125c907d06": (
             analyzer_type: RayTrace(
-                min_energy_per_ray: 0.000000000001,
+                min_energy_per_ray: 1e-12,
                 max_number_of_bounces: 1000,
                 max_number_of_refractions: 1000,
                 missed_surface_strategy: Stop,
-                source_map: {},
-                ambient_material: {
-                    "schema_version": 1,
-                    "id": "00000000-0000-0000-0000-000000000000",
-                    "version": 0,
-                    "name": "vacuum",
-                    "optical": (
-                        refractive_index: Const(
-                            refractive_index: 1.0,
-                        ),
-                    ),
-                },
             ),
         ),
     },

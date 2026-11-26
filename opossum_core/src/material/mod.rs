@@ -9,13 +9,14 @@ pub mod thermal;
 
 pub use mechanical::MechanicalProperties;
 pub use optical::OpticalProperties;
+use schemars::JsonSchema;
 pub use thermal::ThermalProperties;
 
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 use uuid::Uuid;
 
-use crate::{
+pub use crate::{
     asset::AssetHeader,
     error::OpmResult,
     refractive_index::{
@@ -29,7 +30,7 @@ use crate::{
 /// Same purpose as [`OPTIC_SHAPE`](crate::geometry::body::OPTIC_SHAPE) for the transversal
 /// extent: the node declarations and every reader refer to the property by this constant rather
 /// than by a literal.
-pub const MATERIAL: &str = "Material";
+pub const MATERIAL: &str = "material";
 
 /// The wavelength a material is characterised at when nothing else is given.
 ///
@@ -47,10 +48,9 @@ pub fn default_reference_wavelength() -> Length {
 }
 
 /// Represents a complete material embedded in an OPOSSUM scenery or stored in the registry.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Material {
     /// Shared metadata header (UUID, versioning, name, vendor).
-    #[serde(flatten)]
     pub header: AssetHeader,
 
     /// Primary optical properties.

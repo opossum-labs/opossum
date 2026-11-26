@@ -8,9 +8,11 @@ use crate::{
     meter,
     properties::Proptype,
     radian,
+    types::Vector3Schema,
 };
 use nalgebra::{Isometry3, Point3, Rotation3, Translation3, Vector3, vector};
 use num_traits::Zero;
+use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use strum::EnumIter;
 use uom::si::{
@@ -20,9 +22,11 @@ use uom::si::{
 };
 
 /// Struct to store the isometric transformation matrix and its inverse.
-#[derive(Debug, Clone, Default, PartialEq, Copy)]
+#[derive(Debug, Clone, Default, PartialEq, Copy, JsonSchema)]
 pub struct Isometry {
+    #[schemars(with = "Vector3Schema")]
     transform: Isometry3<f64>,
+    #[schemars(with = "Vector3Schema")]
     inverse: Isometry3<f64>,
 }
 
@@ -176,7 +180,7 @@ impl Isometry {
     /// For the translation, it is assumed to transform a point of meters
     /// # Attributes
     /// - `view_point`: origin of the view. will translate the cartesian origin to this point
-    /// - `view_direction`: view direction vector. The rotation will rotate the z vector onto this direction
+    /// - `view direction`: view direction vector. The rotation will rotate the z vector onto this direction
     /// - `up_direction`: vertical direction of the view. Must not be collinear to the view!
     #[must_use]
     pub fn new_from_view(

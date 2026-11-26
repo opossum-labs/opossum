@@ -1,16 +1,21 @@
 #![warn(missing_docs)]
 //! Spot diagram data structures and plotting routines.
 
-use crate::{error::OpmResult, light::Rays, utils::geom_transformation::Isometry};
+use crate::{
+    error::OpmResult, light::Rays, types::SiScalarSchema, utils::geom_transformation::Isometry,
+};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 
 /// A single spectral series containing 2D spot coordinates at a specific wavelength.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, JsonSchema)]
 pub struct WavelengthSpotSeries {
     /// Nominal wavelength for this spectral bin.
+    #[schemars(with = "SiScalarSchema")]
     pub wavelength: Length,
     /// 2D positions (x, y) of ray hits on the detector surface.
+    #[schemars(with = "Vec<(SiScalarSchema, SiScalarSchema)>")]
     pub spots: Vec<(Length, Length)>,
 }
 
@@ -23,7 +28,7 @@ impl WavelengthSpotSeries {
 }
 
 /// Compact 2D spot diagram data binned by wavelength.
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, JsonSchema)]
 pub struct SpotDiagramData {
     /// Spectral series containing ray spots.
     pub series: Vec<WavelengthSpotSeries>,

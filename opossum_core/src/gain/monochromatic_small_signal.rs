@@ -36,6 +36,7 @@ use crate::{
     reciprocal_centimeter, validated, validated_type,
 };
 use opm_macros_lib::EnsureValidated;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::ReciprocalLength;
 use utoipa::ToSchema;
@@ -56,10 +57,13 @@ impl Default for ValidatedGainCoefficient {
 /// Parameters of an unsaturated gain that follows the path through the medium.
 ///
 /// See the [module documentation](self) for what the model does and what it deliberately does not.
-#[derive(Serialize, Deserialize, ToSchema, Debug, Clone, Copy, PartialEq, EnsureValidated)]
+#[derive(
+    Serialize, Deserialize, ToSchema, Debug, Clone, Copy, PartialEq, EnsureValidated, JsonSchema,
+)]
 #[serde(try_from = "NonValidatedMonochromaticSmallSignalGain")]
 pub struct MonochromaticSmallSignalGain {
     #[schema(value_type = f64)]
+    #[schemars(with = "f64")]
     peak_gain_coefficient: ValidatedGainCoefficient,
 }
 
@@ -68,8 +72,9 @@ pub struct MonochromaticSmallSignalGain {
 /// It lets the value read from an `.opm` file run through the very same validation as one set
 /// through the setter, so a hand-edited file cannot smuggle in a non-finite coefficient. Same
 /// pattern as [`ConstGain`](super::ConstGain).
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 struct NonValidatedMonochromaticSmallSignalGain {
+    #[schemars(with = "f64")]
     peak_gain_coefficient: ReciprocalLength,
 }
 impl TryFrom<NonValidatedMonochromaticSmallSignalGain> for MonochromaticSmallSignalGain {
@@ -160,7 +165,7 @@ impl Extraction for MonochromaticSmallSignalGain {
         config: &PumpConfig,
     ) -> OpmResult<Option<Inversion>> {
         Ok(Some(match config.pump() {
-            PumpSource::None => Inversion::Uniform(0.0),
+            PumpSource::Unpumped => Inversion::Uniform(0.0),
             PumpSource::Const => Inversion::Uniform(1.0),
             PumpSource::Analytic(pump) => {
                 let mut field = InversionField::from_body(body, pump.grid())?;
@@ -489,7 +494,7 @@ mod test {
         // Even a model with a nonzero coefficient leaves an unpumped medium (β = 0) untouched: the
         // pump, not the model, decides whether there is any inversion to amplify.
         let model = MonochromaticSmallSignalGain::new(reciprocal_centimeter!(0.5))?;
-        let passive = PumpConfig::new(GainModel::None, PumpSource::None);
+        let passive = PumpConfig::new(GainModel::None, PumpSource::Unpumped);
         assert_relative_eq!(
             factor_through_disk(&model, &passive, &ray_at(0.0, 0.0)?)?,
             1.0

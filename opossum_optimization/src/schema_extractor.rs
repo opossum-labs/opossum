@@ -9,6 +9,7 @@ use opossum_core::{
         optimization::{
             DiscoveredAnalyzer, DiscoveredEdgeThicknessNode, DiscoveredObservable,
             DiscoveredVariable, ModelOptimizationSchema, ObservableAddress, ParameterAddress,
+            ParameterUnit,
         },
     },
     properties::Proptype,
@@ -17,6 +18,18 @@ use opossum_core::{
 pub struct SchemaExtractor;
 
 impl SchemaExtractor {
+    /// Resolves physical UI unit metadata from a [`Proptype`] variant.
+    #[must_use]
+    fn unit_for_proptype(prop: &Proptype) -> Option<ParameterUnit> {
+        match prop {
+            Proptype::Length(_) | Proptype::RadiusOfCurvature(_) => Some(ParameterUnit::length()),
+            Proptype::Angle(_) => Some(ParameterUnit::angle_deg()),
+            Proptype::Energy(_) => Some(ParameterUnit::energy()),
+            Proptype::Fluence(_) => Some(ParameterUnit::fluence()),
+            Proptype::LinearDensity(_) => Some(ParameterUnit::linear_density()),
+            _ => None,
+        }
+    }
     /// Extracts all controllable variables, observable metrics, and constraint candidates from an `OpmDocument`.
     #[must_use]
     pub fn extract(doc: &OpmDocument) -> ModelOptimizationSchema {
@@ -166,7 +179,6 @@ impl SchemaExtractor {
                 .cloned()
                 .unwrap_or_else(|| conn.target_id.to_string());
 
-            // Omit redundant port names if standard linear ports are connected
             let display_name = if conn.src_port == "output_1" && conn.target_port == "input_1" {
                 "Distance".to_string()
             } else {
@@ -184,6 +196,7 @@ impl SchemaExtractor {
                 display_name,
                 initial_value: conn.distance.value,
                 is_read_only: false,
+                unit: Some(ParameterUnit::length()),
             });
         }
 
@@ -193,7 +206,6 @@ impl SchemaExtractor {
             let node_name = node_ref.name().to_string();
             let attr = node_ref.node_attr();
 
-            // Recurse into nested sub-groups
             if let Some(sub_group) = node_ref.as_any().downcast_ref::<NodeGroup>() {
                 Self::extract_from_group(sub_group, &current_group_name, node_names, schema);
                 continue;
@@ -201,7 +213,7 @@ impl SchemaExtractor {
 
             for (prop_name, prop) in attr.properties() {
                 match prop.prop() {
-                    Proptype::Curvature(radius_len) => {
+                    Proptype::RadiusOfCurvature(radius_len) => {
                         let radius_m = radius_len.value;
                         let initial_c = if !radius_m.is_finite() || radius_m.abs() < 1e-12 {
                             0.0
@@ -220,11 +232,12 @@ impl SchemaExtractor {
                             display_name: format!("{prop_name} (curvature)"),
                             initial_value: initial_c,
                             is_read_only: prop.is_read_only(),
+                            unit: Some(ParameterUnit::length()),
                         });
                     }
 
-                    _ => {
-                        if let Some(val) = prop.prop().as_f64() {
+                    other => {
+                        if let Some(val) = other.as_f64() {
                             schema.controllable_variables.push(DiscoveredVariable {
                                 address: ParameterAddress::NodeProperty {
                                     node_id,
@@ -236,6 +249,7 @@ impl SchemaExtractor {
                                 display_name: prop_name.clone(),
                                 initial_value: val,
                                 is_read_only: prop.is_read_only(),
+                                unit: Self::unit_for_proptype(other),
                             });
                         }
                     }

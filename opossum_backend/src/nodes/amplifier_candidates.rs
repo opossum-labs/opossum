@@ -2,8 +2,6 @@
 //! hardware-side half of the Hardware/Betriebspunkt split (see `opossum_core::gain::scenario`).
 //! Candidacy here does not depend on any [`PumpScenario`]; a node's actual gain model in one
 //! operating point is configured separately, per scenario, in `crate::pump_scenarios`.
-use std::collections::HashSet;
-
 use actix_web::{HttpResponse, get, put, web};
 use opossum_core::{gain::PumpScenario, types::api_types::ErrorResponse};
 use uuid::Uuid;
@@ -70,7 +68,7 @@ pub async fn put_node_is_amplifier(
         .iter()
         .map(|(id, scenario)| (*id, scenario.clone()))
         .collect();
-    let candidates_before: HashSet<Uuid> = document.amplifier_nodes().clone();
+    let candidates_before = document.amplifier_nodes().clone();
 
     document.set_is_amplifier_node(uuid, is_amplifier);
 

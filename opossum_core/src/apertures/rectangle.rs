@@ -1,20 +1,34 @@
 use nalgebra::{Point2, Point3, Vector2};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::{f64::Length, length::meter};
 use utoipa::ToSchema;
 
 use super::Shape;
 use crate::{
-    apertures::ApertureShape, error::OpmResult,
-    types::validated_type_definitions::ValidatedSideLengths2D,
+    apertures::ApertureShape,
+    error::OpmResult,
+    types::{
+        schema_helper_types::Point2Schema, validated_type_definitions::ValidatedSideLengths2D,
+    },
 };
 use opm_macros_lib::EnsureValidated;
 /// Configuration data for a rectangular aperture.
 #[derive(
-    Copy, Debug, Clone, Serialize, Deserialize, PartialEq, EnsureValidated, ToSchema, Default,
+    Copy,
+    Debug,
+    Clone,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    EnsureValidated,
+    ToSchema,
+    Default,
+    JsonSchema,
 )]
 pub struct RectangleShape {
     #[schema(value_type = Object)]
+    #[schemars(with = "Point2Schema")]
     side_length: ValidatedSideLengths2D,
 }
 

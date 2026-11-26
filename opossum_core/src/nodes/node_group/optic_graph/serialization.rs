@@ -6,6 +6,7 @@ use crate::{
     properties::Proptype,
 };
 use log::warn;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -71,7 +72,7 @@ where
 }
 
 // This is the simplified serializable version of an OpticGraph.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct SerializableGraph {
     #[serde(deserialize_with = "deserialize_nodes_lossy")]
     nodes: Vec<OpticRef>,

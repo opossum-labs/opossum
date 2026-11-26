@@ -43,7 +43,7 @@ pub fn CurvatureEditor(
                     node_id: *node_id.read(),
                     action: NodeChangeAction::Property(
                         property_key.clone(),
-                        Proptype::Curvature(new_val),
+                        Proptype::RadiusOfCurvature(new_val),
                     ),
                 });
                 curvature_sig.set(new_val);

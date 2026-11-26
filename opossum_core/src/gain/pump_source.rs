@@ -32,6 +32,7 @@ use crate::{
 };
 use nalgebra::{Point2, Point3};
 use opm_macros_lib::EnsureValidated;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, ops::Range};
 use strum::EnumIter;
@@ -54,7 +55,17 @@ const DEFAULT_LONGITUDINAL_CELLS: usize = 16;
 /// The two ends of the same optical axis the light itself travels along, so this is stated in the
 /// optic's own frame rather than as a direction in the laboratory.
 #[derive(
-    Default, Serialize, Deserialize, ToSchema, Debug, Clone, Copy, PartialEq, Eq, EnumIter,
+    Default,
+    Serialize,
+    Deserialize,
+    ToSchema,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    EnumIter,
+    JsonSchema,
 )]
 pub enum PumpDirection {
     /// The pump enters at the entrance face and is absorbed on its way towards the exit.
@@ -74,8 +85,9 @@ impl Display for PumpDirection {
 impl DefaultFromName for PumpDirection {}
 
 /// Deserialization shim for [`LambertBeerProfile`], mirroring [`NonValidatedAnalyticPump`].
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 struct NonValidatedLambertBeerProfile {
+    #[schemars(with = "f64")]
     absorption: ReciprocalLength,
     direction: PumpDirection,
 }
@@ -105,11 +117,21 @@ impl Default for ValidatedAbsorptionCoefficient {
 /// so the inversion it leaves behind decays the same way. This is what makes one end of an
 /// end-pumped rod hotter and more strongly inverted than the other.
 #[derive(
-    Default, Serialize, Deserialize, ToSchema, Debug, Clone, Copy, PartialEq, EnsureValidated,
+    Default,
+    Serialize,
+    Deserialize,
+    ToSchema,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    EnsureValidated,
+    JsonSchema,
 )]
 #[serde(try_from = "NonValidatedLambertBeerProfile")]
 pub struct LambertBeerProfile {
     #[schema(value_type = f64)]
+    #[schemars(with = "f64")]
     absorption: ValidatedAbsorptionCoefficient,
     #[validate(skip)]
     direction: PumpDirection,
@@ -187,6 +209,7 @@ impl LambertBeerProfile {
     PartialEq,
     EnumIter,
     EnsureValidated,
+    JsonSchema,
 )]
 #[non_exhaustive]
 pub enum TransversalProfile {
@@ -236,6 +259,7 @@ impl TransversalProfile {
     PartialEq,
     EnumIter,
     EnsureValidated,
+    JsonSchema,
 )]
 #[non_exhaustive]
 pub enum LongitudinalProfile {
@@ -278,7 +302,7 @@ impl LongitudinalProfile {
 /// It lets the values read from an `.opm` file run through the very same validation as ones set
 /// through the constructor, so a hand-edited file cannot smuggle in a zero-cell grid. Same pattern
 /// as [`ConstGain`](super::ConstGain).
-#[derive(Deserialize)]
+#[derive(Deserialize, JsonSchema)]
 struct NonValidatedAnalyticPump {
     transversal: TransversalProfile,
     longitudinal: LongitudinalProfile,
@@ -308,7 +332,9 @@ impl TryFrom<NonValidatedAnalyticPump> for AnalyticPump {
 /// deposits — reaches 1 exactly where they both peak: on the axis of the spot, at the face the pump
 /// enters through. The gain coefficient that peak stands for is not stated here but on the
 /// [`GainModel`](super::GainModel); this side only carries the shape and the grid it is resolved on.
-#[derive(Serialize, Deserialize, ToSchema, Debug, Clone, Copy, PartialEq, EnsureValidated)]
+#[derive(
+    Serialize, Deserialize, ToSchema, Debug, Clone, Copy, PartialEq, EnsureValidated, JsonSchema,
+)]
 #[serde(try_from = "NonValidatedAnalyticPump")]
 pub struct AnalyticPump {
     #[validate(skip)]
@@ -316,10 +342,13 @@ pub struct AnalyticPump {
     #[validate(skip)]
     longitudinal: LongitudinalProfile,
     #[schema(value_type = usize)]
+    #[schemars(with = "usize")]
     cells_x: ValidatedCellCount,
     #[schema(value_type = usize)]
+    #[schemars(with = "usize")]
     cells_y: ValidatedCellCount,
     #[schema(value_type = usize)]
+    #[schemars(with = "usize")]
     cells_z: ValidatedCellCount,
 }
 impl Default for AnalyticPump {
@@ -466,7 +495,9 @@ impl From<AnalyticPump> for PumpSource {
 ///
 /// Each way of describing a pumped medium adds one variant here rather than a node type of its own,
 /// exactly as the extraction side does with [`GainModel`](super::GainModel).
-#[derive(Default, Serialize, Deserialize, ToSchema, Debug, Clone, Copy, PartialEq, EnumIter)]
+#[derive(
+    Default, Serialize, Deserialize, ToSchema, Debug, Clone, Copy, PartialEq, EnumIter, JsonSchema,
+)]
 #[non_exhaustive]
 pub enum PumpSource {
     /// Not pumped at all. The medium keeps whatever inversion it already had, which for a fresh
@@ -474,7 +505,7 @@ pub enum PumpSource {
     ///
     /// This is the default, so a component nobody pumped behaves exactly as it always did.
     #[default]
-    None,
+    Unpumped,
     /// A uniform inversion throughout the medium: `β = 1` everywhere it reaches.
     ///
     /// It carries no parameters — how hard the medium is pumped is the gain coefficient the
@@ -487,7 +518,7 @@ pub enum PumpSource {
 impl Display for PumpSource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::None => write!(f, "None"),
+            Self::Unpumped => write!(f, "Unpumped"),
             Self::Const => write!(f, "Const"),
             Self::Analytic(_) => write!(f, "Analytic"),
         }
@@ -501,7 +532,7 @@ impl PumpSource {
     /// stores only the entries that actually do something.
     #[must_use]
     pub const fn is_active(&self) -> bool {
-        !matches!(self, Self::None)
+        !matches!(self, Self::Unpumped)
     }
 }
 
@@ -611,7 +642,7 @@ mod test {
     }
     #[test]
     fn default_is_unpumped() {
-        assert_eq!(PumpSource::default(), PumpSource::None);
+        assert_eq!(PumpSource::default(), PumpSource::Unpumped);
         assert!(!PumpSource::default().is_active());
         // A uniform pump and a shaped one both do something; only `None` is passive.
         assert!(PumpSource::Const.is_active());
@@ -619,7 +650,7 @@ mod test {
     }
     #[test]
     fn fmt() {
-        assert_eq!(format!("{}", PumpSource::None), "None");
+        assert_eq!(format!("{}", PumpSource::Unpumped), "Unpumped");
         assert_eq!(format!("{}", PumpSource::Const), "Const");
         assert_eq!(
             format!("{}", PumpSource::Analytic(AnalyticPump::default())),
@@ -640,7 +671,7 @@ mod test {
     #[test]
     fn serde_roundtrip() -> OpmResult<()> {
         for source in [
-            PumpSource::None,
+            PumpSource::Unpumped,
             PumpSource::Const,
             PumpSource::Analytic(AnalyticPump::new(
                 TransversalProfile::SuperGaussian(SuperGaussianShape::default()),

@@ -6,6 +6,7 @@ use crate::percent;
 use crate::{error::OpmResult, light::Ray, validated, validated_type};
 use nalgebra::Vector3;
 use opm_macros_lib::EnsureValidated;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Ratio;
 use utoipa::ToSchema;
@@ -41,11 +42,21 @@ impl Default for ValidatedReflectivity {
 /// The simple model represents an ideal coating with a given constant reflectivity independent from
 /// the incoming wavelength, angle of incidence, or refractive index of the following medium.
 #[derive(
-    Default, Deserialize, Serialize, Debug, Clone, ToSchema, PartialEq, EnsureValidated, Copy,
+    Default,
+    Deserialize,
+    Serialize,
+    Debug,
+    Clone,
+    ToSchema,
+    PartialEq,
+    EnsureValidated,
+    Copy,
+    JsonSchema,
 )]
 pub struct CoatingConstantR {
     /// The reflectivity of the coating in the range [0.0, 1.0].
     #[schema(value_type = f64, example = 0.5)]
+    #[schemars(with = "f64")]
     reflectivity: ValidatedReflectivity,
 }
 

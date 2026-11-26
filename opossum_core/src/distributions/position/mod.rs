@@ -20,6 +20,7 @@ use std::fmt::Display;
 
 use nalgebra::Point3;
 use opm_macros_lib::EnsureValidated;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 use uom::si::f64::Length;
@@ -49,7 +50,9 @@ pub trait PositionDistribution {
 }
 
 /// Enum for the different types of position distributions
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy, EnumIter, EnsureValidated)]
+#[derive(
+    Debug, Clone, Serialize, Deserialize, PartialEq, Copy, EnumIter, EnsureValidated, JsonSchema,
+)]
 pub enum PosDistType {
     /// Rectangular, uniform random distribution
     Random(random::Random),

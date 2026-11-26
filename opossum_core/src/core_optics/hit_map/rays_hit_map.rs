@@ -8,10 +8,12 @@ use crate::{
     light::{RayMesh, RaySource, ray_mesh::RayVertex},
     meter, micrometer,
     nodes::fluence_detector::fluence_data::FluenceData,
+    types::{SiScalarSchema, schema_helper_types::Point3Schema},
     utils::{to_f64, try_f64_to_usize},
 };
 use libm::modf;
 use nalgebra::{DMatrix, Point2, Point3};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{ops::Range, sync::Arc};
 use uom::si::{
@@ -63,11 +65,12 @@ impl HitPoint {
     }
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema)]
 ///Storage struct for hitpoints on a surface from a single ray bundle
 pub struct RaysHitMap {
     hit_points: Vec<HitPoint>,
     x_lims: (Length, Length),
+    #[schemars(with = "(SiScalarSchema, SiScalarSchema)")]
     y_lims: (Length, Length),
     /// The ray tubes the hits stand in, in the order they first hit (see [`RayMesh`]). Not
     /// written to file.

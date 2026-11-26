@@ -1,10 +1,10 @@
-use super::{
-    numeric_input::NumericCommitInput,
-    state::{OptimizationModel, UiVariableRow},
-};
-use crate::components::primitives::{
-    button::{Button, ButtonSize, ButtonVariant},
-    scroll_area::ScrollArea,
+use super::state::{OptimizationModel, UiVariableRow};
+use crate::components::{
+    node_editor::inputs::input_components::OptionalNumericInput,
+    primitives::{
+        button::{Button, ButtonSize, ButtonVariant},
+        scroll_area::ScrollArea,
+    },
 };
 use dioxus::prelude::*;
 use dioxus_free_icons::{
@@ -108,6 +108,7 @@ pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
                   for row in group_rows.iter() {
                     {
                         let (main_val, sub_val) = row.display_current();
+                        let bound_mode = row.bound_input_mode();
                         rsx! {
                           tr {
                             key: "{row.address:?}",
@@ -133,7 +134,7 @@ pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
                                 title: "{row.node_name}",
                                 "{row.node_name}"
                               }
-                              div { class: "text-muted text-truncate", style: "max-width: 140px;", "{row.property_name}" }
+                              div { class: "text-truncate", style: "max-width: 140px;", "{row.property_name}" }
                             }
                             // Current Value
                             td { class: "text-end px-1",
@@ -145,10 +146,10 @@ pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
                             // Min Bound
                             td { class: "px-1",
                               if row.coupling.is_none() {
-                                NumericCommitInput {
+                                OptionalNumericInput {
                                   value: row.min_bound,
+                                  mode: bound_mode.clone(),
                                   disabled: props.is_running,
-                                  precision: 3,
                                   allow_empty: true,
                                   on_commit: {
                                       let addr = row.address.clone();
@@ -162,10 +163,10 @@ pub fn VariablesPanel(mut props: VariablesPanelProps) -> Element {
                             // Max Bound
                             td { class: "px-1",
                               if row.coupling.is_none() {
-                                NumericCommitInput {
+                                OptionalNumericInput {
                                   value: row.max_bound,
+                                  mode: bound_mode,
                                   disabled: props.is_running,
-                                  precision: 3,
                                   allow_empty: true,
                                   on_commit: {
                                       let addr = row.address.clone();

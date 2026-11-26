@@ -1,0 +1,4910 @@
+{
+  "$id": "https://opossum-labs.github.io/opossum/spec/v1/opm_v1.schema.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OPOSSUM Model Document v1",
+  "description": "The main structure of an OPOSSUM model.\n\nIt contains the [`NodeGroup`] representing the optical model, a list of analyzers,\noptional pump scenarios, embedded materials, and an optional optimization configuration.",
+  "type": "object",
+  "properties": {
+    "opm_file_version": {
+      "description": "File format version. MUST be `1` for this specification.",
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    },
+    "scenery": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/NodeGroup"
+        }
+      ]
+    },
+    "analyzers": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/AnalyzerInfo"
+      }
+    },
+    "pump_scenarios": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/PumpScenario"
+      }
+    },
+    "amplifier_nodes": {
+      "description": "Nodes marked as amplifier candidates, independent of any [`PumpScenario`].",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      }
+    },
+    "embedded_materials": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/Material"
+      }
+    },
+    "optimization_config": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/OptimizationConfig"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "opm_file_version"
+  ],
+  "definitions": {
+    "NodeGroup": {
+      "description": "The basic building block of an optical system. It represents a group of other optical\nnodes ([`OpticNode`]s) arranged in a (sub)graph.",
+      "type": "object",
+      "properties": {
+        "node_attr": {
+          "$ref": "#/definitions/NodeAttr"
+        },
+        "graph": {
+          "$ref": "#/definitions/OpticGraph"
+        },
+        "input_port_distances": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/SiScalarSchema"
+          }
+        },
+        "accumulated_rays": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/definitions/Rays"
+            }
+          }
+        },
+        "ray_ends": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Rays"
+          }
+        }
+      },
+      "required": [
+        "node_attr",
+        "graph",
+        "input_port_distances",
+        "accumulated_rays",
+        "ray_ends"
+      ]
+    },
+    "NodeAttr": {
+      "description": "Struct for storing common attributes of optical nodes.\n\n`NodeAttr` encapsulates metadata and configuration for an optical node, including its type,\nname, ports, unique identifier, properties, geometric placement, alignment, and GUI position.",
+      "type": "object",
+      "properties": {
+        "node_type": {
+          "description": "The type of the node (e.g., \"lens\", \"mirror\").",
+          "type": "string"
+        },
+        "name": {
+          "description": "The name of the node.",
+          "type": "string"
+        },
+        "uuid": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "props": {
+          "$ref": "#/definitions/Properties"
+        },
+        "positioning": {
+          "description": "3D placement mode (Absolute or Automatic).",
+          "allOf": [
+            {
+              "$ref": "#/definitions/NodePositioning"
+            }
+          ]
+        },
+        "inverted": {
+          "type": "boolean"
+        },
+        "alignment": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Isometry"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "align_like_node_at_distance": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "maxItems": 2,
+          "minItems": 2,
+          "items": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            }
+          ]
+        },
+        "gui_position": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Point2Schema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "node_type",
+        "name",
+        "uuid"
+      ]
+    },
+    "Properties": {
+      "description": "A general set of optical properties.\n\nProperties keep the order in which they were created.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/Property"
+      }
+    },
+    "Property": {
+      "description": "(optical) Property\n\nA property consists of the actual value (stored as [`Proptype`]), a description and optionally a validator.",
+      "allOf": [
+        {
+          "$ref": "#/definitions/Proptype"
+        }
+      ]
+    },
+    "Proptype": {
+      "description": "The type of the [`Property`](crate::properties::Property).",
+      "oneOf": [
+        {
+          "description": "A string property",
+          "type": "object",
+          "properties": {
+            "String": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "String"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "An integer property",
+          "type": "object",
+          "properties": {
+            "I32": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "required": [
+            "I32"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "A float property",
+          "type": "object",
+          "properties": {
+            "F64": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "required": [
+            "F64"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "A boolean property",
+          "type": "object",
+          "properties": {
+            "Bool": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "Bool"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "An optional [`LightData`] property",
+          "type": "object",
+          "properties": {
+            "LightData": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/LightData"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "LightData"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Property for storing a [`FilterTypeBuilder`] of an [`IdealFilter`](crate::nodes::IdealFilter) node.",
+          "type": "object",
+          "properties": {
+            "FilterTypeBuilder": {
+              "$ref": "#/definitions/FilterTypeBuilder"
+            }
+          },
+          "required": [
+            "FilterTypeBuilder"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Property for storing a [`SpectrometerType`] of a [`Sepctrometer`](crate::nodes::Spectrometer) node.",
+          "type": "object",
+          "properties": {
+            "SpectrometerType": {
+              "$ref": "#/definitions/SpectrometerType"
+            }
+          },
+          "required": [
+            "SpectrometerType"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Property for storing a [`Metertype`] of an [`Energymeter`](crate::nodes::EnergyMeter) node.",
+          "type": "object",
+          "properties": {
+            "MeterType": {
+              "$ref": "#/definitions/Metertype"
+            }
+          },
+          "required": [
+            "MeterType"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "An [`Uuid`] for identifying an optical node.",
+          "type": "object",
+          "properties": {
+            "Uuid": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "required": [
+            "Uuid"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "The optic shape of a component: an outline on its axis, possibly with a bore through it.",
+          "type": "object",
+          "properties": {
+            "OpticShape": {
+              "$ref": "#/definitions/OpticShape"
+            }
+          },
+          "required": [
+            "OpticShape"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "A property for storing a [`Spectrum`].",
+          "type": "object",
+          "properties": {
+            "Spectrum": {
+              "$ref": "#/definitions/Spectrum"
+            }
+          },
+          "required": [
+            "Spectrum"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "This property stores the fluence information [`FluenceData`]",
+          "type": "object",
+          "properties": {
+            "FluenceData": {
+              "$ref": "#/definitions/FluenceData"
+            }
+          },
+          "required": [
+            "FluenceData"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "This property stores the fluence estimator strategy [`FluenceEstimator`]",
+          "type": "object",
+          "properties": {
+            "FluenceEstimator": {
+              "$ref": "#/definitions/FluenceEstimator"
+            }
+          },
+          "required": [
+            "FluenceEstimator"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "This property stores the wavefront Information [`WaveFrontMap`]",
+          "type": "object",
+          "properties": {
+            "WaveFrontData": {
+              "$ref": "#/definitions/WaveFrontMap"
+            }
+          },
+          "required": [
+            "WaveFrontData"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Polynomial wavefront basis decomposition",
+          "type": "object",
+          "properties": {
+            "WavefrontDecomposition": {
+              "$ref": "#/definitions/WavefrontDecomposition"
+            }
+          },
+          "required": [
+            "WavefrontDecomposition"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "This property stores the ray position history of all [`Rays`](crate::light::Rays) during propagation through the optic scenery",
+          "type": "object",
+          "properties": {
+            "RayPositionHistory": {
+              "$ref": "#/definitions/RayPositionHistories"
+            }
+          },
+          "required": [
+            "RayPositionHistory"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "This property stores the ray position history of all [`Rays`](crate::light::Rays), separated by their bounce level,\nduring propagation through the optic scenery",
+          "type": "object",
+          "properties": {
+            "GhostFocusHistory": {
+              "$ref": "#/definitions/GhostFocusHistory"
+            }
+          },
+          "required": [
+            "GhostFocusHistory"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "A (nested set) of Properties",
+          "type": "object",
+          "properties": {
+            "NodeReport": {
+              "$ref": "#/definitions/NodeReport"
+            }
+          },
+          "required": [
+            "NodeReport"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "linear density in `1/length_unit`",
+          "type": "object",
+          "properties": {
+            "LinearDensity": {
+              "$ref": "#/definitions/SiScalarSchema"
+            }
+          },
+          "required": [
+            "LinearDensity"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Fluence in Units of J/cm²",
+          "type": "object",
+          "properties": {
+            "Fluence": {
+              "$ref": "#/definitions/SiScalarSchema"
+            }
+          },
+          "required": [
+            "Fluence"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Unit of Wavelength",
+          "type": "object",
+          "properties": {
+            "WfLambda": {
+              "type": "array",
+              "maxItems": 2,
+              "minItems": 2,
+              "items": [
+                {
+                  "type": "number",
+                  "format": "double"
+                },
+                {
+                  "$ref": "#/definitions/SiScalarSchema"
+                }
+              ]
+            }
+          },
+          "required": [
+            "WfLambda"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "a geometrical length",
+          "type": "object",
+          "properties": {
+            "Length": {
+              "$ref": "#/definitions/SiScalarSchema"
+            }
+          },
+          "required": [
+            "Length"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "a radius of curvature (e.g. for lens surfaces), This value usually is never zero ban can be `+/-Inf`.",
+          "type": "object",
+          "properties": {
+            "RadiusOfCurvature": {
+              "$ref": "#/definitions/SiScalarSchema"
+            }
+          },
+          "required": [
+            "RadiusOfCurvature"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "an optional length parameter. used, e.g., for the alignment wavelength of the source",
+          "type": "object",
+          "properties": {
+            "LengthOption": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/SiScalarSchema"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "LengthOption"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "an energy value",
+          "type": "object",
+          "properties": {
+            "Energy": {
+              "$ref": "#/definitions/SiScalarSchema"
+            }
+          },
+          "required": [
+            "Energy"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "a (2D) geometric angle (e.g. component tilt)",
+          "type": "object",
+          "properties": {
+            "Angle": {
+              "$ref": "#/definitions/SiScalarSchema"
+            }
+          },
+          "required": [
+            "Angle"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "an optical refractive index model",
+          "type": "object",
+          "properties": {
+            "RefractiveIndex": {
+              "$ref": "#/definitions/RefractiveIndexType"
+            }
+          },
+          "required": [
+            "RefractiveIndex"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "a (node) location / orientation",
+          "type": "object",
+          "properties": {
+            "Isometry": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Isometry"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "Isometry"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Three dimensional Vector",
+          "type": "object",
+          "properties": {
+            "Vec3": {
+              "$ref": "#/definitions/Vector3Schema"
+            }
+          },
+          "required": [
+            "Vec3"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "a hit map (position of rays hitting a given surface)",
+          "type": "object",
+          "properties": {
+            "HitMap": {
+              "$ref": "#/definitions/HitMap"
+            }
+          },
+          "required": [
+            "HitMap"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "2D spot diagram data resolved by wavelength",
+          "type": "object",
+          "properties": {
+            "SpotDiagram": {
+              "$ref": "#/definitions/SpotDiagramData"
+            }
+          },
+          "required": [
+            "SpotDiagram"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "2-dimenstional vector",
+          "type": "object",
+          "properties": {
+            "Vec2": {
+              "$ref": "#/definitions/Vector2Schema"
+            }
+          },
+          "required": [
+            "Vec2"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "[`LightData`] build configuration",
+          "type": "object",
+          "properties": {
+            "LightDataBuilder": {
+              "$ref": "#/definitions/LightDataBuilder"
+            }
+          },
+          "required": [
+            "LightDataBuilder"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "An optical material property",
+          "type": "object",
+          "properties": {
+            "Material": {
+              "$ref": "#/definitions/AssetRef"
+            }
+          },
+          "required": [
+            "Material"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "The coating and the laser induced damage threshold of one surface of a component",
+          "type": "object",
+          "properties": {
+            "SurfaceConfig": {
+              "$ref": "#/definitions/SurfaceConfig"
+            }
+          },
+          "required": [
+            "SurfaceConfig"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "LightData": {
+      "description": "Data structure defining the light properties.\n\nThe actuals data type used depends on the [`AnalyzerType`](crate::analyzers::AnalyzerType).\nFor example, an energy analysis ([`LightData::Energy`]) only\ncontains a [`Spectrum`] information, while a geometric analysis ([`LightData::Geometric`]) constains a set of optical\nray data.",
+      "oneOf": [
+        {
+          "description": "data type used for energy analysis.",
+          "type": "object",
+          "properties": {
+            "Energy": {
+              "$ref": "#/definitions/Spectrum"
+            }
+          },
+          "required": [
+            "Energy"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "data type used for geometric optics analysis (ray tracing)",
+          "type": "object",
+          "properties": {
+            "Geometric": {
+              "$ref": "#/definitions/Rays"
+            }
+          },
+          "required": [
+            "Geometric"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "data type used for ghost focus analysis (back- and forth ray-tracing)",
+          "type": "object",
+          "properties": {
+            "GhostFocus": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Rays"
+              }
+            }
+          },
+          "required": [
+            "GhostFocus"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "placeholder value for future Fourier optics analysis, nothing implementd yet.",
+          "type": "string",
+          "const": "Fourier"
+        }
+      ]
+    },
+    "Spectrum": {
+      "description": "Structure for handling spectral data.\n\nThis structure handles an array of values over a given wavelength range. Although the interface\nis still limited, the structure is prepared for handling also non-equidistant wavelength slots.",
+      "type": "object",
+      "properties": {
+        "data": {
+          "$ref": "#/definitions/Tuple2Schema"
+        }
+      },
+      "required": [
+        "data"
+      ]
+    },
+    "Tuple2Schema": {
+      "description": "Helper schema type representing a 2D point `(x, y)` serialized as a 2-element tuple.",
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": [
+        {
+          "type": "number",
+          "format": "double"
+        },
+        {
+          "type": "number",
+          "format": "double"
+        }
+      ]
+    },
+    "Rays": {
+      "description": "Struct containing all relevant information of a ray bundle",
+      "type": "object",
+      "properties": {
+        "ray_bundle": {
+          "description": "vector containing the individual rays",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Ray"
+          }
+        },
+        "node_origin": {
+          "description": "origin node of this ray bundle",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        },
+        "uuid": {
+          "description": "id of this ray bundle",
+          "type": "string",
+          "format": "uuid"
+        },
+        "parent_id": {
+          "description": "parent id of this ray bundle",
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        },
+        "parent_pos_split_idx": {
+          "description": "the index of the position history of the parent ray bundle at which this ray bundle was generated",
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "ray_bundle",
+        "uuid",
+        "parent_pos_split_idx"
+      ]
+    },
+    "Ray": {
+      "description": "Struct that contains all information about an optical ray",
+      "type": "object",
+      "properties": {
+        "pos": {
+          "description": "Current position of the ray in 3D space.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Vector3Schema"
+            }
+          ]
+        },
+        "pos_hist": {
+          "description": "History of positions traversed by the ray.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Vector3Schema"
+          }
+        },
+        "dir": {
+          "description": "Current propagation direction of the ray (as a normalized direction cosine vector).",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Vector3Schema"
+            }
+          ]
+        },
+        "e": {
+          "description": "Energy carried by the ray.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            }
+          ]
+        },
+        "wvl": {
+          "description": "Wavelength of the ray",
+          "allOf": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            }
+          ]
+        },
+        "number_of_bounces": {
+          "description": "Number of times the ray has bounced (reflected). Used as stop criterion.",
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "number_of_refractions": {
+          "description": "Number of times the ray has refracted. Used as stop criterion.",
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "valid": {
+          "description": "Indicates whether the ray is allowed to propagate further.",
+          "type": "boolean"
+        },
+        "path_length": {
+          "description": "Total optical path length traversed by the ray.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            }
+          ]
+        },
+        "refractive_index": {
+          "description": "Refractive index of the medium in which the ray is propagating.",
+          "type": "number",
+          "format": "double"
+        },
+        "helper_rays": {
+          "description": "Helper rays used for fluence or wavefront calculations.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FluenceRays"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "is_helper": {
+          "description": "Indicates if this is a helper ray (true) or a primary ray (false).\n\nThis is currently a workaround until a new separate helper ray struct is available.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "pos",
+        "pos_hist",
+        "dir",
+        "e",
+        "wvl",
+        "number_of_bounces",
+        "number_of_refractions",
+        "valid",
+        "path_length",
+        "refractive_index",
+        "is_helper"
+      ]
+    },
+    "Vector3Schema": {
+      "description": "Helper schema type representing a 3D vector `[x, y, z]` serialized as a 3-element array.",
+      "type": "array",
+      "items": {
+        "type": "number",
+        "format": "double"
+      },
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "SiScalarSchema": {
+      "description": "Helper schema type representing a physical scalar quantity serialized as a plain `f64` in SI base units.",
+      "type": "number",
+      "format": "double"
+    },
+    "FluenceRays": {
+      "description": "Struct to hold a set of helper rays for fluence calculation\n\n[`FluenceRays`] is used to calculate the fluence evolution using the helper rays [`FluenceEstimator`].\nHere, three additional rays are spawned around the original ray, creating a triangle with a defined are of the square of the ray wavelength.\nDuring propagation through the system, the area of the helper rays changes, as well as the effective energy of the rays when the original is partially reflected or refracted.\nAs the local evolution of the small surface element is stored, the fluence between all the rays can later on easily be interpolated",
+      "type": "object",
+      "properties": {
+        "helper_rays": {
+          "$ref": "#/definitions/Rays"
+        },
+        "effective_energy": {
+          "$ref": "#/definitions/SiScalarSchema"
+        }
+      },
+      "required": [
+        "helper_rays",
+        "effective_energy"
+      ]
+    },
+    "FilterTypeBuilder": {
+      "description": "Config data builder for an [`IdealFilter`](crate::nodes::IdealFilter).",
+      "oneOf": [
+        {
+          "description": "a fixed (wavelength-independant) transmission value. Must be between 0.0 and 1.0",
+          "type": "object",
+          "properties": {
+            "Constant": {
+              "$ref": "#/definitions/FilterConst"
+            }
+          },
+          "required": [
+            "Constant"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "filter based on given transmission spectrum.",
+          "type": "object",
+          "properties": {
+            "Spectrum": {
+              "$ref": "#/definitions/SpectralFilterBuilder"
+            }
+          },
+          "required": [
+            "Spectrum"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "FilterConst": {
+      "description": "Config data for a constant filter type.",
+      "type": "object",
+      "properties": {
+        "transmission": {
+          "description": "the constant transmission value of the filter. Must be between 0.0 and 1.0",
+          "allOf": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            }
+          ]
+        }
+      },
+      "required": [
+        "transmission"
+      ]
+    },
+    "SpectralFilterBuilder": {
+      "description": "Represents different ways to create a spectral filter.\n\nThis enum can hold:\n- An [`EdgeFilter`] instance for edge-type filters.\n- A [`BandFilter`] instance for band-pass filters.\n- A file path for loading a filter from external data.",
+      "oneOf": [
+        {
+          "description": "Builds a filter from an [`EdgeFilter`] definition.",
+          "type": "object",
+          "properties": {
+            "EdgeFilter": {
+              "$ref": "#/definitions/EdgeFilter"
+            }
+          },
+          "required": [
+            "EdgeFilter"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Builds a filter from a [`BandFilter`] definition.",
+          "type": "object",
+          "properties": {
+            "BandFilter": {
+              "$ref": "#/definitions/BandFilter"
+            }
+          },
+          "required": [
+            "BandFilter"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Builds a filter by loading data from a file at the given path.",
+          "type": "object",
+          "properties": {
+            "FromFile": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "FromFile"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "EdgeFilter": {
+      "description": "Represents an optical edge filter with defined characteristics.\n\nThis struct stores the edge filter type, the edge wavelength,\nan optional smooth transition width, the operational wavelength range,\nand the resolution of the filter data.\n\n# Note\nThe edge wavelength is included in a short-pass and excluded ind the long-pass filter",
+      "type": "object",
+      "properties": {
+        "filter_type": {
+          "description": "The type of edge filter (long‑pass or short‑pass).",
+          "allOf": [
+            {
+              "$ref": "#/definitions/EdgeFilterType"
+            }
+          ]
+        },
+        "edge_wavelength": {
+          "description": "The cut-on / cut-off (edge) wavelength of the filter.\nThe edge wavelength is included in a short-pass and excluded ind the long-pass filter",
+          "allOf": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            }
+          ]
+        },
+        "transmission_range": {
+          "description": "Minimum and maximum values of this filters' transmission",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Range_of_double"
+            }
+          ]
+        },
+        "smooth_step_width": {
+          "description": "The optional smooth transition width at the edge wavelength.\n\nIf `Some`, this specifies the width of a gradual transition;\nif `None`, the filter is assumed to have a sharp edge.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "range": {
+          "description": "The wavelength range over which the filter is defined.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Range_of_SiScalarSchema"
+            }
+          ]
+        },
+        "resolution": {
+          "description": "The wavelength resolution associated with the filter's data.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "filter_type",
+        "edge_wavelength",
+        "transmission_range",
+        "range"
+      ]
+    },
+    "EdgeFilterType": {
+      "description": "Specifies the type of edge filter.\n\n- `LongPass`: Allows wavelengths longer than the specified edge wavelength to pass.\n- `ShortPass`: Allows wavelengths shorter than the specified edge wavelength to pass.",
+      "oneOf": [
+        {
+          "description": "Passes wavelengths longer than the edge wavelength.",
+          "type": "string",
+          "const": "LongPass"
+        },
+        {
+          "description": "Passes wavelengths shorter than the edge wavelength.",
+          "type": "string",
+          "const": "ShortPass"
+        }
+      ]
+    },
+    "Range_of_double": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "number",
+          "format": "double"
+        },
+        "end": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ]
+    },
+    "Range_of_SiScalarSchema": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "$ref": "#/definitions/SiScalarSchema"
+        },
+        "end": {
+          "$ref": "#/definitions/SiScalarSchema"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ]
+    },
+    "BandFilter": {
+      "description": "Represents a band filter with defined spectral characteristics.\n\nA `BandFilter` describes either a band-pass or notch filter. It includes\nparameters such as center wavelength, filter width, optional smooth transition width,\nthe operational wavelength range, and the spectral resolution.",
+      "type": "object",
+      "properties": {
+        "filter_type": {
+          "description": "The type of band filter (band-pass or notch).",
+          "allOf": [
+            {
+              "$ref": "#/definitions/BandFilterType"
+            }
+          ]
+        },
+        "center_wavelength": {
+          "description": "The central wavelength of the band.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            }
+          ]
+        },
+        "width": {
+          "description": "The full width of the band.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            }
+          ]
+        },
+        "transmission_range": {
+          "description": "The minimum and maximum transmission values of the `BandFilter`",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Range_of_double"
+            }
+          ]
+        },
+        "smooth_step_width": {
+          "description": "Optional smooth transition width at the band edges.\n\nIf `Some`, the filter transitions gradually; if `None`, the transition is sharp.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "range": {
+          "description": "The wavelength range over which the filter is defined.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Range_of_SiScalarSchema"
+            }
+          ]
+        },
+        "resolution": {
+          "description": "The wavelength resolution associated with the filter's data.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            }
+          ]
+        }
+      },
+      "required": [
+        "filter_type",
+        "center_wavelength",
+        "width",
+        "transmission_range",
+        "range",
+        "resolution"
+      ]
+    },
+    "BandFilterType": {
+      "description": "Specifies the type of band filter.\n\n- `BandPass`: Passes a specified wavelength band and attenuates others.\n- `Notch`: Filters out a specified wavelength band while passing others.",
+      "oneOf": [
+        {
+          "description": "Passes a specified wavelength band.",
+          "type": "string",
+          "const": "BandPass"
+        },
+        {
+          "description": "filters out a specified wavelength band.",
+          "type": "string",
+          "const": "Notch"
+        }
+      ]
+    },
+    "SpectrometerType": {
+      "description": "Type of the [`Spectrometer`]. This is currently not used.",
+      "oneOf": [
+        {
+          "description": "an ideal energy meter",
+          "type": "string",
+          "const": "Ideal"
+        },
+        {
+          "description": "Ocean Optics HR2000",
+          "type": "string",
+          "const": "HR2000"
+        }
+      ]
+    },
+    "Metertype": {
+      "description": "Type of the [`EnergyMeter`]. This is currently not used.",
+      "oneOf": [
+        {
+          "description": "An ideal energy meter measuring integrated pulse energy.",
+          "type": "string",
+          "const": "IdealEnergyMeter"
+        },
+        {
+          "description": "An ideal power meter measuring continuous-wave power (currently not used).",
+          "type": "string",
+          "const": "IdealPowerMeter"
+        }
+      ]
+    },
+    "OpticShape": {
+      "description": "The value of a node's optic shape: how far the component reaches transversally.",
+      "oneOf": [
+        {
+          "description": "Unbounded, which only an idealization, a detector or a dummy may be.",
+          "type": "string",
+          "const": "Open"
+        },
+        {
+          "description": "Bounded by an edge on the axis, possibly with a bore through it.",
+          "type": "object",
+          "properties": {
+            "Bounded": {
+              "$ref": "#/definitions/Outline"
+            }
+          },
+          "required": [
+            "Bounded"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Outline": {
+      "description": "The edge of a component, centered on its axis, and the bore through it, if it has one.\n\nThe edge and the bore bound a region, and the bore lies within the edge; that is checked\nwhenever an [`Outline`] is made, also when one is read from a file.",
+      "type": "object",
+      "properties": {
+        "shape": {
+          "$ref": "#/definitions/OutlineShape"
+        },
+        "bore": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Bore"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "shape"
+      ]
+    },
+    "OutlineShape": {
+      "description": "A shape with an edge: the outline of a component, or of a bore through it.",
+      "oneOf": [
+        {
+          "description": "A circle around the origin.",
+          "type": "object",
+          "properties": {
+            "Circle": {
+              "$ref": "#/definitions/CircleShape"
+            }
+          },
+          "required": [
+            "Circle"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "A rectangle around the origin.",
+          "type": "object",
+          "properties": {
+            "Rectangle": {
+              "$ref": "#/definitions/RectangleShape"
+            }
+          },
+          "required": [
+            "Rectangle"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "A polygon.",
+          "type": "object",
+          "properties": {
+            "Polygon": {
+              "$ref": "#/definitions/PolygonShape"
+            }
+          },
+          "required": [
+            "Polygon"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CircleShape": {
+      "description": "Configuration data for a circular aperture.",
+      "type": "object",
+      "properties": {
+        "radius": {
+          "$ref": "#/definitions/SiScalarSchema"
+        }
+      },
+      "required": [
+        "radius"
+      ]
+    },
+    "RectangleShape": {
+      "description": "Configuration data for a rectangular aperture.",
+      "type": "object",
+      "properties": {
+        "side_length": {
+          "$ref": "#/definitions/Point2Schema"
+        }
+      },
+      "required": [
+        "side_length"
+      ]
+    },
+    "Point2Schema": {
+      "description": "Helper schema type representing a 2D point `(x, y)` serialized as a 2-element tuple.",
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": [
+        {
+          "type": "number",
+          "format": "double"
+        },
+        {
+          "type": "number",
+          "format": "double"
+        }
+      ]
+    },
+    "PolygonShape": {
+      "description": "Configuration of a polygonal aperture defined by a given set of points.\n\nOnly the points are written to a file; the triangles are worked out from them whenever they\nchange, also when a polygon is read.",
+      "type": "object",
+      "properties": {
+        "points": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Point2Schema"
+          }
+        }
+      },
+      "required": [
+        "points"
+      ]
+    },
+    "Bore": {
+      "description": "A bore through a component: the region of a shape, shifted off the axis, turned about its\ncenter and possibly tilted against the axis, that holds no material.\n\nThe bore is a prism: its shape is the cross-section across the axis of the bore, as a drill\nleaves it, and it runs along that axis through the whole component. Its center is where the\naxis of the bore crosses the plane of the outline. Untilted, it runs along the axis of the\ncomponent (see [`Bore::with_tilt`]).",
+      "type": "object",
+      "properties": {
+        "shape": {
+          "$ref": "#/definitions/OutlineShape"
+        },
+        "center": {
+          "$ref": "#/definitions/Point2Schema"
+        },
+        "rotation": {
+          "$ref": "#/definitions/SiScalarSchema"
+        },
+        "tilt": {
+          "type": "array",
+          "maxItems": 2,
+          "minItems": 2,
+          "items": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            },
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            }
+          ]
+        }
+      },
+      "required": [
+        "shape",
+        "center",
+        "rotation"
+      ]
+    },
+    "FluenceData": {
+      "description": "Struct to hold the fluence map information of a beam",
+      "type": "object",
+      "properties": {
+        "peak": {
+          "description": "peak fluence of the beam",
+          "allOf": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            }
+          ]
+        },
+        "interp_distribution": {
+          "description": "2d fluence distribution of the beam.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Vector2Schema"
+            }
+          ]
+        },
+        "x_range": {
+          "description": "x coordinates of the fluence distribution",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Range_of_SiScalarSchema"
+            }
+          ]
+        },
+        "y_range": {
+          "description": "y coordinates of the fluence distribution",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Range_of_SiScalarSchema"
+            }
+          ]
+        },
+        "estimator": {
+          "description": "the estimator which has been used to calculate this fluence",
+          "allOf": [
+            {
+              "$ref": "#/definitions/FluenceEstimator"
+            }
+          ]
+        }
+      },
+      "required": [
+        "peak",
+        "interp_distribution",
+        "x_range",
+        "y_range",
+        "estimator"
+      ]
+    },
+    "Vector2Schema": {
+      "description": "Helper schema type representing a 2D vector `[x, y]` serialized as a 2-element array.",
+      "type": "array",
+      "items": {
+        "type": "number",
+        "format": "double"
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "FluenceEstimator": {
+      "description": "Strategy for fluence estimation",
+      "oneOf": [
+        {
+          "description": "Calculate Voronoi cells of the hit points and use the cell area for calculation of the fluence.",
+          "type": "string",
+          "const": "Voronoi"
+        },
+        {
+          "description": "Calculate the fluence at given point using a Kernel Density Estimator",
+          "type": "string",
+          "const": "KDE"
+        },
+        {
+          "description": "Simply perform binning of the hit points on a given matrix",
+          "type": "string",
+          "const": "Binning"
+        },
+        {
+          "description": "Using additional \"helper rays\" for each ray to calculate the evolution of a small area element around the intial ray to calcuklate the fluence",
+          "type": "string",
+          "const": "HelperRays"
+        }
+      ]
+    },
+    "WaveFrontMap": {
+      "description": "A struct which holds the necessary data to describe the wavefront as well as some statistical values:\n- `wavelength`: the wavelength that was used to calculate this wavefront map in units of a specific wavelength\n- `ptv`: the peak-to-valley value of the wavefront map in units of milli-lambda\n- `rms`: the root-mean-square value of the wavefront map in units of milli-lambda\n- `x`: the x axis of the wavefront map\n- `y`: the y axis of the wavefront map\n- `wf_map`: the wavefront map",
+      "type": "object",
+      "properties": {
+        "wavelength": {
+          "$ref": "#/definitions/SiScalarSchema"
+        },
+        "ptv": {
+          "type": "number",
+          "format": "double"
+        },
+        "rms": {
+          "type": "number",
+          "format": "double"
+        },
+        "x": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "y": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "opd": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "required": [
+        "wavelength",
+        "ptv",
+        "rms",
+        "x",
+        "y",
+        "opd"
+      ]
+    },
+    "WavefrontDecomposition": {
+      "description": "Bundled decomposition result including the reference wavelength.",
+      "type": "object",
+      "properties": {
+        "decomposition": {
+          "description": "Generic basis decomposition outcome.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/DecompositionResult"
+            }
+          ]
+        },
+        "wavelength": {
+          "description": "Reference wavelength of the decomposed wavefront map.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            }
+          ]
+        }
+      },
+      "required": [
+        "decomposition",
+        "wavelength"
+      ]
+    },
+    "DecompositionResult": {
+      "description": "Generic result of any 2D wavefront polynomial decomposition.",
+      "type": "object",
+      "properties": {
+        "basis_name": {
+          "description": "Basis family name.",
+          "type": "string"
+        },
+        "modes": {
+          "description": "List of fitted modes.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DecomposedMode"
+          }
+        },
+        "residual_rms": {
+          "description": "Root-mean-square error of the fit residuals in fractions of wavelength λ.",
+          "type": "number",
+          "format": "double"
+        },
+        "metadata": {
+          "description": "Basis-specific metadata (e.g. normalization radius).",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "items": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "basis_name",
+        "modes",
+        "residual_rms",
+        "metadata"
+      ]
+    },
+    "DecomposedMode": {
+      "description": "A single decomposed mode with its label, fitted amplitude, and piston flag.",
+      "type": "object",
+      "properties": {
+        "label": {
+          "description": "Display label for reporting and UI (e.g. \"Z4 (Defocus)\").",
+          "type": "string"
+        },
+        "coefficient": {
+          "description": "Expansion coefficient in fractions of wavelength λ.",
+          "type": "number",
+          "format": "double"
+        },
+        "is_piston": {
+          "description": "Whether this mode is a global piston / phase offset.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "label",
+        "coefficient",
+        "is_piston"
+      ]
+    },
+    "RayPositionHistories": {
+      "description": "Struct that holds the history of ray positions across all spectral bins for report generation.",
+      "type": "object",
+      "properties": {
+        "rays_pos_history": {
+          "description": "Ray position histories grouped per spectral component.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RayPositionHistorySpectrum"
+          }
+        },
+        "plot_view_direction": {
+          "description": "Optional view direction vector for 2D plane projection.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Vector3Schema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ray_transparency": {
+          "description": "Ray color transparency alpha in [0.0, 1.0].",
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "rays_pos_history",
+        "ray_transparency"
+      ]
+    },
+    "RayPositionHistorySpectrum": {
+      "description": "Struct that holds the history of ray positions for rays of a specific spectral bin.",
+      "type": "object",
+      "properties": {
+        "history": {
+          "description": "Ray history coordinate matrices.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Vector3Schema"
+          }
+        },
+        "center_wavelength": {
+          "description": "central wavelength for polychromatic ray bundles",
+          "allOf": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            }
+          ]
+        },
+        "wavelength_bin_size": {
+          "description": "spectral bin size",
+          "allOf": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            }
+          ]
+        }
+      },
+      "required": [
+        "history",
+        "center_wavelength",
+        "wavelength_bin_size"
+      ]
+    },
+    "GhostFocusHistory": {
+      "description": "struct that holds the history of the ray positions that is needed for report generation",
+      "type": "object",
+      "properties": {
+        "rays_pos_history": {
+          "description": "vector of ray positions for each raybundle at a specifc spectral position",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Vector3Schema"
+              }
+            }
+          }
+        },
+        "plot_view_direction": {
+          "description": "view direction if the ray position history is plotted",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/Vector3Schema"
+          }
+        },
+        "ray_node_correlation": {
+          "description": "stores the corrleation between a rays bundle and its parent node as well as parent\nray bundle for each bounce in a vector",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RaysNodeCorrelation"
+          }
+        }
+      },
+      "required": [
+        "rays_pos_history",
+        "ray_node_correlation"
+      ]
+    },
+    "RaysNodeCorrelation": {
+      "description": "Struct to store the correlation between a ray bundle and its parent ray bundle as well as its node origin",
+      "type": "object",
+      "properties": {
+        "correlation": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RaysOrigin"
+          }
+        }
+      },
+      "required": [
+        "correlation"
+      ]
+    },
+    "RaysOrigin": {
+      "description": "Struct to store the node origin uuid and parent ray bundle Uuid of a ray bundle",
+      "type": "object",
+      "properties": {
+        "parent_rays": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        },
+        "node_origin": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        }
+      }
+    },
+    "NodeReport": {
+      "description": "Structure for storing node specific data to be integrated in an [`AnalysisReport`](crate::reporting::analysis_report::AnalysisReport).",
+      "type": "object",
+      "properties": {
+        "node_type": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "uuid": {
+          "type": "string"
+        },
+        "properties": {
+          "$ref": "#/definitions/Properties"
+        },
+        "show_item": {
+          "type": "boolean"
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ReportNote"
+          }
+        }
+      },
+      "required": [
+        "node_type",
+        "name",
+        "uuid",
+        "properties",
+        "show_item"
+      ]
+    },
+    "ReportNote": {
+      "type": "object",
+      "properties": {
+        "level": {
+          "$ref": "#/definitions/ReportLevel"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "level",
+        "message"
+      ]
+    },
+    "ReportLevel": {
+      "type": "string",
+      "enum": [
+        "Info",
+        "Warning",
+        "Error"
+      ]
+    },
+    "RefractiveIndexType": {
+      "description": "Available models for the calculation of refractive index",
+      "oneOf": [
+        {
+          "description": "Trivial model returning a wavelength-independant constant",
+          "type": "object",
+          "properties": {
+            "Const": {
+              "$ref": "#/definitions/RefrIndexConst"
+            }
+          },
+          "required": [
+            "Const"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Sellmeier 1 model",
+          "type": "object",
+          "properties": {
+            "Sellmeier1": {
+              "$ref": "#/definitions/BoundedFormula"
+            }
+          },
+          "required": [
+            "Sellmeier1"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Schott model",
+          "type": "object",
+          "properties": {
+            "Schott": {
+              "$ref": "#/definitions/BoundedFormula2"
+            }
+          },
+          "required": [
+            "Schott"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Conrady model",
+          "type": "object",
+          "properties": {
+            "Conrady": {
+              "$ref": "#/definitions/BoundedFormula3"
+            }
+          },
+          "required": [
+            "Conrady"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Air model (Edlén formula modified by Birch and Downs)",
+          "type": "object",
+          "properties": {
+            "Air": {
+              "$ref": "#/definitions/RefrIndexAir"
+            }
+          },
+          "required": [
+            "Air"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "RefrIndexConst": {
+      "description": "Constant refractive index model",
+      "type": "object",
+      "properties": {
+        "refractive_index": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "refractive_index"
+      ]
+    },
+    "BoundedFormula": {
+      "description": "A generic wrapper that adds wavelength range validation to any [`DispersionFormula`].",
+      "type": "object",
+      "properties": {
+        "coefficients": {
+          "description": "The coefficients/parameters of the dispersion formula.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Sellmeier1Coefficients"
+            }
+          ]
+        },
+        "wvl_range": {
+          "description": "The valid wavelength range.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Tuple2Schema"
+            }
+          ]
+        }
+      },
+      "required": [
+        "coefficients",
+        "wvl_range"
+      ]
+    },
+    "Sellmeier1Coefficients": {
+      "description": "Coefficients for the Sellmeier (1) dispersion formula.",
+      "type": "object",
+      "properties": {
+        "k1": {
+          "description": "Coefficient K1",
+          "type": "number",
+          "format": "double"
+        },
+        "k2": {
+          "description": "Coefficient K2",
+          "type": "number",
+          "format": "double"
+        },
+        "k3": {
+          "description": "Coefficient K3",
+          "type": "number",
+          "format": "double"
+        },
+        "l1": {
+          "description": "Coefficient L1",
+          "type": "number",
+          "format": "double"
+        },
+        "l2": {
+          "description": "Coefficient L2",
+          "type": "number",
+          "format": "double"
+        },
+        "l3": {
+          "description": "Coefficient L3",
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "k1",
+        "k2",
+        "k3",
+        "l1",
+        "l2",
+        "l3"
+      ]
+    },
+    "BoundedFormula2": {
+      "description": "A generic wrapper that adds wavelength range validation to any [`DispersionFormula`].",
+      "type": "object",
+      "properties": {
+        "coefficients": {
+          "description": "The coefficients/parameters of the dispersion formula.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/SchottCoefficients"
+            }
+          ]
+        },
+        "wvl_range": {
+          "description": "The valid wavelength range.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Tuple2Schema"
+            }
+          ]
+        }
+      },
+      "required": [
+        "coefficients",
+        "wvl_range"
+      ]
+    },
+    "SchottCoefficients": {
+      "description": "Coefficients for the Schott dispersion formula.",
+      "type": "object",
+      "properties": {
+        "a0": {
+          "description": "Coefficient A0",
+          "type": "number",
+          "format": "double"
+        },
+        "a1": {
+          "description": "Coefficient A1",
+          "type": "number",
+          "format": "double"
+        },
+        "a2": {
+          "description": "Coefficient A2",
+          "type": "number",
+          "format": "double"
+        },
+        "a3": {
+          "description": "Coefficient A3",
+          "type": "number",
+          "format": "double"
+        },
+        "a4": {
+          "description": "Coefficient A4",
+          "type": "number",
+          "format": "double"
+        },
+        "a5": {
+          "description": "Coefficient A5",
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "a0",
+        "a1",
+        "a2",
+        "a3",
+        "a4",
+        "a5"
+      ]
+    },
+    "BoundedFormula3": {
+      "description": "A generic wrapper that adds wavelength range validation to any [`DispersionFormula`].",
+      "type": "object",
+      "properties": {
+        "coefficients": {
+          "description": "The coefficients/parameters of the dispersion formula.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/ConradyCoefficients"
+            }
+          ]
+        },
+        "wvl_range": {
+          "description": "The valid wavelength range.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Tuple2Schema"
+            }
+          ]
+        }
+      },
+      "required": [
+        "coefficients",
+        "wvl_range"
+      ]
+    },
+    "ConradyCoefficients": {
+      "description": "Coefficients for the Conrady dispersion formula.",
+      "type": "object",
+      "properties": {
+        "n0": {
+          "description": "Base refractive index n0",
+          "type": "number",
+          "format": "double"
+        },
+        "a": {
+          "description": "Coefficient A",
+          "type": "number",
+          "format": "double"
+        },
+        "b": {
+          "description": "Coefficient B",
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "n0",
+        "a",
+        "b"
+      ]
+    },
+    "RefrIndexAir": {
+      "description": "Refractive index model for air using the Edlén formula.",
+      "type": "object",
+      "properties": {
+        "temperature": {
+          "$ref": "#/definitions/SiScalarSchema"
+        },
+        "pressure": {
+          "$ref": "#/definitions/SiScalarSchema"
+        },
+        "humidity": {
+          "$ref": "#/definitions/SiScalarSchema"
+        }
+      },
+      "required": [
+        "temperature",
+        "pressure",
+        "humidity"
+      ]
+    },
+    "Isometry": {
+      "description": "Struct to store the isometric transformation matrix and its inverse.",
+      "type": "object",
+      "properties": {
+        "transform": {
+          "$ref": "#/definitions/Vector3Schema"
+        },
+        "inverse": {
+          "$ref": "#/definitions/Vector3Schema"
+        }
+      },
+      "required": [
+        "transform",
+        "inverse"
+      ]
+    },
+    "HitMap": {
+      "description": "Data structure for storing intersection points (and energies) of [`Rays`](crate::light::rays::Rays) hitting an\n[`OpticSurface`](crate::core_optics::optic_surface::OpticSurface).",
+      "type": "object",
+      "properties": {
+        "hit_map": {
+          "description": "Stores the hitpoints of the rays on this surface, separated by their bounce level and the individual ray bundle",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/BouncedHitMap"
+          }
+        },
+        "critical_fluence": {
+          "description": "Stores the fluence, position in the history of the ray bundles that create a critical fluence on this surface and the bounce level. key value is the uuid of the ray bundle",
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 3,
+            "items": [
+              {
+                "$ref": "#/definitions/SiScalarSchema"
+              },
+              {
+                "type": "integer",
+                "format": "uint",
+                "minimum": 0
+              },
+              {
+                "type": "integer",
+                "format": "uint",
+                "minimum": 0
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "hit_map",
+        "critical_fluence"
+      ]
+    },
+    "BouncedHitMap": {
+      "description": "Storage struct for `RaysHitMap` on a surface from a single bounce",
+      "type": "object",
+      "properties": {
+        "hit_map": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RaysHitMap"
+          }
+        }
+      },
+      "required": [
+        "hit_map"
+      ]
+    },
+    "RaysHitMap": {
+      "description": "Storage struct for hitpoints on a surface from a single ray bundle",
+      "type": "object",
+      "properties": {
+        "hit_points": {
+          "$ref": "#/definitions/HitPoints"
+        },
+        "x_lims": {
+          "type": "array",
+          "maxItems": 2,
+          "minItems": 2,
+          "items": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            },
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            }
+          ]
+        },
+        "y_lims": {
+          "type": "array",
+          "maxItems": 2,
+          "minItems": 2,
+          "items": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            },
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            }
+          ]
+        }
+      },
+      "required": [
+        "hit_points",
+        "x_lims",
+        "y_lims"
+      ]
+    },
+    "HitPoints": {
+      "description": "Enum to store different types of hit point quantities in a hitmap",
+      "oneOf": [
+        {
+          "description": "Energy hitpoints contain a vec of [`EnergyHitPoint`]",
+          "type": "object",
+          "properties": {
+            "Energy": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/BaseHitPoint"
+              }
+            }
+          },
+          "required": [
+            "Energy"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Fluence hitpoints contain a vec of [`FluenceHitPoint`]",
+          "type": "object",
+          "properties": {
+            "Fluence": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/BaseHitPoint"
+              }
+            }
+          },
+          "required": [
+            "Fluence"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "BaseHitPoint": {
+      "description": "A generic hit point storing a position and a generic value (e.g., Energy or Fluence).",
+      "type": "object",
+      "properties": {
+        "position": {
+          "description": "Position of the intersection point",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Point3Schema"
+            }
+          ]
+        },
+        "value": {
+          "description": "Value (Energy or Fluence) of the ray that intersected the surface",
+          "allOf": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            }
+          ]
+        }
+      },
+      "required": [
+        "position",
+        "value"
+      ]
+    },
+    "Point3Schema": {
+      "description": "Helper schema type representing a 3D point `(x, y, z)` serialized as a 3-element tuple.",
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": [
+        {
+          "type": "number",
+          "format": "double"
+        },
+        {
+          "type": "number",
+          "format": "double"
+        },
+        {
+          "type": "number",
+          "format": "double"
+        }
+      ]
+    },
+    "SpotDiagramData": {
+      "description": "Compact 2D spot diagram data binned by wavelength.",
+      "type": "object",
+      "properties": {
+        "series": {
+          "description": "Spectral series containing ray spots.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/WavelengthSpotSeries"
+          }
+        }
+      },
+      "required": [
+        "series"
+      ]
+    },
+    "WavelengthSpotSeries": {
+      "description": "A single spectral series containing 2D spot coordinates at a specific wavelength.",
+      "type": "object",
+      "properties": {
+        "wavelength": {
+          "description": "Nominal wavelength for this spectral bin.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            }
+          ]
+        },
+        "spots": {
+          "description": "2D positions (x, y) of ray hits on the detector surface.",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "items": [
+              {
+                "$ref": "#/definitions/SiScalarSchema"
+              },
+              {
+                "$ref": "#/definitions/SiScalarSchema"
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "wavelength",
+        "spots"
+      ]
+    },
+    "LightDataBuilder": {
+      "description": "Builder for the generation of [`LightData`].",
+      "oneOf": [
+        {
+          "description": "Builder for the generation of [`LightData::Energy`].",
+          "type": "object",
+          "properties": {
+            "Energy": {
+              "$ref": "#/definitions/EnergyDataBuilder"
+            }
+          },
+          "required": [
+            "Energy"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Builder for the generation of [`LightData::Geometric`].",
+          "type": "object",
+          "properties": {
+            "Geometric": {
+              "$ref": "#/definitions/RayDataSource"
+            }
+          },
+          "required": [
+            "Geometric"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "EnergyDataBuilder": {
+      "description": "Builder for the generation of energy spectra.",
+      "oneOf": [
+        {
+          "description": "Build a spectrum from raw data.",
+          "type": "object",
+          "properties": {
+            "Raw": {
+              "$ref": "#/definitions/Spectrum"
+            }
+          },
+          "required": [
+            "Raw"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Build a spectrum from a (CSV) file.",
+          "type": "object",
+          "properties": {
+            "FromFile": {
+              "$ref": "#/definitions/SpectrumFile"
+            }
+          },
+          "required": [
+            "FromFile"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Build a spectrum from a set of (narrow) laser lines (center wavelength, energy) and a given spectrum resolution.",
+          "type": "object",
+          "properties": {
+            "LaserLines": {
+              "$ref": "#/definitions/EnergyLaserLines"
+            }
+          },
+          "required": [
+            "LaserLines"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "SpectrumFile": {
+      "description": "Struct to store a path to read a spectrum from file",
+      "type": "object",
+      "properties": {
+        "f_path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "f_path"
+      ]
+    },
+    "EnergyLaserLines": {
+      "description": "A struct that contains laser line information for the [`EnergyDataBuilder`] variant `LaserLines`",
+      "type": "object",
+      "properties": {
+        "lines": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 2,
+            "items": [
+              {
+                "type": "number",
+                "format": "double"
+              },
+              {
+                "type": "number",
+                "format": "double"
+              }
+            ]
+          }
+        },
+        "spectral_resolution": {
+          "$ref": "#/definitions/SiScalarSchema"
+        }
+      },
+      "required": [
+        "lines",
+        "spectral_resolution"
+      ]
+    },
+    "RayDataSource": {
+      "description": "Builder for the generation of [`LightData::Geometric`](crate::light::lightdata::LightData::Geometric).",
+      "oneOf": [
+        {
+          "description": "Raw [`Rays`] data.",
+          "type": "object",
+          "properties": {
+            "Raw": {
+              "$ref": "#/definitions/Rays"
+            }
+          },
+          "required": [
+            "Raw"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Collimated [`Rays`] data with a given [`PosDistType`], [`EnergyDistType`], and [`SpecDistType`].",
+          "type": "object",
+          "properties": {
+            "Collimated": {
+              "$ref": "#/definitions/CollimatedSrc"
+            }
+          },
+          "required": [
+            "Collimated"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Point source [`Rays`] data with a given [`PosDistType`], [`EnergyDistType`], and [`SpecDistType`].\nAll rays start on the optical axis and are emitted within a cone. The cone is defined by the\nposition distribution **after the rays have propagated the given reference length**.",
+          "type": "object",
+          "properties": {
+            "PointSrc": {
+              "$ref": "#/definitions/PointSrc"
+            }
+          },
+          "required": [
+            "PointSrc"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "A bundle of rays emitted from a 2D black & white image specified by its file path, the actual (x/y) dimenstions of the image as well as the\ntotal energy.",
+          "type": "object",
+          "properties": {
+            "Image": {
+              "$ref": "#/definitions/ImageSrc"
+            }
+          },
+          "required": [
+            "Image"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CollimatedSrc": {
+      "description": "Represents a collimated source, holding he distributions of the rays for ray tracing,\nstoring distributions related to position, energy, and spectrum.\n\n# Fields\n\n* `pos` - Position distribution (`PosDistType`) describing spatial distribution.\n* `energy` - Energy distribution (`EnergyDistType`) describing energy values of the rays.\n* `spect` - Spectral distribution (`SpecDistType`) defining wavelength properties.",
+      "type": "object",
+      "properties": {
+        "pos_dist": {
+          "$ref": "#/definitions/PosDistType"
+        },
+        "energy_dist": {
+          "$ref": "#/definitions/EnergyDistType"
+        },
+        "spect_dist": {
+          "$ref": "#/definitions/SpecDistType"
+        }
+      },
+      "required": [
+        "pos_dist",
+        "energy_dist",
+        "spect_dist"
+      ]
+    },
+    "PosDistType": {
+      "description": "Enum for the different types of position distributions",
+      "oneOf": [
+        {
+          "description": "Rectangular, uniform random distribution",
+          "type": "object",
+          "properties": {
+            "Random": {
+              "$ref": "#/definitions/Random"
+            }
+          },
+          "required": [
+            "Random"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Rectangular, evenly-sized grid distribution",
+          "type": "object",
+          "properties": {
+            "Grid": {
+              "$ref": "#/definitions/Grid"
+            }
+          },
+          "required": [
+            "Grid"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Hexagonal tiling distribution",
+          "type": "object",
+          "properties": {
+            "HexagonalTiling": {
+              "$ref": "#/definitions/HexagonalTiling"
+            }
+          },
+          "required": [
+            "HexagonalTiling"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Hexapolar distribution",
+          "type": "object",
+          "properties": {
+            "Hexapolar": {
+              "$ref": "#/definitions/Hexapolar"
+            }
+          },
+          "required": [
+            "Hexapolar"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Fibonacci rectangle distribution",
+          "type": "object",
+          "properties": {
+            "FibonacciRectangle": {
+              "$ref": "#/definitions/FibonacciRectangle"
+            }
+          },
+          "required": [
+            "FibonacciRectangle"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Fibonacci ellipse distribution",
+          "type": "object",
+          "properties": {
+            "FibonacciEllipse": {
+              "$ref": "#/definitions/FibonacciEllipse"
+            }
+          },
+          "required": [
+            "FibonacciEllipse"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Pseudo random Sobol distribution",
+          "type": "object",
+          "properties": {
+            "Sobol": {
+              "$ref": "#/definitions/SobolDist"
+            }
+          },
+          "required": [
+            "Sobol"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Random": {
+      "description": "Rectangular, uniform random distribution",
+      "type": "object",
+      "properties": {
+        "nr_of_points": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "side_length": {
+          "$ref": "#/definitions/Point2Schema"
+        }
+      },
+      "required": [
+        "nr_of_points",
+        "side_length"
+      ]
+    },
+    "Grid": {
+      "description": "Rectangular, evenly-sized grid distribution",
+      "type": "object",
+      "properties": {
+        "nr_of_points": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "side_length": {
+          "$ref": "#/definitions/Point2Schema"
+        }
+      },
+      "required": [
+        "nr_of_points",
+        "side_length"
+      ]
+    },
+    "HexagonalTiling": {
+      "description": "Circular, hexapolar distribution",
+      "type": "object",
+      "properties": {
+        "nr_of_hex_along_radius": {
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "radius": {
+          "$ref": "#/definitions/SiScalarSchema"
+        }
+      },
+      "required": [
+        "nr_of_hex_along_radius",
+        "radius"
+      ]
+    },
+    "Hexapolar": {
+      "description": "Circular, hexapolar distribution",
+      "type": "object",
+      "properties": {
+        "nr_of_rings": {
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "radius": {
+          "$ref": "#/definitions/SiScalarSchema"
+        }
+      },
+      "required": [
+        "nr_of_rings",
+        "radius"
+      ]
+    },
+    "FibonacciRectangle": {
+      "description": "Rectangular Fibonacci distribution\n\nFor further details see [here](https://en.wikipedia.org/wiki/Fibonacci_sequence)",
+      "type": "object",
+      "properties": {
+        "nr_of_points": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "side_length": {
+          "$ref": "#/definitions/Point2Schema"
+        }
+      },
+      "required": [
+        "nr_of_points",
+        "side_length"
+      ]
+    },
+    "FibonacciEllipse": {
+      "description": "Rectangular Fibbonacci distribution\n\nFor further details see [here](https://en.wikipedia.org/wiki/Fibonacci_sequence)",
+      "type": "object",
+      "properties": {
+        "nr_of_points": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "radius": {
+          "$ref": "#/definitions/Point2Schema"
+        }
+      },
+      "required": [
+        "nr_of_points",
+        "radius"
+      ]
+    },
+    "SobolDist": {
+      "description": "Rectangluar, low-discrepancy quasirandom distribution\n\nFor further details see [here](https://en.wikipedia.org/wiki/Sobol_sequence)",
+      "type": "object",
+      "properties": {
+        "nr_of_points": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "side_length": {
+          "$ref": "#/definitions/Point2Schema"
+        }
+      },
+      "required": [
+        "nr_of_points",
+        "side_length"
+      ]
+    },
+    "EnergyDistType": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "Uniform": {
+              "$ref": "#/definitions/UniformDist"
+            }
+          },
+          "required": [
+            "Uniform"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "General2DGaussian": {
+              "$ref": "#/definitions/General2DGaussian"
+            }
+          },
+          "required": [
+            "General2DGaussian"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "UniformDist": {
+      "type": "object",
+      "properties": {
+        "total_energy": {
+          "$ref": "#/definitions/SiScalarSchema"
+        }
+      },
+      "required": [
+        "total_energy"
+      ]
+    },
+    "General2DGaussian": {
+      "type": "object",
+      "properties": {
+        "total_energy": {
+          "$ref": "#/definitions/SiScalarSchema"
+        },
+        "mu_xy": {
+          "$ref": "#/definitions/Point2Schema"
+        },
+        "sigma_xy": {
+          "$ref": "#/definitions/Point2Schema"
+        },
+        "power": {
+          "$ref": "#/definitions/SiScalarSchema"
+        },
+        "theta": {
+          "$ref": "#/definitions/SiScalarSchema"
+        },
+        "rectangular": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "total_energy",
+        "mu_xy",
+        "sigma_xy",
+        "power",
+        "theta",
+        "rectangular"
+      ]
+    },
+    "SpecDistType": {
+      "description": "Enum representing different types of spectral distributions",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "Gaussian": {
+              "$ref": "#/definitions/Gaussian"
+            }
+          },
+          "required": [
+            "Gaussian"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "LaserLines": {
+              "$ref": "#/definitions/LaserLines"
+            }
+          },
+          "required": [
+            "LaserLines"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Gaussian": {
+      "type": "object",
+      "properties": {
+        "wvl_range": {
+          "$ref": "#/definitions/Tuple2Schema"
+        },
+        "num_points": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "mu": {
+          "$ref": "#/definitions/SiScalarSchema"
+        },
+        "fwhm": {
+          "$ref": "#/definitions/SiScalarSchema"
+        },
+        "power": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "wvl_range",
+        "num_points",
+        "mu",
+        "fwhm",
+        "power"
+      ]
+    },
+    "LaserLines": {
+      "description": "A struct representing a collection of laser lines with their respective wavelengths and relative intensities.\n\nNote: Laser lines must have unique wavelengths. Wavelengths are considered equal if their difference is less than [`MIN_WAVELENGTH_DIFF_NM`] nm.",
+      "type": "object",
+      "properties": {
+        "lines": {
+          "$ref": "#/definitions/Vector2Schema"
+        }
+      },
+      "required": [
+        "lines"
+      ]
+    },
+    "PointSrc": {
+      "description": "Represents a point source for ray tracing,\nstoring various distributions related to position, energy, and spectrum,\nalong with a reference length.\n\n# Fields\n\n* `pos` - Position distribution (`PosDistType`) determining how points are spatially distributed.\n* `energy` - Energy distribution (`EnergyDistType`) describing energy values for the rays.\n* `spect` - Spectral distribution (`SpecDistType`) defining wavelength properties of the rays.\n* `reference_length` - A length scale used as a reference in calculations (`Length`).",
+      "type": "object",
+      "properties": {
+        "pos_dist": {
+          "$ref": "#/definitions/PosDistType"
+        },
+        "energy_dist": {
+          "$ref": "#/definitions/EnergyDistType"
+        },
+        "spect_dist": {
+          "$ref": "#/definitions/SpecDistType"
+        },
+        "reference_length": {
+          "$ref": "#/definitions/SiScalarSchema"
+        }
+      },
+      "required": [
+        "pos_dist",
+        "energy_dist",
+        "spect_dist",
+        "reference_length"
+      ]
+    },
+    "ImageSrc": {
+      "description": "A ray source that emits rays from an image, with a defined cone angle per pixel.\n\n`ImageSrc` is used to simulate image-based light sources in optical setups.\nIt emits rays from an image plane, where each pixel launches rays within a\ndefined cone angle. This is particularly useful for visualizing image formation,\nfocus planes, or blur depending on the optical system.\n\n# Fields\n- `file_path`: Path to the input image file.\n- `pixel_size`: Size of each pixel on the image plane (usually in millimeters).\n- `total_energy`: Total energy emitted by the source.\n- `wave_length`: Wavelength of emitted light.\n- `cone_angle`: Angular spread of rays emitted from each pixel.",
+      "type": "object",
+      "properties": {
+        "file_path": {
+          "description": "path to the image file",
+          "type": "string"
+        },
+        "pixel_size": {
+          "description": "x & y dimensions of the image",
+          "allOf": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            }
+          ]
+        },
+        "total_energy": {
+          "description": "total energy",
+          "allOf": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            }
+          ]
+        },
+        "wave_length": {
+          "description": "wavelength",
+          "allOf": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            }
+          ]
+        },
+        "cone_angle": {
+          "description": "cone angle of each point src per pixel",
+          "allOf": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            }
+          ]
+        }
+      },
+      "required": [
+        "file_path",
+        "pixel_size",
+        "total_energy",
+        "wave_length",
+        "cone_angle"
+      ]
+    },
+    "AssetRef": {
+      "description": "Wrapper for registry assets that can hold either the full inline data\nor a lightweight UUID reference for serialization.",
+      "anyOf": [
+        {
+          "description": "Full in-memory asset struct.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Material"
+            }
+          ]
+        },
+        {
+          "description": "Lightweight UUID reference.",
+          "type": "string",
+          "format": "uuid"
+        }
+      ]
+    },
+    "Material": {
+      "description": "Represents a complete material embedded in an OPOSSUM scenery or stored in the registry.",
+      "type": "object",
+      "properties": {
+        "header": {
+          "description": "Shared metadata header (UUID, versioning, name, vendor).",
+          "allOf": [
+            {
+              "$ref": "#/definitions/AssetHeader"
+            }
+          ]
+        },
+        "optical": {
+          "description": "Primary optical properties.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/OpticalProperties"
+            }
+          ]
+        },
+        "thermal": {
+          "description": "Optional thermal properties block.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ThermalProperties"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mechanical": {
+          "description": "Optional mechanical properties block.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/MechanicalProperties"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "header",
+        "optical"
+      ]
+    },
+    "AssetHeader": {
+      "description": "Common metadata header shared by all registry assets (Materials, Coatings, Components, Light Sources, etc.).",
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "description": "Format schema version for compatibility checks.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "id": {
+          "description": "Unique global identifier for the asset instance.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "version": {
+          "description": "Data version of this asset (follows the append-only versioning strategy).",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "name": {
+          "description": "Human-readable display name (e.g., \"N-BK7\", \"LA1951-A\").",
+          "type": "string"
+        },
+        "manufacturer": {
+          "description": "Optional manufacturer or vendor name (e.g., \"Schott\", \"Thorlabs\").",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "description": {
+          "description": "Optional description or notes about the asset.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "id",
+        "version",
+        "name"
+      ]
+    },
+    "OpticalProperties": {
+      "description": "Primary optical properties required for optical simulation.",
+      "type": "object",
+      "properties": {
+        "refractive_index": {
+          "description": "Refractive index calculation model.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/RefractiveIndexType"
+            }
+          ]
+        },
+        "absorption": {
+          "description": "Absorption model specifying transmittance and attenuation.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/AbsorptionModel"
+            }
+          ]
+        }
+      },
+      "required": [
+        "refractive_index"
+      ]
+    },
+    "AbsorptionModel": {
+      "description": "Defines the absorption model for an optical material.",
+      "oneOf": [
+        {
+          "description": "No absorption (perfectly transparent material).",
+          "type": "string",
+          "const": "None"
+        },
+        {
+          "description": "Wavelength- and path-length-independent attenuation factor in range [0.0, 1.0].\nApplies a flat intensity reduction upon surface interaction or transit.",
+          "type": "object",
+          "properties": {
+            "ConstantAttenuation": {
+              "$ref": "#/definitions/AbsConst"
+            }
+          },
+          "required": [
+            "ConstantAttenuation"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Wavelength-independent absorption coefficient for the Lambert-Beer law.",
+          "type": "object",
+          "properties": {
+            "LambertBeerConstant": {
+              "$ref": "#/definitions/AbsLBConst"
+            }
+          },
+          "required": [
+            "LambertBeerConstant"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Wavelength-dependent absorption coefficient (alpha) for the Lambert-Beer law.\nUses a spectrum mapping wavelengths to absorption coefficients (in 1/m).",
+          "type": "object",
+          "properties": {
+            "LambertBeerSpectrum": {
+              "$ref": "#/definitions/Spectrum"
+            }
+          },
+          "required": [
+            "LambertBeerSpectrum"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Tabulated internal transmittance from glass catalogs.\nProvides transmittances at specific wavelengths for a given reference thickness.",
+          "type": "object",
+          "properties": {
+            "CatalogTransmittance": {
+              "$ref": "#/definitions/AbsCatTrans"
+            }
+          },
+          "required": [
+            "CatalogTransmittance"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Constant extinction coefficient `k` (imaginary part of complex refractive index n + i*k).\nThe absorption coefficient is calculated via alpha(lambda) = 4 * PI * k / lambda.",
+          "type": "object",
+          "properties": {
+            "ExtinctionCoefficient": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "required": [
+            "ExtinctionCoefficient"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "AbsConst": {
+      "type": "object",
+      "properties": {
+        "absorption_constant": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "absorption_constant"
+      ]
+    },
+    "AbsLBConst": {
+      "type": "object",
+      "properties": {
+        "absorption_coefficient": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "absorption_coefficient"
+      ]
+    },
+    "AbsCatTrans": {
+      "description": "Holds catalog internal transmittance data for a specific reference sample thickness.",
+      "type": "object",
+      "properties": {
+        "reference_thickness": {
+          "description": "The reference thickness for the given transmittance data.",
+          "type": "number",
+          "format": "double"
+        },
+        "spectrum": {
+          "description": "Tabulated wavelength-transmittance spectrum.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Spectrum"
+            }
+          ]
+        }
+      },
+      "required": [
+        "reference_thickness",
+        "spectrum"
+      ]
+    },
+    "ThermalProperties": {
+      "description": "Optional thermal properties of a material.",
+      "type": "object",
+      "properties": {
+        "thermal_conductivity": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "expansion_coefficient": {
+          "description": "Coefficient of thermal expansion",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      }
+    },
+    "MechanicalProperties": {
+      "description": "Optional mechanical properties of a material.",
+      "type": "object",
+      "properties": {
+        "density": {
+          "description": "Mass density",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "youngs_modulus": {
+          "description": "Young's modulus",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      }
+    },
+    "SurfaceConfig": {
+      "description": "The coating and the laser induced damage threshold (LIDT) of one surface of a component.\n\nThe default is an ideal antireflective coating and an infinite LIDT. The coating is always\nwritten: an empty entry would not read back through the fault-tolerant\n[`Properties`](crate::properties::Properties) reader.",
+      "type": "object",
+      "properties": {
+        "coating": {
+          "default": "IdealAR",
+          "allOf": [
+            {
+              "$ref": "#/definitions/CoatingType"
+            }
+          ]
+        },
+        "lidt": {
+          "$ref": "#/definitions/SiScalarSchema"
+        }
+      }
+    },
+    "CoatingType": {
+      "description": "Enum for different types of optical coatings",
+      "oneOf": [
+        {
+          "description": "Perfect anti-reflective coating. Reflectivity is always 0.0",
+          "type": "string",
+          "const": "IdealAR"
+        },
+        {
+          "description": "Ideal coating with a constant given reflectivity",
+          "type": "object",
+          "properties": {
+            "ConstantR": {
+              "$ref": "#/definitions/CoatingConstantR"
+            }
+          },
+          "required": [
+            "ConstantR"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Fesnel reflection (e.g. uncoated surface)",
+          "type": "string",
+          "const": "Fresnel"
+        },
+        {
+          "description": "Splits by a [`SplittingConfig`]: transmits a fixed ratio or a spectrum and reflects the rest,\nwhatever the angle of incidence",
+          "type": "object",
+          "properties": {
+            "Separator": {
+              "$ref": "#/definitions/SplittingConfigBuilder"
+            }
+          },
+          "required": [
+            "Separator"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CoatingConstantR": {
+      "description": "Ideal coating with constant reflectivity\n\nThe simple model represents an ideal coating with a given constant reflectivity independent from\nthe incoming wavelength, angle of incidence, or refractive index of the following medium.",
+      "type": "object",
+      "properties": {
+        "reflectivity": {
+          "description": "The reflectivity of the coating in the range [0.0, 1.0].",
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "reflectivity"
+      ]
+    },
+    "SplittingConfigBuilder": {
+      "description": "The definition of a [`SplittingConfig`], as a [`CoatingType::Separator`] stores it.\n\nA spectrum keeps its filter parameters or its file; it is built once per interaction with a\nsurface.",
+      "oneOf": [
+        {
+          "description": "a fixed (wavelength-independant) transmission value. Must be between 0.0 and 1.0",
+          "type": "object",
+          "properties": {
+            "FixedRatio": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "required": [
+            "FixedRatio"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "splitting based on given transmission spectrum.",
+          "type": "object",
+          "properties": {
+            "Spectrum": {
+              "$ref": "#/definitions/SpectralFilterBuilder"
+            }
+          },
+          "required": [
+            "Spectrum"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "NodePositioning": {
+      "description": "Defines the 3D positioning strategy of an optical node.",
+      "oneOf": [
+        {
+          "description": "Fixed, user-defined absolute position in 3D space.",
+          "type": "object",
+          "properties": {
+            "Absolute": {
+              "$ref": "#/definitions/Isometry"
+            }
+          },
+          "required": [
+            "Absolute"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Automatically positioned along the optical axis during an analysis run.\n\nThe inner option stores the calculated geometry from a previous positioning pass.\n- `None`: Not yet calculated for the current configuration.\n- `Some(isometry)`: Calculated in an earlier alignment pass.",
+          "type": "object",
+          "properties": {
+            "Automatic": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Isometry"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "Automatic"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "OpticGraph": {
+      "description": "Data structure representing an optical graph",
+      "type": "object",
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/OpticNode"
+          }
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ConnectionInfo"
+          }
+        },
+        "input_map": {
+          "$ref": "#/definitions/PortMap"
+        },
+        "output_map": {
+          "$ref": "#/definitions/PortMap"
+        }
+      },
+      "required": [
+        "nodes",
+        "edges"
+      ]
+    },
+    "OpticNode": {
+      "type": "object",
+      "properties": {
+        "node_type": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "uuid": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "props": {
+          "default": {},
+          "allOf": [
+            {
+              "$ref": "#/definitions/Properties"
+            }
+          ]
+        },
+        "positioning": {
+          "default": "Automatic",
+          "allOf": [
+            {
+              "$ref": "#/definitions/NodePositioning"
+            }
+          ]
+        },
+        "inverted": {
+          "type": "boolean",
+          "default": false
+        },
+        "alignment": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Isometry"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "align_like_node_at_distance": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "default": null,
+          "minItems": 2,
+          "maxItems": 2,
+          "items": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            }
+          ]
+        },
+        "gui_position": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Point2Schema"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "graph": {
+          "description": "Sub-graph contained inside this node (only populated when `node_type == \"group\"`).",
+          "allOf": [
+            {
+              "$ref": "#/definitions/OpticGraph"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "node_type",
+        "name",
+        "uuid"
+      ]
+    },
+    "ConnectionInfo": {
+      "description": "Represents a connection (edge) between two optical nodes.\n\nContains all information necessary to identify the source and target nodes\nand their ports, along with the distance of the connection.",
+      "type": "object",
+      "properties": {
+        "src_id": {
+          "description": "UUID of the source node.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "src_port": {
+          "description": "Name of the output port on the source node.",
+          "type": "string"
+        },
+        "target_id": {
+          "description": "UUID of the target node.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "target_port": {
+          "description": "Name of the input port on the target node.",
+          "type": "string"
+        },
+        "distance": {
+          "description": "Physical distance between source and target for optical calculations.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            }
+          ]
+        }
+      },
+      "required": [
+        "src_id",
+        "src_port",
+        "target_id",
+        "target_port",
+        "distance"
+      ]
+    },
+    "PortMap": {
+      "description": "Represents a mapping between externally visible port names and internal node-port pairs.\n\nThe `PortMap` stores associations where an external port name (e.g., `input_1`)\nmaps to a specific internal port name on a specific node (identified by a [`Uuid`])\nwithin a the optical graph.\nRepresents a mapping between externally visible port names and internal node-port pairs.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "maxItems": 2,
+        "minItems": 2,
+        "items": [
+          {
+            "type": "string",
+            "format": "uuid"
+          },
+          {
+            "type": "string"
+          }
+        ]
+      }
+    },
+    "AnalyzerInfo": {
+      "description": "Configuration metadata for an analyzer attached to an [`OpmDocument`](super::OpmDocument),\ncombining its [`AnalyzerType`] with optional UI layout coordinates, display name, and\nassociated pump scenarios.",
+      "type": "object",
+      "properties": {
+        "analyzer_type": {
+          "$ref": "#/definitions/AnalyzerType"
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "gui_position": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "maxItems": 2,
+          "minItems": 2,
+          "items": [
+            {
+              "type": "number",
+              "format": "double"
+            },
+            {
+              "type": "number",
+              "format": "double"
+            }
+          ]
+        },
+        "pump_scenarios": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "default_wavelength": {
+          "description": "Optional default wavelength used when configuring or auto-mapping source ports.\n\nThis value is not serialized since it takes its value from the local settings of the OPOSSUM installation.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "writeOnly": true
+        }
+      },
+      "required": [
+        "analyzer_type"
+      ]
+    },
+    "AnalyzerType": {
+      "description": "Type of analysis to be performed.\n\nWhile the individual analyzers are implemented as traits, this enum is necessary for serialization / desrialization.",
+      "oneOf": [
+        {
+          "description": "Simple energy flow analysis of an optical spectrum.\n\n**Note**: This mode does not consider any geometric aspects of an optical setup (so far). In particular,\npossible apertures of optical elements are ignored.",
+          "type": "object",
+          "properties": {
+            "Energy": {
+              "$ref": "#/definitions/EnergyConfig"
+            }
+          },
+          "required": [
+            "Energy"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Ray tracing analysis.\n\nThis mode simulates a bundle of optical ray propagating through a scenery.",
+          "type": "object",
+          "properties": {
+            "RayTrace": {
+              "$ref": "#/definitions/RayTraceConfig"
+            }
+          },
+          "required": [
+            "RayTrace"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Ghost focus analysis.\n\nThis mode also performs ray tracing but considers parasitic back reflections from surfaces with a\ngiven number of bounces.",
+          "type": "object",
+          "properties": {
+            "GhostFocus": {
+              "$ref": "#/definitions/GhostFocusConfig"
+            }
+          },
+          "required": [
+            "GhostFocus"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "EnergyConfig": {
+      "description": "Configuration for the energy flow analysis.",
+      "type": "object",
+      "properties": {
+        "source_map": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/EnergyDataBuilder"
+          }
+        }
+      },
+      "required": [
+        "source_map"
+      ]
+    },
+    "RayTraceConfig": {
+      "description": "Configuration data for a rays tracing analysis.\n\nThe config contains the following info\n - minimum energy / ray\n - maximum number of bounces (reflections) / ray\n - maximum number of refractions / ray\n - map of `SourcePort` nodes to their respective light definition",
+      "type": "object",
+      "properties": {
+        "min_energy_per_ray": {
+          "type": "number",
+          "format": "double"
+        },
+        "max_number_of_bounces": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "max_number_of_refractions": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "missed_surface_strategy": {
+          "$ref": "#/definitions/MissedSurfaceStrategy"
+        },
+        "source_map": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RayDataBuilder"
+          }
+        },
+        "ambient_material": {
+          "$ref": "#/definitions/AssetRef"
+        }
+      },
+      "required": [
+        "min_energy_per_ray",
+        "max_number_of_bounces",
+        "max_number_of_refractions",
+        "missed_surface_strategy"
+      ]
+    },
+    "MissedSurfaceStrategy": {
+      "description": "Strategy to use if a [`Ray`] misses a surface",
+      "oneOf": [
+        {
+          "description": "The [`Ray`] it is set as invalid and does no longer propagate.",
+          "type": "string",
+          "const": "Stop"
+        },
+        {
+          "description": "The [`Ray`] is not altered in any way, thus skipping the surface and propagating\nfurther through the system.",
+          "type": "string",
+          "const": "Ignore"
+        }
+      ]
+    },
+    "RayDataBuilder": {
+      "description": "Builder struct for generating geometric [`Rays`].\n\nThis struct combines a specific [`RayDataSource`] (e.g., collimated, point source, or image)\nwith global physical properties that apply to the entire generated light field.\nThis includes its 3D position and orientation in the optical system ([`Isometry`]),\nas well as an optional alignment wavelength used by analyzers.",
+      "type": "object",
+      "properties": {
+        "source": {
+          "$ref": "#/definitions/RayDataSource"
+        },
+        "isometry": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Isometry"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "alignment_wavelength": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SiScalarSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "source"
+      ]
+    },
+    "GhostFocusConfig": {
+      "description": "Configuration for performing a ghost focus analysis",
+      "type": "object",
+      "properties": {
+        "max_bounces": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "fluence_estimator": {
+          "$ref": "#/definitions/FluenceEstimator"
+        },
+        "source_map": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RayDataBuilder"
+          }
+        },
+        "ambient_material": {
+          "$ref": "#/definitions/AssetRef"
+        }
+      },
+      "required": [
+        "max_bounces",
+        "fluence_estimator"
+      ]
+    },
+    "PumpScenario": {
+      "description": "A named operating point: what every configured node does in one analysis run.\n\nOnly the nodes that do something are held. A configuration that neither pumps nor amplifies is\nremoved from the scenario rather than stored as an inactive entry, so \"is in the map\" and \"takes\npart in this operating point\" cannot disagree.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "configs": {
+          "description": "Keyed by node uuid; opaque in the API schema like every other uuid-keyed map in this crate\n(e.g. `EnergyConfig::source_map`) - `utoipa` schemas key JSON objects by string, so a real\nschema here would document a shape the wire format doesn't have.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/PumpConfig"
+          }
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "PumpConfig": {
+      "description": "What one node does in one operating point: how it is pumped, and how it amplifies.\n\nThe two halves are deliberately independent. A [`PumpSource`] fills the medium with inversion, a\n[`GainModel`] decides what a beam passing through makes of it, and which pair is chosen is the\nwhole point of an operating point — the same pumping can be evaluated with a cruder or a finer\nextraction model, and the same model can be run at several pump levels, without editing either.",
+      "type": "object",
+      "properties": {
+        "gain_model": {
+          "default": "None",
+          "allOf": [
+            {
+              "$ref": "#/definitions/GainModel"
+            }
+          ]
+        },
+        "pump": {
+          "default": "Unpumped",
+          "allOf": [
+            {
+              "$ref": "#/definitions/PumpSource"
+            }
+          ]
+        }
+      }
+    },
+    "GainModel": {
+      "description": "Amplification model of a node with a volume.\n\nEach escalation stage of the gain modelling adds one variant here. The hosting node does not\nchange, only the value of its `amp config` property.",
+      "oneOf": [
+        {
+          "description": "No amplification. The node behaves exactly like the passive component it is.\n\nThis is the default for every node, so declaring the property does not change any result.",
+          "type": "string",
+          "const": "None"
+        },
+        {
+          "description": "Constant energy gain, independent of the path length through the medium and without\nsaturation. See [`ConstGain`].",
+          "type": "object",
+          "properties": {
+            "Const": {
+              "$ref": "#/definitions/ConstGain"
+            }
+          },
+          "required": [
+            "Const"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Unsaturated gain integrated along the path through the medium, reading the local inversion.\nSee [`MonochromaticSmallSignalGain`].",
+          "type": "object",
+          "properties": {
+            "MonochromaticSmallSignalGain": {
+              "$ref": "#/definitions/MonochromaticSmallSignalGain"
+            }
+          },
+          "required": [
+            "MonochromaticSmallSignalGain"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ConstGain": {
+      "description": "Parameters of a constant, path-length independent energy gain.\n\nThis is the simplest conceivable amplifier: the energy of every ray is multiplied by the same\nfactor, regardless of how far the ray actually travels inside the medium and regardless of how\nmuch energy has already been extracted. It is meant for chain layout and system overview, not\nfor a physically faithful description of an amplifier.",
+      "type": "object",
+      "properties": {
+        "gain": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "gain"
+      ]
+    },
+    "MonochromaticSmallSignalGain": {
+      "description": "Parameters of an unsaturated gain that follows the path through the medium.\n\nSee the [module documentation](self) for what the model does and what it deliberately does not.",
+      "type": "object",
+      "properties": {
+        "peak_gain_coefficient": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "peak_gain_coefficient"
+      ]
+    },
+    "PumpSource": {
+      "description": "How the medium of a node is pumped.\n\nEach way of describing a pumped medium adds one variant here rather than a node type of its own,\nexactly as the extraction side does with [`GainModel`](super::GainModel).",
+      "oneOf": [
+        {
+          "description": "Not pumped at all. The medium keeps whatever inversion it already had, which for a fresh\n[`InversionField`] is none.\n\nThis is the default, so a component nobody pumped behaves exactly as it always did.",
+          "type": "string",
+          "const": "Unpumped"
+        },
+        {
+          "description": "A uniform inversion throughout the medium: `β = 1` everywhere it reaches.\n\nIt carries no parameters — how hard the medium is pumped is the gain coefficient the\n[`GainModel`](super::GainModel) holds. A uniform inversion needs no grid, so the model reads\nit as [`Inversion::Uniform`](super::Inversion) and integrates over the exact chord.",
+          "type": "string",
+          "const": "Const"
+        },
+        {
+          "description": "An inversion shaped by profiles given in closed form. See [`AnalyticPump`].",
+          "type": "object",
+          "properties": {
+            "Analytic": {
+              "$ref": "#/definitions/AnalyticPump"
+            }
+          },
+          "required": [
+            "Analytic"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "AnalyticPump": {
+      "description": "Parameters of a medium pumped into a shape given in closed form.\n\nThe two profiles are **composed**, not chosen between: a real end-pumped rod has a spot profile\nacross its face *and* an absorption decay along its axis at the same time, and stating them\nseparately is what lets either be varied without touching the other.\n\nBoth profiles are peak-normalised, so their product — the normalized inversion `β` this pump\ndeposits — reaches 1 exactly where they both peak: on the axis of the spot, at the face the pump\nenters through. The gain coefficient that peak stands for is not stated here but on the\n[`GainModel`](super::GainModel); this side only carries the shape and the grid it is resolved on.",
+      "type": "object",
+      "properties": {
+        "transversal": {
+          "$ref": "#/definitions/TransversalProfile"
+        },
+        "longitudinal": {
+          "$ref": "#/definitions/LongitudinalProfile"
+        },
+        "cells_x": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "cells_y": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        },
+        "cells_z": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "transversal",
+        "longitudinal",
+        "cells_x",
+        "cells_y",
+        "cells_z"
+      ]
+    },
+    "TransversalProfile": {
+      "description": "How a pump is distributed across the medium, transversally.",
+      "oneOf": [
+        {
+          "description": "The pump covers the whole cross section evenly.",
+          "type": "string",
+          "const": "Flat"
+        },
+        {
+          "description": "A super-Gaussian spot, which may be decentred, elliptical, rotated or flat-topped. See\n[`SuperGaussianShape`].",
+          "type": "object",
+          "properties": {
+            "SuperGaussian": {
+              "$ref": "#/definitions/SuperGaussianShape"
+            }
+          },
+          "required": [
+            "SuperGaussian"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "SuperGaussianShape": {
+      "description": "The shape of a generalized 2D super-Gaussian, without an amplitude.\n\nSee the [module documentation](self) for why this is a type of its own.",
+      "type": "object",
+      "properties": {
+        "mu_xy": {
+          "$ref": "#/definitions/Point2Schema"
+        },
+        "sigma_xy": {
+          "$ref": "#/definitions/Point2Schema"
+        },
+        "power": {
+          "type": "number",
+          "format": "double"
+        },
+        "theta": {
+          "$ref": "#/definitions/SiScalarSchema"
+        },
+        "rectangular": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "mu_xy",
+        "sigma_xy",
+        "power",
+        "theta",
+        "rectangular"
+      ]
+    },
+    "LongitudinalProfile": {
+      "description": "How a pump is distributed along the optical axis of the medium.",
+      "oneOf": [
+        {
+          "description": "The pump reaches the far end of the medium as strongly as the near one.",
+          "type": "string",
+          "const": "Flat"
+        },
+        {
+          "description": "The pump is absorbed on its way through. See [`LambertBeerProfile`].",
+          "type": "object",
+          "properties": {
+            "LambertBeer": {
+              "$ref": "#/definitions/LambertBeerProfile"
+            }
+          },
+          "required": [
+            "LambertBeer"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "LambertBeerProfile": {
+      "description": "A pump absorbed exponentially along the optical axis of the medium.\n\nThe Lambert-Beer law: a pump entering one face is attenuated by `exp(-α·s)` after a depth `s`,\nso the inversion it leaves behind decays the same way. This is what makes one end of an\nend-pumped rod hotter and more strongly inverted than the other.",
+      "type": "object",
+      "properties": {
+        "absorption": {
+          "type": "number",
+          "format": "double"
+        },
+        "direction": {
+          "$ref": "#/definitions/PumpDirection"
+        }
+      },
+      "required": [
+        "absorption",
+        "direction"
+      ]
+    },
+    "PumpDirection": {
+      "description": "Which end of the medium the pump enters through.\n\nThe two ends of the same optical axis the light itself travels along, so this is stated in the\noptic's own frame rather than as a direction in the laboratory.",
+      "oneOf": [
+        {
+          "description": "The pump enters at the entrance face and is absorbed on its way towards the exit.",
+          "type": "string",
+          "const": "Forward"
+        },
+        {
+          "description": "The pump enters at the exit face and travels against the optical axis.",
+          "type": "string",
+          "const": "Backward"
+        }
+      ]
+    },
+    "OptimizationConfig": {
+      "description": "Fully serializable configuration defining a complete optical optimization setup.\n\nCan be persisted to `.opt.ron` template files or embedded directly\nin project files (`.opm`).",
+      "type": "object",
+      "properties": {
+        "free_variables": {
+          "description": "List of independent free parameters tuned by the numerical solver.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FreeVariable"
+          }
+        },
+        "couplings": {
+          "description": "Coupling rules defining deterministic dependencies between parameters.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ParameterCoupling"
+          }
+        },
+        "operands": {
+          "description": "Evaluated merit criteria (targets, inequality bounds, geometry penalties).",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/StandardOperand"
+          }
+        },
+        "algorithm": {
+          "description": "Mathematical optimization algorithm and its specific hyperparameters.",
+          "default": {
+            "NelderMead": {
+              "max_iterations": 100,
+              "sd_tolerance": 1e-6
+            }
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/OptimizationAlgorithm"
+            }
+          ]
+        }
+      }
+    },
+    "FreeVariable": {
+      "description": "A free parameter directly manipulated by the numerical solver.",
+      "type": "object",
+      "properties": {
+        "address": {
+          "description": "Address of the optical property or connection distance being varied.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/ParameterAddress"
+            }
+          ]
+        },
+        "bounds": {
+          "description": "Lower and upper box constraints in SI base units (defaults to `[-inf, +inf]`).",
+          "default": {
+            "min": null,
+            "max": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/BoxBounds"
+            }
+          ]
+        },
+        "delta_rel": {
+          "description": "Relative step size factor for finite-difference derivatives (defaults to [`DEFAULT_DELTA_REL`]).",
+          "type": "number",
+          "format": "double"
+        },
+        "delta_abs_min": {
+          "description": "Minimum absolute step size floor for finite-difference derivatives (defaults to [`DEFAULT_DELTA_ABS_MIN`]).",
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "address",
+        "delta_rel",
+        "delta_abs_min"
+      ]
+    },
+    "ParameterAddress": {
+      "description": "Unique address identifying a tunable variable in the optical model.",
+      "oneOf": [
+        {
+          "description": "A scalar property located on a node (e.g., radius of curvature, thickness, tilt) in SI base units.",
+          "type": "object",
+          "properties": {
+            "NodeProperty": {
+              "type": "object",
+              "properties": {
+                "node_id": {
+                  "description": "Unique ID of the target optical node.",
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "property_name": {
+                  "description": "Name of the property on the node.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "node_id",
+                "property_name"
+              ]
+            }
+          },
+          "required": [
+            "NodeProperty"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "A spherical optical surface curvature.\n\nSolver representation: Curvature $c$ in SI base units $[1/\\text{m}]$ ($c = 1/R$).\nUnderlying model property: Radius of curvature $R$ in $[\\text{m}]$.\nA curvature of $c = 0.0$ corresponds to a flat surface ($R = \\pm\\infty$).",
+          "type": "object",
+          "properties": {
+            "SurfaceCurvature": {
+              "type": "object",
+              "properties": {
+                "node_id": {
+                  "description": "Unique ID of the target optical node.",
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "property_name": {
+                  "description": "Name of the radius/curvature property on the node.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "node_id",
+                "property_name"
+              ]
+            }
+          },
+          "required": [
+            "SurfaceCurvature"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "A propagation distance starting from an output port of a node (in meters).",
+          "type": "object",
+          "properties": {
+            "ConnectionDistance": {
+              "type": "object",
+              "properties": {
+                "src_id": {
+                  "description": "Unique ID of the source node this connection originates from.",
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "src_port": {
+                  "description": "Output port name of the source node this connection belongs to.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "src_id",
+                "src_port"
+              ]
+            }
+          },
+          "required": [
+            "ConnectionDistance"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "BoxBounds": {
+      "description": "Closed interval `[min, max]` defining box constraints on a parameter in SI base units.",
+      "type": "object",
+      "properties": {
+        "min": {
+          "description": "Lower bound (inclusive) in SI base units (may be `f64::NEG_INFINITY`).",
+          "type": "number",
+          "format": "double"
+        },
+        "max": {
+          "description": "Upper bound (inclusive) in SI base units (may be `f64::INFINITY`).",
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "min",
+        "max"
+      ]
+    },
+    "ParameterCoupling": {
+      "description": "A coupling rule that drives a dependent parameter from other system variables.",
+      "type": "object",
+      "properties": {
+        "target": {
+          "description": "Dependent parameter being modified.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/ParameterAddress"
+            }
+          ]
+        },
+        "rule": {
+          "description": "Mathematical rule defining how `target` is calculated.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/CouplingType"
+            }
+          ]
+        }
+      },
+      "required": [
+        "target",
+        "rule"
+      ]
+    },
+    "CouplingType": {
+      "description": "Specific deterministic relationship between a dependent target parameter and one or more source parameters.",
+      "oneOf": [
+        {
+          "description": "Enforces equality: $\\text{target} = \\text{source}$ (e.g., identical air spacings in symmetric setups).",
+          "type": "object",
+          "properties": {
+            "Identical": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "description": "The source parameter controlling the coupling.",
+                  "allOf": [
+                    {
+                      "$ref": "#/definitions/ParameterAddress"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "source"
+              ]
+            }
+          },
+          "required": [
+            "Identical"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Enforces sign inversion: $\\text{target} = -\\text{source}$ (e.g., equiconvex lenses with $R_2 = -R_1$).",
+          "type": "object",
+          "properties": {
+            "Opposite": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "description": "The source parameter controlling the coupling.",
+                  "allOf": [
+                    {
+                      "$ref": "#/definitions/ParameterAddress"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "source"
+              ]
+            }
+          },
+          "required": [
+            "Opposite"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Enforces a linear transformation: $\\text{target} = \\text{factor} \\cdot \\text{source} + \\text{offset}$.",
+          "type": "object",
+          "properties": {
+            "Affine": {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "description": "The source parameter controlling the coupling.",
+                  "allOf": [
+                    {
+                      "$ref": "#/definitions/ParameterAddress"
+                    }
+                  ]
+                },
+                "factor": {
+                  "description": "Multiplicative scaling factor.",
+                  "type": "number",
+                  "format": "double"
+                },
+                "offset": {
+                  "description": "Additive offset in SI base units of the target parameter.",
+                  "type": "number",
+                  "format": "double"
+                }
+              },
+              "required": [
+                "source",
+                "factor",
+                "offset"
+              ]
+            }
+          },
+          "required": [
+            "Affine"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Enforces a fixed total system length by adjusting the target distance:\n$\\text{target} = \\text{total\\_length} - \\sum \\text{other\\_segments}$.",
+          "type": "object",
+          "properties": {
+            "TotalLengthLock": {
+              "type": "object",
+              "properties": {
+                "total_length": {
+                  "description": "The targeted total optical/geometric path length in meters.",
+                  "type": "number",
+                  "format": "double"
+                },
+                "other_segments": {
+                  "description": "All other distance parameters whose values are subtracted from `total_length`.",
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/ParameterAddress"
+                  }
+                }
+              },
+              "required": [
+                "total_length",
+                "other_segments"
+              ]
+            }
+          },
+          "required": [
+            "TotalLengthLock"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "StandardOperand": {
+      "description": "Enumeration of all built-in merit operand types supported by the optimization engine.",
+      "oneOf": [
+        {
+          "description": "Target or inequality bound on a scalar detector observable or model parameter.",
+          "type": "object",
+          "properties": {
+            "Metric": {
+              "$ref": "#/definitions/MetricOperand"
+            }
+          },
+          "required": [
+            "Metric"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Upper bound on the cumulative length of multiple spacing/thickness parameters.",
+          "type": "object",
+          "properties": {
+            "MaxTotalLength": {
+              "$ref": "#/definitions/MaxTotalLengthOperand"
+            }
+          },
+          "required": [
+            "MaxTotalLength"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Lower bound on the mechanical edge thickness of an optical lens.",
+          "type": "object",
+          "properties": {
+            "MinEdgeThickness": {
+              "$ref": "#/definitions/MinEdgeThicknessOperand"
+            }
+          },
+          "required": [
+            "MinEdgeThickness"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Penalty for lost or vignetted rays at a detector.",
+          "type": "object",
+          "properties": {
+            "TransmissionPenalty": {
+              "$ref": "#/definitions/TransmissionPenaltyOperand"
+            }
+          },
+          "required": [
+            "TransmissionPenalty"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "MetricOperand": {
+      "description": "Unified scalar merit operand targeting either an exact value or a one-sided inequality limit.",
+      "type": "object",
+      "properties": {
+        "source": {
+          "description": "Observable or parameter address providing the evaluated scalar value.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/MetricSource"
+            }
+          ]
+        },
+        "target": {
+          "description": "Target value or inequality threshold in SI base units.",
+          "type": "number",
+          "format": "double"
+        },
+        "mode": {
+          "description": "Comparison mode determining how residuals are computed.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/OperandMode"
+            }
+          ]
+        },
+        "weight": {
+          "description": "Relative weighting factor applied to the squared normalized residual.",
+          "type": "number",
+          "format": "double"
+        },
+        "scale": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "source",
+        "target",
+        "mode",
+        "weight",
+        "scale"
+      ]
+    },
+    "MetricSource": {
+      "description": "Unified source for scalar quantities evaluated by optimization operands.",
+      "oneOf": [
+        {
+          "description": "A physics metric recorded by a detector during analysis.",
+          "type": "object",
+          "properties": {
+            "Observable": {
+              "$ref": "#/definitions/ObservableAddress"
+            }
+          },
+          "required": [
+            "Observable"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "A geometric or model property (e.g., thickness, curvature, spacing).",
+          "type": "object",
+          "properties": {
+            "Parameter": {
+              "$ref": "#/definitions/ParameterAddress"
+            }
+          },
+          "required": [
+            "Parameter"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ObservableAddress": {
+      "description": "Unique address identifying an observable output metric produced by a detector during analysis.",
+      "type": "object",
+      "properties": {
+        "analyzer_id": {
+          "description": "Unique ID of the analyzer producing the evaluation.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "node_id": {
+          "description": "Unique ID of the detector node recording the metric.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "metric_name": {
+          "description": "Key of the observable metric (e.g., `\"Energy\"`, `\"rms beam radius\"`).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "analyzer_id",
+        "node_id",
+        "metric_name"
+      ]
+    },
+    "OperandMode": {
+      "description": "Evaluation mode of a scalar optical metric operand.",
+      "oneOf": [
+        {
+          "description": "Penalizes deviation from `target` symmetrically: $((v - \\text{target}) / \\text{scale})^2$.",
+          "type": "string",
+          "const": "Equal"
+        },
+        {
+          "description": "Penalizes values exceeding the upper limit: $(\\max(0, v - \\text{limit}) / \\text{scale})^2$.",
+          "type": "string",
+          "const": "UpperLimit"
+        },
+        {
+          "description": "Penalizes values falling below the lower limit: $(\\max(0, \\text{limit} - v) / \\text{scale})^2$.",
+          "type": "string",
+          "const": "LowerLimit"
+        }
+      ]
+    },
+    "MaxTotalLengthOperand": {
+      "description": "Inequality penalty operand constraining the sum of specified length parameters to not exceed `max_length`.",
+      "type": "object",
+      "properties": {
+        "segments": {
+          "description": "Addresses of the distance or thickness parameters summed together.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ParameterAddress"
+          }
+        },
+        "max_length": {
+          "description": "Maximum allowed total length in meters.",
+          "type": "number",
+          "format": "double"
+        },
+        "weight": {
+          "description": "Relative weighting factor applied when the sum exceeds `max_length`.",
+          "type": "number",
+          "format": "double"
+        },
+        "scale": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "segments",
+        "max_length",
+        "weight",
+        "scale"
+      ]
+    },
+    "MinEdgeThicknessOperand": {
+      "description": "Geometric manufacturability operand enforcing a minimum edge thickness on a lens node.",
+      "type": "object",
+      "properties": {
+        "node_id": {
+          "description": "Unique ID of the lens node whose edge thickness is constrained.",
+          "type": "string",
+          "format": "uuid"
+        },
+        "min_thickness": {
+          "description": "Minimum required edge thickness in meters.",
+          "type": "number",
+          "format": "double"
+        },
+        "weight": {
+          "description": "Relative weighting factor applied when the edge thickness falls below `min_thickness`.",
+          "type": "number",
+          "format": "double"
+        },
+        "scale": {
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "node_id",
+        "min_thickness",
+        "weight",
+        "scale"
+      ]
+    },
+    "TransmissionPenaltyOperand": {
+      "description": "Penalty operand discouraging ray clipping or total internal reflection losses at a detector.",
+      "type": "object",
+      "properties": {
+        "address": {
+          "description": "Observable address of the ray-count or transmission metric on the target detector.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/ObservableAddress"
+            }
+          ]
+        },
+        "expected_rays": {
+          "description": "Expected number of rays reaching the detector without clipping.",
+          "type": "number",
+          "format": "double"
+        },
+        "weight": {
+          "description": "Relative weighting factor applied when fewer than `expected_rays` arrive.",
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "required": [
+        "address",
+        "expected_rays",
+        "weight"
+      ]
+    },
+    "OptimizationAlgorithm": {
+      "description": "Supported numerical optimization algorithms and their solver-specific hyperparameters.",
+      "oneOf": [
+        {
+          "description": "Damped Least Squares (Levenberg-Marquardt) local non-linear least-squares solver.",
+          "type": "object",
+          "properties": {
+            "Dls": {
+              "type": "object",
+              "properties": {
+                "max_iterations": {
+                  "description": "Maximum number of solver iterations.",
+                  "type": "integer",
+                  "format": "uint64",
+                  "minimum": 0
+                },
+                "initial_damping": {
+                  "description": "Initial Levenberg-Marquardt damping factor $\\lambda_0$.",
+                  "type": "number",
+                  "format": "double"
+                },
+                "gradient_tolerance": {
+                  "description": "Convergence threshold on the infinity norm of the merit gradient.",
+                  "type": "number",
+                  "format": "double"
+                }
+              },
+              "required": [
+                "max_iterations",
+                "initial_damping",
+                "gradient_tolerance"
+              ]
+            }
+          },
+          "required": [
+            "Dls"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Nelder-Mead simplex direct search method (derivative-free).",
+          "type": "object",
+          "properties": {
+            "NelderMead": {
+              "type": "object",
+              "properties": {
+                "max_iterations": {
+                  "description": "Maximum number of simplex iterations.",
+                  "type": "integer",
+                  "format": "uint64",
+                  "minimum": 0
+                },
+                "sd_tolerance": {
+                  "description": "Convergence threshold on the standard deviation of function values across simplex vertices.",
+                  "type": "number",
+                  "format": "double"
+                }
+              },
+              "required": [
+                "max_iterations",
+                "sd_tolerance"
+              ]
+            }
+          },
+          "required": [
+            "NelderMead"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Adaptive Simulated Annealing global stochastic optimization (Corana 1/5th success rule).",
+          "type": "object",
+          "properties": {
+            "AdaptiveSimulatedAnnealing": {
+              "type": "object",
+              "properties": {
+                "max_iterations": {
+                  "description": "Maximum number of Markov-chain step evaluations.",
+                  "type": "integer",
+                  "format": "uint64",
+                  "minimum": 0
+                },
+                "initial_temperature": {
+                  "description": "Initial annealing temperature $T_0$ (should be comparable to the initial merit cost).",
+                  "type": "number",
+                  "format": "double"
+                },
+                "cooling_rate": {
+                  "description": "Geometric cooling factor $\\alpha$ in $T_{k+1} = \\alpha \\cdot T_k$ (typically `0.85..=0.999`).",
+                  "type": "number",
+                  "format": "double"
+                },
+                "adaptation_cycle": {
+                  "description": "Number of proposals per variable before adapting step sizes.",
+                  "type": "integer",
+                  "format": "uint64",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "max_iterations",
+                "initial_temperature",
+                "cooling_rate",
+                "adaptation_cycle"
+              ]
+            }
+          },
+          "required": [
+            "AdaptiveSimulatedAnnealing"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

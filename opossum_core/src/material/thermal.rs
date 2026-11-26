@@ -1,15 +1,18 @@
 //! Thermal properties module for materials
+use crate::types::SiScalarSchema;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::{TemperatureCoefficient, ThermalConductivity};
-
 /// Optional thermal properties of a material.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema)]
 pub struct ThermalProperties {
     #[serde(default)]
+    #[schemars(with = "Option<SiScalarSchema>")]
     pub thermal_conductivity: Option<ThermalConductivity>,
 
     /// Coefficient of thermal expansion
     #[serde(default)]
+    #[schemars(with = "Option<SiScalarSchema>")]
     pub expansion_coefficient: Option<TemperatureCoefficient>,
 }
 

@@ -1,5 +1,5 @@
 warning: unused import: `opossum_core::generic_validators::ValidateTrait`
- --> tests/fail/invalid_validate_struct.rs:2:5
+ --> tests/macro_ui/fail/invalid_validate_struct.rs:2:5
   |
 2 | use opossum_core::generic_validators::ValidateTrait;
   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -7,50 +7,50 @@ warning: unused import: `opossum_core::generic_validators::ValidateTrait`
   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
 
 error[E0277]: the trait bound `Validated<std::string::String, AllNotEmpty>: ValidateTrait` is not satisfied
-  --> tests/fail/invalid_validate_struct.rs:10:13
+  --> tests/macro_ui/fail/invalid_validate_struct.rs:10:13
    |
 10 |     street: Validated<String, AllNotEmpty>,
    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
    |
 help: the trait `ValidateTrait` is not implemented for `Validated<std::string::String, AllNotEmpty>`
-  --> tests/fail/invalid_validate_struct.rs:4:1
+  --> tests/macro_ui/fail/invalid_validate_struct.rs:4:1
    |
  4 | struct Validated<T, V>(T, V);
    | ^^^^^^^^^^^^^^^^^^^^^^
 help: the following other types implement trait `ValidateTrait`
-  --> $WORKSPACE/opossum_core/src/generic_validators/mod.rs
+  --> src/generic_validators/mod.rs
    |
    | impl<T, V: Validate<T>> ValidateTrait for Validated<T, V> {}
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `opossum_core::generic_validators::Validated<T, V>`
    | impl<T: Clone, EV: Validate<T>, CV: ValidateVec<T>> ValidateTrait for ValidatedVec<T, EV, CV> {}
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `opossum_core::generic_validators::ValidatedVec<T, EV, CV>`
 note: required by a bound in `_::{closure#0}::_check`
-  --> tests/fail/invalid_validate_struct.rs:8:10
+  --> tests/macro_ui/fail/invalid_validate_struct.rs:8:10
    |
  8 | #[derive(EnsureValidated)]
    |          ^^^^^^^^^^^^^^^ required by this bound in `_check`
    = note: this error originates in the derive macro `EnsureValidated` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `Validated<std::string::String, AllNotEmpty>: ValidateTrait` is not satisfied
-  --> tests/fail/invalid_validate_struct.rs:11:11
+  --> tests/macro_ui/fail/invalid_validate_struct.rs:11:11
    |
 11 |     city: Validated<String, AllNotEmpty>,
    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
    |
 help: the trait `ValidateTrait` is not implemented for `Validated<std::string::String, AllNotEmpty>`
-  --> tests/fail/invalid_validate_struct.rs:4:1
+  --> tests/macro_ui/fail/invalid_validate_struct.rs:4:1
    |
  4 | struct Validated<T, V>(T, V);
    | ^^^^^^^^^^^^^^^^^^^^^^
 help: the following other types implement trait `ValidateTrait`
-  --> $WORKSPACE/opossum_core/src/generic_validators/mod.rs
+  --> src/generic_validators/mod.rs
    |
    | impl<T, V: Validate<T>> ValidateTrait for Validated<T, V> {}
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `opossum_core::generic_validators::Validated<T, V>`
    | impl<T: Clone, EV: Validate<T>, CV: ValidateVec<T>> ValidateTrait for ValidatedVec<T, EV, CV> {}
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `opossum_core::generic_validators::ValidatedVec<T, EV, CV>`
 note: required by a bound in `_::{closure#1}::_check`
-  --> tests/fail/invalid_validate_struct.rs:8:10
+  --> tests/macro_ui/fail/invalid_validate_struct.rs:8:10
    |
  8 | #[derive(EnsureValidated)]
    |          ^^^^^^^^^^^^^^^ required by this bound in `_check`

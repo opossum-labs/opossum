@@ -1,5 +1,3 @@
-// File: opossum_gui/src/components/scenery_editor/node/node_component.rs
-
 use super::{AMP_STATUS_HEIGHT, NodeElement};
 use crate::{
     CONTEXT_MENU,

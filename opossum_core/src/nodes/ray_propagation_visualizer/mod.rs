@@ -43,7 +43,7 @@ inventory::submit! {
 ///   - Outputs: `output_1`
 ///
 /// ## Properties
-///   - `view_direction`: Normal vector defining the projection plane (default: x-axis -> y-z plane).
+///   - `view direction`: Normal vector defining the projection plane (default: x-axis -> y-z plane).
 ///   - `ray transparency`: Alpha value in [0.0, 1.0] for ray rendering.
 #[derive(OpmNode, Serialize, Deserialize, Clone, Debug)]
 #[opm_node("darkgreen")]
@@ -58,7 +58,7 @@ impl Default for RayPropagationVisualizer {
         let mut node_attr = NodeAttr::new("ray propagation");
         node_attr
             .create_property(
-                "view_direction",
+                "view direction",
                 "plane to project the ray positions onto, defined by the normal vector. default: y-z plane",
                 Proptype::Vec3(Vector3::x()),
             )
@@ -92,16 +92,16 @@ impl RayPropagationVisualizer {
     /// * `view_normal_vector` - Optional normal vector of the projection plane.
     ///
     /// # Errors
-    /// Returns an error if the `view_direction` property cannot be set.
+    /// Returns an error if the `view direction` property cannot be set.
     pub fn new(name: &str, view_normal_vector: Option<Vector3<f64>>) -> OpmResult<Self> {
         let mut rpv = Self::default();
         rpv.node_attr.set_name(name);
         if let Some(view_vec) = view_normal_vector {
             rpv.node_attr
-                .set_property("view_direction", Proptype::Vec3(view_vec))?;
+                .set_property("view direction", Proptype::Vec3(view_vec))?;
         } else {
             rpv.node_attr
-                .set_property("view_direction", Proptype::Vec3(Vector3::x()))?;
+                .set_property("view direction", Proptype::Vec3(Vector3::x()))?;
         }
         Ok(rpv)
     }
@@ -136,7 +136,8 @@ impl OpticNode for RayPropagationVisualizer {
         if let Some(LightData::Geometric(rays)) = data
             && let Ok(mut ray_position_histories) = rays.get_rays_position_history(true)
         {
-            if let Ok(Proptype::Vec3(view_vec)) = self.properties().get("view_direction") {
+            // Use the exact property key "view direction" (with space) matching Default::default()
+            if let Ok(Proptype::Vec3(view_vec)) = self.properties().get("view direction") {
                 ray_position_histories.plot_view_direction = Some(*view_vec);
             }
             if let Ok(Proptype::F64(transparency)) = self.properties().get("ray transparency") {

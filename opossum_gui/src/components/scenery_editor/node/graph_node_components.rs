@@ -1,6 +1,8 @@
 use super::NodeType;
-use crate::components::scenery_editor::constants::BORDER_WIDTH;
-use crate::components::scenery_editor::node::{HEADER_HEIGHT, NODE_WIDTH};
+use crate::components::scenery_editor::{
+    constants::BORDER_WIDTH,
+    node::{HEADER_HEIGHT, NODE_WIDTH},
+};
 use dioxus::prelude::*;
 use opossum_core::utils::to_f64;
 

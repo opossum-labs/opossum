@@ -1944,10 +1944,7 @@ async fn ensure_group_tab_exists(
         return;
     }
     if let Ok(hierarchy) = api::get_group_hierarchy(group_id).await {
-        let name = hierarchy
-            .last()
-            .map(|(_, name)| name.clone())
-            .unwrap_or_default();
+        let name = hierarchy.last().map_or_default(|(_, name)| name.clone());
         ws_handler.workspace.ensure_group_tab(GraphInfo {
             name,
             id: group_id,

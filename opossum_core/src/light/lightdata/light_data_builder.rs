@@ -3,6 +3,7 @@
 //! This module provides a builder for the generation of [`LightData`] to be used in `Source`.
 //! This builder allows easier serialization / deserialization in OPM files.
 use opm_macros_lib::EnsureValidated;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use strum::EnumIter;
@@ -16,7 +17,9 @@ use crate::{
 };
 
 /// Builder for the generation of [`LightData`].
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, EnsureValidated)]
+#[derive(
+    Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, EnsureValidated, JsonSchema,
+)]
 pub enum LightDataBuilder {
     /// Builder for the generation of [`LightData::Energy`].
     Energy(EnergyDataBuilder),

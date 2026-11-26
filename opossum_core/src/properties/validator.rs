@@ -166,7 +166,7 @@ impl Validator {
             Proptype::Angle(a) => a.is_finite(),
             Proptype::Energy(e) => e.is_finite(),
             Proptype::Fluence(f) => f.is_finite(),
-            Proptype::Length(l) | Proptype::Curvature(l) => l.is_finite(),
+            Proptype::Length(l) | Proptype::RadiusOfCurvature(l) => l.is_finite(),
             Proptype::LinearDensity(d) => d.is_finite(),
             Proptype::WfLambda(l, _) => l.is_finite(),
             _ => true,
@@ -186,7 +186,7 @@ impl Validator {
             Proptype::Angle(a) => !a.is_nan(),
             Proptype::Energy(e) => !e.is_nan(),
             Proptype::Fluence(f) => !f.is_nan(),
-            Proptype::Length(l) | Proptype::Curvature(l) => !l.is_nan(),
+            Proptype::Length(l) | Proptype::RadiusOfCurvature(l) => !l.is_nan(),
             Proptype::LinearDensity(d) => !d.is_nan(),
             Proptype::WfLambda(l, _) => !l.is_nan(),
             _ => true,
@@ -207,7 +207,7 @@ impl Validator {
             Proptype::Energy(e) => abs_diff_ne!(e.value, 0.0),
             Proptype::Fluence(f) => abs_diff_ne!(f.value, 0.0),
             Proptype::I32(i) => *i != 0,
-            Proptype::Length(l) | Proptype::Curvature(l) => abs_diff_ne!(l.value, 0.0),
+            Proptype::Length(l) | Proptype::RadiusOfCurvature(l) => abs_diff_ne!(l.value, 0.0),
             Proptype::LinearDensity(d) => abs_diff_ne!(d.value, 0.0),
             Proptype::WfLambda(l, _) => abs_diff_ne!(*l, 0.0),
             _ => true,
@@ -228,7 +228,7 @@ impl Validator {
             Proptype::Energy(e) => e.value > 0.0,
             Proptype::Fluence(f) => f.value > 0.0,
             Proptype::I32(i) => i.is_positive(),
-            Proptype::Length(l) | Proptype::Curvature(l) => l.value > 0.0,
+            Proptype::Length(l) | Proptype::RadiusOfCurvature(l) => l.value > 0.0,
             Proptype::LinearDensity(d) => d.value > 0.0,
             Proptype::WfLambda(l, _) => *l > 0.0,
             _ => true,
@@ -250,7 +250,9 @@ impl Validator {
             Proptype::Energy(e) => allowed_range.contains(&e.value),
             Proptype::Fluence(f) => allowed_range.contains(&f.value),
             Proptype::I32(i) => allowed_range.contains(&f64::from(*i)),
-            Proptype::Length(l) | Proptype::Curvature(l) => allowed_range.contains(&l.value),
+            Proptype::Length(l) | Proptype::RadiusOfCurvature(l) => {
+                allowed_range.contains(&l.value)
+            }
             Proptype::LinearDensity(d) => allowed_range.contains(&d.value),
             Proptype::WfLambda(l, _) => allowed_range.contains(l),
             Proptype::FilterTypeBuilder(ftb) => match ftb {

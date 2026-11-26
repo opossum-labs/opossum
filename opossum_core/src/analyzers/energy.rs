@@ -16,6 +16,7 @@ use crate::{
 };
 use log::{info, warn};
 use num_traits::Zero;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::Length;
 use uuid::Uuid;
@@ -28,7 +29,7 @@ inventory::submit! {
 }
 
 /// Configuration for the energy flow analysis.
-#[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone, PartialEq, JsonSchema)]
 pub struct EnergyConfig {
     source_map: HashMap<Uuid, EnergyDataBuilder>,
     /// The operating point of the run currently being performed - see [`ActiveScenario`]. Not part

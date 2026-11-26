@@ -1,19 +1,23 @@
 //! Uniform energy distribution
 
 use crate::{
+    error::OpmResult,
     generic_validators::{AllFinite, AllNotZero, AllPositive},
-    joule, validated, validated_type,
+    joule,
+    types::SiScalarSchema,
+    validated, validated_type,
 };
 use nalgebra::Point2;
 use num_traits::ToPrimitive;
 use opm_macros_lib::EnsureValidated;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uom::si::f64::{Energy, Length};
 
 use super::EnergyDistribution;
-use crate::error::OpmResult;
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy, EnsureValidated)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Copy, EnsureValidated, JsonSchema)]
 pub struct UniformDist {
+    #[schemars(with = "SiScalarSchema")]
     total_energy: validated_type!(Energy, AllNotZero && AllFinite && AllPositive),
 }
 

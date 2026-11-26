@@ -67,7 +67,7 @@ impl GhostFocusAnalyzer {
                             hit_map_props.create(
                                 "Origin",
                                 "Surface bounces that enabled this fluence",
-                                origin_str.clone().into(),
+                                origin_str.into(),
                             )?;
                             hit_map_props.create(
                                 &format!("Peak fluence ({})", fluence_data.estimator()),

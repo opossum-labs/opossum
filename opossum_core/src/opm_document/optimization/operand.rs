@@ -1,5 +1,9 @@
 use super::address::MetricSource;
-use crate::{core_optics::observable::MetricDimension, utils::to_f64};
+use crate::{
+    core_optics::observable::MetricDimension, opm_document::optimization::ObservableAddress,
+    utils::to_f64,
+};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use uom::si::{
@@ -40,16 +44,13 @@ pub fn default_scale_for_metric(dimension: MetricDimension, metric_name: &str) -
     }
 }
 /// Evaluation mode of a scalar optical metric operand.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 pub enum OperandMode {
     /// Penalizes deviation from `target` symmetrically: $((v - \text{target}) / \text{scale})^2$.
-    #[serde(rename = "equal")]
     Equal,
     /// Penalizes values exceeding the upper limit: $(\max(0, v - \text{limit}) / \text{scale})^2$.
-    #[serde(rename = "upper_limit")]
     UpperLimit,
     /// Penalizes values falling below the lower limit: $(\max(0, \text{limit} - v) / \text{scale})^2$.
-    #[serde(rename = "lower_limit")]
     LowerLimit,
 }
 impl OperandMode {
@@ -73,7 +74,7 @@ impl OperandMode {
     }
 }
 /// Unified scalar merit operand targeting either an exact value or a one-sided inequality limit.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct MetricOperand {
     /// Observable or parameter address providing the evaluated scalar value.
     pub source: MetricSource,
@@ -227,7 +228,7 @@ impl MetricOperand {
     }
 }
 /// Inequality penalty operand constraining the sum of specified length parameters to not exceed `max_length`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct MaxTotalLengthOperand {
     /// Addresses of the distance or thickness parameters summed together.
     pub segments: Vec<super::address::ParameterAddress>,
@@ -278,7 +279,7 @@ impl MaxTotalLengthOperand {
     }
 }
 /// Geometric manufacturability operand enforcing a minimum edge thickness on a lens node.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct MinEdgeThicknessOperand {
     /// Unique ID of the lens node whose edge thickness is constrained.
     pub node_id: Uuid,
@@ -321,10 +322,10 @@ impl MinEdgeThicknessOperand {
     }
 }
 /// Penalty operand discouraging ray clipping or total internal reflection losses at a detector.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct TransmissionPenaltyOperand {
     /// Observable address of the ray-count or transmission metric on the target detector.
-    pub address: super::address::ObservableAddress,
+    pub address: ObservableAddress,
     /// Expected number of rays reaching the detector without clipping.
     pub expected_rays: f64,
     /// Relative weighting factor applied when fewer than `expected_rays` arrive.
@@ -356,7 +357,7 @@ impl TransmissionPenaltyOperand {
     }
 }
 /// Enumeration of all built-in merit operand types supported by the optimization engine.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub enum StandardOperand {
     /// Target or inequality bound on a scalar detector observable or model parameter.
     Metric(MetricOperand),

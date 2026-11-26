@@ -70,7 +70,7 @@ fn test_optimization_config_serde_roundtrip() -> OpmResult<()> {
         .with_variable(
             FreeVariable::new(ParameterAddress::NodeProperty {
                 node_id,
-                property_name: "front curvature".into(),
+                property_name: "front radius of curvature".into(),
             })
             .with_length_bounds(millimeter!(50.0), millimeter!(200.0))?,
         )
@@ -98,7 +98,7 @@ fn test_optimization_config_serde_roundtrip() -> OpmResult<()> {
             91,
             50.0,
         ))
-        .with_algorithm(OptimizationAlgorithm::lbfgs());
+        .with_algorithm(OptimizationAlgorithm::dls());
 
     let json = ron::to_string(&config).map_err(|e| OpossumError::Other(e.to_string()))?;
     let deserialized: OptimizationConfig =
