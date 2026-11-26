@@ -21,7 +21,7 @@ use uom::si::{
 
 use super::{
     fluence_estimator::FluenceEstimator,
-    ray_tubes::{Arrival, ArrivedSheet, draw_map},
+    ray_tubes::{Arrival, ArrivedSheet, draw_deviation, draw_map},
 };
 
 /// Where a ray hit a surface and the energy it brought there.
@@ -274,6 +274,17 @@ impl RaysHitMap {
             ax_2_range,
             estimator,
         )
+    }
+    /// Returns the given map of the hits of this [`RaysHitMap`], drawn with
+    /// [`RaysHitMap::calc_fluence_with_tubes`], with the estimated deviation of the fluence from it
+    /// at each of its points (see [`FluenceData::with_deviation`] and the handbook,
+    /// "Uncertainty"). The estimate fits a curvature at every corner, so a map has it only when
+    /// asked.
+    ///
+    /// # Errors
+    /// This function errors if the hits do not all stand in the ray tubes of their sources.
+    pub fn estimate_deviation(&self, map: FluenceData) -> OpmResult<FluenceData> {
+        Ok(draw_deviation(&self.tube_sheets()?, map))
     }
     /// Returns the sheets of ray tubes the hits of this map stand in, each with the fluence, in
     /// J/m², its corners show (see [`ArrivedSheet::fluences_from_energies`]).
@@ -705,12 +716,12 @@ mod test_rays_hit_map {
         fluence: impl Fn(f64, f64) -> f64,
     ) -> OpmResult<Vec<(f64, f64, f64)>> {
         let range = centimeter!(-2.0)..centimeter!(2.0);
-        let map = hits.calc_fluence_with_tubes(
+        let map = hits.estimate_deviation(hits.calc_fluence_with_tubes(
             (41, 41),
             Some(&range),
             Some(&range),
             FluenceEstimator::Voronoi,
-        )?;
+        )?)?;
         let deviation = map
             .deviation()
             .ok_or_else(|| crate::error::OpossumError::Other("no deviation".into()))?;
@@ -726,6 +737,16 @@ mod test_rays_hit_map {
             }
         }
         Ok(points)
+    }
+    /// A map estimates the deviation of the fluence from it only when asked, since the estimate
+    /// fits a curvature at every corner.
+    #[test]
+    fn a_map_estimates_no_deviation_unless_asked() -> OpmResult<()> {
+        let hits = linear_hit_map(4, 4)?;
+        let map = hits.calc_fluence_with_tubes((11, 11), None, None, FluenceEstimator::Voronoi)?;
+        assert!(map.deviation().is_none());
+        assert!(hits.estimate_deviation(map)?.deviation().is_some());
+        Ok(())
     }
     /// For a quadratic fluence the estimated deviation is exact: the map plus it shows the fluence
     /// itself, between the rays too (see the handbook, "Uncertainty").

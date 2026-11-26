@@ -52,15 +52,17 @@ fn main() -> OpmResult<()> {
 /// many rays: with few rays the peak falls between them and comes out low, as between two rays
 /// the map runs linearly.
 fn few_and_many_rays() -> OpmResult<()> {
+    // the map of the given number of rays, with the deviation of the fluence from it it estimates
     let map_of = |rays: usize| -> OpmResult<FluenceData> {
         let x = millimeter!(-8.0)..millimeter!(8.0);
         let y = millimeter!(-0.001)..millimeter!(0.001);
-        hits(&gaussian_beam(rays, 1.0)?, Some)?.calc_fluence_map(
+        let hits = hits(&gaussian_beam(rays, 1.0)?, Some)?;
+        hits.estimate_deviation(hits.calc_fluence_map(
             (401, 3),
             &FluenceEstimator::Voronoi,
             Some(&x),
             Some(&y),
-        )
+        )?)
     };
     let few = map_of(50)?;
     plot(
@@ -296,9 +298,10 @@ fn corrected_row_through_axis(map: &FluenceData) -> OpmResult<Cut> {
         .into_iter()
         .enumerate()
         .map(|(column, (x, fluence))| {
-            let deviation = deviation
-                .get((row, column))
-                .map_or(0.0, |d| d.get::<joule_per_square_centimeter>());
+            let deviation = deviation.get((row, column)).map_or(
+                0.0,
+                uom::si::f64::RadiantExposure::get::<joule_per_square_centimeter>,
+            );
             (x, fluence + deviation)
         })
         .collect())

@@ -29,7 +29,7 @@ use crate::{
 };
 use fluence_estimator::FluenceEstimator;
 use itertools::Itertools;
-use ray_tubes::draw_map;
+use ray_tubes::{draw_deviation, draw_map};
 use rays_hit_map::{HitPoint, RaysHitMap};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, ops::Range};
@@ -252,6 +252,21 @@ impl HitMap {
         nr_of_points: (usize, usize),
         estimator: FluenceEstimator,
     ) -> OpmResult<FluenceData> {
+        draw_map(&self.tube_sheets()?, nr_of_points, None, None, estimator)
+    }
+    /// Returns the given map of this [`HitMap`], drawn with
+    /// [`HitMap::calc_combined_fluence_with_tubes`], with the estimated deviation of the fluence
+    /// from it at each of its points (see [`RaysHitMap::estimate_deviation`]).
+    ///
+    /// # Errors
+    /// This function errors if the hits of a bundle do not all stand in the ray tubes of their
+    /// source.
+    pub fn estimate_deviation(&self, map: FluenceData) -> OpmResult<FluenceData> {
+        Ok(draw_deviation(&self.tube_sheets()?, map))
+    }
+    /// Returns the sheets of ray tubes the hits of all bundles of this [`HitMap`] stand in, each
+    /// with the fluence its corners show (see [`RaysHitMap::tube_sheets`]).
+    fn tube_sheets(&self) -> OpmResult<Vec<(ray_tubes::ArrivedSheet<'_>, Vec<Option<f64>>)>> {
         let mut sheets = Vec::new();
         for rays_hit_map in self
             .hit_map
@@ -260,7 +275,7 @@ impl HitMap {
         {
             sheets.extend(rays_hit_map.tube_sheets()?);
         }
-        draw_map(&sheets, nr_of_points, None, None, estimator)
+        Ok(sheets)
     }
 
     /// Calculate a fluence map ([`FluenceData`]) of this [`HitMap`] using the "Kernel Density Estimator (KDE)" method

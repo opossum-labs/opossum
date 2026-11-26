@@ -335,9 +335,6 @@ pub fn draw_map(
             }
             grid.add_triangle(corners, values);
         });
-        for (corners, along_edges) in sheet.deviations(values) {
-            grid.add_deviation(corners, along_edges);
-        }
     }
     Ok(FluenceData::new(
         grid.values.map(|fluence| J_per_m2!(fluence)),
@@ -345,8 +342,35 @@ pub fn draw_map(
         y,
         estimator,
     )
-    .with_drawn_energy(joule!(in_tubes), joule!(in_margins))
-    .with_deviation(grid.deviation.map(|deviation| J_per_m2!(deviation))))
+    .with_drawn_energy(joule!(in_tubes), joule!(in_margins)))
+}
+/// Returns the given map with the estimated deviation of the fluence from it at each of its
+/// points, drawn from sheets of ray tubes, each with the fluence at each of its corners (see
+/// [`ArrivedSheet::deviations`] and the handbook, "Uncertainty"). Overlapping tubes add up as in
+/// the map.
+///
+/// # Arguments
+///
+/// * `sheets` - the sheets the map was drawn from, each with the fluence (in J/m²) at each of its
+///   corners.
+/// * `map` - the map, whose points the deviation is drawn onto.
+#[must_use]
+pub fn draw_deviation(
+    sheets: &[(ArrivedSheet<'_>, Vec<Option<f64>>)],
+    map: FluenceData,
+) -> FluenceData {
+    let (x, y) = (map.x_range(), map.y_range());
+    let mut grid = FluenceGrid::new(
+        &(x.start.value..x.end.value),
+        &(y.start.value..y.end.value),
+        (map.len_x(), map.len_y()),
+    );
+    for (sheet, values) in sheets {
+        for (corners, along_edges) in sheet.deviations(values) {
+            grid.add_deviation(corners, along_edges);
+        }
+    }
+    map.with_deviation(grid.values.map(|deviation| J_per_m2!(deviation)))
 }
 /// Fits `Δ = g·d + ½ dᵀ H d` by least squares to the given steps `d` from a corner to its
 /// neighbors and the changes `Δ` of the value along them, and returns `H`; `None` if the steps
@@ -386,9 +410,6 @@ pub struct FluenceGrid {
     y: Axis,
     /// The values, with a row per point along y and a column per point along x.
     values: DMatrix<f64>,
-    /// The estimated deviation of the fluence from the values, at the same points (see
-    /// [`FluenceGrid::add_deviation`]).
-    deviation: DMatrix<f64>,
 }
 /// The evenly spaced points of a grid along one axis.
 struct Axis {
@@ -454,7 +475,6 @@ impl FluenceGrid {
             x: Axis::new(x, nr_of_points.0),
             y: Axis::new(y, nr_of_points.1),
             values: DMatrix::zeros(nr_of_points.1, nr_of_points.0),
-            deviation: DMatrix::zeros(nr_of_points.1, nr_of_points.0),
         }
     }
     /// Adds a triangle to the grid, linearly between the values at its corners.
@@ -476,8 +496,9 @@ impl FluenceGrid {
     fn add_deviation(&mut self, corners: [Point2<f64>; 3], along_edges: [f64; 3]) {
         let [w0, w1, w2] = along_edges;
         for_each_covered(&self.x, &self.y, corners, |cell, [l0, l1, l2]| {
-            if let Some(deviation) = self.deviation.get_mut(cell) {
-                *deviation -= 0.5 * (l1 * l2 * w0 + l2 * l0 * w1 + l0 * l1 * w2);
+            if let Some(value) = self.values.get_mut(cell) {
+                let curvature = (l1 * l2).mul_add(w0, (l2 * l0).mul_add(w1, l0 * l1 * w2));
+                *value = curvature.mul_add(-0.5, *value);
             }
         });
     }

@@ -64,6 +64,7 @@
                     "uuid": "9a5b5e01-87b3-4503-90cd-5b123f0518b0",
                     "props": {
                         "fluence estimator": FluenceEstimator(Voronoi),
+                        "error estimates": Bool(false),
                         "optic shape": OpticShape(Bounded(
                             shape: Rectangle(
                                 side_length: (0.025, 0.025),

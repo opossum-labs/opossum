@@ -58,6 +58,10 @@ pub struct FluenceDetector {
     light_data: Option<LightData>,
 }
 
+/// The property that switches the error estimates of the report on (see the handbook, "Fluence
+/// detector").
+const ERROR_ESTIMATES: &str = "error estimates";
+
 impl Default for FluenceDetector {
     fn default() -> Self {
         let mut node_attr = NodeAttr::new("fluence detector");
@@ -66,6 +70,13 @@ impl Default for FluenceDetector {
                 "fluence estimator",
                 "fluence estimator strategy",
                 FluenceEstimator::Voronoi.into(),
+            )
+            .expect("Hardcoded property creation must not fail");
+        node_attr
+            .create_property(
+                ERROR_ESTIMATES,
+                "report how far the fluence may deviate from the map",
+                false.into(),
             )
             .expect("Hardcoded property creation must not fail");
         node_attr
@@ -104,6 +115,8 @@ impl FluenceDetector {
     /// Calculates the current [`FluenceData`] based on the hit map of the detector surface.
     ///
     /// Evaluates the hit map recorded during ray tracing using the currently configured [`FluenceEstimator`].
+    /// With the property `error estimates` switched on, a map that follows ray tubes carries the
+    /// estimated deviation of the fluence from it (see [`HitMap::estimate_deviation`]).
     ///
     /// # Returns
     ///
@@ -120,7 +133,19 @@ impl FluenceDetector {
         let Some(estimator) = self.estimator() else {
             return Ok(None);
         };
-        hit_map.calc_fluence_map((101, 101), &estimator).map(Some)
+        let map = hit_map.calc_fluence_map((101, 101), &estimator)?;
+        if self.reports_errors() && estimator.needs_ray_tubes() {
+            return hit_map.estimate_deviation(map).map(Some);
+        }
+        Ok(Some(map))
+    }
+    /// Returns whether this detector reports how far the fluence may deviate from its map: its
+    /// property `error estimates`.
+    fn reports_errors(&self) -> bool {
+        matches!(
+            self.node_attr.get_property(ERROR_ESTIMATES),
+            Ok(Proptype::Bool(true))
+        )
     }
     /// Returns the hits this detector recorded, `None` if no light reached it.
     fn recorded_hits(&self) -> Option<&HitMap> {
@@ -189,48 +214,52 @@ impl OpticNode for FluenceDetector {
                 "Peak fluence of the distribution",
                 Proptype::Fluence(fluence_data.peak()),
             )?;
-            if let (Some(uncertainty), Some(peak_uncertainty)) = (
-                fluence_data.uncertainty_map(),
-                fluence_data.peak_uncertainty(),
-            ) {
-                props.create(
-                    "Peak fluence uncertainty",
-                    "How far the peak of the fluence may lie above the peak of the map, estimated from the curvature of the fluence between the rays",
-                    Proptype::Fluence(peak_uncertainty),
-                )?;
-                props.create(
-                    "Fluence uncertainty",
-                    "Estimated size of the deviation of the fluence from the map at each point, from the curvature of the fluence between the rays",
-                    uncertainty.into(),
-                )?;
-            }
-            let energy = self.recorded_hits().map_or(joule!(0.0), HitMap::energy);
+            let energy = self
+                .recorded_hits()
+                .map_or_else(|| joule!(0.0), HitMap::energy);
             props.create(
                 "Total energy",
                 "Energy of the light that hit the detector",
                 Proptype::Energy(energy),
             )?;
-            if let Some(drawn) = fluence_data.drawn_energy()
-                && energy.value > 0.0
-            {
-                props.create(
-                    "Energy deviation of the map",
-                    "Share by which the energy the map holds misses the energy that hit the detector",
-                    Proptype::F64((drawn / energy).value - 1.0),
-                )?;
-            }
             // Explizite Angabe der verwendeten Schätzmethode
             props.create(
                 "Estimator",
                 "Fluence estimation algorithm used",
                 (*fluence_data.estimator()).into(),
             )?;
-            if let Some(share) = fluence_data.edge_share() {
-                props.create(
-                    "Energy in edge margins",
-                    "Share of the energy at the edges of the light, placed only to within half a ray tube",
-                    Proptype::F64(share),
-                )?;
+            if self.reports_errors() {
+                if let (Some(uncertainty), Some(peak_uncertainty)) = (
+                    fluence_data.uncertainty_map(),
+                    fluence_data.peak_uncertainty(),
+                ) {
+                    props.create(
+                        "Peak fluence uncertainty",
+                        "How far the peak of the fluence may lie above the peak of the map, estimated from the curvature of the fluence between the rays",
+                        Proptype::Fluence(peak_uncertainty),
+                    )?;
+                    props.create(
+                        "Fluence uncertainty",
+                        "Estimated size of the deviation of the fluence from the map at each point, from the curvature of the fluence between the rays",
+                        uncertainty.into(),
+                    )?;
+                }
+                if let Some(drawn) = fluence_data.drawn_energy()
+                    && energy.value > 0.0
+                {
+                    props.create(
+                        "Energy deviation of the map",
+                        "Share by which the energy the map holds misses the energy that hit the detector",
+                        Proptype::F64((drawn / energy).value - 1.0),
+                    )?;
+                }
+                if let Some(share) = fluence_data.edge_share() {
+                    props.create(
+                        "Energy in edge margins",
+                        "Share of the energy at the edges of the light, placed only to within half a ray tube",
+                        Proptype::F64(share),
+                    )?;
+                }
             }
 
             if self.apodization_warning {
@@ -464,6 +493,7 @@ mod test {
         };
 
         let mut detector = FluenceDetector::default();
+        detector.set_property("error estimates", true.into())?;
         detector.set_positioning(crate::core_optics::node_attr::NodePositioning::Absolute(
             crate::utils::geom_transformation::Isometry::identity(),
         ))?;
@@ -595,6 +625,46 @@ mod test {
             .cloned()
             .ok_or_else(|| crate::error::OpossumError::Other("no fluence detector".into()))
     }
+    /// A fluence detector that reports its error estimates.
+    fn estimating_errors() -> OpmResult<FluenceDetector> {
+        let mut detector = FluenceDetector::default();
+        detector.set_property("error estimates", true.into())?;
+        Ok(detector)
+    }
+    /// The entries of a report that tell how far the fluence may lie from the map.
+    const ERROR_ESTIMATES: [&str; 4] = [
+        "Fluence uncertainty",
+        "Peak fluence uncertainty",
+        "Energy deviation of the map",
+        "Energy in edge margins",
+    ];
+    /// A detector reports its map, its peak, the energy that hit it and its estimator, but no
+    /// error estimates unless asked.
+    #[test]
+    fn a_detector_reports_no_error_estimates_by_default() -> OpmResult<()> {
+        let detector = traced(FluenceDetector::default(), grid_beam(false)?.into(), false)?;
+        let report = report_of(&detector)?;
+        for shown in ["Fluence", "Peak Fluence", "Total energy", "Estimator"] {
+            assert!(report.contains(shown), "{shown}");
+        }
+        for hidden in ERROR_ESTIMATES {
+            assert!(!report.contains(hidden), "{hidden}");
+        }
+        Ok(())
+    }
+    /// With error estimates switched on, a detector reports all of them.
+    #[test]
+    fn a_detector_reports_its_error_estimates_when_asked() -> OpmResult<()> {
+        let report = report_of(&traced(
+            estimating_errors()?,
+            grid_beam(false)?.into(),
+            false,
+        )?)?;
+        for shown in ERROR_ESTIMATES {
+            assert!(report.contains(shown), "{shown}");
+        }
+        Ok(())
+    }
     /// The properties of the ray trace report of the given detector.
     fn report_of(detector: &FluenceDetector) -> OpmResult<crate::properties::Properties> {
         let NodeReportResult::Report(report) =
@@ -648,11 +718,13 @@ mod test {
     /// deviations of its center.
     fn gaussian_errors(rings: u8, center: f64) -> OpmResult<(f64, f64)> {
         use uom::si::{length::millimeter, radiant_exposure::joule_per_square_centimeter};
-        let map = detector_map(
+        let map = traced(
+            estimating_errors()?,
             gaussian_beam(rings, center)?.into(),
-            FluenceEstimator::Voronoi,
             false,
-        )?;
+        )?
+        .calc_fluence_data()?
+        .ok_or_else(|| crate::error::OpossumError::Other("no map".into()))?;
         let fluence = gaussian_fluence(&map, center)?;
         let deviation = map
             .deviation()
@@ -709,11 +781,7 @@ mod test {
     #[test]
     fn the_report_tells_the_uncertainty_of_the_peak() -> OpmResult<()> {
         use uom::si::radiant_exposure::joule_per_square_centimeter;
-        let detector = traced(
-            FluenceDetector::default(),
-            gaussian_beam(7, 1.0)?.into(),
-            false,
-        )?;
+        let detector = traced(estimating_errors()?, gaussian_beam(7, 1.0)?.into(), false)?;
         let report = report_of(&detector)?;
         let fluence_in = |name: &str| -> OpmResult<f64> {
             let Proptype::Fluence(fluence) = report.get(name)?.clone() else {
@@ -747,7 +815,7 @@ mod test {
     /// A flat-top beam deviates nowhere from its map, so its peak is certain.
     #[test]
     fn a_flat_top_reports_no_uncertainty() -> OpmResult<()> {
-        let detector = traced(FluenceDetector::default(), grid_beam(false)?.into(), false)?;
+        let detector = traced(estimating_errors()?, grid_beam(false)?.into(), false)?;
         let Proptype::Fluence(uncertainty) = report_of(&detector)?
             .get("Peak fluence uncertainty")?
             .clone()
@@ -853,13 +921,9 @@ mod test {
             };
             Ok(deviation)
         };
-        let flat = traced(FluenceDetector::default(), grid_beam(false)?.into(), false)?;
+        let flat = traced(estimating_errors()?, grid_beam(false)?.into(), false)?;
         assert!(deviation_of(&flat)?.abs() < 1e-9);
-        let gaussian = traced(
-            FluenceDetector::default(),
-            gaussian_beam(7, 0.0)?.into(),
-            false,
-        )?;
+        let gaussian = traced(estimating_errors()?, gaussian_beam(7, 0.0)?.into(), false)?;
         let fine = gaussian
             .get_optic_surface("input_1")
             .ok_or_else(|| crate::error::OpossumError::Other("no surface".into()))?
