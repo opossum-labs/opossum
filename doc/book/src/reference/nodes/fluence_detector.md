@@ -30,7 +30,7 @@ If the light folds over itself on the detector, as near a caustic, a warning in 
 `fluence estimator`
 : The algorithm used to estimate the fluence. Currently there are the following options:
 
-- Voronoi: follows the ray tubes the source spans. Each corner spreads its energy over the area it stands for at the source, grown as much as its tubes grew on the way. Where light was cut away, as behind a bored mirror, the map stays dark.
+- Voronoi (default): follows the ray tubes the source spans (see [Voronoi: fluence from ray tubes](../../concepts/fluence.md#voronoi-fluence-from-ray-tubes)). Each corner spreads its energy over the area it stands for at the source, its Voronoi cell there, grown as much as its tubes grew on the way. Where light was cut away, as behind a bored mirror, the map stays dark.
 - KDE: spreads the energy of each ray with a smooth kernel.
 - Binning: spreads the energy of each ray over the four points of a grid around it.
 

@@ -20,9 +20,9 @@ This method behaves like a pixelated representation of the detector. It is simpl
 
 However, the result strongly depends on grid resolution. A coarse grid smooths out details and can hide peak fluence regions, while a fine grid requires a high number of rays to avoid noise. As a result, binning is often used for fast but lower-resolution analysis.
 
-## Fluence from ray tubes
+## Voronoi: fluence from ray tubes
 
-The Voronoi estimator follows the light from where it starts. At the source, every three neighboring rays span a triangle, a *ray tube*. The light inside a tube stays inside it: wherever its three rays go, the tube goes with them, stretched, shrunk or turned over.
+The estimator `Voronoi`, the default `fluence estimator` of a [fluence detector](../reference/nodes/fluence_detector.md) and of a ghost focus analysis, follows the light from where it starts. At the source, every three neighboring rays span a triangle, a *ray tube*. The light inside a tube stays inside it: wherever its three rays go, the tube goes with them, stretched, shrunk or turned over. Wherever this handbook speaks of ray tubes, or of a map that follows them, it means a map of the estimator `Voronoi`; the name comes from the area each ray stands for at the source, its Voronoi cell there (see [The value at a corner](#the-value-at-a-corner)).
 
 On a surface, a tube is *alive* if all three of its rays arrived there. The map is drawn over the alive tubes only. A bore, an edge or an aperture that cuts the light tears the tubes across the cut: their rays arrive on different surfaces, and neither surface draws them. So where light was cut away, the map stays dark.
 
@@ -48,7 +48,7 @@ Between its corners a tube runs linearly. Where tubes overlap, their values add 
 
 ### Edges
 
-Beyond each edge that no alive tube continues, the map draws a margin of half a tube height, carrying the values of the edge across: the light ends somewhere inside the torn tube, halfway on average. The same rule holds at the outer edge of a beam and at a cut. Where the margins of two edges meet at a corner, both end on the bisector of that corner, as picture frames are mitered: at the edge of a hole they do not overlap, and at an outer corner they leave no gap. The area each ray stands for at the source follows the same rule. Rays along a straight edge, as of a grid that is turned or sent out from a point, often lie on one line only up to rounding; the flat triangles between them are no tubes, so the edge keeps its margin. Unless a range is given, the map is square, centered on the light and 5 % wider than its longer side, so the edges of the light lie inside the map rather than on its outermost points.
+Beyond each edge that no alive tube continues, the map draws a margin of half a tube height, carrying the values of the edge across: the light ends somewhere inside the torn tube, halfway on average. The same rule holds at the outer edge of a beam and at a cut. Where the margins of two edges meet at a corner, both end on the bisector of that corner, as picture frames are mitered: at the edge of a hole they do not overlap, and at an outer corner they leave no gap. The area each ray stands for at the source follows the same rule. Rays along a straight edge, as of a grid sent out from a point or given as raw rays turned about the axis, often lie on one line only up to rounding; the flat triangles between them are no tubes, so the edge keeps its margin. Unless a range is given, the map is square, centered on the light and 5 % wider than its longer side, so the edges of the light lie inside the map rather than on its outermost points.
 
 ![The margin at an edge of the light](../images/fluence_edge_margin.svg)
 
@@ -64,7 +64,9 @@ A map built from the hits alone does not know which hits belonged together. A tr
 
 ### Sheets
 
-Rays of one wavelength that start side by side form one *sheet*, triangulated by where they start. Rays that start at one point in different directions, as from a point source or from one pixel of an image source, form a sheet of their own, triangulated by their directions. Rays of different wavelengths never share a tube. Each sheet draws its own tubes, and the map is their sum.
+Rays of one wavelength that start side by side form one *sheet*, triangulated by where they start, seen along the axis of the source. Rays that start at one point in different directions, as from a point source or from one pixel of an image source, form a sheet of their own, triangulated by where their directions cross a plane across the axis of the source, where the distribution of a point source lies. A ray of such a sheet that does not point forward along the axis spans no tubes, and the log says so. Rays of different wavelengths never share a tube. Each sheet draws its own tubes, and the map is their sum.
+
+The tubes are spanned before the light is turned or moved with the position of the source, so a turned source spans the tubes of an upright one.
 
 ![Two sheets of ray tubes and the map that adds them](../images/fluence_sheets_sum.svg)
 
@@ -117,7 +119,7 @@ It is sensitive to both sampling density and reconstruction method. The cuts bel
 
 *A Gaussian beam with σ = 2 mm, its peak 1 mm off the axis. With 50 rays the peak falls between rays and comes out 7 % low and 0.5 mm off. Adding the deviation the map estimates from the curvature brings it to 4 % low and 0.1 mm off; at the outermost tube, near 7.5 mm, the estimate overshoots. With 2000 rays the map is right.*
 
-A map that follows ray tubes knows the fluence at its rays and runs linearly between them. A peak that falls between two rays is cut off. The rays need to lie closer than the features of the light are wide, above all where the peak is. How far the peak of the fluence may lie above the peak of the map, the report estimates from the curvature of the fluence (see [Uncertainty](#uncertainty)).
+A Voronoi map knows the fluence at its rays and runs linearly between them. A peak that falls between two rays is cut off. The rays need to lie closer than the features of the light are wide, above all where the peak is. How far the peak of the fluence may lie above the peak of the map, the report estimates from the curvature of the fluence (see [Uncertainty](#uncertainty)).
 
 ### Binning: the grid
 
@@ -153,7 +155,7 @@ Near a fold, more rays do not bring the peak closer to a true value, because in 
 
 ### Energy
 
-The methods do not hold the same energy either. Binning and KDE spread the energy of every ray that hit the surface. A map that follows ray tubes holds the energy of the tubes that arrived complete and of their margins: the margins estimate where the light ends, and a ray all of whose tubes tore shows nowhere. Between its rays such a map runs linearly, so a curved profile sampled by few rays holds slightly more or less energy than its rays brought: a Gaussian sampled 0.57 σ apart about 0.2 % more (see [Too few rays](#too-few-rays)).
+The methods do not hold the same energy either. Binning and KDE spread the energy of every ray that hit the surface. A Voronoi map, which follows the ray tubes, holds the energy of the tubes that arrived complete and of their margins: the margins estimate where the light ends, and a ray all of whose tubes tore shows nowhere. Between its rays such a map runs linearly, so a curved profile sampled by few rays holds slightly more or less energy than its rays brought: a Gaussian sampled 0.57 σ apart about 0.2 % more (see [Too few rays](#too-few-rays)).
 
 The report of a fluence detector therefore tells the energy that hit it, whatever the estimator, and for Voronoi, with `error estimates` switched on, how far the energy of the map misses it (see [Fluence detector](../reference/nodes/fluence_detector.md)).
 

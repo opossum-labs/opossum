@@ -82,7 +82,7 @@ variation at the output is entirely due to position-dependent gain, not to the i
 The output detector is a [`FluenceDetector`](../reference/nodes/fluence_detector.md) using the
 Voronoi estimator, which spreads the energy of each ray over the area it stands for at the source,
 its Voronoi cell there, grown as much as the ray tubes around it grew on the way (see
-[Fluence](../concepts/fluence.md#fluence-from-ray-tubes)). With a Fibonacci source grid the cells
+[Voronoi: fluence from ray tubes](../concepts/fluence.md#voronoi-fluence-from-ray-tubes)). With a Fibonacci source grid the cells
 have nearly equal area, giving a low-noise estimate.
 
 ## What to look for

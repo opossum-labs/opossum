@@ -1,6 +1,6 @@
 # Fluence uncertainty
 
-This page explains where the error of a Voronoi fluence map comes from, and how a [fluence detector](../nodes/fluence_detector.md) estimates it with its property `error estimates` switched on: the map `Fluence uncertainty` and the value `Peak fluence uncertainty`. [Fluence calculations](../../concepts/fluence.md#uncertainty) describes the same in words.
+This page explains where the error of a Voronoi fluence map, which follows the ray tubes of its source (see [Voronoi: fluence from ray tubes](../../concepts/fluence.md#voronoi-fluence-from-ray-tubes)), comes from, and how a [fluence detector](../nodes/fluence_detector.md) estimates it with its property `error estimates` switched on: the map `Fluence uncertainty` and the value `Peak fluence uncertainty`. [Fluence calculations](../../concepts/fluence.md#uncertainty) describes the same in words.
 
 ## In short
 
