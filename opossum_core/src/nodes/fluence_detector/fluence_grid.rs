@@ -55,9 +55,14 @@ impl Axis {
             0.0
         }
     }
-    /// The coordinate of the point with the given index.
+    /// The coordinate of the point with the given index, the first and the last exactly on the
+    /// ends of the range.
     fn at(&self, index: usize) -> f64 {
-        self.step().mul_add(to_f64(index), self.start)
+        if self.count < 2 {
+            return self.start;
+        }
+        let share = to_f64(index) / to_f64(self.count - 1);
+        self.start.mul_add(1.0 - share, self.end * share)
     }
     /// The length the point with the given index stands for: the spacing, half of it at either
     /// end (the trapezoid rule), and the whole range for a single point.
@@ -308,6 +313,22 @@ mod test {
     /// The fluences of a grid, in J/m².
     fn in_j_per_m2(grid: FluenceGrid) -> DMatrix<f64> {
         grid.into_values().map(|fluence| fluence.value)
+    }
+    /// The first and the last point of a grid lie exactly on the ends of its ranges, however the
+    /// spacing between them rounds.
+    #[test]
+    fn the_outermost_points_of_a_grid_lie_on_its_ends() {
+        for count in 2..300 {
+            for (start, end) in [(-0.006, 0.006), (-1.3, 2.9), (0.1, 0.7)] {
+                let range = meter!(start)..meter!(end);
+                let (x, _) = FluenceGrid::new(&range, &range, (count, 1)).points();
+                assert_eq!(
+                    (x[0].value, x[count - 1].value),
+                    (start, end),
+                    "{count} points over {start}..{end}"
+                );
+            }
+        }
     }
     /// The points of a grid lie evenly from one end of each range to the other, both included.
     #[test]
