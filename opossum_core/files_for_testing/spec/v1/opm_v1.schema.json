@@ -2222,38 +2222,10 @@
           "items": {
             "$ref": "#/definitions/HitPoint"
           }
-        },
-        "x_lims": {
-          "type": "array",
-          "maxItems": 2,
-          "minItems": 2,
-          "items": [
-            {
-              "$ref": "#/definitions/SiScalarSchema"
-            },
-            {
-              "$ref": "#/definitions/SiScalarSchema"
-            }
-          ]
-        },
-        "y_lims": {
-          "type": "array",
-          "maxItems": 2,
-          "minItems": 2,
-          "items": [
-            {
-              "$ref": "#/definitions/SiScalarSchema"
-            },
-            {
-              "$ref": "#/definitions/SiScalarSchema"
-            }
-          ]
         }
       },
       "required": [
-        "hit_points",
-        "x_lims",
-        "y_lims"
+        "hit_points"
       ]
     },
     "HitPoint": {

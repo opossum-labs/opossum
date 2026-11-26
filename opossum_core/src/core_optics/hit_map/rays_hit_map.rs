@@ -6,7 +6,7 @@ use crate::{
     joule,
     kde::Kde,
     light::{RayMesh, RaySource, ray_mesh::RayVertex},
-    meter, micrometer,
+    micrometer,
     nodes::fluence_detector::{Fluence, fluence_data::FluenceData, fluence_grid::FluenceGrid},
     types::{SiScalarSchema, schema_helper_types::Point3Schema},
     utils::try_f64_to_usize,
@@ -68,10 +68,6 @@ impl HitPoint {
 ///Storage struct for hitpoints on a surface from a single ray bundle
 pub struct RaysHitMap {
     hit_points: Vec<HitPoint>,
-    #[schemars(with = "(SiScalarSchema, SiScalarSchema)")]
-    x_lims: (Length, Length),
-    #[schemars(with = "(SiScalarSchema, SiScalarSchema)")]
-    y_lims: (Length, Length),
     /// The ray tubes the hits stand in, in the order they first hit (see [`RayMesh`]). Not
     /// written to file.
     #[serde(skip)]
@@ -85,17 +81,8 @@ impl RaysHitMap {
     /// Creates a new [`RaysHitMap`] of the given hits, which follow no ray tubes.
     #[must_use]
     pub fn new(hit_points: Vec<HitPoint>) -> Self {
-        let far = (meter!(f64::INFINITY), meter!(f64::NEG_INFINITY));
-        let (x_lims, y_lims) = hit_points.iter().fold((far, far), |(x, y), hit| {
-            (
-                (x.0.min(hit.position.x), x.1.max(hit.position.x)),
-                (y.0.min(hit.position.y), y.1.max(hit.position.y)),
-            )
-        });
         Self {
             hit_points,
-            x_lims,
-            y_lims,
             meshes: Vec::new(),
             vertices: Vec::new(),
         }
@@ -116,7 +103,7 @@ impl RaysHitMap {
         source: Option<&RaySource>,
     ) -> OpmResult<()> {
         let in_tubes = self.follows_tubes();
-        self.push_hit_point(hit_point);
+        self.hit_points.push(hit_point);
         match source {
             Some(source) if in_tubes => {
                 let slot = self
@@ -143,29 +130,6 @@ impl RaysHitMap {
     const fn follows_tubes(&self) -> bool {
         self.vertices.len() == self.hit_points.len()
     }
-    /// Add an intersection point to the hit points of this map and widen its limits.
-    fn push_hit_point(&mut self, hit_point: HitPoint) {
-        let (x, y) = (hit_point.position.x, hit_point.position.y);
-        if self.hit_points.is_empty() {
-            self.x_lims = (x, x);
-            self.y_lims = (y, y);
-        } else {
-            self.x_lims = (x.min(self.x_lims.0), x.max(self.x_lims.1));
-            self.y_lims = (y.min(self.y_lims.0), y.max(self.y_lims.1));
-        }
-        self.hit_points.push(hit_point);
-    }
-    /// Returns the x limit (min, max) of the hit points that are stored in this [`RaysHitMap`]
-    #[must_use]
-    pub fn x_lims(&self) -> &(Length, Length) {
-        &self.x_lims
-    }
-    /// Returns the y limit (min, max) of the hit points that are stored in this [`RaysHitMap`]
-    #[must_use]
-    pub fn y_lims(&self) -> &(Length, Length) {
-        &self.y_lims
-    }
-
     /// Merge this [`RaysHitMap`] with another [`RaysHitMap`].
     ///
     /// The merged map follows no ray tubes: it is made for the estimators that need none.
@@ -780,18 +744,6 @@ mod test_rays_hit_map {
         for (_, deviation, _) in deviation_check(&hit_map_showing(7, 7, even)?, even)? {
             assert!(deviation.abs() < 1e-9, "{deviation} J/cm²");
         }
-        Ok(())
-    }
-    #[test]
-    fn lims() -> OpmResult<()> {
-        let rhm = RaysHitMap::new(vec![
-            HitPoint::new(meter!(1.0, 2.0, 3.0), joule!(4.0))?,
-            HitPoint::new(meter!(2.0, 3.0, 4.0), joule!(5.0))?,
-        ]);
-        assert_eq!(rhm.x_lims.0.value, 1.0);
-        assert_eq!(rhm.x_lims.1.value, 2.0);
-        assert_eq!(rhm.y_lims.0.value, 2.0);
-        assert_eq!(rhm.y_lims.1.value, 3.0);
         Ok(())
     }
     #[test]
