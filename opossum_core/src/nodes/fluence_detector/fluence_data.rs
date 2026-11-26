@@ -1,23 +1,15 @@
 //! Data structure for holding a fluence map.
 use std::ops::Range;
 
-use super::Fluence;
+use super::{Fluence, fluence_grid::FluenceGrid};
 use crate::{
-    J_per_cm2,
-    core_optics::hit_map::fluence_estimator::FluenceEstimator,
-    error::OpmResult,
-    joule,
-    properties::Proptype,
-    types::{SiScalarSchema, schema_helper_types::Vector2Schema},
-    utils::{griddata::linspace, to_f64},
+    J_per_cm2, core_optics::hit_map::fluence_estimator::FluenceEstimator, joule,
+    properties::Proptype, types::SiScalarSchema,
 };
 use nalgebra::{DMatrix, DVector};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use uom::si::{
-    f64::{Area, Energy, Length},
-    length::meter,
-};
+use uom::si::f64::{Energy, Length};
 
 impl From<FluenceData> for Proptype {
     fn from(value: FluenceData) -> Self {
@@ -30,15 +22,8 @@ pub struct FluenceData {
     /// peak fluence of the beam
     #[schemars(with = "SiScalarSchema")]
     peak: Fluence,
-    /// 2d fluence distribution of the beam.
-    #[schemars(with = "Vector2Schema")]
-    interp_distribution: DMatrix<Fluence>,
-    /// x coordinates of the fluence distribution
-    #[schemars(with = "Range<SiScalarSchema>")]
-    x_range: Range<Length>,
-    /// y coordinates of the fluence distribution
-    #[schemars(with = "Range<SiScalarSchema>")]
-    y_range: Range<Length>,
+    /// the fluence of the beam at each point of the map
+    grid: FluenceGrid,
     /// the estimator which has been used to calculate this fluence
     estimator: FluenceEstimator,
     /// for a map that follows ray tubes, the energy it draws in the tubes and in the margins at the
@@ -73,9 +58,7 @@ impl FluenceData {
                 });
         Self {
             peak: peak_fluence,
-            interp_distribution,
-            x_range,
-            y_range,
+            grid: FluenceGrid::with_values(x_range, y_range, interp_distribution),
             estimator,
             drawn_energy: None,
             deviation: None,
@@ -108,8 +91,8 @@ impl FluenceData {
         let deviation = self.deviation.as_ref()?;
         Some(Self::new(
             deviation.map(Fluence::abs),
-            self.x_range.clone(),
-            self.y_range.clone(),
+            self.x_range().clone(),
+            self.y_range().clone(),
             self.estimator,
         ))
     }
@@ -121,7 +104,7 @@ impl FluenceData {
     pub fn peak_uncertainty(&self) -> Option<Fluence> {
         let deviation = self.deviation.as_ref()?;
         let corrected_peak = self
-            .interp_distribution
+            .interp_distribution()
             .zip_map(deviation, |fluence, deviation| fluence + deviation)
             .iter()
             .filter(|fluence| fluence.is_finite())
@@ -165,63 +148,50 @@ impl FluenceData {
         &self.estimator
     }
 
+    /// Returns the grid of points of this [`FluenceData`], with the fluence at each.
+    #[must_use]
+    pub const fn grid(&self) -> &FluenceGrid {
+        &self.grid
+    }
     /// Returns the interpolated distribution of this [`FluenceData`]
     #[must_use]
     pub const fn interp_distribution(&self) -> &DMatrix<Fluence> {
-        &self.interp_distribution
+        self.grid.values()
     }
 
     /// Returns the x coordinate range of the fluence map.
     #[must_use]
     pub const fn x_range(&self) -> &Range<Length> {
-        &self.x_range
+        self.grid.x_range()
     }
 
     /// Returns the y coordinate range of the fluence map.
     #[must_use]
     pub const fn y_range(&self) -> &Range<Length> {
-        &self.y_range
+        self.grid.y_range()
     }
     /// Returns the fluence distribution and the corresponding x and y axes in a tuple (x, y, distribution)
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the linear axis vector (linspace) could not be generated.
-    pub fn get_fluence_distribution(
-        &self,
-    ) -> OpmResult<(DVector<Length>, DVector<Length>, DMatrix<Fluence>)> {
-        Ok((
-            linspace(
-                self.x_range.start.value,
-                self.x_range.end.value,
-                self.interp_distribution.ncols(),
-            )?
-            .map(Length::new::<meter>),
-            linspace(
-                self.y_range.start.value,
-                self.y_range.end.value,
-                self.interp_distribution.nrows(),
-            )?
-            .map(Length::new::<meter>),
-            self.interp_distribution.clone(),
-        ))
+    #[must_use]
+    pub fn get_fluence_distribution(&self) -> (DVector<Length>, DVector<Length>, DMatrix<Fluence>) {
+        let (x, y) = self.grid.points();
+        (x, y, self.interp_distribution().clone())
     }
     /// Returns length of the x data points (columns)
     #[must_use]
     pub fn len_x(&self) -> usize {
-        self.interp_distribution.ncols()
+        self.interp_distribution().ncols()
     }
     /// Returns length of the y data points (rows)
     #[must_use]
     pub fn len_y(&self) -> usize {
-        self.interp_distribution.nrows()
+        self.interp_distribution().nrows()
     }
     /// Returns the shape of the interpolation distribution in pixels
     ///
     /// The order of the returned tuple is `(rows, columns)`.
     #[must_use]
     pub fn shape(&self) -> (usize, usize) {
-        self.interp_distribution.shape()
+        self.interp_distribution().shape()
     }
     /// Returns the peak fluence of this [`FluenceData`].
     #[must_use]
@@ -229,11 +199,12 @@ impl FluenceData {
         self.peak
     }
     /// Returns the total energy of this [`FluenceData`]: the fluence at each point times the area
-    /// it stands for (see [`FluenceData::point_areas`]), leaving out points without a value.
+    /// it stands for (see [`FluenceGrid::point_areas`]), leaving out points without a value.
     #[must_use]
     pub fn total_energy(&self) -> Energy {
-        Self::point_areas(&self.x_range, &self.y_range, (self.len_x(), self.len_y()))
-            .zip_map(&self.interp_distribution, |area, fluence| {
+        self.grid
+            .point_areas()
+            .zip_map(self.interp_distribution(), |area, fluence| {
                 if fluence.is_nan() {
                     joule!(0.0)
                 } else {
@@ -243,46 +214,14 @@ impl FluenceData {
             .iter()
             .fold(joule!(0.0), |total, energy| total + *energy)
     }
-    /// Returns the area each point of a map stands for, a row per point along y.
-    ///
-    /// The points of a map lie evenly from one end of each range to the other, both included. Each
-    /// stands for a cell as large as their spacing, cut at the border of the map: a point on an
-    /// edge for half of one, a point in a corner for a quarter (the trapezoid rule).
-    ///
-    /// # Arguments
-    ///
-    /// * `x`, `y` - the ranges the map covers.
-    /// * `nr_of_points` - the number of points along x and y; a single point stands for its whole
-    ///   range.
-    #[must_use]
-    pub fn point_areas(
-        x: &Range<Length>,
-        y: &Range<Length>,
-        (columns, rows): (usize, usize),
-    ) -> DMatrix<Area> {
-        let spacing = |range: &Range<Length>, points: usize| {
-            (range.end - range.start) / to_f64(points.saturating_sub(1).max(1))
-        };
-        let share = |index: usize, points: usize| {
-            if points > 1 && (index == 0 || index + 1 == points) {
-                0.5
-            } else {
-                1.0
-            }
-        };
-        let cell = spacing(x, columns) * spacing(y, rows);
-        DMatrix::from_fn(rows, columns, |row, column| {
-            cell * share(row, rows) * share(column, columns)
-        })
-    }
 }
 
 #[cfg(test)]
 mod test {
     use super::FluenceData;
     use crate::{
-        J_per_cm2, J_per_m2, core_optics::hit_map::fluence_estimator::FluenceEstimator,
-        error::OpmResult, joule, meter, properties::Proptype,
+        J_per_cm2, J_per_m2, core_optics::hit_map::fluence_estimator::FluenceEstimator, joule,
+        meter, properties::Proptype,
     };
     use assert_matches::assert_matches;
     use nalgebra::{dmatrix, vector};
@@ -312,7 +251,7 @@ mod test {
         assert_eq!(fluence_data.estimator(), &FluenceEstimator::Binning);
     }
     #[test]
-    fn get_fluence_distribution() -> OpmResult<()> {
+    fn get_fluence_distribution() {
         let fluence_data = FluenceData::new(
             dmatrix![
                 J_per_cm2!(1.0), J_per_cm2!(2.0);
@@ -321,7 +260,7 @@ mod test {
             meter!(0.0)..meter!(1.0),
             FluenceEstimator::Binning,
         );
-        let (x, y, distribution) = fluence_data.get_fluence_distribution()?;
+        let (x, y, distribution) = fluence_data.get_fluence_distribution();
         assert_eq!(x, vector![meter!(0.0), meter!(1.0)]);
         assert_eq!(y, vector![meter!(0.0), meter!(1.0)]);
         assert_eq!(
@@ -330,7 +269,6 @@ mod test {
             J_per_cm2!(1.0), J_per_cm2!(2.0);
             J_per_cm2!(3.0), J_per_cm2!(4.0)]
         );
-        Ok(())
     }
     #[test]
     fn len_x_y() {
@@ -380,30 +318,6 @@ mod test {
             FluenceEstimator::Binning,
         );
         assert_eq!(fluence_data.total_energy(), joule!(5.0));
-    }
-    /// A point inside a map stands for a whole cell, one on an edge for half of it, one in a
-    /// corner for a quarter, and a single point along an axis for its whole range.
-    #[test]
-    fn the_points_of_a_map_stand_for_the_cells_around_them() {
-        let areas = FluenceData::point_areas(
-            &(meter!(0.0)..meter!(4.0)),
-            &(meter!(0.0)..meter!(2.0)),
-            (5, 3),
-        )
-        .map(|area| area.value);
-        assert_eq!(
-            areas,
-            dmatrix![
-                0.25, 0.5, 0.5, 0.5, 0.25;
-                0.5, 1.0, 1.0, 1.0, 0.5;
-                0.25, 0.5, 0.5, 0.5, 0.25]
-        );
-        let single = FluenceData::point_areas(
-            &(meter!(0.0)..meter!(4.0)),
-            &(meter!(0.0)..meter!(2.0)),
-            (1, 1),
-        );
-        assert_eq!(single[(0, 0)].value, 8.0);
     }
     /// The points of a map lie 1 m apart over 2 m: the one in the middle stands for 1 m², so its
     /// 1 J/m² is 1 J.

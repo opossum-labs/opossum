@@ -7,7 +7,7 @@ use crate::{
     kde::Kde,
     light::{RayMesh, RaySource, ray_mesh::RayVertex},
     meter, micrometer,
-    nodes::fluence_detector::{Fluence, fluence_data::FluenceData},
+    nodes::fluence_detector::{Fluence, fluence_data::FluenceData, fluence_grid::FluenceGrid},
     types::{SiScalarSchema, schema_helper_types::Point3Schema},
     utils::{to_f64, try_f64_to_usize},
 };
@@ -178,7 +178,7 @@ impl RaysHitMap {
     ///
     /// Each hit spreads its energy over the four points of the map around it, the nearer a point
     /// the more. Each point shows the energy it got over the area it stands for (see
-    /// [`FluenceData::point_areas`]), so the map holds the energy of the hits within it. Hits
+    /// [`FluenceGrid::point_areas`]), so the map holds the energy of the hits within it. Hits
     /// beyond the given ranges are left out.
     ///
     /// # Attributes
@@ -240,7 +240,7 @@ impl RaysHitMap {
             }
         }
         let fluences = energies.zip_map(
-            &FluenceData::point_areas(&x, &y, nr_of_points),
+            &FluenceGrid::new(&x, &y, nr_of_points).point_areas(),
             |energy, area| energy / area,
         );
         Ok(FluenceData::new(fluences, x, y, FluenceEstimator::Binning))
@@ -714,7 +714,7 @@ mod test_rays_hit_map {
         let deviation = map
             .deviation()
             .ok_or_else(|| crate::error::OpossumError::Other("no deviation".into()))?;
-        let (xs, ys, values) = map.get_fluence_distribution()?;
+        let (xs, ys, values) = map.get_fluence_distribution();
         let mut points = Vec::new();
         for (row, y) in ys.iter().enumerate() {
             for (column, x) in xs.iter().enumerate() {

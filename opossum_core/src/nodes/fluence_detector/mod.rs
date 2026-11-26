@@ -732,7 +732,7 @@ mod test {
         let deviation = map
             .deviation()
             .ok_or_else(|| crate::error::OpossumError::Other("no deviation".into()))?;
-        let (xs, ys, values) = map.get_fluence_distribution()?;
+        let (xs, ys, values) = map.get_fluence_distribution();
         let (mut linear, mut corrected) = (0.0_f64, 0.0_f64);
         for (row, y) in ys.iter().enumerate() {
             for (column, x) in xs.iter().enumerate() {
@@ -979,7 +979,7 @@ mod test {
         let map = map_of_a_flat_top(vec![(nanometer!(1000.0), 1.0)], false)?;
         let middle = fluence_near(&map, 0.0, 0.0)?;
         approx::assert_relative_eq!(middle, flat_top_fluence(), max_relative = 0.02);
-        let (xs, ys, values) = map.get_fluence_distribution()?;
+        let (xs, ys, values) = map.get_fluence_distribution();
         for (row, y) in ys.iter().enumerate() {
             for (column, x) in xs.iter().enumerate() {
                 let (x, y) = (x.get::<millimeter>(), y.get::<millimeter>());

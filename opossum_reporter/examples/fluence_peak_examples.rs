@@ -274,7 +274,7 @@ fn cut(
 }
 /// The middle row of the given map, which runs along the x axis.
 fn row_through_axis(map: &FluenceData) -> OpmResult<Cut> {
-    let (xs, _, values) = map.get_fluence_distribution()?;
+    let (xs, _, values) = map.get_fluence_distribution();
     let row = map.len_y() / 2;
     Ok(xs
         .iter()

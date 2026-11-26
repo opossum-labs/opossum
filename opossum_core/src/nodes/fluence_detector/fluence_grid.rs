@@ -1,59 +1,93 @@
-//! A regular grid of points that triangles of a fluence map are drawn onto.
+//! The regular grid of points a fluence map shows its fluences at.
 use std::{cmp::Ordering, ops::Range};
 
-use nalgebra::{DMatrix, Point2, Vector2};
-use uom::si::{f64::Length, length::meter};
+use nalgebra::{DMatrix, DVector, Point2, Vector2};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use uom::si::{
+    f64::{Area, Length},
+    length::meter,
+};
 
 use super::Fluence;
-use crate::utils::{math_utils::signed_area, to_f64, try_f64_to_usize};
+use crate::{
+    meter, square_meter,
+    types::SiScalarSchema,
+    utils::{math_utils::signed_area, to_f64, try_f64_to_usize},
+};
 
-/// A regular grid of points that tubes are drawn onto, the fluences of overlapping tubes adding
-/// up.
+/// A regular grid of points with a fluence at each: the points lie evenly from one end of each
+/// range to the other, both included. Triangles drawn onto it add up where they overlap.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct FluenceGrid {
-    x: Axis,
-    y: Axis,
-    /// The fluences, with a row per point along y and a column per point along x.
+    /// the range of the points along x
+    #[schemars(with = "Range<SiScalarSchema>")]
+    x: Range<Length>,
+    /// the range of the points along y
+    #[schemars(with = "Range<SiScalarSchema>")]
+    y: Range<Length>,
+    /// the fluences, a row per point along y and a column per point along x: column by column,
+    /// then the number of rows and of columns
+    #[schemars(with = "(Vec<SiScalarSchema>, usize, usize)")]
     values: DMatrix<Fluence>,
 }
 /// The evenly spaced points of a grid along one axis, in meters.
 struct Axis {
     start: f64,
-    step: f64,
+    end: f64,
     count: usize,
 }
 impl Axis {
     /// Creates a new [`Axis`] of `count` points from the start to the end of `range`, both
     /// included.
     fn new(range: &Range<Length>, count: usize) -> Self {
-        let (start, end) = (range.start.get::<meter>(), range.end.get::<meter>());
-        let step = if count > 1 {
-            (end - start) / to_f64(count - 1)
+        Self {
+            start: range.start.get::<meter>(),
+            end: range.end.get::<meter>(),
+            count,
+        }
+    }
+    /// The spacing of the points, zero for fewer than two.
+    fn step(&self) -> f64 {
+        if self.count > 1 {
+            (self.end - self.start) / to_f64(self.count - 1)
         } else {
             0.0
-        };
-        Self { start, step, count }
+        }
     }
     /// The coordinate of the point with the given index.
     fn at(&self, index: usize) -> f64 {
-        self.step.mul_add(to_f64(index), self.start)
+        self.step().mul_add(to_f64(index), self.start)
+    }
+    /// The length the point with the given index stands for: the spacing, half of it at either
+    /// end (the trapezoid rule), and the whole range for a single point.
+    fn cell(&self, index: usize) -> f64 {
+        if self.count < 2 {
+            self.end - self.start
+        } else if index == 0 || index + 1 == self.count {
+            self.step() / 2.0
+        } else {
+            self.step()
+        }
     }
     /// The indices of the points from `from` to `to`, both included.
     fn within(&self, from: f64, to: f64) -> Range<usize> {
         // A point on the border of the range may be off by rounding; which side of an edge it
         // lies on is decided when the triangle is drawn.
         const ROUNDING: f64 = 1e-9;
+        let step = self.step();
         if self.count == 0 {
             return 0..0;
         }
-        if self.step <= 0.0 {
+        if step <= 0.0 {
             return if (from..=to).contains(&self.start) {
                 0..1
             } else {
                 0..0
             };
         }
-        let first = ((from - self.start) / self.step - ROUNDING).ceil().max(0.0);
-        let last = ((to - self.start) / self.step + ROUNDING)
+        let first = ((from - self.start) / step - ROUNDING).ceil().max(0.0);
+        let last = ((to - self.start) / step + ROUNDING)
             .floor()
             .min(to_f64(self.count - 1));
         match (try_f64_to_usize(first), try_f64_to_usize(last)) {
@@ -72,17 +106,70 @@ impl FluenceGrid {
     /// * `nr_of_points` - the number of points along x and y.
     #[must_use]
     pub fn new(x: &Range<Length>, y: &Range<Length>, nr_of_points: (usize, usize)) -> Self {
-        Self {
-            x: Axis::new(x, nr_of_points.0),
-            y: Axis::new(y, nr_of_points.1),
-            values: DMatrix::zeros(nr_of_points.1, nr_of_points.0),
-        }
+        Self::with_values(
+            x.clone(),
+            y.clone(),
+            DMatrix::zeros(nr_of_points.1, nr_of_points.0),
+        )
     }
-    /// Returns the fluences of this [`FluenceGrid`], with a row per point along y and a column per
+    /// Creates a new [`FluenceGrid`] with the given fluences.
+    ///
+    /// # Arguments
+    ///
+    /// * `x` - the range of the grid along x, both ends included.
+    /// * `y` - the range of the grid along y, both ends included.
+    /// * `values` - the fluences, a row per point along y and a column per point along x.
+    #[must_use]
+    pub const fn with_values(x: Range<Length>, y: Range<Length>, values: DMatrix<Fluence>) -> Self {
+        Self { x, y, values }
+    }
+    /// Returns the range of the points of this [`FluenceGrid`] along x.
+    #[must_use]
+    pub const fn x_range(&self) -> &Range<Length> {
+        &self.x
+    }
+    /// Returns the range of the points of this [`FluenceGrid`] along y.
+    #[must_use]
+    pub const fn y_range(&self) -> &Range<Length> {
+        &self.y
+    }
+    /// Returns the fluences of this [`FluenceGrid`], a row per point along y and a column per
+    /// point along x.
+    #[must_use]
+    pub const fn values(&self) -> &DMatrix<Fluence> {
+        &self.values
+    }
+    /// Returns the fluences of this [`FluenceGrid`], a row per point along y and a column per
     /// point along x.
     #[must_use]
     pub fn into_values(self) -> DMatrix<Fluence> {
         self.values
+    }
+    /// Returns the coordinates of the points of this [`FluenceGrid`] along x and along y.
+    #[must_use]
+    pub fn points(&self) -> (DVector<Length>, DVector<Length>) {
+        let points = |axis: Axis| DVector::from_fn(axis.count, |index, _| meter!(axis.at(index)));
+        let (x, y) = self.axes();
+        (points(x), points(y))
+    }
+    /// Returns the area each point of this [`FluenceGrid`] stands for, a row per point along y.
+    ///
+    /// Each point stands for a cell as large as the spacing of the points, cut at the border of
+    /// the grid: a point on an edge for half of one, a point in a corner for a quarter (the
+    /// trapezoid rule). A single point along an axis stands for its whole range.
+    #[must_use]
+    pub fn point_areas(&self) -> DMatrix<Area> {
+        let (x, y) = self.axes();
+        DMatrix::from_fn(y.count, x.count, |row, column| {
+            square_meter!(x.cell(column) * y.cell(row))
+        })
+    }
+    /// The points of this [`FluenceGrid`] along x and along y.
+    fn axes(&self) -> (Axis, Axis) {
+        (
+            Axis::new(&self.x, self.values.ncols()),
+            Axis::new(&self.y, self.values.nrows()),
+        )
     }
     /// Adds a triangle to the grid, linearly between the fluences at its corners.
     ///
@@ -91,7 +178,8 @@ impl FluenceGrid {
     /// * `corners` - the corners of the triangle, in meters.
     /// * `values` - the fluences at the corners.
     pub(crate) fn add_triangle(&mut self, corners: [Point2<f64>; 3], values: [Fluence; 3]) {
-        for_each_covered(&self.x, &self.y, corners, |cell, lambda| {
+        let (x, y) = self.axes();
+        for_each_covered(&x, &y, corners, |cell, lambda| {
             if let Some(value) = self.values.get_mut(cell) {
                 *value += lambda
                     .iter()
@@ -111,7 +199,8 @@ impl FluenceGrid {
     /// * `along_edges` - `eᵀ H e` along each edge, the edge opposite the corner of the same index.
     pub(crate) fn add_deviation(&mut self, corners: [Point2<f64>; 3], along_edges: [Fluence; 3]) {
         let [w0, w1, w2] = along_edges;
-        for_each_covered(&self.x, &self.y, corners, |cell, [l0, l1, l2]| {
+        let (x, y) = self.axes();
+        for_each_covered(&x, &y, corners, |cell, [l0, l1, l2]| {
             if let Some(value) = self.values.get_mut(cell) {
                 *value -= (w0 * (l1 * l2) + w1 * (l2 * l0) + w2 * (l0 * l1)) * 0.5;
             }
@@ -203,6 +292,49 @@ mod test {
     /// The fluences of a grid, in J/m².
     fn in_j_per_m2(grid: FluenceGrid) -> DMatrix<f64> {
         grid.into_values().map(|fluence| fluence.value)
+    }
+    /// The points of a grid lie evenly from one end of each range to the other, both included.
+    #[test]
+    fn the_points_of_a_grid_span_its_ranges() {
+        let (x, y) = unit_grid().points();
+        let expected = [-2.0, -1.0, 0.0, 1.0, 2.0].map(|x| meter!(x));
+        assert_eq!(x.as_slice(), expected);
+        assert_eq!(y.as_slice(), expected);
+    }
+    /// A grid writes its fluences as its schema says: column by column, then the number of rows
+    /// and of columns.
+    #[test]
+    fn a_grid_writes_its_fluences_column_by_column() {
+        let grid = FluenceGrid::with_values(
+            meter!(0.0)..meter!(2.0),
+            meter!(0.0)..meter!(1.0),
+            nalgebra::dmatrix![
+                J_per_m2!(1.0), J_per_m2!(2.0), J_per_m2!(3.0);
+                J_per_m2!(4.0), J_per_m2!(5.0), J_per_m2!(6.0)],
+        );
+        let written = serde_json::to_value(&grid).unwrap();
+        assert_eq!(
+            written["values"],
+            serde_json::json!([[1.0, 4.0, 2.0, 5.0, 3.0, 6.0], 2, 3])
+        );
+    }
+    /// A point inside a grid stands for a whole cell, one on an edge for half of it, one in a
+    /// corner for a quarter, and a single point along an axis for its whole range.
+    #[test]
+    fn the_points_of_a_grid_stand_for_the_cells_around_them() {
+        let (x, y) = (meter!(0.0)..meter!(4.0), meter!(0.0)..meter!(2.0));
+        let areas = FluenceGrid::new(&x, &y, (5, 3))
+            .point_areas()
+            .map(|area| area.value);
+        assert_eq!(
+            areas,
+            nalgebra::dmatrix![
+                0.25, 0.5, 0.5, 0.5, 0.25;
+                0.5, 1.0, 1.0, 1.0, 0.5;
+                0.25, 0.5, 0.5, 0.5, 0.25]
+        );
+        let single = FluenceGrid::new(&x, &y, (1, 1)).point_areas();
+        assert_eq!(single[(0, 0)].value, 8.0);
     }
     /// The two triangles of a square cover the point on their shared diagonal once, and of the
     /// points on the border of the square those on its bottom and left edges: the others belong

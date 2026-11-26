@@ -1399,27 +1399,11 @@
             }
           ]
         },
-        "interp_distribution": {
-          "description": "2d fluence distribution of the beam.",
+        "grid": {
+          "description": "the fluence of the beam at each point of the map",
           "allOf": [
             {
-              "$ref": "#/definitions/Vector2Schema"
-            }
-          ]
-        },
-        "x_range": {
-          "description": "x coordinates of the fluence distribution",
-          "allOf": [
-            {
-              "$ref": "#/definitions/Range_of_SiScalarSchema"
-            }
-          ]
-        },
-        "y_range": {
-          "description": "y coordinates of the fluence distribution",
-          "allOf": [
-            {
-              "$ref": "#/definitions/Range_of_SiScalarSchema"
+              "$ref": "#/definitions/FluenceGrid"
             }
           ]
         },
@@ -1452,21 +1436,60 @@
       },
       "required": [
         "peak",
-        "interp_distribution",
-        "x_range",
-        "y_range",
+        "grid",
         "estimator"
       ]
     },
-    "Vector2Schema": {
-      "description": "Helper schema type representing a 2D vector `[x, y]` serialized as a 2-element array.",
-      "type": "array",
-      "items": {
-        "type": "number",
-        "format": "double"
+    "FluenceGrid": {
+      "description": "A regular grid of points with a fluence at each: the points lie evenly from one end of each\nrange to the other, both included. Triangles drawn onto it add up where they overlap.",
+      "type": "object",
+      "properties": {
+        "x": {
+          "description": "the range of the points along x",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Range_of_SiScalarSchema"
+            }
+          ]
+        },
+        "y": {
+          "description": "the range of the points along y",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Range_of_SiScalarSchema"
+            }
+          ]
+        },
+        "values": {
+          "description": "the fluences, a row per point along y and a column per point along x: column by column,\nthen the number of rows and of columns",
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/SiScalarSchema"
+              }
+            },
+            {
+              "type": "integer",
+              "format": "uint",
+              "minimum": 0
+            },
+            {
+              "type": "integer",
+              "format": "uint",
+              "minimum": 0
+            }
+          ]
+        }
       },
-      "minItems": 2,
-      "maxItems": 2
+      "required": [
+        "x",
+        "y",
+        "values"
+      ]
     },
     "FluenceEstimator": {
       "description": "Strategy for fluence estimation",
@@ -2329,6 +2352,16 @@
         "wavelength",
         "spots"
       ]
+    },
+    "Vector2Schema": {
+      "description": "Helper schema type representing a 2D vector `[x, y]` serialized as a 2-element array.",
+      "type": "array",
+      "items": {
+        "type": "number",
+        "format": "double"
+      },
+      "minItems": 2,
+      "maxItems": 2
     },
     "LightDataBuilder": {
       "description": "Builder for the generation of [`LightData`].",

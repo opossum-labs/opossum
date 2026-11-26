@@ -123,7 +123,7 @@ pub mod helper {
     ///
     /// This function returns an error if the axes of the map cannot be built.
     pub fn point_near(map: &FluenceData, x: f64, y: f64) -> OpmResult<(f64, f64, f64)> {
-        let (xs, ys, values) = map.get_fluence_distribution()?;
+        let (xs, ys, values) = map.get_fluence_distribution();
         let nearest = |axis: &DVector<Length>, at: f64| {
             axis.iter()
                 .map(|c| c.get::<millimeter>())
