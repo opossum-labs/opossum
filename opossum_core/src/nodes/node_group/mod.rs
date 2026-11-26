@@ -4,7 +4,7 @@
 //! A node group is a special type of optical node that can contain other optical nodes (including other groups) and connections between them. It allows to build up complex optical systems in a hierarchical way. The internal structure of a node group can be hidden or shown in the dot format by setting the `expand view` property of the group node. To use a node group from the outside, internal nodes / ports must be mapped to be visible (see [`map_input_port`](NodeGroup::map_input_port()) & [`map_output_port`](NodeGroup::map_output_port()) functions).
 
 use opm_macros_lib::OpmNode;
-use schemars::JsonSchema;
+use schemars::{JsonSchema, Schema, SchemaGenerator};
 mod analysis_energy;
 mod analysis_ghostfocus;
 mod analysis_raytrace;
@@ -16,7 +16,7 @@ use crate::{
     analyzers::{AnalyzerKind, propagation_strategy::PropagationStrategy},
     core_optics::{
         NodeAttr, NodeAttrExt, OpticNode, OpticPorts, OpticRef, PortType, SurfacePorts,
-        node_attr::HasNodeAttr,
+        node_attr::HasNodeAttr, optic_ref::DeserializedNode,
     },
     error::{OpmResult, OpossumError},
     geometry::Geometry,
@@ -34,11 +34,13 @@ use crate::{
         node_report::{NodeReport, NodeReportResult},
         report_note::{ReportLevel, ReportNote},
     },
-    types::SiScalarSchema,
 };
 pub use optic_graph::{ConnectionInfo, OpticGraph};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, HashMap},
+};
 use uom::si::f64::Length;
 use uuid::Uuid;
 
@@ -46,7 +48,7 @@ inventory::submit! {
     NodeRegistration::new::<NodeGroup>("group", "group node containing other nodes or groups")
 }
 
-#[derive(OpmNode, Debug, Clone, JsonSchema)]
+#[derive(OpmNode, Debug, Clone)]
 #[opm_node("yellow")]
 #[manual_analyzable]
 /// The basic building block of an optical system. It represents a group of other optical
@@ -54,7 +56,6 @@ inventory::submit! {
 pub struct NodeGroup {
     node_attr: NodeAttr,
     graph: OpticGraph,
-    #[schemars(with = "HashMap<String, SiScalarSchema>")]
     input_port_distances: BTreeMap<String, Length>,
     accumulated_rays: Vec<HashMap<Uuid, Rays>>,
     ray_ends: Vec<Rays>,
@@ -906,7 +907,7 @@ impl<'de> Deserialize<'de> for NodeGroup {
     where
         D: serde::Deserializer<'de>,
     {
-        let raw = crate::core_optics::optic_ref::DeserializedNode::deserialize(deserializer)?;
+        let raw = DeserializedNode::deserialize(deserializer)?;
         if raw.node_type != "group" {
             return Err(serde::de::Error::custom(format!(
                 "expected node_type 'group', found '{}'",
@@ -922,6 +923,16 @@ impl<'de> Deserialize<'de> for NodeGroup {
             .after_deserialization_hook()
             .map_err(|e| serde::de::Error::custom(e.to_string()))?;
         Ok(group)
+    }
+}
+/// A group is written as the flat node every other node is written as, so it has the same schema.
+impl JsonSchema for NodeGroup {
+    fn schema_name() -> Cow<'static, str> {
+        DeserializedNode::schema_name()
+    }
+
+    fn json_schema(generator: &mut SchemaGenerator) -> Schema {
+        DeserializedNode::json_schema(generator)
     }
 }
 #[cfg(test)]
@@ -954,6 +965,38 @@ mod test {
         assert!(!outer.needs_ray_tubes());
         outer.add_node(inner)?;
         assert!(outer.needs_ray_tubes());
+        Ok(())
+    }
+    /// The schema of a group describes what a group writes: every field it writes is in the
+    /// schema, and every field the schema requires is written.
+    #[test]
+    fn schema_describes_what_a_group_writes() -> OpmResult<()> {
+        let mut group = NodeGroup::default();
+        group.add_node(Dummy::default())?;
+        let written = serde_json::to_value(&group).unwrap();
+        let written = written.as_object().unwrap();
+        let schema = schemars::schema_for!(NodeGroup);
+        let properties = schema
+            .get("properties")
+            .and_then(serde_json::Value::as_object)
+            .unwrap();
+        for field in written.keys() {
+            assert!(
+                properties.contains_key(field),
+                "the schema lacks the written field `{field}`"
+            );
+        }
+        for field in schema
+            .get("required")
+            .and_then(serde_json::Value::as_array)
+            .unwrap()
+        {
+            let field = field.as_str().unwrap();
+            assert!(
+                written.contains_key(field),
+                "the schema requires `{field}`, which a group never writes"
+            );
+        }
         Ok(())
     }
     #[test]

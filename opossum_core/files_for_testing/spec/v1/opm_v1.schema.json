@@ -14,7 +14,7 @@
     "scenery": {
       "allOf": [
         {
-          "$ref": "#/definitions/NodeGroup"
+          "$ref": "#/definitions/OpticNode"
         }
       ]
     },
@@ -61,56 +61,13 @@
     "opm_file_version"
   ],
   "definitions": {
-    "NodeGroup": {
-      "description": "The basic building block of an optical system. It represents a group of other optical\nnodes ([`OpticNode`]s) arranged in a (sub)graph.",
-      "type": "object",
-      "properties": {
-        "node_attr": {
-          "$ref": "#/definitions/NodeAttr"
-        },
-        "graph": {
-          "$ref": "#/definitions/OpticGraph"
-        },
-        "input_port_distances": {
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/definitions/SiScalarSchema"
-          }
-        },
-        "accumulated_rays": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/definitions/Rays"
-            }
-          }
-        },
-        "ray_ends": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/Rays"
-          }
-        }
-      },
-      "required": [
-        "node_attr",
-        "graph",
-        "input_port_distances",
-        "accumulated_rays",
-        "ray_ends"
-      ]
-    },
-    "NodeAttr": {
-      "description": "Struct for storing common attributes of optical nodes.\n\n`NodeAttr` encapsulates metadata and configuration for an optical node, including its type,\nname, ports, unique identifier, properties, geometric placement, alignment, and GUI position.",
+    "OpticNode": {
       "type": "object",
       "properties": {
         "node_type": {
-          "description": "The type of the node (e.g., \"lens\", \"mirror\").",
           "type": "string"
         },
         "name": {
-          "description": "The name of the node.",
           "type": "string"
         },
         "uuid": {
@@ -118,10 +75,15 @@
           "format": "uuid"
         },
         "props": {
-          "$ref": "#/definitions/Properties"
+          "default": {},
+          "allOf": [
+            {
+              "$ref": "#/definitions/Properties"
+            }
+          ]
         },
         "positioning": {
-          "description": "3D placement mode (Absolute or Automatic).",
+          "default": "Automatic",
           "allOf": [
             {
               "$ref": "#/definitions/NodePositioning"
@@ -129,7 +91,8 @@
           ]
         },
         "inverted": {
-          "type": "boolean"
+          "type": "boolean",
+          "default": false
         },
         "alignment": {
           "anyOf": [
@@ -139,15 +102,17 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "default": null
         },
         "align_like_node_at_distance": {
           "type": [
             "array",
             "null"
           ],
-          "maxItems": 2,
+          "default": null,
           "minItems": 2,
+          "maxItems": 2,
           "items": [
             {
               "type": "string",
@@ -166,9 +131,19 @@
             {
               "type": "null"
             }
+          ],
+          "default": null
+        },
+        "graph": {
+          "description": "Sub-graph contained inside this node (only populated when `node_type == \"group\"`).",
+          "allOf": [
+            {
+              "$ref": "#/definitions/OpticGraph"
+            }
           ]
         }
       },
+      "additionalProperties": false,
       "required": [
         "node_type",
         "name",
@@ -3476,95 +3451,6 @@
       "required": [
         "nodes",
         "edges"
-      ]
-    },
-    "OpticNode": {
-      "type": "object",
-      "properties": {
-        "node_type": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "uuid": {
-          "type": "string",
-          "format": "uuid"
-        },
-        "props": {
-          "default": {},
-          "allOf": [
-            {
-              "$ref": "#/definitions/Properties"
-            }
-          ]
-        },
-        "positioning": {
-          "default": "Automatic",
-          "allOf": [
-            {
-              "$ref": "#/definitions/NodePositioning"
-            }
-          ]
-        },
-        "inverted": {
-          "type": "boolean",
-          "default": false
-        },
-        "alignment": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Isometry"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "align_like_node_at_distance": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "default": null,
-          "minItems": 2,
-          "maxItems": 2,
-          "items": [
-            {
-              "type": "string",
-              "format": "uuid"
-            },
-            {
-              "$ref": "#/definitions/SiScalarSchema"
-            }
-          ]
-        },
-        "gui_position": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/Point2Schema"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "graph": {
-          "description": "Sub-graph contained inside this node (only populated when `node_type == \"group\"`).",
-          "allOf": [
-            {
-              "$ref": "#/definitions/OpticGraph"
-            }
-          ]
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "node_type",
-        "name",
-        "uuid"
       ]
     },
     "ConnectionInfo": {
