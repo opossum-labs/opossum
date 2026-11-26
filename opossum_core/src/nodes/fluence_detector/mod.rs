@@ -1,6 +1,7 @@
 #![warn(missing_docs)]
 //! Fluence measurement node
 pub mod fluence_data;
+pub mod fluence_grid;
 
 use crate::{
     analyzers::{
