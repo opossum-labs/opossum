@@ -24,7 +24,6 @@ use crate::{
     prelude::EnergyLaserLines,
     properties::Proptype,
     refractive_index::RefractiveIndexType,
-    types::SiScalarSchema,
     utils::{filter_data::get_unique_finite_values_sorted, geom_transformation::Isometry, to_f64},
 };
 use approx::relative_eq;

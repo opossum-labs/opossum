@@ -44,6 +44,7 @@ pub struct FluenceData {
     /// for a map that follows ray tubes, the energy it draws in the tubes and in the margins at the
     /// edges of the light (see [`FluenceData::with_drawn_energy`])
     #[serde(default)]
+    #[schemars(with = "Option<(SiScalarSchema, SiScalarSchema)>")]
     drawn_energy: Option<(Energy, Energy)>,
     /// for a map that follows ray tubes, the estimated deviation of the fluence from the map at
     /// each of its points (see [`FluenceData::with_deviation`]); derived for the report, not

@@ -27,11 +27,13 @@ use super::{
 };
 
 /// Where a ray hit a surface and the energy it brought there.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema)]
 pub struct HitPoint {
     /// Where the ray hit, in the coordinates of the surface.
+    #[schemars(with = "Point3Schema")]
     position: Point3<Length>,
     /// The energy the ray brought.
+    #[schemars(with = "SiScalarSchema")]
     energy: Energy,
 }
 impl HitPoint {
@@ -69,6 +71,7 @@ impl HitPoint {
 ///Storage struct for hitpoints on a surface from a single ray bundle
 pub struct RaysHitMap {
     hit_points: Vec<HitPoint>,
+    #[schemars(with = "(SiScalarSchema, SiScalarSchema)")]
     x_lims: (Length, Length),
     #[schemars(with = "(SiScalarSchema, SiScalarSchema)")]
     y_lims: (Length, Length),
