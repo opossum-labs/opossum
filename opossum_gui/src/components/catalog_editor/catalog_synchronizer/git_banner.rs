@@ -19,24 +19,31 @@ pub struct GitSyncBannerProps {
     pub on_sync: EventHandler<()>,
 }
 
-/// Renders a banner displaying the shared catalog Git repository details and sync controls.
+/// Renders a banner displaying the official catalog Git repository details and sync controls.
 #[component]
 pub fn GitSyncBanner(props: GitSyncBannerProps) -> Element {
     let config = APP_CONFIG.read();
-    let remote_url = config.catalog_remote_url().to_string();
-    let catalog_dir = config.catalog_dir().cloned();
+    let remote_url = {
+        let configured = config.catalog_remote_url().trim();
+        if configured.is_empty() {
+            opossum_registry::DEFAULT_CATALOG_REMOTE_URL.to_string()
+        } else {
+            configured.to_string()
+        }
+    };
+    let official_dir = config.catalog_dir().map(|d| d.join("official"));
 
     rsx! {
         div { class: "p-3 mb-4 rounded border bg-light text-dark",
-            // Header row with repository details and sync button
+            // Header row with official repository details and sync button
             div { class: "d-flex justify-content-between align-items-center flex-wrap gap-3",
                 div {
                     div { class: "fw-bold small d-flex align-items-center gap-1",
                         Icon { icon: FaCodeBranch }
-                        "Shared Git Catalog Repository"
+                        "Official Catalog Git Repository (main)"
                     }
                     div { class: "text-muted small", "{remote_url}" }
-                    if let Some(dir) = catalog_dir {
+                    if let Some(dir) = official_dir {
                         div { class: "text-muted small font-monospace", "{dir.display()}" }
                     }
                 }
@@ -48,9 +55,9 @@ pub fn GitSyncBanner(props: GitSyncBannerProps) -> Element {
                         onclick: move |_| props.on_sync.call(()),
                         Icon { icon: FaCloudArrowDown }
                         if props.is_syncing {
-                            "Syncing with Git..."
+                            "Syncing Official Catalog..."
                         } else {
-                            "Pull Updates from Git"
+                            "Pull Official Catalog"
                         }
                     }
                 }

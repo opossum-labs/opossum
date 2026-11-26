@@ -18,14 +18,32 @@ impl AssetCategory {
     }
 }
 
-/// Comparison status between an asset in the model and the catalog.
+/// Indicates which catalog source an asset belongs to or targets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CatalogOrigin {
+    /// Asset is registered in the shared official catalog.
+    Official,
+    /// Asset is registered in the local user catalog.
+    User,
+    /// Asset is not yet present in either catalog.
+    None,
+}
+
+/// Comparison status between an asset in the model and the dual-catalog registry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AssetSyncStatus {
+    /// Model asset matches the catalog version (`official` or `user`).
     UpToDate,
+    /// Catalog (`official` or `user`) has a newer version than the model.
     ModelOutdated,
+    /// Model holds a newer version of an official asset; pull the official catalog first.
+    OfficialSyncRecommended,
+    /// Asset is not in official or user catalog and has version >= 1 (can be imported to user catalog).
     MissingInCatalogRegular,
+    /// Asset is not in official or user catalog and has version == 0 (ad-hoc draft).
     MissingInCatalogAdHoc,
-    ModelNewer,
+    /// Asset exists in the user catalog with a conflicting version or state; user must resolve.
+    UserConflict,
 }
 
 /// Identifies a node and property that uses an asset.
@@ -36,13 +54,14 @@ pub struct NodeUsageInfo {
     pub property_key: String,
 }
 
-/// A row representing an asset found in the model compared to the catalog.
+/// A row representing an asset found in the model compared to the official and user catalogs.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AssetSyncRow {
     pub id: Uuid,
     pub name: String,
     pub category: AssetCategory,
     pub manufacturer: Option<String>,
+    pub origin: CatalogOrigin,
     pub model_version: u32,
     pub catalog_version: Option<u32>,
     pub status: AssetSyncStatus,
@@ -59,34 +78,79 @@ pub enum StatusFilter {
     Outdated,
     Missing,
     AdHocOnly,
+    ConflictsOnly,
     UpToDate,
 }
 
-/// Determines the synchronization status between an asset version in the model and the catalog.
+/// Determines the synchronization status using the official catalog (by UUID) as single point of truth,
+/// falling back to the user catalog and then to uncataloged model assets.
 #[must_use]
-pub const fn determine_sync_status(
+pub const fn determine_dual_catalog_status(
     model_version: u32,
-    catalog_version: Option<u32>,
-) -> AssetSyncStatus {
-    match catalog_version {
-        Some(latest_cat_v) => {
-            if latest_cat_v > model_version {
-                AssetSyncStatus::ModelOutdated
-            } else if latest_cat_v == model_version && model_version >= 1 {
-                AssetSyncStatus::UpToDate
-            } else if model_version > latest_cat_v {
-                AssetSyncStatus::ModelNewer
-            } else {
-                AssetSyncStatus::ModelOutdated
+    is_official: bool,
+    official_version: Option<u32>,
+    in_user_catalog: bool,
+    user_version: Option<u32>,
+) -> (CatalogOrigin, Option<u32>, AssetSyncStatus) {
+    if is_official {
+        let cat_v = official_version;
+        match cat_v {
+            Some(latest_off_v) => {
+                if latest_off_v > model_version {
+                    (
+                        CatalogOrigin::Official,
+                        cat_v,
+                        AssetSyncStatus::ModelOutdated,
+                    )
+                } else if latest_off_v == model_version && model_version >= 1 {
+                    (CatalogOrigin::Official, cat_v, AssetSyncStatus::UpToDate)
+                } else if model_version > latest_off_v {
+                    (
+                        CatalogOrigin::Official,
+                        cat_v,
+                        AssetSyncStatus::OfficialSyncRecommended,
+                    )
+                } else {
+                    (
+                        CatalogOrigin::Official,
+                        cat_v,
+                        AssetSyncStatus::ModelOutdated,
+                    )
+                }
             }
+            None => (
+                CatalogOrigin::Official,
+                None,
+                AssetSyncStatus::OfficialSyncRecommended,
+            ),
         }
-        None => {
-            if model_version == 0 {
-                AssetSyncStatus::MissingInCatalogAdHoc
-            } else {
-                AssetSyncStatus::MissingInCatalogRegular
+    } else if in_user_catalog {
+        let cat_v = user_version;
+        match cat_v {
+            Some(latest_usr_v) => {
+                if latest_usr_v > model_version {
+                    (CatalogOrigin::User, cat_v, AssetSyncStatus::ModelOutdated)
+                } else if latest_usr_v == model_version && model_version >= 1 {
+                    (CatalogOrigin::User, cat_v, AssetSyncStatus::UpToDate)
+                } else {
+                    // Model version differs higher or v0 conflicts with existing user catalog entry
+                    (CatalogOrigin::User, cat_v, AssetSyncStatus::UserConflict)
+                }
             }
+            None => (CatalogOrigin::User, None, AssetSyncStatus::UserConflict),
         }
+    } else if model_version == 0 {
+        (
+            CatalogOrigin::None,
+            None,
+            AssetSyncStatus::MissingInCatalogAdHoc,
+        )
+    } else {
+        (
+            CatalogOrigin::None,
+            None,
+            AssetSyncStatus::MissingInCatalogRegular,
+        )
     }
 }
 
@@ -125,6 +189,11 @@ pub fn matches_filter(
         }
         StatusFilter::AdHocOnly => {
             if row.status != AssetSyncStatus::MissingInCatalogAdHoc {
+                return false;
+            }
+        }
+        StatusFilter::ConflictsOnly => {
+            if row.status != AssetSyncStatus::UserConflict {
                 return false;
             }
         }

@@ -61,9 +61,7 @@ pub fn OptionalPropertyInput(
     on_change: EventHandler<Option<f64>>,
     #[props(default = false)] readonly: bool,
 ) -> Element {
-    // Show empty string if the property is None
     let val_str = value.map_or_default(|v| v.to_string());
-
     let on_save = move |s: String| {
         let trimmed = s.trim();
         if trimmed.is_empty() {
@@ -71,9 +69,7 @@ pub fn OptionalPropertyInput(
         } else if let Ok(parsed) = trimmed.parse::<f64>() {
             on_change.call(Some(parsed));
         }
-        // Invalid input is gracefully ignored (reverts to previous valid value on next render)
     };
-
     rsx! {
         crate::components::node_editor::inputs::input_components::FlushableTextInput {
             id,
@@ -100,16 +96,19 @@ pub fn MaterialEditor(
     #[props(default = "materialEditor".to_string())] base_id: String,
     #[props(default = false)] readonly: bool,
 ) -> Element {
-    debug!("🔄 Render: MaterialEditor");
+    debug!("Render: MaterialEditor");
     let mut show_overwrite_warning = use_signal(|| false);
+
+    let (current_name, current_version) = {
+        let guard = material.read();
+        (guard.name().to_string(), guard.version())
+    };
+    let is_draft = current_version == 0;
 
     let header_memo = use_memo(move || material.read().header.clone());
     let optical_memo = use_memo(move || material.read().optical.clone());
     let thermal_memo = use_memo(move || material.read().thermal.clone());
     let mechanical_memo = use_memo(move || material.read().mechanical.clone());
-
-    let current_version = material.read().version();
-    let is_draft = current_version == 0;
 
     let handle_header_change = use_callback(move |event: AssetHeaderChangeEvent| {
         on_change.call(MaterialChangeEvent {
@@ -143,6 +142,29 @@ pub fn MaterialEditor(
         }
     });
 
+    let version_badge_text = if is_draft {
+        if save_label.is_some() {
+            "AdHoc Material".to_string()
+        } else {
+            "Draft (Auto-Version)".to_string()
+        }
+    } else {
+        format!("Target Version: v{current_version}")
+    };
+
+    let save_button_text = if let Some(custom_label) = save_label.as_deref() {
+        custom_label.to_string()
+    } else if is_draft {
+        "Publish to User Catalog".to_string()
+    } else {
+        format!("Overwrite Version {current_version}")
+    };
+
+    let optical_id = format!("{base_id}_optical");
+    let thermal_id = format!("{base_id}_thermal");
+    let mechanical_id = format!("{base_id}_mechanical");
+    let version_input_id = format!("{base_id}_version_input");
+
     rsx! {
         AlertDialog {
             open: open(),
@@ -153,18 +175,8 @@ pub fn MaterialEditor(
                 div { class: "material-editor-container", id: "{base_id}",
                     div { class: "d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom",
                         h4 { class: "mb-0",
-                            "{material.read().name()}"
-                            if is_draft {
-                                if save_label.is_some() {
-                                    span { class: "badge bg-secondary ms-2", "AdHoc Material" }
-                                } else {
-                                    span { class: "badge bg-secondary ms-2", "Draft (Auto-Version)" }
-                                }
-                            } else {
-                                span { class: "badge bg-warning text-dark ms-2",
-                                    "Target Version: v{current_version}"
-                                }
-                            }
+                            "{current_name}"
+                            span { class: "badge bg-secondary ms-2", "{version_badge_text}" }
                         }
                     }
                 }
@@ -176,23 +188,22 @@ pub fn MaterialEditor(
                     }
                     OpticalPropertiesEditor {
                         optical: optical_memo,
-                        base_id: format!("{}_optical", base_id),
+                        base_id: optical_id,
                         readonly,
                         on_change: handle_optical_change,
                     }
                     ThermalPropertiesEditor {
                         thermal: thermal_memo,
-                        base_id: format!("{}_thermal", base_id),
+                        base_id: thermal_id,
                         readonly,
                         on_change: handle_thermal_change,
                     }
                     MechanicalPropertiesEditor {
                         mechanical: mechanical_memo,
-                        base_id: format!("{}_mechanical", base_id),
+                        base_id: mechanical_id,
                         readonly,
                         on_change: handle_mechanical_change,
                     }
-
                     details { class: "mt-4 p-3 border rounded bg-light",
                         summary {
                             class: "fw-bold text-secondary text-uppercase small",
@@ -206,11 +217,11 @@ pub fn MaterialEditor(
                             div { class: "d-flex align-items-center gap-2",
                                 label {
                                     class: "form-label mb-0 small text-muted",
-                                    r#for: "{base_id}_version_input",
+                                    r#for: "{version_input_id}",
                                     "Target Version Number:"
                                 }
                                 input {
-                                    id: "{base_id}_version_input",
+                                    id: "{version_input_id}",
                                     class: "form-control form-control-sm text-center",
                                     style: "width: 5.5rem;",
                                     r#type: "number",
@@ -255,15 +266,7 @@ pub fn MaterialEditor(
             AlertDialogActions {
                 AlertDialogCancel { "Cancel" }
                 if on_save.is_some() && !readonly {
-                    AlertDialogAction { on_click: handle_save_click,
-                        if let Some(custom_label) = save_label.as_deref() {
-                            "{custom_label}"
-                        } else if is_draft {
-                            "Publish New Version"
-                        } else {
-                            "Overwrite Version {current_version}"
-                        }
-                    }
+                    AlertDialogAction { on_click: handle_save_click, "{save_button_text}" }
                 }
             }
         }
@@ -277,7 +280,7 @@ pub fn MaterialEditor(
                     "Attention: You are about to overwrite version {current_version}!"
                 }
                 p { class: "small text-muted mb-0",
-                    "This operation replaces the existing version file on disk. If this version has already been pushed to a remote repository, this change can cause Git merge conflicts during synchronization."
+                    "This operation replaces the existing version file on disk."
                 }
             }
             AlertDialogActions {
