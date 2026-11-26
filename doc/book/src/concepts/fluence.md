@@ -198,6 +198,6 @@ KDE produces a smooth continuous distribution by spreading each ray’s energy o
 
 A peak is only as good as the rays around it: they must lie closer than the light changes, binning needs enough rays in each cell, the peak of KDE is a lower bound, and at a fold the rays rather than the light set the peak.
 
-For Voronoi, with `error estimates` switched on, the report estimates from the curvature at the corners how far the fluence deviates from the map between the rays. The estimate catches the deviation up to the third order in the spacing of the rays and is exact for quadratic profiles; it is an estimate, not a bound.
+For Voronoi, with `error estimates` switched on, the report estimates from the curvature at the corners how far the fluence deviates from the map between the rays. The estimate catches the part of the deviation that grows with the square of the spacing of the rays; what it leaves grows with the cube. It is exact for quadratic profiles, and it is an estimate, not a bound.
 
 The choice of method affects how clearly peak fluence and spatial energy distribution are represented, especially in systems with focused beams or non-uniform illumination.
