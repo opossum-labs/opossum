@@ -23,23 +23,22 @@ use crate::{
     error::OpmResult,
     joule,
     light::RaySource,
-    meter,
     nodes::fluence_detector::{Fluence, fluence_data::FluenceData},
     properties::Proptype,
 };
 use fluence_estimator::FluenceEstimator;
-use itertools::Itertools;
+use indexmap::IndexMap;
 use ray_tubes::{draw_deviation, draw_map};
 use rays_hit_map::{HitPoint, RaysHitMap};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, ops::Range};
-use uom::si::f64::{Energy, Length};
+use uom::si::f64::Energy;
 use uuid::Uuid;
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
-/// Storage struct for `RaysHitMap` on a surface from a single bounce
+/// Storage struct for `RaysHitMap` on a surface from a single bounce, its bundles in the order
+/// they arrived.
 pub struct BouncedHitMap {
-    hit_map: HashMap<Uuid, RaysHitMap>,
+    hit_map: IndexMap<Uuid, RaysHitMap>,
 }
 impl BouncedHitMap {
     /// Add a hit point to this [`BouncedHitMap`].
@@ -64,9 +63,10 @@ impl BouncedHitMap {
             .or_default()
             .add_hit_point(hit_point, source)
     }
-    /// Returns a reference to the internal map of [`RaysHitMap`]s.
+    /// Returns a reference to the internal map of [`RaysHitMap`]s, in the order their bundles
+    /// arrived.
     #[must_use]
-    pub const fn hit_map(&self) -> &HashMap<Uuid, RaysHitMap> {
+    pub const fn hit_map(&self) -> &IndexMap<Uuid, RaysHitMap> {
         &self.hit_map
     }
 
@@ -84,7 +84,7 @@ pub struct HitMap {
     /// Stores the hitpoints of the rays on this surface, separated by their bounce level and the individual ray bundle
     hit_map: Vec<BouncedHitMap>,
     /// Stores the fluence, position in the history of the ray bundles that create a critical fluence on this surface and the bounce level. key value is the uuid of the ray bundle
-    critical_fluence: HashMap<Uuid, (Fluence, usize, usize)>,
+    critical_fluence: IndexMap<Uuid, (Fluence, usize, usize)>,
 }
 impl HitMap {
     /// Returns a reference to the hit map of this [`HitMap`].
@@ -136,22 +136,23 @@ impl HitMap {
         self.hit_map.is_empty()
     }
     /// Returns the energy of the light that hit this surface: the energy of all its hits, of all
-    /// bounces and bundles. The bundles of a bounce are summed in the order of their ids, so the
-    /// sum does not depend on the order they are stored in.
+    /// bounces and bundles, summed in the order they arrived.
     #[must_use]
     pub fn energy(&self) -> Energy {
         self.hit_map
             .iter()
-            .flat_map(|bounced| bounced.hit_map.iter().sorted_by_key(|(uuid, _)| **uuid))
-            .flat_map(|(_, rays)| rays.hit_points())
+            .flat_map(|bounced| bounced.hit_map.values())
+            .flat_map(RaysHitMap::hit_points)
             .map(HitPoint::energy)
             .fold(joule!(0.0), |total, energy| total + energy)
     }
     /// returns a reference to the `critical_fluence` field of this [`HitMap`] which contains:
     /// - the uuid of the ray bundle that causes this critical fluence on this surface as key
     /// - a tuple containing the calculated peak fluence, the index of the position history and the bounce level which can be used to reconstruct the ray-propagation plot later on
+    ///
+    /// The bundles stand in the order their critical fluences were found.
     #[must_use]
-    pub fn critical_fluences(&self) -> &HashMap<Uuid, (Fluence, usize, usize)> {
+    pub const fn critical_fluences(&self) -> &IndexMap<Uuid, (Fluence, usize, usize)> {
         &self.critical_fluence
     }
 
@@ -194,34 +195,8 @@ impl HitMap {
         merged_rays_hit_map
     }
 
-    /// Returns the 'bounding box' of this hitmap, meaning the minimum and maximum position values in x and y
-    #[must_use]
-    pub fn get_bounding_box(&self) -> (Range<Length>, Range<Length>) {
-        let mut x_min = meter!(0.);
-        let mut x_max = meter!(0.);
-        let mut y_min = meter!(0.);
-        let mut y_max = meter!(0.);
-        let mut count = 0;
-        for bounced_hit_map in &self.hit_map {
-            for hit_map in bounced_hit_map.hit_map.values() {
-                if count == 0 {
-                    (x_min, x_max) = *hit_map.x_lims();
-                    (y_min, y_max) = *hit_map.y_lims();
-                } else {
-                    let x_lims = hit_map.x_lims();
-                    let y_lims = hit_map.y_lims();
-                    x_min = x_min.min(x_lims.0);
-                    x_max = x_max.max(x_lims.1);
-                    y_min = y_min.min(y_lims.0);
-                    y_max = y_max.max(y_lims.1);
-                }
-                count += 1;
-            }
-        }
-        (x_min..x_max, y_min..y_max)
-    }
-
-    /// Returns the first hitpoint in this [`HitMap`] or None if there is none
+    /// Returns the hits of the first bundle that arrived on this [`HitMap`], at its lowest
+    /// bounce, or None if there is none.
     #[must_use]
     pub fn get_first_hitpoints(&self) -> Option<&[HitPoint]> {
         for bhm in &self.hit_map {
@@ -451,6 +426,7 @@ mod test_hit_map {
     use uuid::Uuid;
 
     use crate::{
+        J_per_cm2,
         core_optics::hit_map::{HitMap, HitPoint, fluence_estimator::FluenceEstimator},
         error::OpmResult,
         joule,
@@ -598,36 +574,6 @@ mod test_hit_map {
     }
 
     #[test]
-    fn get_bounding_box() -> OpmResult<()> {
-        let mut hm = HitMap::default();
-        hm.add_to_hitmap(
-            HitPoint::new(meter!(0.1, 1.0, 0.0), joule!(1.0))?,
-            1,
-            Uuid::new_v4(),
-            None,
-        )?;
-        hm.add_to_hitmap(
-            HitPoint::new(meter!(-20.0, 20.0, 0.0), joule!(1.0))?,
-            1,
-            Uuid::new_v4(),
-            None,
-        )?;
-        hm.add_to_hitmap(
-            HitPoint::new(meter!(3.210, 0.0, 0.0), joule!(1.0))?,
-            0,
-            Uuid::new_v4(),
-            None,
-        )?;
-
-        let (x_range, y_range) = hm.get_bounding_box();
-
-        assert_eq!(x_range.start.value, -20.);
-        assert_eq!(x_range.end.value, 3.21);
-        assert_eq!(y_range.start.value, 0.0);
-        assert_eq!(y_range.end.value, 20.);
-        Ok(())
-    }
-    #[test]
     fn get_first_hitpoints() -> OpmResult<()> {
         let mut hm = HitMap::default();
         hm.add_to_hitmap(
@@ -646,6 +592,27 @@ mod test_hit_map {
         let hm = HitMap::default();
         let hp = hm.get_first_hitpoints();
         assert!(hp.is_none());
+    }
+    /// The bundles of a bounce and the critical fluences keep the order they arrived in, whatever
+    /// their ids, so that everything drawn from them comes out the same in every run.
+    #[test]
+    fn bundles_keep_the_order_they_arrived_in() -> OpmResult<()> {
+        let mut hm = HitMap::default();
+        let uuids = [5_u128, 2, 7, 0, 3, 6, 1, 4].map(Uuid::from_u128);
+        for (x, uuid) in (0_u8..).zip(uuids) {
+            hm.add_to_hitmap(
+                HitPoint::new(meter!(f64::from(x), 0.0, 0.0), joule!(1.0))?,
+                0,
+                uuid,
+                None,
+            )?;
+            hm.add_critical_fluence(uuid, 0, J_per_cm2!(1.0), 0);
+        }
+        assert!(hm.hit_map()[0].hit_map().keys().copied().eq(uuids));
+        assert!(hm.critical_fluences().keys().copied().eq(uuids));
+        let first = hm.get_first_hitpoints().map(|hits| hits[0].position().x);
+        assert_eq!(first, Some(meter!(0.0)));
+        Ok(())
     }
 
     /// Adds hits at the given points, at bounce 1, of a bundle spanning the ray tubes between
