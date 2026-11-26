@@ -1,79 +1,104 @@
 # Fluence uncertainty
 
-This page derives the error estimates a [fluence detector](../nodes/fluence_detector.md) reports with its property `error estimates` switched on, for the Voronoi estimator: the map `Fluence uncertainty` of how far the fluence may lie from the map between the rays, and `Peak fluence uncertainty`, how far the peak of the fluence may lie above the peak of the map. It states exactly what they promise and what they do not. [Fluence calculations](../../concepts/fluence.md#uncertainty) describes them without the mathematics.
+This page explains where the error of a Voronoi fluence map comes from, and how a [fluence detector](../nodes/fluence_detector.md) estimates it with its property `error estimates` switched on: the map `Fluence uncertainty` and the value `Peak fluence uncertainty`. [Fluence calculations](../../concepts/fluence.md#uncertainty) describes the same in words.
 
-The map follows the ray tubes the source spans (see [Fluence from ray tubes](../../concepts/fluence.md#fluence-from-ray-tubes)): it knows the fluence at the corners of the tubes and runs linearly between them.
+## In short
 
-## Notation
+- The map knows the fluence at the rays and runs straight between them: in each ray tube it is the flat plane through the values at the three corners. A curved fluence bulges away from that plane. The gap grows with the curvature of the fluence and with the square of the spacing of the rays.
+- At the peak of a Gaussian beam, with the rays $h$ apart, the map lies up to about $(h/\sigma)^2/6$ of the peak too low: 4 % for $h = \sigma/2$.
+- OPOSSUM measures the curvature at every ray from the values of its neighbors and puts back the bulge the plane misses. That is `Fluence uncertainty`.
+- What the estimate leaves is one power of the spacing smaller. Halving the spacing shrinks the gap about fourfold, and what the estimate leaves about eightfold. For a fluence shaped like a paraboloid, the estimate is exact.
+- The peak of the map never lies above the real peak. `Peak fluence uncertainty` tells how far the real peak lies above it. It is an estimate, not a guaranteed bound.
+- Not covered: the values at the rays themselves behind optics, the edges of the light, the outermost ring of a beam, folds and overlapping light, and anything finer than the spacing of the rays.
 
-Let $f$ be the fluence on the surface. An alive tube $T$ has the corners $x_0, x_1, x_2$, the edges $e_{ij} = x_i - x_j$ and the size $h = \max_{i<j} |e_{ij}|$. A point $x$ of $T$ has the barycentric coordinates $\lambda_i \ge 0$ with $\sum_i \lambda_i = 1$ and $\sum_i \lambda_i x_i = x$. In $T$ the map is the linear interpolation $L(x) = \sum_i \lambda_i F_i$ of the values $F_i$ at the corners. $\|D^2 f\|$ and $\|D^3 f\|$ are the largest second and third derivatives of $f$, as the norms of the symmetric bilinear and trilinear forms, over the region in question.
+## Where the error comes from
 
-## Assumptions
+![How the map deviates from the light, and how the estimate tries to catch it](../../images/fluence_uncertainty_estimate.svg)
 
-- **A1** On the alive tubes of a sheet, $f$ is three times continuously differentiable.
-- **A2** The values at the corners are values of the fluence: $F_i = f(x_i)$. Without optics between the source and the surface this holds exactly, since an analysis gives each ray the value of its source's distribution times the area it stands for (see [The value at a corner](../../concepts/fluence.md#the-value-at-a-corner)). Behind optics it holds only approximately (see the limits below).
-- **A3** The light does not fold over itself on the surface (see [Folds and caustics](../../concepts/fluence.md#folds-and-caustics)).
-- **A4** The light forms one sheet. Overlapping sheets add up point by point, and their estimates with them.
+*The figure from [Fluence calculations](../../concepts/fluence.md#uncertainty): a cut through a Gaussian beam, with rays one σ apart.*
 
-## Theorem 1: error of the linear interpolation
+### Between two rays
 
-Under A1 and A2, for every point $x$ of $T$
+Take a cut through the light along one edge of a tube, from a ray at $x_0$ to a ray at $x_1 = x_0 + h$. The map draws the straight line $L$ through the fluence at the two rays. Subtract that line from the fluence $f$. What remains is zero at both rays, and it has the curvature $f''$ of the fluence, since a straight line has none. If the curvature is constant, the only such function is a parabola:
 
-$$f(x) - L(x) = -\frac{1}{2}\sum_{i<j}\lambda_i\lambda_j\, e_{ij}^\top D^2 f(x)\, e_{ij} + R(x), \qquad |R(x)| \le \frac{1}{6}\,\|D^3 f\|\,h^3 .$$
+$$f(x) - L(x) = -\tfrac{1}{2}\, f''\,(x - x_0)(x_1 - x) .$$
 
-*Proof.* Let $y_i = x_i - x$. Taylor's theorem along the segment from $x$ to $x_i$, which lies in $T$, gives $f(x_i) = f(x) + \nabla f(x)\cdot y_i + \frac{1}{2}\,y_i^\top D^2 f(x)\, y_i + r_i$ with $|r_i| \le \frac{1}{6}\|D^3 f\|\,|y_i|^3 \le \frac{1}{6}\|D^3 f\|\,h^3$, since no point of a triangle lies farther than its longest edge from a corner. Weighted by $\lambda_i$ and summed, the first term gives $f(x)$, and the second vanishes because $\sum_i \lambda_i y_i = 0$. For the third, take any symmetric matrix $A$. Since $\sum_i \lambda_i = 1$ and $\sum_i \lambda_i y_i = 0$,
+The gap is largest in the middle of the tube, $-f''h^2/8$. Where the light bends down, as at a peak ($f'' < 0$), the map lies below it. Where the light bends up, as in the wings of a beam, the map lies above it. At the peak $f_\mathrm{peak}$ of a Gaussian beam, $f'' = -f_\mathrm{peak}/\sigma^2$, so along the cut the map lies up to $f_\mathrm{peak}\,h^2/(8\sigma^2)$ too low.
 
-$$\sum_{i,j}\lambda_i\lambda_j\,(y_i - y_j)^\top A\,(y_i - y_j) = 2\sum_i \lambda_i\, y_i^\top A\, y_i - 2\Big(\sum_i \lambda_i y_i\Big)^\top A\,\Big(\sum_j \lambda_j y_j\Big) = 2\sum_i \lambda_i\, y_i^\top A\, y_i ,$$
+In a real beam the curvature changes a little across the tube, by about the third derivative times the spacing, $f''' h$. This adds a remainder of the order $f''' h^3$, one power of $h$ smaller than the gap. For a fluence shaped like a parabola it vanishes.
 
-and since $y_i - y_j = e_{ij}$, the left side is $2\sum_{i<j}\lambda_i\lambda_j\, e_{ij}^\top A\, e_{ij}$. So $L(x) = \sum_i \lambda_i f(x_i) = f(x) + \frac{1}{2}\sum_{i<j}\lambda_i\lambda_j\, e_{ij}^\top D^2 f(x)\, e_{ij} + \sum_i \lambda_i r_i$, which is the statement with $R = -\sum_i \lambda_i r_i$. $\square$
+### In a tube
 
-For a quadratic fluence $D^3 f = 0$, so $R = 0$ and the formula is exact.
+On the surface a tube is a triangle with the corners $x_0, x_1, x_2$, and the map is the flat plane through the fluence at the corners. Expand the fluence around a point $x$ of the tube: a constant, a slope, a curvature, and higher terms. A plane through three points reproduces the constant and the slope exactly. What it cannot follow is the curvature, so the gap is again set by the curvature. A short calculation sums it up edge by edge:
 
-## Theorem 2: curvature at a corner
+$$f(x) - L(x) \approx -\frac{1}{2}\sum_{i<j}\lambda_i\lambda_j\; e_{ij}^\top H\, e_{ij} .$$
 
-Let a corner $x_0$ share alive tubes with the neighbors $x_1, \dots, x_m$. Let $d_k = x_k - x_0$, $\Delta_k = F_k - F_0$, $s = \max_k |d_k|$ and $\delta_k = d_k / s$. OPOSSUM fits $\Delta_k \approx g\cdot d_k + \frac{1}{2}\, d_k^\top \hat H\, d_k$ by least squares in five unknowns, the gradient $g$ and the symmetric matrix $\hat H$. The fit has the $m \times 5$ matrix $M$ with the rows $\big(\delta_{k,x},\ \delta_{k,y},\ \frac{1}{2}\delta_{k,x}^2,\ \delta_{k,x}\delta_{k,y},\ \frac{1}{2}\delta_{k,y}^2\big)$, and the unknowns $(s\,g,\ s^2 \hat H_{xx},\ s^2 \hat H_{xy},\ s^2 \hat H_{yy})$. Its solution is unique if $M$ has rank 5, which needs $m \ge 5$. OPOSSUM gives a corner no curvature unless the smallest singular value $\sigma_{\min}$ of $M$ exceeds $10^{-10}$ times the largest. Under A2:
+Here $e_{ij} = x_i - x_j$ are the edges, $H$ is the curvature of the fluence, the matrix of its second derivatives, and $\lambda_i$ are the weights of the point between the corners (its barycentric coordinates). $\lambda_i$ is 1 at corner $i$, 0 on the edge opposite to it, and the three add up to 1. $e^\top H e$ is the curvature along an edge times its length squared. The weight $\lambda_i\lambda_j$ makes each edge count most in the middle of the tube and not at all at the corners. On an edge, where the third weight is 0, the sum is the cut above.
 
-1. If $f$ is quadratic, its gradient and Hessian at $x_0$ fit the $\Delta_k$ without residual, so the unique least-squares solution is exact: $\hat H = D^2 f$.
-2. Under A1, the $\Delta_k$ equal $\nabla f(x_0)\cdot d_k + \frac{1}{2}\, d_k^\top D^2 f(x_0)\, d_k + \rho_k$ with $|\rho_k| \le \frac{1}{6}\|D^3 f\|\, s^3$, by Taylor's theorem along the edge from $x_0$ to $x_k$. The least-squares solution is linear in the data, so the error of the fit is the least-squares solution for the $\rho_k$ alone, of length at most $|\rho| / \sigma_{\min} \le \sqrt{m}\,\|D^3 f\|\, s^3 / (6\,\sigma_{\min})$. Dividing by $s^2$, every entry of $\hat H - D^2 f(x_0)$ is at most
+In the middle of a tube with three equal edges $h$, and a curvature that is the same in all directions, the sum gives $-f''h^2/6$. At the peak of a Gaussian beam, the map therefore lies up to $(h/\sigma)^2/6$ of the peak too low. It lies that low when the peak sits in the middle of a tube; when the peak sits right on a ray, the map gets it exactly. As before, the curvature changes across the tube, which adds a remainder of the order $f''' h^3$.
 
-$$\frac{\sqrt{m}}{6\,\sigma_{\min}}\,\|D^3 f\|\, s .$$
+## Measuring the curvature
 
-The factor $\sqrt{m}/(6\,\sigma_{\min})$ depends on the shape of the neighborhood, not on its size.
+Between the rays the fluence is not known, and neither is its curvature. OPOSSUM measures it from the rays. At each ray, it fits a paraboloid through the values $F_k$ of its neighbors:
+
+$$F_k - F_0 \approx g\cdot d_k + \tfrac{1}{2}\, d_k^\top \hat H\, d_k .$$
+
+Here $F_0$ is the value at the ray, $d_k$ the step from the ray to its neighbor $k$, $g$ the slope and $\hat H$ the measured curvature. These are five unknowns, two slopes and three curvatures, so a ray needs at least five neighbors, which have to lie around it, not along a line. On a hexagonal grid a ray has six. The fit is least squares, and OPOSSUM measures no curvature at a ray whose neighbors pin the five unknowns down too weakly.
+
+- If the fluence is a paraboloid, the fit matches it exactly: $\hat H = H$.
+- Otherwise the third derivative bends the values of the neighbors away from the paraboloid, by about $f''' s^3$, where $s$ is the distance to the farthest neighbor. It takes a division by $s^2$ to turn values into a curvature, so the measured curvature is off by about $f''' s$. The factor in front depends on how well the neighbors surround the ray, not on how far apart they are.
 
 ## The estimate
 
-In each alive tube $T$, OPOSSUM takes $\hat H_T$, the mean of $\hat H$ over those of its corners that have one, and draws
+In each tube, OPOSSUM takes the mean $\hat H_T$ of the curvatures measured at its corners and puts it into the formula of the gap:
 
-$$\hat e(x) = -\frac{1}{2}\sum_{i<j}\lambda_i\lambda_j\, e_{ij}^\top \hat H_T\, e_{ij}$$
+$$\hat e(x) = -\frac{1}{2}\sum_{i<j}\lambda_i\lambda_j\; e_{ij}^\top \hat H_T\, e_{ij} .$$
 
-onto the points of the map, where overlapping tubes add up as in the map. By Theorem 1, and since $\sum_{i<j}\lambda_i\lambda_j \le \frac{1}{3}$ and $|e_{ij}| \le h$,
+Drawn onto the pixels of the map, this is `Fluence uncertainty`. Where tubes overlap, their estimates add up, as the map does.
 
-$$\big|f(x) - L(x) - \hat e(x)\big| \le \frac{h^2}{6}\,\big\|D^2 f(x) - \hat H_T\big\| + \frac{1}{6}\,\|D^3 f\|\,h^3 .$$
+The gap of the map is of the order $f'' h^2$. The estimate misses two things:
 
-At each corner $x_c$ of $T$, $\|D^2 f(x) - D^2 f(x_c)\| \le \|D^3 f\|\,h$, and by Theorem 2 $\|D^2 f(x_c) - \hat H_c\| \le 2\,C\,\|D^3 f\|\,s$, where $C$ is the largest $\sqrt{m}/(6\,\sigma_{\min})$ and $s$ the largest step of the corners of $T$, and the factor 2 turns the bound on the entries of a symmetric $2 \times 2$ matrix into one on its norm. So
+- the remainder of the formula, from the curvature changing across the tube, of the order $f''' h^3$;
+- the error of the curvature it uses: the fit is off by about $f''' s$, and the curvature at the corners differs from that inside the tube by about $f''' h$. Both are multiplied by the $h^2$ of the formula.
 
-$$\big|f(x) - L(x) - \hat e(x)\big| \le \frac{1}{6}\,\|D^3 f\|\,\big(2h^3 + 2\,C\,h^2 s\big) ,$$
+So what the estimate leaves is of the order $f''' h^3$, one power of the spacing smaller than the gap. Halving the spacing of the rays shrinks the gap about fourfold, and what the estimate leaves about eightfold. For a Gaussian beam with σ = 2 mm, its peak 1 mm off the axis, sampled by hexapolar rings out to 8 mm:
 
-of the order $h^3$. The estimate catches the leading part of the deviation, of the order $h^2$; what it misses is one order smaller. For a quadratic fluence it is exact.
+| rings | ray spacing | largest gap of the map within 2σ | left after the estimate |
+|------:|------------:|---------------------------------:|------------------------:|
+|     7 |      1.1 mm |                      0.188 J/cm² |              0.040 J/cm² |
+|    14 |     0.57 mm |                      0.062 J/cm² |             0.0044 J/cm² |
+|    28 |     0.29 mm |                      0.018 J/cm² |             0.0006 J/cm² |
 
 ## The peak
 
-Let $P$ be the peak of the map, its highest value over its points $y_k$, spaced $h_r$ apart along both axes. The report gives
+The peak $P$ of the map is the highest of its pixels.
 
-$$U = \max\Big(0,\ \max_k \big(L(y_k) + \hat e(y_k)\big) - P\Big).$$
+**The peak of the map never lies above the real peak.** Inside a tube, the plane is a weighted mean of the values at the three corners, so it never exceeds the largest of them, and those are values of the real fluence. The map can cut a peak off, but it cannot invent a higher one. This needs the values at the rays to be right, and each pixel to lie in one tube only (see the limits below).
 
-- *The peak of the map does not lie above the peak of the fluence.* Under A2 to A4, every point of the map lies in at most one alive tube or margin, unless a margin reaches across a gap narrower than a tube onto another margin or tube. In a tube the map is an average of corner values, so $L \le \max_i F_i = \max_i f(x_i)$, and a margin carries the values of its edge. Hence $P \le \max f$.
-- *The peak of the fluence lies above that of the map by about $U$.* Let the peak of $f$ lie at $x^*$, inside alive tubes that have an estimate and at least $h_r/\sqrt{2}$ from their outer edge, and let $y^*$ be the point of the map nearest to it, so that $|x^* - y^*| \le h_r/\sqrt{2}$ and $y^*$ lies in those tubes too. Since $\nabla f(x^*) = 0$, Taylor's theorem gives $f(x^*) - f(y^*) \le \frac{1}{2}\|D^2 f\|\,|x^* - y^*|^2 \le \frac{1}{4}\|D^2 f\|\,h_r^2$. With the bound $\varepsilon$ of the estimate above, $f(y^*) \le L(y^*) + \hat e(y^*) + \varepsilon \le P + U + \varepsilon$. Together:
+**How far the real peak lies above.** The report gives the highest point of the map with the estimate added, minus the peak of the map, and never less than zero:
 
-$$P \;\le\; \max f \;\le\; P + U + \varepsilon + \tfrac{1}{4}\,\|D^2 f\|\,h_r^2 .$$
+$$U = \max\big(L + \hat e\big) - P .$$
 
-$U$ is therefore an estimate, not a bound: the peak of the fluence can lie above $P + U$ by a remainder of the third order in the spacing of the rays and of the second order in the spacing of the map. For a Gaussian beam with σ = 2 mm, sampled by 7 hexapolar rings out to 8 mm, rays about 1.1 mm apart, with its peak 1 mm off the axis, the peak of the map lies 0.187 J/cm² below that of the beam. $U$ = 0.148 J/cm² closes 79 % of the gap; the remaining 0.039 J/cm² is the remainder. Halving the spacing of the rays shrinks the largest deviation of the map within 2σ about fourfold, and what the estimate leaves about eightfold: 0.188, 0.062 and 0.018 J/cm², against 0.040, 0.0044 and 0.0006 J/cm², for 7, 14 and 28 rings.
+The real peak then lies about $U$ above the peak of the map:
 
-## Limits
+$$P \;\le\; \text{real peak} \;\approx\; P + U .$$
 
-- Behind optics, A2 holds only approximately. A corner's value divides by the growth $D_{det}/D_{src}$ of its alive tubes, an average over the tubes around it rather than the magnification at the ray itself. Its error is of the first order in $h$, and of the second where the tubes lie point-symmetrically around the corner. $U$ does not contain it.
-- Margins have no estimate: A1 fails there, because the light ends. Where it ends is known to half a tube, which `Energy in edge margins` tells.
-- A corner with fewer than five neighbors along alive tubes, or with a fit of rank below five, has no curvature, as on the outermost ring of a beam. Its tubes use the mean over their other corners, which is taken from further inside and can overshoot where the curvature changes fast; the cut in [Too few rays](../../concepts/fluence.md#too-few-rays) shows this at 7.5 mm. A tube none of whose corners has a curvature has no estimate.
-- Where the light folds over itself (A3), where sheets overlap (A4), or where a margin reaches across a gap narrower than a tube, $P \le \max f$ need not hold.
-- Nothing finer than the rays is seen. The bounds above are small only if $h\,\|D^3 f\|$ is small against $\|D^2 f\|$, that is if the light changes little from one ray to the next. A structure narrower than the spacing of the rays shows in no estimate built from them.
-- The estimate is made for Voronoi maps only; KDE and binning report none.
+The "about" is why $U$ is an estimate and not a bound. Two things remain: what the estimate leaves, of the order $f''' h^3$, and the pixels of the map. The real peak may lie between two pixels, where the map, even corrected, misses it by up to a quarter of the curvature times the squared pixel spacing.
+
+For the Gaussian beam with 7 rings above, the peak of the map lies 0.187 J/cm² below that of the beam. $U$ = 0.148 J/cm² closes 79 % of that; 0.039 J/cm² remain.
+
+## What the estimate rests on
+
+- The fluence is smooth inside the alive tubes.
+- The values at the rays are the real fluence there. Without optics between the source and the surface, this holds exactly, since an analysis gives each ray the value of its source's distribution times the area it stands for (see [The value at a corner](../../concepts/fluence.md#the-value-at-a-corner)). Behind optics it holds only approximately (see below).
+- The light does not fold over itself on the surface (see [Folds and caustics](../../concepts/fluence.md#folds-and-caustics)).
+- The light forms one sheet. Where sheets overlap, their maps add up, and their estimates with them.
+
+## What it does not cover
+
+- **The values at the rays behind optics.** A ray's value is divided by how much its tubes spread out on the way, $D_{det}/D_{src}$. That spread is averaged over the tubes around the ray, not taken at the ray itself. The resulting error is of the first order in $h$, and of the second where the tubes lie symmetrically around the ray. $U$ does not contain it.
+- **The edges of the light.** Margins have no estimate, because the light ends there and is not smooth. Where it ends is known only to half a tube; `Energy in edge margins` tells how much energy lies in that uncertain strip.
+- **The outermost ring of a beam.** A ray with fewer than five neighbors, or with neighbors that do not surround it, gets no curvature. Its tubes take the mean over their other corners, which are measured further inside. That can overshoot where the curvature changes fast, as at 7.5 mm in the cut under [Too few rays](../../concepts/fluence.md#too-few-rays). A tube with no measured corner has no estimate.
+- **Folds and overlapping light.** Where the light folds over itself, where sheets overlap, or where a margin reaches across a gap narrower than a tube onto other light, the peak of the map can lie above the real peak.
+- **Anything finer than the rays.** The estimate works if the light changes little from one ray to the next, that is, if $f''' h$ is small compared to $f''$. A structure narrower than the spacing of the rays does not show in their values, and no estimate built from them can see it.
+- **Other estimators.** Only Voronoi maps get an estimate; KDE and binning report none.
