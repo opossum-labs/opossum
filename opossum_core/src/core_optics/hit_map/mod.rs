@@ -20,10 +20,7 @@ mod ray_tubes;
 pub mod rays_hit_map;
 
 use crate::{
-    error::OpmResult,
-    joule,
-    light::RaySource,
-    nodes::fluence_detector::{Fluence, fluence_data::FluenceData},
+    error::OpmResult, joule, light::RaySource, nodes::fluence_detector::fluence_data::FluenceData,
     properties::Proptype,
 };
 use fluence_estimator::FluenceEstimator;
@@ -83,8 +80,8 @@ impl BouncedHitMap {
 pub struct HitMap {
     /// Stores the hitpoints of the rays on this surface, separated by their bounce level and the individual ray bundle
     hit_map: Vec<BouncedHitMap>,
-    /// Stores the fluence, position in the history of the ray bundles that create a critical fluence on this surface and the bounce level. key value is the uuid of the ray bundle
-    critical_fluence: IndexMap<Uuid, (Fluence, usize, usize)>,
+    /// Stores the fluence map and the position in the history of the ray bundles that create a critical fluence on this surface. key value is the uuid of the ray bundle
+    critical_fluence: IndexMap<Uuid, (FluenceData, usize)>,
 }
 impl HitMap {
     /// Returns a reference to the hit map of this [`HitMap`].
@@ -148,24 +145,23 @@ impl HitMap {
     }
     /// returns a reference to the `critical_fluence` field of this [`HitMap`] which contains:
     /// - the uuid of the ray bundle that causes this critical fluence on this surface as key
-    /// - a tuple containing the calculated peak fluence, the index of the position history and the bounce level which can be used to reconstruct the ray-propagation plot later on
+    /// - a tuple containing the fluence map whose peak is critical and the index of the position history, which can be used to reconstruct the ray-propagation plot later on
     ///
     /// The bundles stand in the order their critical fluences were found.
     #[must_use]
-    pub const fn critical_fluences(&self) -> &IndexMap<Uuid, (Fluence, usize, usize)> {
+    pub const fn critical_fluences(&self) -> &IndexMap<Uuid, (FluenceData, usize)> {
         &self.critical_fluence
     }
 
-    ///stores a critical fluence in a hitmap
-    pub fn add_critical_fluence(
-        &mut self,
-        uuid: Uuid,
-        rays_hist_pos: usize,
-        fluence: Fluence,
-        bounce: usize,
-    ) {
-        self.critical_fluence
-            .insert(uuid, (fluence, rays_hist_pos, bounce));
+    /// Stores a critical fluence in this [`HitMap`].
+    ///
+    /// # Arguments
+    ///
+    /// * `uuid` - the bundle whose fluence is critical.
+    /// * `rays_hist_pos` - the position of the bundle in the ray history.
+    /// * `map` - the fluence map of the bundle on this surface, whose peak is critical.
+    pub fn add_critical_fluence(&mut self, uuid: Uuid, rays_hist_pos: usize, map: FluenceData) {
+        self.critical_fluence.insert(uuid, (map, rays_hist_pos));
     }
 
     ///returns a reference to a [`RaysHitMap`] in this [`HitMap`]
@@ -432,9 +428,12 @@ mod test_hit_map {
         joule,
         light::Ray,
         meter, nanometer,
-        nodes::test_helper::helper::rays_along_z_from,
+        nodes::{
+            fluence_detector::fluence_data::FluenceData, test_helper::helper::rays_along_z_from,
+        },
         properties::Proptype,
     };
+    use nalgebra::DMatrix;
     use nalgebra::Point3;
     use uom::si::f64::Length;
 
@@ -599,6 +598,12 @@ mod test_hit_map {
     fn bundles_keep_the_order_they_arrived_in() -> OpmResult<()> {
         let mut hm = HitMap::default();
         let uuids = [5_u128, 2, 7, 0, 3, 6, 1, 4].map(Uuid::from_u128);
+        let map = FluenceData::new(
+            DMatrix::from_element(1, 1, J_per_cm2!(1.0)),
+            meter!(0.0)..meter!(1.0),
+            meter!(0.0)..meter!(1.0),
+            FluenceEstimator::Binning,
+        );
         for (x, uuid) in (0_u8..).zip(uuids) {
             hm.add_to_hitmap(
                 HitPoint::new(meter!(f64::from(x), 0.0, 0.0), joule!(1.0))?,
@@ -606,7 +611,7 @@ mod test_hit_map {
                 uuid,
                 None,
             )?;
-            hm.add_critical_fluence(uuid, 0, J_per_cm2!(1.0), 0);
+            hm.add_critical_fluence(uuid, 0, map.clone());
         }
         assert!(hm.hit_map()[0].hit_map().keys().copied().eq(uuids));
         assert!(hm.critical_fluences().keys().copied().eq(uuids));

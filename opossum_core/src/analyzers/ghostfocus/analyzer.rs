@@ -51,7 +51,7 @@ impl GhostFocusAnalyzer {
                     let critical_positions = hit_map.critical_fluences();
                     let lidt = *surface.lidt();
                     if !critical_positions.is_empty() {
-                        for (i, (rays_uuid, (fluence, hist_idx, bounce))) in
+                        for (i, (rays_uuid, (fluence_data, hist_idx))) in
                             critical_positions.iter().enumerate()
                         {
                             let critical_ghost_hist = GhostFocusHistory::from((
@@ -67,23 +67,13 @@ impl GhostFocusAnalyzer {
                                 "Surface bounces that enabled this fluence",
                                 origin_str.clone().into(),
                             )?;
-                            let fluence_data = hit_map
-                                .get_rays_hit_map(*bounce, *rays_uuid)
-                                .unwrap()
-                                .calc_fluence_map(
-                                    (101, 101),
-                                    self.config().fluence_estimator(),
-                                    None,
-                                    None,
-                                )?;
-
                             hit_map_props.create(
                                 &format!("Peak fluence ({})", fluence_data.estimator()),
-                                "Peak fluence on this surface using Voronoi estimator",
+                                "Peak fluence on this surface",
                                 format!(
                                     "{}J/cm², (LIDT of surface: {}J/cm²)",
                                     format_value_with_prefix(
-                                        fluence.get::<joule_per_square_centimeter>()
+                                        fluence_data.peak().get::<joule_per_square_centimeter>()
                                     ),
                                     format_value_with_prefix(
                                         lidt.get::<joule_per_square_centimeter>()
@@ -99,7 +89,7 @@ impl GhostFocusAnalyzer {
                             hit_map_props.create(
                                 "Fluence",
                                 "2D spatial energy distribution",
-                                fluence_data.into(),
+                                fluence_data.clone().into(),
                             )?;
                             let hit_map_report = NodeReport::new(
                                 "surface",
@@ -415,8 +405,10 @@ mod test_ghost_analysis_nested_groups_inversion {
         nodes::{Dummy, Lens, NodeGroup, SourcePort, round_collimated_ray_builder},
         percent,
         prelude::{AnalyzerType, CollimatedSrc, OpmDocument, RayDataSource, RefrIndexConst},
+        properties::{Proptype, proptype::format_value_with_prefix},
         radian,
     };
+    use uom::si::radiant_exposure::joule_per_square_centimeter;
     use uuid::Uuid;
 
     fn create_doc(bounces: usize) -> OpmResult<OpmDocument> {
@@ -686,6 +678,30 @@ mod test_ghost_analysis_nested_groups_inversion {
             report.node_reports().len() > 1,
             "Expected at least one critical fluence node report to be generated"
         );
+        // the peak each critical fluence report names is the peak of the map it shows
+        let critical = report
+            .node_reports()
+            .iter()
+            .filter(|node_report| node_report.node_type() == "surface")
+            .collect::<Vec<_>>();
+        assert!(!critical.is_empty());
+        for node_report in critical {
+            let props = node_report.properties();
+            let Proptype::FluenceData(map) = props.get("Fluence")? else {
+                panic!("a critical fluence report shows its map");
+            };
+            let Proptype::String(peak) =
+                props.get(&format!("Peak fluence ({})", map.estimator()))?
+            else {
+                panic!("a critical fluence report names its peak");
+            };
+            let expected =
+                format_value_with_prefix(map.peak().get::<joule_per_square_centimeter>());
+            assert!(
+                peak.starts_with(&format!("{expected}J/cm²")),
+                "{peak} vs {expected}"
+            );
+        }
         Ok(())
     }
 }

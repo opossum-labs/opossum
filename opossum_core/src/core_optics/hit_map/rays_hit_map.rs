@@ -7,7 +7,7 @@ use crate::{
     kde::Kde,
     light::{RayMesh, RaySource, ray_mesh::RayVertex},
     meter, micrometer,
-    nodes::fluence_detector::{Fluence, fluence_data::FluenceData},
+    nodes::fluence_detector::fluence_data::FluenceData,
     utils::{to_f64, try_f64_to_usize},
 };
 use libm::modf;
@@ -493,20 +493,6 @@ impl RaysHitMap {
                 self.calc_fluence_with_binning(nr_of_points, ax_1_range_opt, ax_2_range_opt)
             }
         }
-    }
-
-    /// Gets the maximum fluence value off this [`RaysHitMap`]: the peak of its fluence map of
-    /// 101 × 101 points.
-    ///
-    /// # Attributes
-    /// -`estimator`: Reference to the [`FluenceEstimator`] that should be used toestimate the fluence value.
-    ///
-    /// # Errors
-    /// This function will return an error if `calc_fluence_map` returns an error.
-    pub fn get_max_fluence(&self, estimator: &FluenceEstimator) -> OpmResult<Fluence> {
-        Ok(self
-            .calc_fluence_map((101, 101), estimator, None, None)?
-            .peak())
     }
 
     /// Returns the hits of this [`RaysHitMap`], in the order they hit.

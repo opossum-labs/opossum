@@ -118,18 +118,6 @@ impl OpticSurface {
     pub const fn hit_map(&self) -> &HitMap {
         &self.hit_map
     }
-    /// Stores a critical fluence in a hitmap
-    fn add_critical_fluence(
-        &mut self,
-        uuid: Uuid,
-        rays_hist_pos: usize,
-        fluence: Fluence,
-        bounce: usize,
-    ) {
-        self.hit_map
-            .add_critical_fluence(uuid, rays_hist_pos, fluence, bounce);
-    }
-
     ///returns a reference to a [`RaysHitMap`] in this [`OpticSurface`]
     #[must_use]
     pub fn get_rays_hit_map(&self, bounce: usize, uuid: Uuid) -> Option<&RaysHitMap> {
@@ -161,25 +149,25 @@ impl OpticSurface {
         self.hit_map.reset();
     }
 
-    /// Evaluate the fluence of a given ray bundle on this surface. If the fluence
-    /// surpasses its lidt, store the critical fluence parameters in the hitmap
+    /// Evaluate the fluence of a given ray bundle on this surface: its fluence map of 101 × 101
+    /// points. If the peak of the map surpasses the lidt, store the map with the critical fluence
+    /// parameters in the hitmap.
     ///
     /// # Errors
     ///
-    /// This function errors on error propagation of `calc_fluence`
+    /// This function does not fail: a map that cannot be computed is warned about, and the
+    /// bundle is left out.
     pub fn evaluate_fluence_of_ray_bundle(
         &mut self,
         rays: &Rays,
         estimator: &FluenceEstimator,
     ) -> OpmResult<()> {
         if let Some(rays_hit_map) = self.get_rays_hit_map(rays.bounce_lvl(), rays.uuid()) {
-            match rays_hit_map.get_max_fluence(estimator) {
-                Ok(peak_fluence) if peak_fluence > self.lidt => self.add_critical_fluence(
-                    rays.uuid(),
-                    rays.ray_history_len(),
-                    peak_fluence,
-                    rays.bounce_lvl(),
-                ),
+            match rays_hit_map.calc_fluence_map((101, 101), estimator, None, None) {
+                Ok(map) if map.peak() > self.lidt => {
+                    self.hit_map
+                        .add_critical_fluence(rays.uuid(), rays.ray_history_len(), map);
+                }
                 Ok(_) => {}
                 Err(error) => warn!(
                     "Could not estimate maximum fluence of ray bundle! Ray bundle will be ignored during calculation: {error}"
@@ -220,7 +208,7 @@ impl Debug for OpticSurface {
 }
 #[cfg(test)]
 mod test {
-    use super::{Face, Isometry, OpticSurface, SurfaceConfig};
+    use super::{Face, FluenceEstimator, HitPoint, Isometry, OpticSurface, SurfaceConfig};
     use crate::{
         J_per_cm2,
         coatings::CoatingType,
@@ -229,8 +217,8 @@ mod test {
         joule,
         light::{Ray, Rays},
         meter, nanometer,
+        nodes::test_helper::helper::rays_along_z_from,
     };
-    use uuid::Uuid;
 
     /// A plane through the origin.
     fn plane() -> Face {
@@ -318,20 +306,36 @@ mod test {
         assert_eq!(os.forward_rays_cache.len(), 0);
         Ok(())
     }
+    /// A bundle whose map peaks above the LIDT of the surface leaves its map there as a critical
+    /// fluence; below the LIDT it leaves nothing.
     #[test]
-    fn add_critical_fluence() -> OpmResult<()> {
+    fn a_bundle_above_the_lidt_leaves_its_map() -> OpmResult<()> {
         let mut os = OpticSurface::from(plane());
-        let uuid = Uuid::new_v4();
-        os.add_critical_fluence(uuid, 1, J_per_cm2!(1.0), 2);
-        let hit_map = os.hit_map();
-        assert!(hit_map.critical_fluences().get(&Uuid::nil()).is_none());
-        let critical_fluence = hit_map
+        let rays = rays_along_z_from(
+            &[
+                meter!(0.0, 0.0, 0.0),
+                meter!(1.0, 0.0, 0.0),
+                meter!(0.0, 1.0, 0.0),
+                meter!(1.0, 1.0, 0.0),
+            ],
+            nanometer!(1000.0),
+        )?;
+        for ray in rays.iter() {
+            let hit = HitPoint::new(ray.position(), ray.energy())?;
+            os.add_to_hit_map(hit, rays.bounce_lvl(), rays.uuid(), None)?;
+        }
+        os.evaluate_fluence_of_ray_bundle(&rays, &FluenceEstimator::Binning)?;
+        assert!(os.hit_map().critical_fluences().is_empty());
+        os.set_lidt(J_per_cm2!(1e-9))?;
+        os.evaluate_fluence_of_ray_bundle(&rays, &FluenceEstimator::Binning)?;
+        let (map, history_position) = os
+            .hit_map()
             .critical_fluences()
-            .get(&uuid)
-            .ok_or(OpossumError::Other("Error getting critical fluence".into()))?;
-        assert_eq!(critical_fluence.0, J_per_cm2!(1.0));
-        assert_eq!(critical_fluence.1, 1);
-        assert_eq!(critical_fluence.2, 2);
+            .get(&rays.uuid())
+            .ok_or(OpossumError::Other("no critical fluence".into()))?;
+        assert!(map.peak() > J_per_cm2!(1e-9));
+        assert_eq!(*map.estimator(), FluenceEstimator::Binning);
+        assert_eq!(*history_position, rays.ray_history_len());
         Ok(())
     }
     #[test]
