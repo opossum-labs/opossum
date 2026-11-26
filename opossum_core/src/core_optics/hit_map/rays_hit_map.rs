@@ -278,8 +278,8 @@ impl RaysHitMap {
     /// Returns the given map of the hits of this [`RaysHitMap`], drawn with
     /// [`RaysHitMap::calc_fluence_with_tubes`], with the estimated deviation of the fluence from it
     /// at each of its points (see [`FluenceData::with_deviation`] and the handbook,
-    /// "Uncertainty"). The estimate fits a curvature at every corner, so a map has it only when
-    /// asked.
+    /// "Fluence uncertainty"). The estimate fits a curvature at every corner, so a map has it only
+    /// when asked.
     ///
     /// # Errors
     /// This function errors if the hits do not all stand in the ray tubes of their sources.
@@ -749,7 +749,7 @@ mod test_rays_hit_map {
         Ok(())
     }
     /// For a quadratic fluence the estimated deviation is exact: the map plus it shows the fluence
-    /// itself, between the rays too (see the handbook, "Uncertainty").
+    /// itself, between the rays too (see the handbook, "Fluence uncertainty").
     #[test]
     fn the_deviation_of_a_quadratic_fluence_is_exact() -> OpmResult<()> {
         let quadratic = |x: f64, y: f64| 0.5f64.mul_add(x * y, 50.0 - 2.0 * x * x - y * y);

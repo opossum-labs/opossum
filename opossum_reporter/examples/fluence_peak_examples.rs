@@ -288,7 +288,7 @@ fn row_through_axis(map: &FluenceData) -> OpmResult<Cut> {
         .collect())
 }
 /// The middle row of the given map plus the deviation of the fluence from it that the map
-/// estimates (see the handbook, "Uncertainty").
+/// estimates (see the handbook, "Fluence uncertainty").
 fn corrected_row_through_axis(map: &FluenceData) -> OpmResult<Cut> {
     let deviation = map
         .deviation()

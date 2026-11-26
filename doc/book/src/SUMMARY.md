@@ -59,3 +59,5 @@
     - [Analyzers](./reference/analyzers.md)
     - [Pump scenarios](./reference/pump_scenarios.md)
     - [Interfacing with external code](./reference/interfacing.md)
+  - [Mathematical derivations](./reference/derivations.md)
+    - [Fluence uncertainty](./reference/derivations/fluence_uncertainty.md)

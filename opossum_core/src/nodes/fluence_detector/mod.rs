@@ -700,7 +700,7 @@ mod test {
     /// The fluence of [`gaussian_beam`] at the given point in mm, in J/cm², from the shape the
     /// source samples, scaled to the given map where the middle ray of the beam arrived: each
     /// corner of the map shows the shape there times one factor (see the handbook,
-    /// "Uncertainty").
+    /// "Fluence uncertainty").
     fn gaussian_fluence(map: &FluenceData, center: f64) -> OpmResult<impl Fn(f64, f64) -> f64> {
         use crate::{degree, millimeter, utils::super_gaussian::SuperGaussianShape};
         let shape = SuperGaussianShape::new(
@@ -757,7 +757,7 @@ mod test {
     }
     /// Halving the spacing of the rays shrinks the deviation of the map from a Gaussian beam about
     /// fourfold, as the second order it is of, and what the estimate leaves about eightfold, as
-    /// the third (see the handbook, "Uncertainty").
+    /// the third (see the handbook, "Fluence uncertainty").
     #[test]
     fn the_estimated_deviation_converges_one_order_faster() -> OpmResult<()> {
         let errors = [7, 14, 28]

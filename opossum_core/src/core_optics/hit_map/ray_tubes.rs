@@ -117,7 +117,7 @@ impl<'a> ArrivedSheet<'a> {
     /// Returns the curvature of the fluence at each corner of this sheet: the Hessian `H` of
     /// `Δ = g·d + ½ dᵀ H d`, fitted by least squares to the steps `d` to the neighbors the corner
     /// shares an alive tube with and the changes `Δ` of the value along them (see the handbook,
-    /// "Uncertainty", which also states when the fit is exact).
+    /// "Fluence uncertainty", which also states when the fit is exact).
     ///
     /// # Arguments
     ///
@@ -154,7 +154,7 @@ impl<'a> ArrivedSheet<'a> {
     /// Returns, for each alive tube of this sheet with a corner that tells the curvature of the
     /// fluence (see [`ArrivedSheet::curvatures`]), its corners on the surface and the curvature
     /// along each of its edges, `eᵀ H e`, the edge opposite the corner of the same index. `H` is
-    /// the mean of the curvatures its corners tell (see the handbook, "Uncertainty").
+    /// the mean of the curvatures its corners tell (see the handbook, "Fluence uncertainty").
     ///
     /// # Arguments
     ///
@@ -346,8 +346,8 @@ pub fn draw_map(
 }
 /// Returns the given map with the estimated deviation of the fluence from it at each of its
 /// points, drawn from sheets of ray tubes, each with the fluence at each of its corners (see
-/// [`ArrivedSheet::deviations`] and the handbook, "Uncertainty"). Overlapping tubes add up as in
-/// the map.
+/// [`ArrivedSheet::deviations`] and the handbook, "Fluence uncertainty"). Overlapping tubes add up
+/// as in the map.
 ///
 /// # Arguments
 ///
@@ -375,7 +375,7 @@ pub fn draw_deviation(
 /// Fits `Δ = g·d + ½ dᵀ H d` by least squares to the given steps `d` from a corner to its
 /// neighbors and the changes `Δ` of the value along them, and returns `H`; `None` if the steps
 /// do not fix all five coefficients, its singular values spreading by more than 10¹⁰ (see the
-/// handbook, "Uncertainty").
+/// handbook, "Fluence uncertainty").
 fn fitted_curvature(steps: &[(Vector2<f64>, f64)]) -> Option<Matrix2<f64>> {
     // the steps measured in the longest of them, so that the columns of the fit are alike in size
     let scale = steps.iter().map(|(d, _)| d.norm()).fold(0.0, f64::max);
@@ -487,7 +487,7 @@ impl FluenceGrid {
     }
     /// Adds the deviation of a quadratic fluence from its linear interpolation over a triangle:
     /// `−½ Σ_{i<j} λ_i λ_j eᵀ H e` over the edges `e` of the triangle, with the barycentric
-    /// coordinates `λ` of each point (see the handbook, "Uncertainty").
+    /// coordinates `λ` of each point (see the handbook, "Fluence uncertainty").
     ///
     /// # Arguments
     ///

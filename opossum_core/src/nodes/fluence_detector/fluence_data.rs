@@ -76,7 +76,7 @@ impl FluenceData {
     }
     /// Returns this [`FluenceData`] with the estimated deviation of the fluence from it at each
     /// of its points, from the curvature of the fluence between the rays: positive where the
-    /// fluence lies above the map (see the handbook, "Uncertainty").
+    /// fluence lies above the map (see the handbook, "Fluence uncertainty").
     ///
     /// # Arguments
     ///
@@ -108,8 +108,8 @@ impl FluenceData {
     }
     /// Returns how far the peak of the fluence may lie above the peak of this [`FluenceData`]:
     /// the highest value of the map plus its estimated deviation, less the peak of the map, and
-    /// zero if that is negative (see the handbook, "Uncertainty", for when the peak of the map
-    /// cannot lie above that of the fluence). `None` for a map that does not follow ray tubes.
+    /// zero if that is negative (see the handbook, "Fluence uncertainty", for when the peak of the
+    /// map cannot lie above that of the fluence). `None` for a map that does not follow ray tubes.
     #[must_use]
     pub fn peak_uncertainty(&self) -> Option<Fluence> {
         let deviation = self.deviation.as_ref()?;
