@@ -582,14 +582,14 @@ mod tests {
     fn the_axis_url_changes_exactly_with_its_digest() {
         let base = "http://localhost:8001";
         assert_eq!(
-            crate::api::scene_axis_url(base, "a", None),
-            crate::api::scene_axis_url(base, "a", None)
+            crate::api::scene_axis_url(base, "a"),
+            crate::api::scene_axis_url(base, "a")
         );
         assert_ne!(
-            crate::api::scene_axis_url(base, "a", None),
-            crate::api::scene_axis_url(base, "b", None)
+            crate::api::scene_axis_url(base, "a"),
+            crate::api::scene_axis_url(base, "b")
         );
-        assert!(crate::api::scene_axis_url(base, "a", None).starts_with(base));
+        assert!(crate::api::scene_axis_url(base, "a").starts_with(base));
     }
 
     /// The same holds for the rays, whose URL is also new for a new number of rays or a new way of
@@ -611,15 +611,15 @@ mod tests {
         assert_ne!(url("a", 500, false), url("a", 500, true));
     }
 
-    /// The axis and the rays follow the analyzer the components were placed after, so their URLs
-    /// name it - and name none when the model is drawn after its default.
+    /// The rays are the light of the analyzer the manifest drew, so their URL names it - and names
+    /// none when the default one is drawn. The axis is the setup's own and names no analyzer.
     #[test]
-    fn the_light_follows_the_analyzer_the_components_were_placed_after() {
+    fn the_rays_follow_the_analyzer_the_manifest_drew() {
         let base = "http://localhost:8001";
         let analyzer = Uuid::new_v4();
         let named = format!("analyzer={analyzer}");
-        assert!(crate::api::scene_axis_url(base, "a", Some(analyzer)).contains(&named));
         assert!(crate::api::scene_rays_url(base, "a", 500, false, Some(analyzer)).contains(&named));
-        assert!(!crate::api::scene_axis_url(base, "a", None).contains("analyzer"));
+        assert!(!crate::api::scene_rays_url(base, "a", 500, false, None).contains("analyzer"));
+        assert!(!crate::api::scene_axis_url(base, "a").contains("analyzer"));
     }
 }

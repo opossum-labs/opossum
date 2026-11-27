@@ -218,16 +218,15 @@ impl OpmDocument {
         config.for_positioning()
     }
 
-    /// Returns the analyzer a drawing of this model follows.
+    /// Returns the analyzer whose light a drawing of this model shows.
     ///
-    /// Two analyses can place the same model differently — another source, another alignment
-    /// wavelength — so a drawing follows the one named. Without a name it follows the first
-    /// analysis whose light is rays, as that one can show its light as well, and the first of all
-    /// only when none has rays.
+    /// Where the setup stands is its own, whichever analyzer examines it; which light is drawn
+    /// through it is the named analyzer's. Without a name it is the first analysis whose light is
+    /// rays, as that one has light to show, and the first of all only when none has rays.
     ///
     /// # Arguments
     ///
-    /// - `analyzer_id`: the analyzer to follow, or `None` to choose one as above
+    /// - `analyzer_id`: the analyzer whose light to draw, or `None` to choose one as above
     ///
     /// # Returns
     ///

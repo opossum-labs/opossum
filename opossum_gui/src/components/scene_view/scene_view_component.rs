@@ -60,8 +60,8 @@ pub fn SceneView() -> Element {
     let mut skipped = use_signal(Vec::<SkippedSceneNode>::new);
     // Why nothing of the model can be drawn, as the last fetch said; `None` while it can be.
     let mut notice = use_signal(|| None::<String>);
-    // The analyzer the last fetch was placed after. The axis and the rays follow the same one, and
-    // the status line names it.
+    // The analyzer whose light the last fetch drew; the status line names it. The placement is the
+    // setup's own, whichever analyzer this is.
     let mut drawn_after = use_signal(|| None::<SceneAnalyzer>);
     // The false colors that analyzer's light is drawn in, for the legend; `None` for one wavelength.
     let mut spectrum = use_signal(|| None::<SceneSpectrum>);
@@ -179,7 +179,7 @@ pub fn SceneView() -> Element {
                     if let Some(axis) = &fetched.axis {
                         list.push(ray_object(
                             AXIS_OBJECT_ID,
-                            api::scene_axis_url(&base_url, axis, analyzer),
+                            api::scene_axis_url(&base_url, axis),
                             controls.beam_axis,
                             // Always solid, whatever the rays are set to: the axis is the single
                             // line the whole setup is built on, and it is one line per source
@@ -398,7 +398,7 @@ pub fn SceneView() -> Element {
                 if let Some(analyzer) = drawn_after() {
                     span {
                         class: "scene-view-analyzer",
-                        title: "The analyzer the 3D view is drawn after. Click to follow another.",
+                        title: "The analyzer whose light the 3D view draws. Click to draw another's.",
                         onclick: move |event: MouseEvent| {
                             let (x, y) = (event.page_coordinates().x, event.page_coordinates().y);
                             spawn(async move {

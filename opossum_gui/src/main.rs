@@ -129,8 +129,8 @@ static SCENE_VIEW_OPEN: GlobalSignal<bool> = Signal::global(|| false);
 /// at its default the next time it is opened.
 static SCENE_VIEW_CONTROLS: GlobalSignal<SceneViewControls> =
     Signal::global(SceneViewControls::default);
-/// The analyzer the user chose for the 3D view to follow, or `None` for the one the model is drawn
-/// after by default.
+/// The analyzer whose light the user chose for the 3D view to draw, or `None` for the one drawn by
+/// default. Where the setup stands does not depend on it.
 ///
 /// Global so that the choice outlives a closed view, like [`SCENE_VIEW_CONTROLS`], but a signal of
 /// its own: the view fetches the model again when it changes, and toggling the table must not.

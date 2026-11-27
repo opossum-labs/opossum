@@ -1014,7 +1014,7 @@ pub struct SkippedSceneNode {
     pub reason: String,
 }
 
-/// The analyzer a 3D view of a model is drawn after.
+/// The analyzer whose light a 3D view of a model draws.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, ToSchema, Eq)]
 pub struct SceneAnalyzer {
     /// The analyzer's UUID, for asking for the same one again.
@@ -1056,18 +1056,17 @@ pub struct SceneManifest {
     /// no longer matches the model.
     #[serde(default)]
     pub notice: Option<String>,
-    /// The analyzer the placement follows, or `None` if the model has none.
+    /// The analyzer whose light is drawn, or `None` if the model has none.
     ///
-    /// Named even when the model cannot be placed after it, so that a viewer can offer to follow
-    /// another one instead.
+    /// Named even when the model cannot be placed, so that a viewer can offer to draw another
+    /// one's light instead.
     #[serde(default)]
     pub analyzer: Option<SceneAnalyzer>,
     /// The false colors the light of the analyzer's sources is drawn in, or `None` if it is drawn
     /// in the colors of its wavelength - light of a single wavelength, or no light at all.
     #[serde(default)]
     pub spectrum: Option<SceneSpectrum>,
-    /// A digest of what the optical axis is served as for the same analyzer, or `None` if the
-    /// model cannot be placed.
+    /// A digest of what the optical axis is served as, or `None` if the model cannot be placed.
     ///
     /// It changes exactly when the axis does, so a viewer that names it in the axis's address
     /// fetches the axis again only then, as `geometry` does for a component.

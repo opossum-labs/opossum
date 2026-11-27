@@ -234,8 +234,8 @@ mod test {
         Ok(())
     }
 
-    /// Traces the light of the analyzer `document` is drawn after as the 3D view does: through
-    /// the model as its positioning run placed it.
+    /// Traces the light of the analyzer whose light `document` draws by default, as the 3D view
+    /// does: through the model as its positioning run placed it.
     fn light_of(
         document: &OpmDocument,
         max_rays: usize,

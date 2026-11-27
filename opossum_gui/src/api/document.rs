@@ -109,8 +109,8 @@ pub async fn post_viewport_change(
 ///
 /// # Arguments
 ///
-/// - `analyzer`: the analyzer to take the placement from, or `None` for the one the model is drawn
-///   after by default
+/// - `analyzer`: the analyzer whose light is drawn, or `None` for the one drawn by default; the
+///   placement is the setup's own, whichever analyzer is named
 /// - `rays`: the most rays drawn and whether each start point shines every wavelength, or `None`
 ///   while no rays are drawn; only then does the manifest digest the rays, which costs a trace
 ///
@@ -168,17 +168,13 @@ pub fn scene_node_url(base_url: &str, uid: Uuid, geometry: &str) -> String {
 ///
 /// - `base_url`: the backend's root, from [`crate::api::http_client::HTTPClient::base_url`]
 /// - `version`: the axis's digest, from the manifest's `axis`
-/// - `analyzer`: the analyzer the components were placed after, so the axis follows the same one
 ///
 /// # Returns
 ///
 /// An absolute URL the webview can fetch.
 #[must_use]
-pub fn scene_axis_url(base_url: &str, version: &str, analyzer: Option<Uuid>) -> String {
-    format!(
-        "{base_url}/api/document/scene/axis.glb?v={version}{}",
-        analyzer_param(analyzer)
-    )
+pub fn scene_axis_url(base_url: &str, version: &str) -> String {
+    format!("{base_url}/api/document/scene/axis.glb?v={version}")
 }
 
 /// The URL the 3D viewer fetches the light of the model's sources from.
@@ -192,7 +188,7 @@ pub fn scene_axis_url(base_url: &str, version: &str, analyzer: Option<Uuid>) -> 
 /// - `version`: the rays' digest, from the manifest's `rays`
 /// - `max_rays`: the most rays drawn, of all sources together; the backend caps it
 /// - `full_spectrum`: whether each start point shines every wavelength rather than one
-/// - `analyzer`: the analyzer the components were placed after, so the rays are its light
+/// - `analyzer`: the analyzer the manifest drew the light of, so the rays are its light
 ///
 /// # Returns
 ///
@@ -207,11 +203,6 @@ pub fn scene_rays_url(
 ) -> String {
     format!(
         "{base_url}/api/document/scene/rays.glb?max_rays={max_rays}&full_spectrum={full_spectrum}&v={version}{}",
-        analyzer_param(analyzer)
+        analyzer.map_or_default(|id| format!("&analyzer={id}"))
     )
-}
-
-/// The query parameter naming `analyzer`, to append after another one; empty for none.
-fn analyzer_param(analyzer: Option<Uuid>) -> String {
-    analyzer.map_or_default(|id| format!("&analyzer={id}"))
 }

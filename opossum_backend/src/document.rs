@@ -212,11 +212,11 @@ fn digest_of(answer: &OpmResult<Vec<u8>>) -> String {
     }
 }
 
-/// The analyzer a 3D view asked to follow, if the document still has it.
+/// The analyzer whose light a 3D view asked to draw, if the document still has it.
 ///
 /// A viewer holds on to its choice while the document changes underneath it: the analyzer may have
 /// been deleted, undone, or belong to a document since loaded over it. A choice that is gone is
-/// dropped, so the view follows the analyzer the model is drawn after by default rather than fail.
+/// dropped, so the view draws the light of the default analyzer rather than fail.
 ///
 /// # Arguments
 ///
@@ -2214,9 +2214,10 @@ pub(crate) mod test {
         *app_state.document.lock().analyzers().keys().next().unwrap()
     }
 
-    /// The manifest names the analyzer it was drawn after, so a viewer can say which one it shows.
+    /// The manifest names the analyzer whose light it draws, so a viewer can say which one it
+    /// shows.
     #[actix_web::test]
-    async fn the_manifest_names_the_analyzer_it_is_drawn_after() {
+    async fn the_manifest_names_the_analyzer_whose_light_it_draws() {
         let app_state = state_with_a_lens();
         let ray_trace = first_analyzer(&app_state);
 
@@ -2228,9 +2229,9 @@ pub(crate) mod test {
         assert_eq!(analyzer.name, "RayTracing");
     }
 
-    /// Named, an analyzer is the one the manifest is drawn after.
+    /// Named, an analyzer is the one whose light the manifest draws.
     #[actix_web::test]
-    async fn the_manifest_is_drawn_after_the_analyzer_named() {
+    async fn the_manifest_draws_the_light_of_the_analyzer_named() {
         let app_state = state_with_a_lens();
         let named = analyze_two_more_ways(&app_state);
 
@@ -2242,7 +2243,7 @@ pub(crate) mod test {
     }
 
     /// A view may still ask for an analyzer that has gone since - deleted, undone, or part of a
-    /// document loaded over it. The model is drawn after the one it follows by default instead.
+    /// document loaded over it. The light of the default analyzer is drawn instead.
     #[actix_web::test]
     async fn an_analyzer_that_is_gone_falls_back_to_the_default() {
         let app_state = state_with_a_lens();
