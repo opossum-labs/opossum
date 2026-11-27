@@ -149,16 +149,19 @@ impl OptimizationModel {
         self.run_preflight_validation();
     }
 
-    /// Initializes or refreshes the model using an extracted backend schema.
+    /// Replaces the whole UI state with the one the backend `schema` describes: its saved
+    /// config if it has one, otherwise an empty default setup.
+    ///
+    /// # Arguments
+    /// * `schema` - The optimization schema of the currently loaded document.
     pub fn populate_from_schema(&mut self, schema: ModelOptimizationSchema) {
         let saved_config = schema.saved_config.clone();
-        self.schema = Some(schema);
-
+        *self = Self {
+            schema: Some(schema),
+            ..Self::default()
+        };
         if let Some(config) = saved_config {
             self.apply_config(&config);
-        } else {
-            self.sync_rows_with_schema();
-            self.run_preflight_validation();
         }
     }
 
