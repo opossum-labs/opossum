@@ -851,7 +851,7 @@ mod tests {
 
         assert_eq!(model.variable_rows.len(), 0);
         assert_eq!(model.operands.len(), 0);
-        assert!(model.validation_issues.is_empty());
+        assert_eq!(model.validation_issues.len(), 0);
         assert_eq!(model.scope_group_id, None);
         assert!(matches!(model.algorithm, OptimizationAlgorithm::Dls { .. }));
     }
