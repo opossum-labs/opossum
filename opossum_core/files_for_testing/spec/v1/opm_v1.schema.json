@@ -4181,6 +4181,109 @@
             "ConnectionDistance"
           ],
           "additionalProperties": false
+        },
+        {
+          "description": "A local alignment degree of freedom on a node (translation in `[m]`, rotation in `[rad]`).",
+          "type": "object",
+          "properties": {
+            "NodeAlignment": {
+              "type": "object",
+              "properties": {
+                "node_id": {
+                  "description": "Unique ID of the target optical node.",
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "axis": {
+                  "description": "Local translation or rotation axis.",
+                  "allOf": [
+                    {
+                      "$ref": "#/definitions/AlignmentAxis"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "node_id",
+                "axis"
+              ]
+            }
+          },
+          "required": [
+            "NodeAlignment"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "AlignmentAxis": {
+      "description": "Define the alignment axes type for the [`Isometry`]",
+      "oneOf": [
+        {
+          "description": "Translation axis",
+          "type": "object",
+          "properties": {
+            "Translation": {
+              "$ref": "#/definitions/TranslationAxis"
+            }
+          },
+          "required": [
+            "Translation"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Rotation Axis",
+          "type": "object",
+          "properties": {
+            "Rotation": {
+              "$ref": "#/definitions/RotationAxis"
+            }
+          },
+          "required": [
+            "Rotation"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "TranslationAxis": {
+      "description": "Define the translation and rotation axes for the [`Isometry`]",
+      "oneOf": [
+        {
+          "description": "The X axis",
+          "type": "string",
+          "const": "X"
+        },
+        {
+          "description": "The Y axis",
+          "type": "string",
+          "const": "Y"
+        },
+        {
+          "description": "The Z axis",
+          "type": "string",
+          "const": "Z"
+        }
+      ]
+    },
+    "RotationAxis": {
+      "description": "Define the rotation axes for the [`Isometry`]",
+      "oneOf": [
+        {
+          "description": "The Roll axis",
+          "type": "string",
+          "const": "Roll"
+        },
+        {
+          "description": "The Pitch axis",
+          "type": "string",
+          "const": "Pitch"
+        },
+        {
+          "description": "The Yaw axis",
+          "type": "string",
+          "const": "Yaw"
         }
       ]
     },

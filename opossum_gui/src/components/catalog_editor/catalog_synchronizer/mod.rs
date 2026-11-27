@@ -338,7 +338,7 @@ pub fn CatalogSynchronizer(
         let usages = active_row.used_by_nodes.clone();
         let mut reg = registry;
 
-        match service::resolve_user_catalog_conflict_rename(&mat, new_name, &mut reg.write()) {
+        match service::resolve_user_catalog_conflict_rename(&mat, &new_name, &mut reg.write()) {
             Ok(created_mat) => {
                 let created_name = created_mat.name().to_string();
                 let created_ver = created_mat.version();

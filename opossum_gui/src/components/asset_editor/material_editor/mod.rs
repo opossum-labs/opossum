@@ -152,13 +152,16 @@ pub fn MaterialEditor(
         format!("Target Version: v{current_version}")
     };
 
-    let save_button_text = if let Some(custom_label) = save_label.as_deref() {
-        custom_label.to_string()
-    } else if is_draft {
-        "Publish to User Catalog".to_string()
-    } else {
-        format!("Overwrite Version {current_version}")
-    };
+    let save_button_text = save_label.as_deref().map_or_else(
+        || {
+            if is_draft {
+                "Publish to User Catalog".to_string()
+            } else {
+                format!("Overwrite Version {current_version}")
+            }
+        },
+        std::string::ToString::to_string,
+    );
 
     let optical_id = format!("{base_id}_optical");
     let thermal_id = format!("{base_id}_thermal");
