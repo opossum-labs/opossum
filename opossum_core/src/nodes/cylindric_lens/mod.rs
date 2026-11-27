@@ -11,7 +11,6 @@ use crate::{
     millimeter,
     nodes::NodeRegistration,
     properties::{Proptype, validator::Validator},
-    refractive_index::RefrIndexConst,
 };
 use log::warn;
 use opm_macros_lib::OpmNode;
@@ -88,17 +87,7 @@ impl Default for CylindricLens {
             )
             .unwrap();
         node_attr
-            .create_property(
-                MATERIAL,
-                "material of the lens",
-                Material::new_draft(
-                    "lens material",
-                    None,
-                    None,
-                    RefrIndexConst::new(1.5).unwrap().into(),
-                )
-                .into(),
-            )
+            .create_property(MATERIAL, "material of the lens", Material::n_bk7().into())
             .unwrap();
         // 20 mm across the curvature (x), 30 mm along the cylinder axis (y)
         let rectangle = RectangleShape::new(millimeter!(20.0), millimeter!(30.0)).unwrap();
@@ -207,6 +196,7 @@ mod test {
         distributions::position::Hexapolar,
         joule,
         light::{LightData, LightResult, Rays},
+        material::RefrIndexConst,
         millimeter, nanometer,
         nodes::test_helper::helper::*,
         properties::{Proptype, proptype::AssetRef},
@@ -243,7 +233,10 @@ mod test {
         else {
             panic!()
         };
-        assert_eq!((*material).get_refractive_index(Length::zero())?, 1.5);
+        assert_eq!(
+            (*material).refractive_index(nanometer!(500.0))?,
+            Material::n_bk7().refractive_index(nanometer!(500.0))?
+        );
         Ok(())
     }
     #[test]
@@ -299,7 +292,7 @@ mod test {
         else {
             panic!()
         };
-        assert_eq!((*material).get_refractive_index(Length::zero())?, 2.0);
+        assert_eq!((*material).refractive_index(Length::zero())?, 2.0);
         Ok(())
     }
     #[test]
