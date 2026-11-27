@@ -1,8 +1,8 @@
 use opossum_core::{
     material::Material,
     types::api_types::{
-        LoadDocumentResponse, PositionUpdate, SceneManifest, UndoRedoResponse, Viewport,
-        ViewportChangeRequest,
+        LoadDocumentResponse, PositionUpdate, PositioningSummary, SceneManifest, UndoRedoResponse,
+        Viewport, ViewportChangeRequest,
     },
 };
 use uuid::Uuid;
@@ -20,6 +20,15 @@ pub async fn delete_document() -> Result<String, String> {
 }
 pub async fn get_document_root_uuid() -> Result<Uuid, String> {
     HTTP_API_CLIENT().get("/api/document/root_uuid").await
+}
+/// Ask what the positioning of the current model found: the connections whose distance placed a
+/// node, and why the positioning stopped, if it did.
+///
+/// # Errors
+///
+/// This function will return an error if the request fails.
+pub async fn get_positioning_summary() -> Result<PositioningSummary, String> {
+    HTTP_API_CLIENT().get("/api/document/positioning").await
 }
 /// Ask for the medium the setup is aligned in, which the model is placed in.
 ///

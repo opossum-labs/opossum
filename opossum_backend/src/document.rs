@@ -26,7 +26,8 @@ use opossum_core::{
     opm_document::{OpmDocument, PositioningRun},
     types::api_types::{
         DocumentChange, ErrorResponse, JumpTarget, LoadDocumentResponse, PositionUpdate,
-        SceneAnalyzer, SceneManifest, UndoRedoResponse, UpdateNodeRequest, ViewportChangeRequest,
+        PositioningSummary, SceneAnalyzer, SceneManifest, UndoRedoResponse, UpdateNodeRequest,
+        ViewportChangeRequest,
     },
 };
 use opossum_scene::{
@@ -370,12 +371,8 @@ async fn get_scene(data: web::Data<AppState>) -> Result<impl Responder, BackEndE
 /// nothing. The rays are traced for their digest only when asked for. The files digested are kept,
 /// and fetched by their digest they are served as built here, without positioning the model again.
 ///
-/// The list also names the connections whose distance placed a node in this positioning, so an
-/// editor can offer the distance of a connection into a reference only where it does something.
-///
 /// A model that cannot be placed is answered with an empty list whose `notice` says why: that is
-/// a state of the model a viewer has to show, not a failed request. The connections that placed a
-/// node before the positioning stopped are listed all the same.
+/// a state of the model a viewer has to show, not a failed request.
 #[utoipa::path(tag = "document",
     params(ManifestQuery),
     responses(
@@ -390,7 +387,7 @@ async fn get_scene_manifest(
 ) -> Result<impl Responder, BackEndErrorResponse> {
     // Only the positioning needs the live model: meshing and tracing its copy must not block every
     // other edit for as long as they take.
-    let (run, analyzer, sources, placing) = {
+    let (run, analyzer, sources) = {
         let document = data.document.lock();
         let asked = analyzer_still_there(&document, query.analyzer);
         let analyzer = document
@@ -401,12 +398,8 @@ async fn get_scene_manifest(
             });
         let sources = drawn_light_sources(&document, asked)?;
         let run = data.last_positioning.lock().run_for(&document);
-        let placing = (*run).as_ref().map_or_else(
-            |_| Vec::new(),
-            |run| connect_infos(document.scenery(), &run.connections_placing_by_distance()),
-        );
         drop(document);
-        (run, analyzer, sources, placing)
+        (run, analyzer, sources)
     };
     // The rays are only traced while a view asks for them.
     let rays = query
@@ -418,9 +411,41 @@ async fn get_scene_manifest(
     *data.last_drawn_light.lock() = drawn;
     Ok(Json(SceneManifest {
         analyzer,
-        connections_placing_by_distance: placing,
         ..manifest
     }))
+}
+
+/// Get what the positioning of the model found
+///
+/// This function answers what an editor shows of the placement without a 3D view: the
+/// connections whose distance placed a node, and why the positioning stopped part way, if it did.
+/// It is the same positioning run the 3D view draws, made once per change of the model.
+///
+/// A distance into a reference usually places nothing, as the reference takes the placement of
+/// the node it refers to, so an editor offers it only where the list names it. A model without a
+/// source port cannot be positioned at all; it lists no connections, and no reason either: that is
+/// a model still being built.
+#[utoipa::path(tag = "document",
+    responses(
+        (status = 200, description = "what the positioning of the model found", body = PositioningSummary)
+    )
+)]
+#[get("/positioning")]
+async fn get_positioning(data: web::Data<AppState>) -> impl Responder {
+    let document = data.document.lock();
+    let run = data.last_positioning.lock().run_for(&document);
+    let summary = (*run).as_ref().map_or_else(
+        |_| PositioningSummary::default(),
+        |run| PositioningSummary {
+            connections_placing_by_distance: Some(connect_infos(
+                document.scenery(),
+                &run.connections_placing_by_distance(),
+            )),
+            stop_reason: run.positioned_scenery().err().map(|e| e.to_string()),
+        },
+    );
+    drop(document);
+    Json(summary)
 }
 
 /// Get one component of the model as a 3D scene
@@ -890,6 +915,7 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(get_root_uuid);
     cfg.service(get_ambient_material);
     cfg.service(patch_ambient_material);
+    cfg.service(get_positioning);
     cfg.service(get_scene);
     cfg.service(get_scene_manifest);
     cfg.service(get_scene_node);
@@ -2055,42 +2081,58 @@ pub(crate) mod test {
         (app_state, root, vec![(first, lens), (second, reference)])
     }
 
-    /// The source and target of every connection `manifest` lists as placing a node.
-    fn placing_pairs(manifest: &SceneManifest) -> Vec<(Uuid, Uuid)> {
-        let mut pairs: Vec<(Uuid, Uuid)> = manifest
+    /// Ask a state what the positioning of its model found.
+    async fn request_positioning(app_state: &Data<AppState>) -> PositioningSummary {
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(web::scope("/document").service(get_positioning)),
+        )
+        .await;
+        let req = test::TestRequest::get()
+            .uri("/document/positioning")
+            .to_request();
+        test::read_body_json(app.call(req).await.unwrap()).await
+    }
+
+    /// The source and target of every connection `summary` lists as placing a node.
+    fn placing_pairs(summary: &PositioningSummary) -> Vec<(Uuid, Uuid)> {
+        let mut pairs: Vec<(Uuid, Uuid)> = summary
             .connections_placing_by_distance
             .iter()
+            .flatten()
             .map(|c| (c.src_uuid(), c.target_uuid()))
             .collect();
         pairs.sort();
         pairs
     }
 
-    /// The manifest lists the connections whose distance placed a node, marked when they lead
+    /// The positioning lists the connections whose distance placed a node, marked when they lead
     /// into a reference: here the one into the lens, and the one into the reference that the
-    /// automatic source stands in front of.
+    /// automatic source stands in front of. It did not stop.
     #[actix_web::test]
-    async fn the_manifest_lists_the_connections_placing_a_node_by_distance() {
+    async fn the_positioning_lists_the_connections_placing_a_node_by_distance() {
         let (app_state, _, mut expected) = state_with_a_source_in_front_of_a_reference();
 
-        let manifest: SceneManifest =
-            test::read_body_json(request_manifest(&app_state, "").await).await;
+        let summary = request_positioning(&app_state).await;
 
         expected.sort();
-        assert_eq!(placing_pairs(&manifest), expected);
+        assert_eq!(placing_pairs(&summary), expected);
         assert!(
-            manifest
+            summary
                 .connections_placing_by_distance
                 .iter()
+                .flatten()
                 .any(opossum_core::types::api_types::ConnectInfo::targets_reference)
         );
+        assert_eq!(summary.stop_reason, None);
     }
 
     /// A positioning that stops part way still lists the connections that placed a node before
-    /// it stopped, next to the notice why: here the one into a forward reference, ahead of a
+    /// it stopped, next to the reason why: here the one into a forward reference, ahead of a
     /// component passed twice in a row, which no ray can follow.
     #[actix_web::test]
-    async fn the_manifest_lists_the_connections_placed_before_a_stop() {
+    async fn the_positioning_lists_the_connections_placed_before_a_stop() {
         use opossum_core::{
             analyzers::{AnalyzerType, RayTraceConfig},
             light::lightdata::ray_data_builder::RayDataBuilder,
@@ -2124,17 +2166,17 @@ pub(crate) mod test {
         let app_state = Data::new(AppState::default());
         *app_state.document.lock() = document;
 
-        let manifest: SceneManifest =
-            test::read_body_json(request_manifest(&app_state, "").await).await;
+        let summary = request_positioning(&app_state).await;
 
-        assert!(manifest.notice.is_some(), "the positioning stops");
-        assert!(placing_pairs(&manifest).contains(&(source, ahead)));
+        let reason = summary.stop_reason.clone().expect("the positioning stops");
+        assert!(reason.contains("passed twice"), "{reason}");
+        assert!(placing_pairs(&summary).contains(&(source, ahead)));
     }
 
-    /// A model that cannot be positioned at all, here for lack of a source port, places nothing by
-    /// any distance: the list is empty, next to the notice why.
+    /// A model that cannot be positioned at all, for lack of a source port, is still being built:
+    /// it lists no connections, and no reason either.
     #[actix_web::test]
-    async fn the_manifest_lists_no_connection_when_the_model_cannot_be_positioned() {
+    async fn a_model_that_cannot_be_positioned_lists_nothing() {
         let (app_state, _, _) = state_with_a_source_in_front_of_a_reference();
         {
             let mut document = app_state.document.lock();
@@ -2143,11 +2185,9 @@ pub(crate) mod test {
             }
         }
 
-        let manifest: SceneManifest =
-            test::read_body_json(request_manifest(&app_state, "").await).await;
+        let summary = request_positioning(&app_state).await;
 
-        assert!(manifest.notice.is_some());
-        assert!(manifest.connections_placing_by_distance.is_empty());
+        assert_eq!(summary, PositioningSummary::default());
     }
 
     /// The light files a manifest digested are served as it built them when asked for by their

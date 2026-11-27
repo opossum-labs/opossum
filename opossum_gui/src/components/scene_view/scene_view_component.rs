@@ -10,11 +10,10 @@ use dioxus_glb_viewer::{
 use opossum_core::types::api_types::{
     AnalyzerItemDto, SceneAnalyzer, SceneManifest, SceneSpectrum, SkippedSceneNode,
 };
-use uuid::Uuid;
 
 use crate::{
-    CONNECTIONS_PLACING_BY_DISTANCE, CONTEXT_MENU, HTTP_API_CLIENT, OPOSSUM_UI_LOGS,
-    SCENE_REVISION, SCENE_VIEW_ANALYZER, SCENE_VIEW_CONTROLS, SCENE_VIEW_REQUEST, api,
+    CONTEXT_MENU, HTTP_API_CLIENT, OPOSSUM_UI_LOGS, SCENE_REVISION, SCENE_VIEW_ANALYZER,
+    SCENE_VIEW_CONTROLS, SCENE_VIEW_REQUEST, api,
     api::eval_action_run,
     components::{
         context_menu::cx_menu::CxMenu,
@@ -28,21 +27,8 @@ use crate::{
             GraphsWorkspaceStateStoreExt,
         },
     },
+    utils::debounce,
 };
-
-/// How long the view waits for the edits to stop before asking for the model again.
-///
-/// Long enough that holding a spinner or dragging a value through a range costs one fetch rather
-/// than dozens, short enough that a single deliberate edit still feels immediate.
-const SETTLE: std::time::Duration = std::time::Duration::from_millis(100);
-
-/// Wait out [`SETTLE`], on whichever platform this is.
-async fn debounce() {
-    #[cfg(feature = "desktop")]
-    tokio::time::sleep(SETTLE).await;
-    #[cfg(not(feature = "desktop"))]
-    gloo_timers::future::sleep(SETTLE).await;
-}
 
 /// Show the model's components in three dimensions.
 ///
@@ -156,17 +142,6 @@ pub fn SceneView() -> Element {
                             "3D view: '{}' could not be drawn: {}",
                             s.name, s.reason
                         ));
-                    }
-                    // The edges take which distances place a node from this positioning rather
-                    // than run one of their own; written only when it differs, so they re-render
-                    // only then.
-                    let placing: HashSet<(Uuid, String)> = fetched
-                        .connections_placing_by_distance
-                        .iter()
-                        .map(|c| (c.src_uuid(), c.src_port().to_owned()))
-                        .collect();
-                    if CONNECTIONS_PLACING_BY_DISTANCE.peek().as_ref() != Some(&placing) {
-                        *CONNECTIONS_PLACING_BY_DISTANCE.write() = Some(placing);
                     }
                     // Handing over a whole new list is the point: the viewer compares it against
                     // what it already draws and moves, reloads or removes only what differs. The

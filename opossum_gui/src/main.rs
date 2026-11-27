@@ -142,15 +142,14 @@ static SCENE_VIEW_ANALYZER: GlobalSignal<Option<Uuid>> = Signal::global(|| None)
 /// only the view itself holds, its model resource or its viewer handle, so a caller outside can do no
 /// more than ask. `None` whenever nothing has been asked for, which is nearly always.
 static SCENE_VIEW_REQUEST: GlobalSignal<Option<SceneViewRequest>> = Signal::global(|| None);
-/// The connections whose distance placed a node when the 3D view last positioned the model, as
-/// pairs of source node and source port, or `None` while no 3D view has positioned the document
-/// loaded.
+/// The connections whose distance placed a node when the model was last positioned, as pairs of
+/// source node and source port, or `None` while the model cannot be positioned - it has no source
+/// port yet - or its positioning has not been fetched.
 ///
 /// Whether the distance of a connection into a reference places anything depends on the whole
-/// model, so only a positioning run can tell. The 3D view runs one anyway, and the edges take its
-/// answer instead of running one of their own: until there is one, every connection into a
-/// reference offers its distance; after it, the answer stays until the view positions the model
-/// again, closed or not.
+/// model, so only a positioning run can tell. The backend runs one per change of the model, and
+/// [`use_positioning`](crate::components::positioning::use_positioning) fetches what it found:
+/// while there is no answer, every connection into a reference offers its distance.
 static CONNECTIONS_PLACING_BY_DISTANCE: GlobalSignal<Option<HashSet<(Uuid, String)>>> =
     Signal::global(|| None);
 /// Set right before a `RevealNode` action whose `bring_to_front` is `false` changes `active_tab`

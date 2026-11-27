@@ -1079,11 +1079,20 @@ pub struct SceneManifest {
     /// `axis`; `None` if no rays were asked for or the model cannot be placed.
     #[serde(default)]
     pub rays: Option<String>,
+}
+
+/// What the positioning run of a model found, for an editor to show without a 3D view.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default, ToSchema)]
+pub struct PositioningSummary {
     /// The connections of the model, those of nested groups included, whose distance placed a
-    /// node in the positioning this manifest follows, also when it stopped part way.
+    /// node, also when the run stopped part way; `None` if the model could not be positioned at
+    /// all, as it has no source port.
     ///
     /// A distance into a reference usually places nothing, as the reference takes the placement
     /// of the node it refers to, so an editor offers it only where this list names it.
     #[serde(default)]
-    pub connections_placing_by_distance: Vec<ConnectInfo>,
+    pub connections_placing_by_distance: Option<Vec<ConnectInfo>>,
+    /// Why the run stopped part way, or `None` if it finished or could not start.
+    #[serde(default)]
+    pub stop_reason: Option<String>,
 }

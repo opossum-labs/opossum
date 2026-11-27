@@ -94,7 +94,8 @@ pub fn use_workspace_processor(
                         *crate::AMP_LIST_REFRESH.write() += 1;
                         *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
                         // A different document altogether - whatever the 3D view shows is gone,
-                        // and no view has positioned this one yet.
+                        // and the positioning of the old one stops applying until the new one's
+                        // is fetched.
                         *crate::SCENE_REVISION.write() += 1;
                         *crate::CONNECTIONS_PLACING_BY_DISTANCE.write() = None;
                     }
@@ -127,7 +128,8 @@ pub fn use_workspace_processor(
                         *crate::AMP_LIST_REFRESH.write() += 1;
                         *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
                         // A different document altogether - whatever the 3D view shows is gone,
-                        // and no view has positioned this one yet.
+                        // and the positioning of the old one stops applying until the new one's
+                        // is fetched.
                         *crate::SCENE_REVISION.write() += 1;
                         *crate::CONNECTIONS_PLACING_BY_DISTANCE.write() = None;
                     }
@@ -143,7 +145,7 @@ pub fn use_workspace_processor(
                         .await;
                         // Clear undo/redo history on initial startup/reset
                         *crate::UNDO_REDO_STATUS.write() = (false, false);
-                        // No view has positioned the new document yet.
+                        // The positioning of the new document has not been fetched yet.
                         *crate::CONNECTIONS_PLACING_BY_DISTANCE.write() = None;
                     }
                     GraphsWorkspaceAction::Refresh { preserve_undo } => {

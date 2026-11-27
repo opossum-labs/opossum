@@ -81,10 +81,10 @@ impl EdgeCreation {
 }
 /// Draw the connections of the graph.
 ///
-/// Which of them place a node by their distance is what the 3D view last found when it positioned
-/// the model (see [`CONNECTIONS_PLACING_BY_DISTANCE`]): whether a distance places a node depends on
-/// the whole model, not on the connection alone. Until a view has positioned the model, every
-/// connection counts as placing one.
+/// Which of them place a node by their distance is what the last positioning of the model found
+/// (see [`CONNECTIONS_PLACING_BY_DISTANCE`]): whether a distance places a node depends on the
+/// whole model, not on the connection alone. While there is no answer, every connection counts as
+/// placing one.
 #[component]
 pub fn EdgesComponent() -> Element {
     let graph_state = use_context::<ReadStore<GraphState>>();

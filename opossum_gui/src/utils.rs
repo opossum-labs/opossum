@@ -1,5 +1,19 @@
 use heck::ToSnakeCase;
 
+/// How long a view waits for the edits to stop before asking for the model again.
+///
+/// Long enough that holding a spinner or dragging a value through a range costs one fetch rather
+/// than dozens, short enough that a single deliberate edit still feels immediate.
+const SETTLE: std::time::Duration = std::time::Duration::from_millis(100);
+
+/// Wait out [`SETTLE`], on whichever platform this is.
+pub async fn debounce() {
+    #[cfg(feature = "desktop")]
+    tokio::time::sleep(SETTLE).await;
+    #[cfg(not(feature = "desktop"))]
+    gloo_timers::future::sleep(SETTLE).await;
+}
+
 /// Extension trait providing sentence case transformation.
 pub trait ToSentenceCase {
     /// Converts a string into sentence case (e.g., `optical_node` -> `Optical node`).
