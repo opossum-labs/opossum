@@ -34,3 +34,4 @@ pub use operand::{
 };
 pub use progress_event::OptimizationProgressEvent;
 pub use variable::{BoxBounds, DEFAULT_DELTA_ABS_MIN, DEFAULT_DELTA_REL, FreeVariable};
+pub use crate::utils::geom_transformation::{AlignmentAxis, RotationAxis, TranslationAxis};

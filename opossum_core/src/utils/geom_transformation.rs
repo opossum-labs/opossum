@@ -697,7 +697,7 @@ mod transform_serde {
 }
 
 /// Define the translation and rotation axes for the [`Isometry`]
-#[derive(Debug, Clone, PartialEq, Eq, Copy, EnumIter)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy, EnumIter, Serialize, Deserialize, JsonSchema)]
 pub enum TranslationAxis {
     /// The X axis
     X,
@@ -708,7 +708,7 @@ pub enum TranslationAxis {
 }
 
 /// Define the rotation axes for the [`Isometry`]
-#[derive(Debug, Clone, PartialEq, Eq, Copy, EnumIter)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy, EnumIter, Serialize, Deserialize, JsonSchema)]
 pub enum RotationAxis {
     /// The Roll axis
     Roll,
@@ -719,12 +719,24 @@ pub enum RotationAxis {
 }
 
 /// Define the alignment axes type for the [`Isometry`]
-#[derive(Debug, Clone, PartialEq, Eq, Copy)]
+#[derive(Debug, Clone, PartialEq, Hash, Eq, Copy, Serialize, Deserialize, JsonSchema)]
 pub enum AlignmentAxis {
     /// Translation axis
     Translation(TranslationAxis),
     /// Rotation Axis
     Rotation(RotationAxis),
+}
+
+impl AlignmentAxis {
+    /// All six local alignment degrees of freedom in canonical order.
+    pub const ALL: [Self; 6] = [
+        Self::Translation(TranslationAxis::X),
+        Self::Translation(TranslationAxis::Y),
+        Self::Translation(TranslationAxis::Z),
+        Self::Rotation(RotationAxis::Pitch),
+        Self::Rotation(RotationAxis::Yaw),
+        Self::Rotation(RotationAxis::Roll),
+    ];
 }
 
 impl Display for AlignmentAxis {

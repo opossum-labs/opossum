@@ -2,17 +2,14 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use opossum_core::{
-    core_optics::{NodeAttrExt, node_attr::HasNodeAttr},
-    nodes::NodeGroup,
-    opm_document::{
+    core_optics::{NodeAttrExt, node_attr::HasNodeAttr}, nodes::{NodeGroup, NodeReference}, opm_document::{
         OpmDocument,
         optimization::{
             DiscoveredAnalyzer, DiscoveredEdgeThicknessNode, DiscoveredObservable,
             DiscoveredVariable, ModelOptimizationSchema, ObservableAddress, ParameterAddress,
             ParameterUnit,
         },
-    },
-    properties::Proptype,
+    }, properties::Proptype, utils::geom_transformation::{AlignmentAxis, Isometry},
 };
 
 pub struct SchemaExtractor;
@@ -210,6 +207,7 @@ impl SchemaExtractor {
                 Self::extract_from_group(sub_group, &current_group_name, node_names, schema);
                 continue;
             }
+            let is_reference_node = node_ref.as_any().is::<NodeReference>();
 
             for (prop_name, prop) in attr.properties() {
                 match prop.prop() {
@@ -253,6 +251,34 @@ impl SchemaExtractor {
                             });
                         }
                     }
+                }
+            }
+            // Expose local alignment degrees of freedom for all non-group, non-reference nodes
+            if !is_reference_node {
+                let alignment = attr.alignment().unwrap_or_else(Isometry::identity);
+                for axis in AlignmentAxis::ALL {
+                    let (initial_value, unit, label) = match axis {
+                        AlignmentAxis::Translation(t_axis) => (
+                            alignment.translation_of_axis(t_axis).value,
+                            Some(ParameterUnit::length()),
+                            format!("Decenter {t_axis}"),
+                        ),
+                        AlignmentAxis::Rotation(r_axis) => (
+                            alignment.rotation_of_axis(r_axis).value,
+                            Some(ParameterUnit::angle_deg()),
+                            format!("Tilt {r_axis}"),
+                        ),
+                    };
+                    schema.controllable_variables.push(DiscoveredVariable {
+                        address: ParameterAddress::NodeAlignment { node_id, axis },
+                        group_id: Some(group_id),
+                        group_name: current_group_name.clone(),
+                        node_name: node_name.clone(),
+                        display_name: label,
+                        initial_value,
+                        is_read_only: false,
+                        unit,
+                    });
                 }
             }
         }
