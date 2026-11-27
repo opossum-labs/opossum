@@ -481,7 +481,7 @@ mod test {
     /// The same rays give the same bytes, so a viewer can tell an unchanged file from a new one.
     #[test]
     fn the_same_rays_give_the_same_file() -> OpmResult<()> {
-        let run = two_lenses(millimeter!(100.0))?.run_positioning(None)?;
+        let run = two_lenses(millimeter!(100.0))?.run_positioning()?;
         let axes = run.optical_axis()?;
         assert!(!axes.is_empty(), "the model has an open output");
         assert_eq!(
@@ -499,13 +499,13 @@ mod test {
         let sources = drawn_light_sources(&document, None)?;
         // Each drawing positions the model anew, as two requests of a viewer do.
         let light_of = |drawing| -> OpmResult<Vec<u8>> {
-            let run = document.run_positioning(None)?;
+            let run = document.run_positioning()?;
             let light = sources
                 .as_ref()
                 .map(|sources| OpmResult::Ok((run.positioned_scenery()?, sources)));
             light_glb(light.transpose()?, 50, drawing)
         };
-        let axis_of = || axis_glb(&document.run_positioning(None)?);
+        let axis_of = || axis_glb(&document.run_positioning()?);
         for drawing in [SpectrumDrawing::Dealt, SpectrumDrawing::Full] {
             let light = light_of(drawing)?;
             assert!(

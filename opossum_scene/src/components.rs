@@ -363,7 +363,7 @@ mod test {
     fn drawing_a_model_leaves_it_alone() -> OpmResult<()> {
         let document = a_bit_of_everything()?;
         let before = document.to_opm_file_string()?;
-        scene_glb(document.run_positioning(None)?.positioned_scenery()?)?;
+        scene_glb(document.run_positioning()?.positioned_scenery()?)?;
         assert_eq!(document.to_opm_file_string()?, before);
         Ok(())
     }
@@ -464,7 +464,7 @@ mod test {
             .node_attr()
             .uuid();
 
-        let run = document.run_positioning(None)?;
+        let run = document.run_positioning()?;
         let from_placed = glb_of_node(&*run.positioned_scenery()?.node_recursive(lens)?.0)?;
 
         assert_eq!(
@@ -485,7 +485,7 @@ mod test {
     #[test]
     fn a_components_own_file_holds_it_at_the_origin() -> OpmResult<()> {
         let document = two_lenses(millimeter!(100.0))?;
-        let run = document.run_positioning(None)?;
+        let run = document.run_positioning()?;
         let far = run
             .positioned_scenery()?
             .collect_all_nodes_recursive()

@@ -1,9 +1,6 @@
 use super::*;
 use crate::{
-    analyzers::{
-        AnalyzerType, GhostFocusConfig, RayTraceConfig, energy::EnergyConfig,
-        raytrace::AnalysisRayTrace,
-    },
+    analyzers::{AnalyzerType, RayTraceConfig, energy::EnergyConfig, raytrace::AnalysisRayTrace},
     core_optics::{Alignable, NodeAttrExt, node_attr::HasNodeAttr},
     degree,
     gain::{ConstGain, GainModel},
@@ -287,7 +284,7 @@ fn a_positioning_run_leaves_the_document_it_came_from_alone() -> OpmResult<()> {
     document.add_analyzer(AnalyzerType::RayTrace(config));
     let before = document.to_opm_file_string()?;
 
-    let run = document.run_positioning(None)?;
+    let run = document.run_positioning()?;
     let placed = run.positioned_scenery()?;
 
     assert_eq!(document.to_opm_file_string()?, before);
@@ -299,15 +296,15 @@ fn a_positioning_run_leaves_the_document_it_came_from_alone() -> OpmResult<()> {
     Ok(())
 }
 
-/// Placing a model needs the light an analyzer defines for its source ports. A model nobody
-/// analyzes is not placed, and the error says what is missing.
+/// The setup is placed by its source ports alone, so a model nobody analyzes yet is placed all
+/// the same.
 #[test]
-fn a_model_without_an_analyzer_is_not_placed() -> OpmResult<()> {
-    let (document, ..) = lined_up_model()?;
-    let Err(error) = document.run_positioning(None) else {
-        panic!("a model nobody analyzes has no light to place it with");
-    };
-    assert!(error.to_string().contains("no analyzer"), "{error}");
+fn a_model_without_an_analyzer_is_placed() -> OpmResult<()> {
+    let (document, _, first, second) = lined_up_model()?;
+    let run = document.run_positioning()?;
+    let placed = run.positioned_scenery()?;
+    assert_relative_eq!(placed_at(placed, first)?, 0.1, epsilon = 1e-12);
+    assert_relative_eq!(placed_at(placed, second)?, 0.15, epsilon = 1e-12);
     Ok(())
 }
 
@@ -320,11 +317,10 @@ fn a_model_without_a_source_port_is_not_placed() -> OpmResult<()> {
     let first = scenery.add_node(Dummy::default())?;
     let second = scenery.add_node(Dummy::default())?;
     scenery.connect_nodes(first, "output_1", second, "input_1", millimeter!(50.0))?;
-    let mut document = OpmDocument::new(scenery);
-    document.add_analyzer(AnalyzerType::RayTrace(RayTraceConfig::default()));
+    let document = OpmDocument::new(scenery);
     let before = document.to_opm_file_string()?;
 
-    let Err(error) = document.run_positioning(None) else {
+    let Err(error) = document.run_positioning() else {
         panic!("a model without a source port has nowhere to start the optical axis");
     };
 
@@ -333,49 +329,27 @@ fn a_model_without_a_source_port_is_not_placed() -> OpmResult<()> {
     Ok(())
 }
 
-/// The setup is placed by its source ports, not by the light an analysis sends in: a ghost focus
-/// analysis that defines no light for the source places the model just as the ray trace does.
-#[test]
-fn an_analysis_without_light_for_the_source_places_the_model_all_the_same() -> OpmResult<()> {
-    let (mut document, source, first, _) = lined_up_model()?;
-    let mut config = RayTraceConfig::default();
-    config.map_source(source, RayDataBuilder::default());
-    let ray_trace = document.add_analyzer(AnalyzerType::RayTrace(config));
-    let ghost_focus = document.add_analyzer(AnalyzerType::GhostFocus(GhostFocusConfig::default()));
-
-    for analyzer in [ray_trace, ghost_focus] {
-        let run = document.run_positioning(Some(analyzer))?;
-        assert_relative_eq!(
-            placed_at(run.positioned_scenery()?, first)?,
-            0.1,
-            epsilon = 1e-12
-        );
-    }
-    Ok(())
-}
-
 /// A drawing cannot follow an analyzer the model does not have.
 #[test]
 fn a_model_is_not_drawn_after_an_analyzer_it_does_not_have() -> OpmResult<()> {
     let (document, ..) = lined_up_model()?;
-    assert!(document.run_positioning(Some(Uuid::new_v4())).is_err());
+    assert!(document.drawing_analyzer(Some(Uuid::new_v4())).is_err());
     Ok(())
 }
 
-/// An empty model is no exception: it has neither a source port nor an analyzer, and the error
-/// says so.
+/// An empty model is no exception: it has no source port, and the error says so.
 #[test]
 fn an_empty_model_says_what_it_lacks() {
-    let Err(error) = OpmDocument::default().run_positioning(None) else {
+    let Err(error) = OpmDocument::default().run_positioning() else {
         panic!("an empty model has nothing to place");
     };
-    assert!(error.to_string().contains("neither"), "{error}");
+    assert!(error.to_string().contains("no source port"), "{error}");
 }
 
 /// The positioning a document that went through its file form arrives at: what a positioning
 /// copy started from before it was a plain clone, and so the oracle the clone has to agree with.
 fn placed_through_file(document: &OpmDocument) -> OpmResult<PositioningRun> {
-    OpmDocument::from_string(&document.to_opm_file_string()?)?.run_positioning(None)
+    OpmDocument::from_string(&document.to_opm_file_string()?)?.run_positioning()
 }
 
 /// Where a node sits along the optical axis, or `None` if it was not placed.
@@ -400,7 +374,7 @@ fn a_property_changed_after_adding_the_node_reaches_the_placement() -> OpmResult
     scenery.connect_nodes(lens, "output_1", after, "input_1", millimeter!(50.0))?;
     let mut document = OpmDocument::new(scenery);
     document.add_analyzer(AnalyzerType::RayTrace(single_ray_config(source)?));
-    let default_thickness = document.run_positioning(None)?;
+    let default_thickness = document.run_positioning()?;
 
     document
         .scenery_mut()
@@ -409,7 +383,7 @@ fn a_property_changed_after_adding_the_node_reaches_the_placement() -> OpmResult
         .node_attr_mut()
         .set_property("center thickness", millimeter!(30.0).into())?;
 
-    let run = document.run_positioning(None)?;
+    let run = document.run_positioning()?;
     let placed = run.positioned_scenery()?;
     let oracle = placed_through_file(&document)?;
     assert_eq!(
@@ -454,7 +428,7 @@ fn a_group_and_a_reference_are_placed_as_through_the_file_form() -> OpmResult<()
     document.add_analyzer(AnalyzerType::RayTrace(single_ray_config(source)?));
     let before = document.to_opm_file_string()?;
 
-    let run = document.run_positioning(None)?;
+    let run = document.run_positioning()?;
     let placed = run.positioned_scenery()?;
     let oracle = placed_through_file(&document)?;
     let oracle = oracle.positioned_scenery()?;
@@ -507,7 +481,7 @@ fn positioning_stops_at_an_evanescent_grating_with_a_clear_error() -> OpmResult<
     let mut document = OpmDocument::new(scenery);
     document.add_analyzer(AnalyzerType::RayTrace(single_ray_config(source)?));
 
-    let run = document.run_positioning(None)?;
+    let run = document.run_positioning()?;
     let Err(error) = run.positioned_scenery() else {
         panic!("the mirror after the grating cannot be placed");
     };
@@ -528,7 +502,7 @@ fn a_terminal_evanescent_grating_is_still_placed() -> OpmResult<()> {
     let mut document = OpmDocument::new(scenery);
     document.add_analyzer(AnalyzerType::RayTrace(single_ray_config(source)?));
 
-    let run = document.run_positioning(None)?;
+    let run = document.run_positioning()?;
 
     assert!(is_placed(run.positioned_scenery()?, grating)?);
     Ok(())
@@ -542,7 +516,7 @@ fn the_axis_a_terminal_grating_swallows_ends_at_the_grating() -> OpmResult<()> {
     let (scenery, source, grating) = source_then_untilted_grating(false)?;
     let mut document = OpmDocument::new(scenery);
     document.add_analyzer(AnalyzerType::RayTrace(single_ray_config(source)?));
-    let run = document.run_positioning(None)?;
+    let run = document.run_positioning()?;
     let grating_at = z_of(run.positioned_scenery()?, grating)?
         .ok_or_else(|| OpossumError::Other("the grating is not placed".into()))?;
 
@@ -617,7 +591,7 @@ fn an_energy_analysis_places_the_model_at_the_alignment_wavelength_of_the_port()
         nanometer!(500.0),
     )?));
 
-    let run = document.run_positioning(None)?;
+    let run = document.run_positioning()?;
 
     let Err(error) = run.positioned_scenery() else {
         panic!("the axis at 1000 nm ends at the grating");
@@ -676,7 +650,7 @@ fn a_strand_the_axis_does_not_reach_leaves_the_rest_placed() -> OpmResult<()> {
     let mut document = OpmDocument::new(scenery);
     document.add_analyzer(AnalyzerType::RayTrace(single_ray_config(source)?));
 
-    let run = document.run_positioning(None)?;
+    let run = document.run_positioning()?;
     let placed = run.positioned_scenery()?;
 
     assert!(is_placed(placed, lens)?);

@@ -33,6 +33,7 @@ use crate::{
         unit_format::{get_exponent_for_base_unit_in_e3_steps, get_prefix_for_base_unit},
     },
 };
+use indexmap::IndexMap;
 use nalgebra::{Vector2, Vector3};
 use num_traits::Float;
 use schemars::JsonSchema;
@@ -98,6 +99,51 @@ impl<T> AssetRef<T> {
             Self::Inline(asset) => asset,
             Self::Id(id) => panic!("Expected inline asset, found AssetRef::Id({id})"),
         }
+    }
+}
+
+impl AssetRef<Material> {
+    /// Takes the material held inline into `embedded` and leaves its id in its place, as a file
+    /// holds it. Vacuum, whose id is nil, is known without being embedded. A material named by id
+    /// already stays as it is.
+    ///
+    /// # Arguments
+    ///
+    /// - `embedded`: the materials a file embeds
+    pub(crate) fn embed_into(&mut self, embedded: &mut IndexMap<Uuid, Material>) {
+        if let Self::Inline(material) = self {
+            let id = material.id();
+            if !id.is_nil() {
+                embedded.insert(id, material.clone());
+            }
+            *self = Self::Id(id);
+        }
+    }
+
+    /// Puts the material named by id back inline: vacuum for the nil id, else the one of that id
+    /// in `embedded`. A material held inline already stays as it is.
+    ///
+    /// # Arguments
+    ///
+    /// - `embedded`: the materials a file embeds
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if `embedded` holds no material of that id.
+    pub(crate) fn resolve_from(&mut self, embedded: &IndexMap<Uuid, Material>) -> OpmResult<()> {
+        if let Self::Id(id) = self {
+            let material = if id.is_nil() {
+                Material::vacuum()
+            } else {
+                embedded.get(id).cloned().ok_or_else(|| {
+                    OpossumError::OpmDocument(format!(
+                        "the embedded material with UUID {id} is missing from the file"
+                    ))
+                })?
+            };
+            *self = Self::Inline(material);
+        }
+        Ok(())
     }
 }
 

@@ -243,7 +243,7 @@ mod test {
     ) -> OpmResult<Vec<Rays>> {
         let sources = drawn_light_sources(document, None)?
             .ok_or_else(|| OpossumError::Other("the model has no light to draw".into()))?;
-        let run = document.run_positioning(None)?;
+        let run = document.run_positioning()?;
         traced_rays(run.positioned_scenery()?, &sources, max_rays, drawing)
     }
 
@@ -418,10 +418,7 @@ mod test {
         document.add_analyzer(AnalyzerType::RayTrace(config));
         let sources = drawn_light_sources(&document, None)?
             .ok_or_else(|| OpossumError::Other("the model has no light to draw".into()))?;
-        let mut positioned = document
-            .run_positioning(None)?
-            .positioned_scenery()?
-            .clone();
+        let mut positioned = document.run_positioning()?.positioned_scenery()?.clone();
         positioned.update_connection_distance(source, "output_1", millimeter!(80.0))?;
 
         let ends = traced_rays(&positioned, &sources, 10, SpectrumDrawing::Dealt)?;

@@ -39,6 +39,14 @@
         "format": "uuid"
       }
     },
+    "ambient_material": {
+      "description": "The medium the setup is aligned in, which the positioning run sends the optical axis\nthrough (see [`OpmDocument::positioning_config`]).",
+      "allOf": [
+        {
+          "$ref": "#/definitions/AssetRef"
+        }
+      ]
+    },
     "embedded_materials": {
       "type": "object",
       "additionalProperties": {

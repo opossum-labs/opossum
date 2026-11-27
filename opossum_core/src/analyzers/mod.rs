@@ -110,14 +110,12 @@ impl AnalyzerType {
             Self::GhostFocus(config) => config.set_active_pump_scenario(pump_scenario),
         }
     }
-    /// Return the configuration this analyzer places the nodes of a model with.
+    /// Return the configuration this analyzer places the nodes of a model with when it runs on a
+    /// bare scenery, holding the sources of its light.
     ///
-    /// The optical axis leaves each source port at the port's own alignment wavelength, whatever
-    /// light the analysis sends in (see [`SourcePort`](crate::nodes::SourcePort)); the ambient
-    /// medium still comes from the analysis. Anything that needs to know where the components of a
-    /// model are, rather than to run the analysis itself, asks here instead of assembling a
-    /// configuration of its own, so that a drawing of the setup shows the same geometry the
-    /// analysis worked on.
+    /// Where the components of a model stand is the setup's own and is asked of the document
+    /// instead (see
+    /// [`OpmDocument::positioning_config`](crate::opm_document::OpmDocument::positioning_config)).
     ///
     /// # Returns
     ///

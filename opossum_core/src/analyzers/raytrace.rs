@@ -30,11 +30,13 @@ inventory::submit! {
     )
 }
 
-fn default_ambient_material() -> AssetRef<Material> {
+/// The ambient medium of an analysis or a setup that names none: vacuum.
+pub(crate) fn default_ambient_material() -> AssetRef<Material> {
     AssetRef::Inline(Material::vacuum())
 }
 
-const fn is_default_vacuum(asset: &AssetRef<Material>) -> bool {
+/// Whether `asset` is the default ambient medium, vacuum, which is not written to file.
+pub(crate) const fn is_default_vacuum(asset: &AssetRef<Material>) -> bool {
     match asset {
         AssetRef::Inline(mat) => mat.id().is_nil(),
         AssetRef::Id(id) => id.is_nil(),

@@ -38,20 +38,9 @@ use uuid::Uuid;
 const RON_MEDIA_TYPE: &str = "application/ron";
 const GLB_MEDIA_TYPE: &str = "model/gltf-binary";
 
-/// Which analyzer a 3D view of the model should follow.
-#[derive(Debug, Deserialize, IntoParams)]
-struct SceneQuery {
-    /// Uuid of the analyzer to take the placement from, or none to follow the first analyzer whose
-    /// light is rays, else the first. One the document no longer has is ignored.
-    analyzer: Option<Uuid>,
-}
-
-/// Which analyzer's optical axis a 3D view of the model should draw, and which file of it.
+/// Which file of the optical axis a 3D view of the model should draw.
 #[derive(Debug, Deserialize, IntoParams)]
 struct AxisQuery {
-    /// Uuid of the analyzer to take the sources from, or none to follow the first analyzer whose
-    /// light is rays, else the first. One the document no longer has is ignored.
-    analyzer: Option<Uuid>,
     /// The digest `/scene/manifest` named the axis by. The file it built under that digest is
     /// served without positioning the model again.
     v: Option<String>,
@@ -79,10 +68,10 @@ struct RaysQuery {
     v: Option<String>,
 }
 
-/// Which analyzer a 3D view of the model should follow, and which of its rays the view draws.
+/// Which analyzer's light a 3D view of the model should draw, and which of its rays.
 #[derive(Debug, Deserialize, IntoParams)]
 struct ManifestQuery {
-    /// Uuid of the analyzer to take the placement from, or none to follow the first analyzer whose
+    /// Uuid of the analyzer to take the light from, or none to follow the first analyzer whose
     /// light is rays, else the first. One the document no longer has is ignored.
     analyzer: Option<Uuid>,
     /// The most rays drawn, as asked of `/scene/rays.glb`. Without it the manifest digests no
@@ -284,11 +273,9 @@ async fn get_document(data: web::Data<AppState>) -> Result<impl Responder, BackE
 /// binary glTF (GLB) file, ready to be opened in any glTF viewer.
 ///
 /// The components of a model only have a place in space once its optical axis has been traced, so
-/// that run happens here — on a copy, leaving the document itself untouched. Which analyzer the
-/// axis is traced after can be named with the `analyzer` parameter; without it, the first analyzer
-/// whose light is rays is used, or else the first of all.
+/// that run happens here — on a copy, leaving the document itself untouched. The placement is the
+/// setup's own, whichever analyzer examines it.
 #[utoipa::path(tag = "document",
-    params(SceneQuery),
     responses(
         (status = 200, description = "glTF binary of the model", body = Vec<u8>,
             content_type = GLB_MEDIA_TYPE),
@@ -296,16 +283,10 @@ async fn get_document(data: web::Data<AppState>) -> Result<impl Responder, BackE
     )
 )]
 #[get("/scene.glb")]
-async fn get_scene(
-    data: web::Data<AppState>,
-    query: web::Query<SceneQuery>,
-) -> Result<impl Responder, BackEndErrorResponse> {
+async fn get_scene(data: web::Data<AppState>) -> Result<impl Responder, BackEndErrorResponse> {
     // Only the copy needs the live model. Meshing it is by far the longer half of the work, and
     // holding the document across that would block every other edit for as long as it takes.
-    let run = {
-        let document = data.document.lock();
-        document.run_positioning(analyzer_still_there(&document, query.analyzer))?
-    };
+    let run = data.document.lock().run_positioning()?;
     let glb = scene_glb(run.positioned_scenery()?)?;
     Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
 }
@@ -322,13 +303,13 @@ async fn get_scene(
 /// again.
 ///
 /// As with `/scene.glb`, the components only have a place in space once the optical axis has been
-/// traced, so that run happens here on a copy, and the `analyzer` parameter picks which analyzer to
-/// follow when the model has more than one. The list names the analyzer it followed, and the false
-/// colors `/scene/rays.glb` draws that analyzer's light in if it holds several wavelengths.
+/// traced, so that run happens here on a copy; the placement is the setup's own. The `analyzer`
+/// parameter picks whose light is drawn when the model has more than one analyzer. The list names
+/// the analyzer it followed, and the false colors `/scene/rays.glb` draws that analyzer's light in
+/// if it holds several wavelengths.
 ///
-/// The drawn light takes the same way: the list holds a digest of what `/scene/axis.glb` serves
-/// for the same analyzer, and, if `max_rays` is given, of what `/scene/rays.glb` serves for the
-/// same parameters. A viewer that names the digest in the address fetches the light again only when
+/// The drawn light takes the same way: the list holds a digest of what `/scene/axis.glb` serves,
+/// and, if `max_rays` is given, of what `/scene/rays.glb` serves for the same parameters. A viewer that names the digest in the address fetches the light again only when
 /// it changed, so an edit that draws nothing new - another analyzer, an amplifier - redraws
 /// nothing. The rays are traced for their digest only when asked for. The files digested are kept,
 /// and fetched by their digest they are served as built here, without positioning the model again.
@@ -363,7 +344,7 @@ async fn get_scene_manifest(
                 name: info.display_name(),
             });
         let sources = drawn_light_sources(&document, asked)?;
-        let run = document.run_positioning(asked);
+        let run = document.run_positioning();
         let placing = run.as_ref().map_or_else(
             |_| Vec::new(),
             |run| connect_infos(document.scenery(), &run.connections_placing_by_distance()),
@@ -429,9 +410,8 @@ async fn get_scene_node(
 /// the path the positioning run follows, one ray per source, so it shows how the setup is built up
 /// and why each component sits where it does.
 ///
-/// The axis is traced on a copy, leaving the document itself untouched, and the `analyzer`
-/// parameter picks which analyzer's sources to follow exactly as for `/scene.glb`. The axis is
-/// drawn up to every open output port it reaches; light that ends in a component without any
+/// The axis is traced on a copy, leaving the document itself untouched; it is the setup's own,
+/// whichever analyzer examines it. The axis is drawn up to every open output port it reaches; light that ends in a component without any
 /// output port is not drawn into it. Asked for by the digest `/scene/manifest` named it by, the
 /// axis that manifest built is served without positioning the model again.
 #[utoipa::path(tag = "document",
@@ -456,8 +436,7 @@ async fn get_scene_axis(
     let glb = if let Some(glb) = built {
         glb
     } else {
-        let document = data.document.lock();
-        axis_glb(&document.run_positioning(analyzer_still_there(&document, query.analyzer))?)?
+        axis_glb(&data.document.lock().run_positioning()?)?
     };
     Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
 }
@@ -479,7 +458,7 @@ async fn get_scene_axis(
 /// primary path is traced; a ghost focus analyzer contributes its sources, not its reflections.
 /// Without an analyzer whose light is rays - none at all, or an energy analysis - the file is
 /// empty. The trace runs on a copy, off the request thread, and the `analyzer` parameter picks
-/// which analyzer's sources to follow exactly as for `/scene.glb`. Asked for by the digest
+/// which analyzer's sources to follow exactly as for `/scene/manifest`. Asked for by the digest
 /// `/scene/manifest` named them by, the rays that manifest traced are served without positioning
 /// the model or tracing its light again.
 #[utoipa::path(tag = "document",
@@ -509,7 +488,7 @@ async fn get_scene_rays(
             let analyzer = analyzer_still_there(&document, query.analyzer);
             // A model without light of its own is not positioned for it.
             let light = drawn_light_sources(&document, analyzer)?
-                .map(|sources| OpmResult::Ok((document.run_positioning(analyzer)?, sources)))
+                .map(|sources| OpmResult::Ok((document.run_positioning()?, sources)))
                 .transpose()?;
             drop(document);
             light
@@ -1823,29 +1802,19 @@ pub(crate) mod test {
         assert!(body.starts_with(b"glTF"));
     }
 
-    /// A model with nothing in it has neither a source port nor an analyzer to place it with, so
-    /// it cannot be exported, and the answer says why.
+    /// A model with nothing in it has no source port to place it from, so it cannot be exported,
+    /// and the answer says why.
     #[actix_web::test]
     async fn the_scene_of_an_empty_model_is_refused_with_the_reason() {
         let resp = request_scene(&Data::new(AppState::default()), "").await;
 
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
         let error: ErrorResponse = test::read_body_json(resp).await;
-        assert!(error.message.contains("neither"), "{}", error.message);
-    }
-
-    /// A model analyzed several ways is drawn after the analyzer named, or else after its first
-    /// analysis with rays.
-    #[actix_web::test]
-    async fn a_model_analyzed_several_ways_is_drawn_without_the_analyzer_named() {
-        let app_state = state_with_a_lens();
-        let named = analyze_two_more_ways(&app_state);
-
-        let resp = request_scene(&app_state, "").await;
-        assert_eq!(resp.status(), StatusCode::OK);
-
-        let resp = request_scene(&app_state, &format!("?analyzer={named}")).await;
-        assert_eq!(resp.status(), StatusCode::OK);
+        assert!(
+            error.message.contains("no source port"),
+            "{}",
+            error.message
+        );
     }
 
     /// Ask a state for the optical axis of its model.
@@ -2050,12 +2019,17 @@ pub(crate) mod test {
         assert!(placing_pairs(&manifest).contains(&(source, ahead)));
     }
 
-    /// A model that cannot be positioned at all, here for lack of an analyzer, places nothing by
+    /// A model that cannot be positioned at all, here for lack of a source port, places nothing by
     /// any distance: the list is empty, next to the notice why.
     #[actix_web::test]
     async fn the_manifest_lists_no_connection_when_the_model_cannot_be_positioned() {
         let (app_state, _, _) = state_with_a_source_in_front_of_a_reference();
-        app_state.document.lock().analyzers_mut().clear();
+        {
+            let mut document = app_state.document.lock();
+            for source in document.scenery().find_source_ports().unwrap() {
+                document.scenery_mut().delete_node(source).unwrap();
+            }
+        }
 
         let manifest: SceneManifest =
             test::read_body_json(request_manifest(&app_state, "").await).await;
@@ -2218,20 +2192,6 @@ pub(crate) mod test {
         assert!(holds_lines(&test::read_body(resp).await));
     }
 
-    /// The axis follows the same analyzer as the scene: the one named, or else the first with
-    /// rays.
-    #[actix_web::test]
-    async fn the_axis_of_a_model_analyzed_several_ways_is_drawn_without_the_analyzer_named() {
-        let app_state = state_with_a_lens();
-        let named = analyze_two_more_ways(&app_state);
-
-        let resp = request_axis(&app_state, "").await;
-        assert_eq!(resp.status(), StatusCode::OK);
-
-        let resp = request_axis(&app_state, &format!("?analyzer={named}")).await;
-        assert_eq!(resp.status(), StatusCode::OK);
-    }
-
     /// Ask a state for the list of its drawable components.
     async fn request_manifest(
         app_state: &Data<AppState>,
@@ -2359,7 +2319,7 @@ pub(crate) mod test {
         let notice = manifest
             .notice
             .expect("the manifest says why nothing is drawn");
-        assert!(notice.contains("neither"), "{notice}");
+        assert!(notice.contains("no source port"), "{notice}");
     }
 
     /// A model that cannot be placed is answered with an empty list that says why, not with a

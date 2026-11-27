@@ -2,7 +2,10 @@
 
 use super::{AnalyzerInfo, OpmDocument, PositioningRun};
 use crate::{
-    analyzers::{AnalyzerKind, AnalyzerRegistration, AnalyzerType, raytrace::AnalysisRayTrace},
+    analyzers::{
+        AnalyzerKind, AnalyzerRegistration, AnalyzerType, RayTraceConfig,
+        raytrace::AnalysisRayTrace,
+    },
     core_optics::OpticNode,
     error::{OpmResult, OpossumError},
     light::light_result::LightResult,
@@ -148,16 +151,9 @@ impl OpmDocument {
     /// rebuilds them first, as a ray trace does: a source then sends its axis from where it stands
     /// now.
     ///
-    /// The axis leaves every source port at the port's own alignment wavelength, whatever light an
-    /// analyzer sends in; the ambient medium still comes from an analyzer (see
-    /// [`AnalyzerType::positioning_config`]). Unless one is named, it is the first analyzer whose
-    /// light is rays, or else the first of all. Without a source port there is nothing to start the
-    /// axis from, and without an analyzer no medium to send it through.
-    ///
-    /// # Arguments
-    ///
-    /// - `analyzer_id`: the analyzer to take the sources from, or `None` to follow the one chosen
-    ///   as above
+    /// The placement is the setup's own, the same whichever analyzer examines it: see
+    /// [`positioning_config`](Self::positioning_config). Without a source port there is nothing
+    /// to start the optical axis from.
     ///
     /// # Returns
     ///
@@ -167,24 +163,17 @@ impl OpmDocument {
     ///
     /// # Errors
     ///
-    /// This function returns an error if the model has no source port or no analyzer, saying which
-    /// it lacks, if the named analyzer does not exist, if the source ports cannot be found, or if a
-    /// node cannot rebuild its surfaces.
-    pub fn run_positioning(&self, analyzer_id: Option<Uuid>) -> OpmResult<PositioningRun> {
-        let analyzer = self.drawing_analyzer(analyzer_id)?;
-        let has_source_port = !self.scenery.find_source_ports()?.is_empty();
-        let config = match (has_source_port, analyzer) {
-            (true, Some((_, analyzer))) => Ok(analyzer.analyzer_type().positioning_config()),
-            (false, Some(_)) => Err("no source port"),
-            (true, None) => Err("no analyzer"),
-            (false, None) => Err("neither"),
-        };
-        let mut config = config.map_err(|lacks| {
-            OpossumError::OpmDocument(format!(
-                "placing a model needs a source port and an analyzer defining its light, and \
-                 this model has {lacks}"
-            ))
-        })?;
+    /// This function returns an error if the model has no source port, if the source ports cannot
+    /// be found, or if a node cannot rebuild its surfaces.
+    pub fn run_positioning(&self) -> OpmResult<PositioningRun> {
+        if self.scenery.find_source_ports()?.is_empty() {
+            return Err(OpossumError::OpmDocument(
+                "placing a model needs a source port to start the optical axis from, and this \
+                 model has no source port"
+                    .into(),
+            ));
+        }
+        let mut config = self.positioning_config();
         // Only copies collect ray ends, so the scenery the copy came from holds none.
         config.set_collect_ray_ends(true);
         let mut scenery = self.scenery.clone();
@@ -193,6 +182,24 @@ impl OpmDocument {
             AnalysisRayTrace::calc_node_positions(&mut scenery, LightResult::default(), &config)
                 .map(|_| ());
         Ok(PositioningRun::new(scenery, outcome))
+    }
+
+    /// Returns the configuration this model is placed with.
+    ///
+    /// The system is fixed and the analyzers examine it, so the placement depends on the setup
+    /// alone: each source port sends the optical axis at its own alignment wavelength (see
+    /// [`SourcePort`](crate::nodes::SourcePort)), through the medium the setup is aligned in (see
+    /// [`set_ambient_material`](Self::set_ambient_material)). The light and the medium an analyzer
+    /// defines play no part.
+    ///
+    /// # Returns
+    ///
+    /// The configuration for the positioning run.
+    #[must_use]
+    pub fn positioning_config(&self) -> RayTraceConfig {
+        let mut config = RayTraceConfig::default();
+        config.set_ambient_material_ref(self.ambient_material.clone());
+        config.for_positioning()
     }
 
     /// Returns the analyzer a drawing of this model follows.
@@ -290,7 +297,7 @@ mod tests {
     use super::*;
     use crate::{
         analyzers::{AnalyzerType, RayTraceConfig, energy::EnergyConfig},
-        core_optics::{NodeAttrExt, OpticNode, node_attr::NodePositioning},
+        core_optics::{Alignable, NodeAttrExt, OpticNode, OpticRef, node_attr::NodePositioning},
         degree,
         distributions::{energy::UniformDist, position::Hexapolar, spectral::LaserLines},
         gain::{ConstGain, GainModel},
@@ -302,15 +309,19 @@ mod tests {
                 ray_data_builder::RayDataBuilder,
             },
         },
+        material::Material,
         millimeter, nanometer,
         nodes::{
             ALIGNMENT_WAVELENGTH, Dummy, EnergyMeter, Lens, NodeGroup, NodeReference,
             ReflectiveGrating, SourcePort,
         },
         prelude::{CollimatedSrc, RayDataSource},
+        refractive_index::RefrIndexConst,
         utils::{geom_transformation::Isometry, test_helper::helper::metered_energy},
     };
     use approx::assert_relative_eq;
+    use nalgebra::Point3;
+    use num_traits::Zero;
     use uom::si::f64::Length;
     use uuid::Uuid;
 
@@ -486,7 +497,7 @@ mod tests {
         config.map_source(source, RayDataBuilder::default());
         document.add_analyzer(AnalyzerType::RayTrace(config));
 
-        let run = document.run_positioning(None)?;
+        let run = document.run_positioning()?;
         let axes = run.optical_axis()?;
         assert_eq!(axes.len(), 1, "one open output, so one end");
         assert_eq!(axes[0].nr_of_rays(true), 1, "the axis is a single ray");
@@ -537,7 +548,7 @@ mod tests {
             attr.set_positioning(NodePositioning::Absolute(moved));
         })?;
 
-        let run = document.run_positioning(None)?;
+        let run = document.run_positioning()?;
         let lens_at = run
             .positioned_scenery()?
             .with_node_attr(lens, |attr| {
@@ -557,49 +568,77 @@ mod tests {
         Ok(())
     }
 
-    /// A source port aligned at `port_wavelength`, a grating turned for 1053 nm and a screen
-    /// behind it, with two ray trace analyzers whose light differs in wavelength and enters
-    /// shifted and tilted. Returns the document, the screen and the two analyzers.
-    fn a_grating_seen_by_two_analyzers(
+    /// A source port aligned at `port_wavelength`, `turning` 100 mm after it and a screen 100 mm
+    /// after that, analyzed by a ray trace whose light shines at `light_wavelength`, enters
+    /// shifted and tilted by `shift` (in millimeters and degrees) and runs through `medium`.
+    /// Returns the document and the screen.
+    fn a_setup_analyzed_with(
+        turning: OpticRef,
         port_wavelength: Length,
-    ) -> OpmResult<(OpmDocument, Uuid, Vec<Uuid>)> {
+        light_wavelength: Length,
+        shift: f64,
+        medium: Option<Material>,
+    ) -> OpmResult<(OpmDocument, Uuid)> {
         let mut scenery = NodeGroup::default();
         let mut source = SourcePort::default();
         source.set_property(ALIGNMENT_WAVELENGTH, port_wavelength.into())?;
         let source = scenery.add_node(source)?;
-        let grating = scenery.add_node(
-            ReflectiveGrating::default()
-                .with_rot_from_littrow(nanometer!(1053.0), degree!(10.0))?,
-        )?;
+        let turning = scenery.add_node_ref(turning)?;
         let screen = scenery.add_node(Dummy::new("screen"))?;
-        scenery.connect_nodes(source, "output_1", grating, "input_1", millimeter!(100.0))?;
-        scenery.connect_nodes(grating, "output_1", screen, "input_1", millimeter!(100.0))?;
+        scenery.connect_nodes(source, "output_1", turning, "input_1", millimeter!(100.0))?;
+        scenery.connect_nodes(turning, "output_1", screen, "input_1", millimeter!(100.0))?;
         let mut document = OpmDocument::new(scenery);
-        let mut analyzers = Vec::new();
-        for (wavelength, shift) in [(nanometer!(1053.0), 0.0), (nanometer!(1000.0), 5.0)] {
-            let mut light = RayDataBuilder::from(RayDataSource::Collimated(CollimatedSrc::new(
-                Hexapolar::new(millimeter!(1.0), 1)?.into(),
-                UniformDist::new(joule!(1.0))?.into(),
-                LaserLines::new(vec![(wavelength, 1.0)])?.into(),
-            )));
-            light.set_isometry(Some(Isometry::new(
-                millimeter!(shift, 0.0, 0.0),
-                degree!(0.0, shift, 0.0),
-            )?));
-            let mut config = RayTraceConfig::default();
-            config.map_source(source, light);
-            analyzers.push(document.add_analyzer(AnalyzerType::RayTrace(config)));
+        let mut light = RayDataBuilder::from(RayDataSource::Collimated(CollimatedSrc::new(
+            Hexapolar::new(millimeter!(1.0), 1)?.into(),
+            UniformDist::new(joule!(1.0))?.into(),
+            LaserLines::new(vec![(light_wavelength, 1.0)])?.into(),
+        )));
+        light.set_isometry(Some(Isometry::new(
+            millimeter!(shift, 0.0, 0.0),
+            degree!(0.0, shift, 0.0),
+        )?));
+        let mut config = RayTraceConfig::default();
+        config.map_source(source, light);
+        if let Some(medium) = medium {
+            config.set_ambient_material(medium);
         }
-        Ok((document, screen, analyzers))
+        document.add_analyzer(AnalyzerType::RayTrace(config));
+        Ok((document, screen))
     }
 
-    /// Where `node` stands, in meters, after a positioning run that follows `analyzer`.
-    fn placed_after(document: &OpmDocument, node: Uuid, analyzer: Uuid) -> OpmResult<[f64; 3]> {
+    /// A grating turned for 1053 nm: it sends the axis off by wavelength.
+    fn grating() -> OpmResult<OpticRef> {
+        Ok(OpticRef::new(Box::new(
+            ReflectiveGrating::default()
+                .with_rot_from_littrow(nanometer!(1053.0), degree!(10.0))?,
+        )))
+    }
+
+    /// A lens 10 mm off the axis, within its clear aperture: it sends the axis off by the medium
+    /// around it.
+    fn decentered_lens() -> OpmResult<OpticRef> {
+        Ok(OpticRef::new(Box::new(Lens::default().with_decenter(
+            Point3::new(Length::zero(), millimeter!(10.0), Length::zero()),
+        )?)))
+    }
+
+    /// A medium of constant refractive index 1.33.
+    fn water() -> OpmResult<Material> {
+        Ok(Material::new_draft(
+            "water",
+            None,
+            None,
+            RefrIndexConst::new(1.33)?.into(),
+        ))
+    }
+
+    /// Where the screen stands, in meters, once the model is placed.
+    fn screen_placed(document: &OpmDocument, screen: Uuid) -> OpmResult<[f64; 3]> {
         let at = document
-            .run_positioning(Some(analyzer))?
+            .run_positioning()?
             .positioned_scenery()?
-            .with_node_attr(node, |attr| attr.effective_position().copied())?
-            .ok_or_else(|| OpossumError::Other("the node was not placed".into()))?
+            .with_node_attr(screen, |attr| attr.effective_position().copied())?
+            .ok_or_else(|| OpossumError::Other("the screen was not placed".into()))?
             .translation();
         Ok([at.x.value, at.y.value, at.z.value])
     }
@@ -613,14 +652,22 @@ mod tests {
             .sqrt()
     }
 
-    /// The system is fixed and the analyzers examine it: two analyzers whose light differs in
+    /// The system is fixed and the analyzers examine it: analyses whose light differs in
     /// wavelength and in where it enters place the setup alike.
     #[test]
-    fn two_analyzers_with_different_light_place_the_setup_alike() -> OpmResult<()> {
-        let (document, screen, analyzers) = a_grating_seen_by_two_analyzers(nanometer!(1053.0))?;
-        let first = placed_after(&document, screen, analyzers[0])?;
-        let second = placed_after(&document, screen, analyzers[1])?;
-        assert_relative_eq!(distance(first, second), 0.0, epsilon = 1e-12);
+    fn analyses_with_different_light_place_the_setup_alike() -> OpmResult<()> {
+        let at_1053 = nanometer!(1053.0);
+        let (first, screen) = a_setup_analyzed_with(grating()?, at_1053, at_1053, 0.0, None)?;
+        let (second, other_screen) =
+            a_setup_analyzed_with(grating()?, at_1053, nanometer!(1000.0), 5.0, None)?;
+        assert_relative_eq!(
+            distance(
+                screen_placed(&first, screen)?,
+                screen_placed(&second, other_screen)?
+            ),
+            0.0,
+            epsilon = 1e-12
+        );
         Ok(())
     }
 
@@ -628,15 +675,68 @@ mod tests {
     /// axis, and so where the setup behind it stands.
     #[test]
     fn the_alignment_wavelength_of_the_port_places_the_setup() -> OpmResult<()> {
-        let (at_1053, screen_1053, analyzers_1053) =
-            a_grating_seen_by_two_analyzers(nanometer!(1053.0))?;
-        let (at_1000, screen_1000, analyzers_1000) =
-            a_grating_seen_by_two_analyzers(nanometer!(1000.0))?;
-        let screen_at_1053 = placed_after(&at_1053, screen_1053, analyzers_1053[0])?;
-        let screen_at_1000 = placed_after(&at_1000, screen_1000, analyzers_1000[0])?;
+        let light = nanometer!(1053.0);
+        let (at_1053, screen) = a_setup_analyzed_with(grating()?, light, light, 0.0, None)?;
+        let (at_1000, other_screen) =
+            a_setup_analyzed_with(grating()?, nanometer!(1000.0), light, 0.0, None)?;
+        let screen_at_1053 = screen_placed(&at_1053, screen)?;
         assert!(
-            distance(screen_at_1053, screen_at_1000) > 1e-3,
+            distance(screen_at_1053, screen_placed(&at_1000, other_screen)?) > 1e-3,
             "the screen stands at {screen_at_1053:?} either way"
+        );
+        Ok(())
+    }
+
+    /// The medium the setup is aligned in decides how a lens bends the axis, and so where the
+    /// setup behind it stands.
+    #[test]
+    fn the_medium_of_the_setup_places_it() -> OpmResult<()> {
+        let at = nanometer!(1053.0);
+        let (in_vacuum, screen) = a_setup_analyzed_with(decentered_lens()?, at, at, 0.0, None)?;
+        let (mut in_water, other_screen) =
+            a_setup_analyzed_with(decentered_lens()?, at, at, 0.0, None)?;
+        in_water.set_ambient_material(water()?);
+        let screen_in_vacuum = screen_placed(&in_vacuum, screen)?;
+        assert!(
+            distance(screen_in_vacuum, screen_placed(&in_water, other_screen)?) > 1e-4,
+            "the screen stands at {screen_in_vacuum:?} either way"
+        );
+        Ok(())
+    }
+
+    /// The medium an analysis traces its light through is that analysis's own: it does not move
+    /// the setup.
+    #[test]
+    fn the_medium_of_an_analysis_does_not_place_the_setup() -> OpmResult<()> {
+        let at = nanometer!(1053.0);
+        let (plain, screen) = a_setup_analyzed_with(decentered_lens()?, at, at, 0.0, None)?;
+        let (in_water, other_screen) =
+            a_setup_analyzed_with(decentered_lens()?, at, at, 0.0, Some(water()?))?;
+        assert_relative_eq!(
+            distance(
+                screen_placed(&plain, screen)?,
+                screen_placed(&in_water, other_screen)?
+            ),
+            0.0,
+            epsilon = 1e-12
+        );
+        Ok(())
+    }
+
+    /// The medium of the setup is written to file and read back.
+    #[test]
+    fn the_medium_of_the_setup_survives_the_file() -> OpmResult<()> {
+        let at = nanometer!(1053.0);
+        let (mut document, screen) = a_setup_analyzed_with(decentered_lens()?, at, at, 0.0, None)?;
+        document.set_ambient_material(water()?);
+        let read_back = OpmDocument::from_string(&document.to_opm_file_string()?)?;
+        assert_relative_eq!(
+            distance(
+                screen_placed(&document, screen)?,
+                screen_placed(&read_back, screen)?
+            ),
+            0.0,
+            epsilon = 1e-12
         );
         Ok(())
     }
@@ -662,7 +762,7 @@ mod tests {
         }
         document.add_analyzer(AnalyzerType::RayTrace(config));
 
-        let mut placing = placing_by_distance(&document.run_positioning(None)?);
+        let mut placing = placing_by_distance(&document.run_positioning()?);
         placing.sort();
         let mut expected = vec![(first, lens), (second, reference)];
         expected.sort();
@@ -703,7 +803,7 @@ mod tests {
     #[test]
     fn the_distances_placing_a_node_inside_a_group_are_listed() -> OpmResult<()> {
         let (document, first, second) = source_into_a_group()?;
-        let placing = placing_by_distance(&document.run_positioning(None)?);
+        let placing = placing_by_distance(&document.run_positioning()?);
         assert!(placing.contains(&(first, second)), "{placing:?}");
         Ok(())
     }
@@ -713,7 +813,7 @@ mod tests {
     #[test]
     fn the_optical_axis_is_taken_out_of_the_positioned_copy() -> OpmResult<()> {
         let (document, _, _) = source_into_a_group()?;
-        let run = document.run_positioning(None)?;
+        let run = document.run_positioning()?;
         assert_eq!(
             run.optical_axis()?.len(),
             1,
@@ -743,7 +843,7 @@ mod tests {
         let mut config = RayTraceConfig::default();
         config.map_source(source, RayDataBuilder::default());
         document.add_analyzer(AnalyzerType::RayTrace(config));
-        let run = document.run_positioning(None)?;
+        let run = document.run_positioning()?;
         assert!(run.positioned_scenery().is_err(), "the placement fails");
         assert!(run.optical_axis().is_err(), "and with it the axis");
 

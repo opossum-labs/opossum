@@ -574,7 +574,7 @@ mod test {
         spot_id: uuid::Uuid,
     ) -> OpmResult<f64> {
         ParameterApplier::set_value(doc, address, distance)?;
-        doc.run_positioning(None)?
+        doc.run_positioning()?
             .positioned_scenery()?
             .with_node_attr(spot_id, |attr| {
                 attr.effective_position()

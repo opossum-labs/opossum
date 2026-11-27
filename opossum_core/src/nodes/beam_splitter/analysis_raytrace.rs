@@ -830,7 +830,7 @@ mod test {
             round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 1)?,
         );
         document.add_analyzer(AnalyzerType::RayTrace(config));
-        let run = document.run_positioning(None)?;
+        let run = document.run_positioning()?;
         let (aside_at, _) = placed(run.positioned_scenery()?, aside);
 
         let axes = run.optical_axis()?;

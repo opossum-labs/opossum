@@ -149,7 +149,7 @@ mod test {
 
     /// The list of components of a model, as a viewer would ask for it.
     fn manifest(document: &OpmDocument) -> OpmResult<SceneManifest> {
-        manifest_of(document.run_positioning(None)?.positioned_scenery()?)
+        manifest_of(document.run_positioning()?.positioned_scenery()?)
     }
 
     /// The whole point of splitting placement from geometry: a component that only moved keeps its
@@ -308,7 +308,7 @@ mod test {
     #[test]
     fn the_manifest_names_what_the_scene_draws() -> OpmResult<()> {
         let document = a_bit_of_everything()?;
-        let run = document.run_positioning(None)?;
+        let run = document.run_positioning()?;
         let scene = exported(&document)?;
         let drawn = drawn_components(&scene);
 

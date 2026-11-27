@@ -13,11 +13,15 @@ mod positioning_run;
 #[cfg(test)]
 mod tests;
 use crate::{
-    analyzers::AnalyzerType,
+    analyzers::{
+        AnalyzerType,
+        raytrace::{default_ambient_material, is_default_vacuum},
+    },
     error::{OpmResult, OpossumError},
     gain::{GainModel, PumpScenario},
     material::Material,
     nodes::NodeGroup,
+    properties::proptype::AssetRef,
 };
 pub use analyzer_info::AnalyzerInfo;
 use indexmap::IndexMap;
@@ -55,6 +59,13 @@ pub struct OpmDocument {
     /// Nodes marked as amplifier candidates, independent of any [`PumpScenario`].
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub(crate) amplifier_nodes: BTreeSet<Uuid>,
+    /// The medium the setup is aligned in, which the positioning run sends the optical axis
+    /// through (see [`OpmDocument::positioning_config`]).
+    #[serde(
+        default = "default_ambient_material",
+        skip_serializing_if = "is_default_vacuum"
+    )]
+    pub(crate) ambient_material: AssetRef<Material>,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     pub(crate) embedded_materials: IndexMap<Uuid, Material>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -72,6 +83,7 @@ impl Default for OpmDocument {
             analyzers: IndexMap::default(),
             pump_scenarios: IndexMap::default(),
             amplifier_nodes: BTreeSet::default(),
+            ambient_material: default_ambient_material(),
             embedded_materials: IndexMap::default(),
             optimization_config: None,
             metric_store: HashMap::new(),
@@ -101,6 +113,15 @@ impl OpmDocument {
     #[must_use]
     pub const fn opm_file_version(&self) -> u32 {
         self.opm_file_version
+    }
+    /// Sets the medium the setup is aligned in, which the optical axis is sent through when the
+    /// model is placed (see [`OpmDocument::positioning_config`]).
+    ///
+    /// # Arguments
+    ///
+    /// - `material`: the ambient medium
+    pub fn set_ambient_material(&mut self, material: Material) {
+        self.ambient_material = AssetRef::Inline(material);
     }
     /// Returns a reference to the embedded materials map of this [`OpmDocument`].
     #[must_use]

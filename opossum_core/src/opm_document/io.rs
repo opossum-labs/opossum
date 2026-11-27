@@ -5,7 +5,6 @@ use crate::{
     analyzers::AnalyzerType,
     core_optics::OpticNode,
     error::{OpmResult, OpossumError},
-    material::Material,
     properties::{Proptype, proptype::AssetRef},
 };
 use ron::{extensions::Extensions, ser::PrettyConfig};
@@ -22,8 +21,8 @@ struct OpmHeader {
 
 impl OpmDocument {
     /// Replaces all `AssetRef::Id(Uuid)` properties in scene nodes (including all nested
-    /// groups) and analyzer ambient materials with the full `AssetRef::Inline(Material)`
-    /// looked up from `embedded_materials`.
+    /// groups), the ambient medium of the setup and analyzer ambient materials with the full
+    /// `AssetRef::Inline(Material)` looked up from `embedded_materials`.
     pub(crate) fn resolve_embedded_materials(&mut self) -> OpmResult<()> {
         let embedded_materials = &self.embedded_materials;
         let mut err = None;
@@ -58,34 +57,18 @@ impl OpmDocument {
             return Err(e);
         }
 
-        for (analyzer_id, analyzer_info) in &mut self.analyzers {
-            let ambient_ref = match analyzer_info.analyzer_type() {
-                AnalyzerType::RayTrace(cfg) => Some(cfg.ambient_material_ref()),
-                AnalyzerType::GhostFocus(cfg) => Some(cfg.ambient_material_ref()),
-                AnalyzerType::Energy(_) => None,
+        self.ambient_material.resolve_from(embedded_materials)?;
+        for analyzer_info in self.analyzers.values_mut() {
+            let mut ambient = match analyzer_info.analyzer_type() {
+                AnalyzerType::RayTrace(cfg) => cfg.ambient_material_ref().clone(),
+                AnalyzerType::GhostFocus(cfg) => cfg.ambient_material_ref().clone(),
+                AnalyzerType::Energy(_) => continue,
             };
-            if let Some(AssetRef::Id(id)) = ambient_ref {
-                let material = if id.is_nil() {
-                    Material::vacuum()
-                } else {
-                    embedded_materials
-                        .get(id)
-                        .cloned()
-                        .ok_or_else(|| {
-                            OpossumError::OpmDocument(format!(
-                                "Embedded ambient material with UUID {id} not found for analyzer '{analyzer_id}'"
-                            ))
-                        })?
-                };
-                match analyzer_info.analyzer_type_mut() {
-                    AnalyzerType::RayTrace(cfg) => {
-                        cfg.set_ambient_material(material);
-                    }
-                    AnalyzerType::GhostFocus(cfg) => {
-                        cfg.set_ambient_material(material);
-                    }
-                    AnalyzerType::Energy(_) => {}
-                }
+            ambient.resolve_from(embedded_materials)?;
+            match analyzer_info.analyzer_type_mut() {
+                AnalyzerType::RayTrace(cfg) => cfg.set_ambient_material_ref(ambient),
+                AnalyzerType::GhostFocus(cfg) => cfg.set_ambient_material_ref(ambient),
+                AnalyzerType::Energy(_) => {}
             }
         }
 
@@ -93,8 +76,8 @@ impl OpmDocument {
     }
 
     /// Extracts full `Material` structs into `embedded_materials` from all nodes
-    /// (including all nested groups) and analyzer ambient materials, replacing them
-    /// with explicit `AssetRef::Id(Uuid)`.
+    /// (including all nested groups), the ambient medium of the setup and analyzer ambient
+    /// materials, replacing them with explicit `AssetRef::Id(Uuid)`.
     pub(crate) fn prepare_materials_for_serialization(&mut self) -> OpmResult<()> {
         self.embedded_materials.clear();
         let embedded_materials = &mut self.embedded_materials;
@@ -126,25 +109,18 @@ impl OpmDocument {
             return Err(e);
         }
 
+        self.ambient_material.embed_into(embedded_materials);
         for analyzer_info in self.analyzers.values_mut() {
             match analyzer_info.analyzer_type_mut() {
                 AnalyzerType::RayTrace(cfg) => {
-                    if let AssetRef::Inline(material) = cfg.ambient_material_ref() {
-                        let id = material.id();
-                        if !id.is_nil() {
-                            embedded_materials.insert(id, material.clone());
-                        }
-                        cfg.set_ambient_material_ref(AssetRef::Id(id));
-                    }
+                    let mut ambient = cfg.ambient_material_ref().clone();
+                    ambient.embed_into(embedded_materials);
+                    cfg.set_ambient_material_ref(ambient);
                 }
                 AnalyzerType::GhostFocus(cfg) => {
-                    if let AssetRef::Inline(material) = cfg.ambient_material_ref() {
-                        let id = material.id();
-                        if !id.is_nil() {
-                            embedded_materials.insert(id, material.clone());
-                        }
-                        cfg.set_ambient_material_ref(AssetRef::Id(id));
-                    }
+                    let mut ambient = cfg.ambient_material_ref().clone();
+                    ambient.embed_into(embedded_materials);
+                    cfg.set_ambient_material_ref(ambient);
                 }
                 AnalyzerType::Energy(_) => {}
             }
