@@ -150,6 +150,17 @@ fn snapshot_blueprint_and_values(
     (doc.clone(), original_values)
 }
 
+/// Writes the optimized parameters into the live document, rebuilds its surfaces and pushes the
+/// command that restores the original values onto the undo stack.
+///
+/// The document is not analyzed: an analysis would place it, and the placement would then stay in
+/// the model (see [`OpmDocument::run_positioning`]).
+///
+/// # Arguments
+///
+/// - `app_state`: the state holding the live document and the undo stack
+/// - `optimized_parameters`: the value the optimization found for each parameter
+/// - `original_values`: each parameter's value before the optimization
 fn apply_results_and_record_undo(
     app_state: &AppState,
     optimized_parameters: &HashMap<ParameterAddress, f64>,
@@ -164,7 +175,6 @@ fn apply_results_and_record_undo(
             let _ = ParameterApplier::set_value(&mut doc, addr, *new_val);
         }
         let _ = ParameterApplier::finalize_update(&mut doc);
-        let _ = doc.analyze_headless();
     }
 
     let inverse_diff: HashMap<_, _> = diff
@@ -358,6 +368,7 @@ mod test {
     use actix_web::{App, dev::Service, http::StatusCode, test, web::Data};
     use opossum_core::{
         distributions::{energy::UniformDist, position::Hexapolar, spectral::LaserLines},
+        error::{OpmResult, OpossumError},
         joule,
         light::lightdata::ray_data_source::{PointSrc, RayDataSource},
         millimeter, nanometer,
@@ -552,6 +563,65 @@ mod test {
             (restored_dist - initial_dist).abs() < 1e-12,
             "undo should restore the initial setup"
         );
+    }
+
+    /// Sets the distance at `address` the way an edit does, places `doc` the way the 3D view does,
+    /// and returns the z coordinate in meters the spot `spot_id` is placed at.
+    fn spot_z_after_an_edit(
+        doc: &mut OpmDocument,
+        address: &ParameterAddress,
+        distance: f64,
+        spot_id: uuid::Uuid,
+    ) -> OpmResult<f64> {
+        ParameterApplier::set_value(doc, address, distance)?;
+        doc.run_positioning(None)?
+            .positioned_scenery()?
+            .with_node_attr(spot_id, |attr| {
+                attr.effective_position()
+                    .map(|placement| placement.translation().z.value)
+            })?
+            .ok_or_else(|| OpossumError::Other("the spot was not placed".into()))
+    }
+
+    /// An optimization applied to the model leaves it unplaced, so a distance edited afterwards
+    /// still moves the spot in the 3D view: 70 mm to the lens, 10 mm through it, then the edited
+    /// 80 mm, not the optimized 60 mm.
+    #[actix_web::test]
+    async fn the_drawing_follows_an_edit_made_after_an_optimization() -> OpmResult<()> {
+        let (app_state, lens_id, spot_id, _) = setup_test_app();
+        let lens_to_spot = ParameterAddress::ConnectionDistance {
+            src_id: lens_id,
+            src_port: "output_1".into(),
+        };
+        apply_results_and_record_undo(
+            &app_state,
+            &HashMap::from([(lens_to_spot.clone(), 0.06)]),
+            &HashMap::from([(lens_to_spot.clone(), 0.05)]),
+        );
+
+        let spot_z =
+            spot_z_after_an_edit(&mut app_state.document.lock(), &lens_to_spot, 0.08, spot_id)?;
+        assert!((spot_z - 0.16).abs() < 1e-12, "spot placed at z = {spot_z}");
+        Ok(())
+    }
+
+    /// Undoing or redoing an optimization leaves the model unplaced as well.
+    #[actix_web::test]
+    async fn the_drawing_follows_an_edit_made_after_undoing_an_optimization() -> OpmResult<()> {
+        let (app_state, lens_id, spot_id, _) = setup_test_app();
+        let lens_to_spot = ParameterAddress::ConnectionDistance {
+            src_id: lens_id,
+            src_port: "output_1".into(),
+        };
+        let mut doc = app_state.document.lock();
+        OptimizationUndo {
+            parameter_diff: HashMap::from([(lens_to_spot.clone(), (0.05, 0.06))]),
+        }
+        .apply_new(&mut doc)?;
+
+        let spot_z = spot_z_after_an_edit(&mut doc, &lens_to_spot, 0.08, spot_id)?;
+        assert!((spot_z - 0.16).abs() < 1e-12, "spot placed at z = {spot_z}");
+        Ok(())
     }
 
     #[actix_web::test]
