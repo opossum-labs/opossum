@@ -98,6 +98,7 @@ pub fn use_workspace_processor(
                         // is fetched.
                         *crate::SCENE_REVISION.write() += 1;
                         *crate::CONNECTIONS_PLACING_BY_DISTANCE.write() = None;
+                        crate::NODE_PLACEMENTS.write().clear();
                     }
                     GraphsWorkspaceAction::SaveToFile(path) => {
                         process_save_root_scenery_to_file(
@@ -132,6 +133,7 @@ pub fn use_workspace_processor(
                         // is fetched.
                         *crate::SCENE_REVISION.write() += 1;
                         *crate::CONNECTIONS_PLACING_BY_DISTANCE.write() = None;
+                        crate::NODE_PLACEMENTS.write().clear();
                     }
                     GraphsWorkspaceAction::ResetAndInitializeRootScenery { name } => {
                         // 1. Abort any running optimization/simulation session first
@@ -147,6 +149,7 @@ pub fn use_workspace_processor(
                         *crate::UNDO_REDO_STATUS.write() = (false, false);
                         // The positioning of the new document has not been fetched yet.
                         *crate::CONNECTIONS_PLACING_BY_DISTANCE.write() = None;
+                        crate::NODE_PLACEMENTS.write().clear();
                     }
                     GraphsWorkspaceAction::Refresh { preserve_undo } => {
                         process_refresh(

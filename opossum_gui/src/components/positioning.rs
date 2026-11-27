@@ -1,14 +1,14 @@
 //! What the positioning of the model found, kept up to date for the whole GUI.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use dioxus::prelude::*;
-use opossum_core::types::api_types::PositioningSummary;
+use opossum_core::{types::api_types::PositioningSummary, utils::geom_transformation::Isometry};
 use uuid::Uuid;
 
 use crate::{
-    CONNECTIONS_PLACING_BY_DISTANCE, OPOSSUM_UI_LOGS, SCENE_REVISION, api, api::eval_action_run,
-    utils::debounce,
+    CONNECTIONS_PLACING_BY_DISTANCE, NODE_PLACEMENTS, OPOSSUM_UI_LOGS, SCENE_REVISION, api,
+    api::eval_action_run, utils::debounce,
 };
 
 /// Fetch what the positioning of the model found whenever the model changes, and hand it to the
@@ -16,8 +16,9 @@ use crate::{
 ///
 /// The backend positions the model once per change, whether a 3D view is open or not, so the
 /// editor knows the placement from the start: which distances into references place something
-/// (see [`CONNECTIONS_PLACING_BY_DISTANCE`]), and why the positioning stops, logged once each time
-/// the reason changes. A burst of edits is fetched once, after it settles, as the 3D view does.
+/// (see [`CONNECTIONS_PLACING_BY_DISTANCE`]), where each node stands (see [`NODE_PLACEMENTS`]),
+/// and why the positioning stops, logged once each time the reason changes. A burst of edits is
+/// fetched once, after it settles, as the 3D view does.
 ///
 /// Called once, by the layout that is mounted for as long as the app runs.
 pub fn use_positioning() {
@@ -45,6 +46,14 @@ pub fn use_positioning() {
                     });
                     if *CONNECTIONS_PLACING_BY_DISTANCE.peek() != placing {
                         *CONNECTIONS_PLACING_BY_DISTANCE.write() = placing;
+                    }
+                    let placements: HashMap<Uuid, Isometry> = fetched
+                        .placements
+                        .iter()
+                        .map(|placed| (placed.uid, placed.placement))
+                        .collect();
+                    if *NODE_PLACEMENTS.peek() != placements {
+                        *NODE_PLACEMENTS.write() = placements;
                     }
                     if *stop_reason.peek() != fetched.stop_reason {
                         if let Some(reason) = &fetched.stop_reason {

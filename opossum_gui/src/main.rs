@@ -21,8 +21,8 @@ use dioxus::{
     prelude::*,
     signals::{GlobalSignal, Signal},
 };
-use opossum_core::types::api_types::NodeEditorPanel;
-use std::collections::HashSet;
+use opossum_core::{types::api_types::NodeEditorPanel, utils::geom_transformation::Isometry};
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 const MAIN_CSS: Asset = asset!("/assets/main.css");
@@ -152,6 +152,12 @@ static SCENE_VIEW_REQUEST: GlobalSignal<Option<SceneViewRequest>> = Signal::glob
 /// while there is no answer, every connection into a reference offers its distance.
 static CONNECTIONS_PLACING_BY_DISTANCE: GlobalSignal<Option<HashSet<(Uuid, String)>>> =
     Signal::global(|| None);
+/// Where the last positioning of the model placed each node it placed, without the node's
+/// alignment; fetched by [`use_positioning`](crate::components::positioning::use_positioning).
+///
+/// A node switched to an absolute position starts from here, so it stays where it stands instead
+/// of jumping to the origin.
+static NODE_PLACEMENTS: GlobalSignal<HashMap<Uuid, Isometry>> = Signal::global(HashMap::new);
 /// Set right before a `RevealNode` action whose `bring_to_front` is `false` changes `active_tab`
 /// (a 3D view pick), so `GraphEditor`'s effect that otherwise brings a graph's tab to the front
 /// whenever `active_tab` changes can skip that step this one time - where the graph would cover the

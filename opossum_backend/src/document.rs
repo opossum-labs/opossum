@@ -25,9 +25,9 @@ use opossum_core::{
     material::Material,
     opm_document::{OpmDocument, PositioningRun},
     types::api_types::{
-        DocumentChange, ErrorResponse, JumpTarget, LoadDocumentResponse, PositionUpdate,
-        PositioningSummary, SceneAnalyzer, SceneManifest, UndoRedoResponse, UpdateNodeRequest,
-        ViewportChangeRequest,
+        DocumentChange, ErrorResponse, JumpTarget, LoadDocumentResponse, NodePlacement,
+        PositionUpdate, PositioningSummary, SceneAnalyzer, SceneManifest, UndoRedoResponse,
+        UpdateNodeRequest, ViewportChangeRequest,
     },
 };
 use opossum_scene::{
@@ -418,13 +418,14 @@ async fn get_scene_manifest(
 /// Get what the positioning of the model found
 ///
 /// This function answers what an editor shows of the placement without a 3D view: the
-/// connections whose distance placed a node, and why the positioning stopped part way, if it did.
-/// It is the same positioning run the 3D view draws, made once per change of the model.
+/// connections whose distance placed a node, why the positioning stopped part way, if it did, and
+/// where it placed each node - what a node switched to an absolute position starts from. It is the
+/// same positioning run the 3D view draws, made once per change of the model.
 ///
 /// A distance into a reference usually places nothing, as the reference takes the placement of
 /// the node it refers to, so an editor offers it only where the list names it. A model without a
-/// source port cannot be positioned at all; it lists no connections, and no reason either: that is
-/// a model still being built.
+/// source port cannot be positioned at all; it lists no connections, no reason and no placements:
+/// that is a model still being built.
 #[utoipa::path(tag = "document",
     responses(
         (status = 200, description = "what the positioning of the model found", body = PositioningSummary)
@@ -442,6 +443,13 @@ async fn get_positioning(data: web::Data<AppState>) -> impl Responder {
                 &run.connections_placing_by_distance(),
             )),
             stop_reason: run.positioned_scenery().err().map(|e| e.to_string()),
+            placements: run
+                .placements()
+                .into_iter()
+                .filter_map(|(uid, placement)| {
+                    placement.map(|placement| NodePlacement { uid, placement })
+                })
+                .collect(),
         },
     );
     drop(document);
@@ -2171,6 +2179,25 @@ pub(crate) mod test {
         let reason = summary.stop_reason.clone().expect("the positioning stops");
         assert!(reason.contains("passed twice"), "{reason}");
         assert!(placing_pairs(&summary).contains(&(source, ahead)));
+    }
+
+    /// The positioning tells where it placed each node: here the lens, 100 mm along the axis of
+    /// the source in the origin.
+    #[actix_web::test]
+    async fn the_positioning_tells_where_it_placed_each_node() {
+        let (app_state, _, placing) = state_with_a_source_in_front_of_a_reference();
+        let (_, lens) = placing[0];
+
+        let summary = request_positioning(&app_state).await;
+
+        let lens_at = summary
+            .placements
+            .iter()
+            .find(|placed| placed.uid == lens)
+            .expect("the lens is placed")
+            .placement
+            .translation();
+        assert!((lens_at.z.value - 0.1).abs() < 1e-12, "{lens_at:?}");
     }
 
     /// A model that cannot be positioned at all, for lack of a source port, is still being built:

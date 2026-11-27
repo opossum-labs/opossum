@@ -1095,4 +1095,18 @@ pub struct PositioningSummary {
     /// Why the run stopped part way, or `None` if it finished or could not start.
     #[serde(default)]
     pub stop_reason: Option<String>,
+    /// Where the run placed each node it placed, those inside groups included.
+    #[serde(default)]
+    pub placements: Vec<NodePlacement>,
+}
+
+/// Where a positioning run placed one node.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, ToSchema)]
+pub struct NodePlacement {
+    /// The node's UUID.
+    pub uid: Uuid,
+    /// The node's placement without its alignment: what an absolute position of the node states,
+    /// so that switching it to one keeps it where it stands.
+    #[schema(value_type = Object)]
+    pub placement: Isometry,
 }

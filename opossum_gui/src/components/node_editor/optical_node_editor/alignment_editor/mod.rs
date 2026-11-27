@@ -1,6 +1,6 @@
 mod grating_alignment;
 use crate::{
-    OPOSSUM_UI_LOGS,
+    NODE_PLACEMENTS, OPOSSUM_UI_LOGS,
     components::node_editor::{
         accordion::{AccordionItem, ElementList, content_id_for_panel},
         hooks::use_synced_signal,
@@ -251,7 +251,9 @@ pub fn PositioningInputs(
             // Reset back to uncalculated/default automatic positioning
             on_save(NodePositioning::Automatic(None));
         } else {
-            let abs_pos = *last_absolute_position.peek();
+            // Absolute starts where the node stands now, else where it last stood absolutely.
+            let placed = NODE_PLACEMENTS.peek().get(&*node_id.peek()).copied();
+            let abs_pos = placed.unwrap_or_else(|| *last_absolute_position.peek());
             on_save(NodePositioning::Absolute(abs_pos));
         }
     });
