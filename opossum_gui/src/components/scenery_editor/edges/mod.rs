@@ -1,4 +1,4 @@
-use crate::components::scenery_editor::constants::EDGE_PORT_STUB;
+use crate::components::scenery_editor::constants::{EDGE_CORNER_RADIUS, EDGE_PORT_STUB};
 use dioxus::html::geometry::euclid::default::Point2D;
 pub mod edge_component;
 pub mod edge_element;
@@ -7,9 +7,12 @@ pub mod edges_component;
 /// The SVG path of a connection from an output port to an input port.
 ///
 /// The connection leaves the output port and enters the input port horizontally, each with a
-/// straight piece of [`EDGE_PORT_STUB`]. Between them runs an S-curve whose control points lie out
-/// by half the horizontal distance, or by a quarter of the vertical one if that is more: long
-/// connections bend gently, steep ones stay round.
+/// straight piece of [`EDGE_PORT_STUB`]. If the input port lies to the right of these pieces, an
+/// S-curve joins them whose control points lie out by half the horizontal distance, or by a quarter
+/// of the vertical one if that is more: long connections bend gently, steep ones stay round. If it
+/// lies to the left, the connection turns down (or up) to halfway between the ports, runs back
+/// there and turns into the input port, with corners rounded by up to [`EDGE_CORNER_RADIUS`]. Either
+/// way it passes the midpoint between the two ports.
 ///
 /// # Arguments
 ///
@@ -22,21 +25,33 @@ pub mod edges_component;
 pub fn edge_path(output_port: Point2D<f64>, input_port: Point2D<f64>) -> String {
     let (start, end) = (output_port, input_port);
     let (from, to) = (start.x + EDGE_PORT_STUB, end.x - EDGE_PORT_STUB);
-    let offset = (to - from).max((end.y - start.y).abs() / 2.0) / 2.0;
+    let between = if to >= from {
+        let offset = (to - from).max((end.y - start.y).abs() / 2.0) / 2.0;
+        format!(
+            "C{},{} {},{} {to},{}",
+            from + offset,
+            start.y,
+            to - offset,
+            end.y,
+            end.y,
+        )
+    } else {
+        // The quarter keeps both vertical runs at least two corners long.
+        let turn = ((end.y - start.y) / 4.0).clamp(-EDGE_CORNER_RADIUS, EDGE_CORNER_RADIUS);
+        let (right, left) = (from + turn.abs(), to - turn.abs());
+        let (start_y, end_y, middle) = (start.y, end.y, f64::midpoint(start.y, end.y));
+        format!(
+            "Q{right},{start_y} {right},{} L{right},{} Q{right},{middle} {from},{middle} \
+             L{to},{middle} Q{left},{middle} {left},{} L{left},{} Q{left},{end_y} {to},{end_y}",
+            start_y + turn,
+            middle - turn,
+            middle + turn,
+            end_y - turn,
+        )
+    };
     format!(
-        "M{},{} L{},{} C{},{} {},{} {},{} L{},{}",
-        start.x,
-        start.y,
-        from,
-        start.y,
-        from + offset,
-        start.y,
-        to - offset,
-        end.y,
-        to,
-        end.y,
-        end.x,
-        end.y,
+        "M{},{} L{from},{} {between} L{},{}",
+        start.x, start.y, start.y, end.x, end.y,
     )
 }
 
@@ -119,5 +134,43 @@ mod tests {
     fn a_steep_edge_bends_by_a_quarter_of_its_vertical_distance() {
         let d = edge_path(Point2D::new(0.0, 0.0), Point2D::new(130.0, 400.0));
         assert_eq!(d, "M0,0 L15,0 C115,0 15,400 115,400 L130,400");
+    }
+
+    /// Stubs end at x = 615 and 85; a quarter of the 200 down exceeds the largest corner, so the
+    /// corners have radius 20 and the run back lies at y = 200, halfway.
+    #[test]
+    fn a_backward_edge_turns_down_runs_back_halfway_and_turns_into_its_port() {
+        let d = edge_path(Point2D::new(600.0, 100.0), Point2D::new(100.0, 300.0));
+        assert_eq!(
+            d,
+            "M600,100 L615,100 Q635,100 635,120 L635,180 Q635,200 615,200 \
+             L85,200 Q65,200 65,220 L65,280 Q65,300 85,300 L100,300"
+        );
+    }
+
+    /// The same edge with its input port 200 higher instead of lower turns up instead of down.
+    #[test]
+    fn a_backward_edge_to_a_higher_port_turns_up() {
+        let d = edge_path(Point2D::new(600.0, 300.0), Point2D::new(100.0, 100.0));
+        assert_eq!(
+            d,
+            "M600,300 L615,300 Q635,300 635,280 L635,220 Q635,200 615,200 \
+             L85,200 Q65,200 65,180 L65,120 Q65,100 85,100 L100,100"
+        );
+    }
+
+    /// Only 40 down, so the corners shrink to a quarter of that (10); the edge stays within the stubs
+    /// plus one corner, and its run back passes the midpoint (250, 20) between the ports.
+    #[test]
+    fn a_backward_edge_passes_the_midpoint_and_stays_within_its_corners() {
+        let d = edge_path(Point2D::new(400.0, 0.0), Point2D::new(100.0, 40.0));
+        let points = points(&d);
+
+        assert!(points.iter().all(|p| (75.0..=425.0).contains(&p.x)), "{d}");
+        let runs_through_midpoint = points.windows(2).any(|pair| {
+            let at_middle = pair.iter().all(|p| (p.y - 20.0).abs() < 1e-9);
+            at_middle && pair[0].x.min(pair[1].x) <= 250.0 && 250.0 <= pair[0].x.max(pair[1].x)
+        });
+        assert!(runs_through_midpoint, "{d}");
     }
 }

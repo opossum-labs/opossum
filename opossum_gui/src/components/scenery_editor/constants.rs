@@ -8,6 +8,8 @@ pub const VIEW_PADDING_FACTOR: f64 = 0.95;
 // constants for EDGE drawing
 /// Length of the straight piece with which a connection leaves and enters a port.
 pub const EDGE_PORT_STUB: f64 = 15.0;
+/// Largest radius of the corners of a connection that runs back to an input port on its left.
+pub const EDGE_CORNER_RADIUS: f64 = 20.0;
 pub const EDGE_DISTANCE_FIELD_WIDTH: f64 = 80.0;
 pub const EDGE_DISTANCE_FIELD_HEIGHT: f64 = 30.0;
 
