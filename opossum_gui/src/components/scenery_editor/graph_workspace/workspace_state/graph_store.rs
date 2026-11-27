@@ -1,7 +1,10 @@
 use crate::components::scenery_editor::{
     NodeElement, NodeType, SelectedNode,
-    constants::{NODE_WIDTH, SUGIYAMA_VERT_PATH_FACTOR, SUGIYAMA_VERTEX_SPACING},
-    edges::edge_element::EdgeElement,
+    constants::{
+        EDGE_DISTANCE_FIELD_HEIGHT, LAYOUT_LINE_GAP, LAYOUT_NODE_GAP, MAX_ZOOM, NODE_WIDTH,
+        SUGIYAMA_VERT_PATH_FACTOR, SUGIYAMA_VERTEX_SPACING, VIEW_PADDING_FACTOR,
+    },
+    edges::{edge_bounds, edge_element::EdgeElement},
     graph_workspace::{
         EditorState,
         test_registry::{EdgeKey, IndexRegistry},
@@ -413,44 +416,124 @@ impl GraphStore {
         selected_nodes
     }
 
+    /// The box the graph covers on the canvas; see [`covered_box`].
     pub fn get_bounding_box(&self) -> Rect<f64> {
-        if self.nodes.is_empty() {
-            return Rect::new(Point2D::zero(), Size2D::zero());
-        }
-        let mut node_boxes =
-            self.nodes.values().map(|node| {
-                let node_id = node.id();
-                let has_mapped_input = !self.mapped_ports.is_empty()
-                    && node.input_ports().iter().any(|port_name| {
-                        self.mapped_ports.contains_port_of_node(node_id, port_name)
-                    });
-                let has_mapped_output = !self.mapped_ports.is_empty()
-                    && node.output_ports().iter().any(|port_name| {
-                        self.mapped_ports.contains_port_of_node(node_id, port_name)
-                    });
-
-                node.get_bounding_box_with_mapped_ports(has_mapped_input, has_mapped_output)
-            });
-
-        // Initialize with the first node's bounding box
-        let mut rect = node_boxes.next().unwrap();
-
-        // Iterate over the rest of the nodes to expand the combined bounding box
-        for node_rect in node_boxes {
-            rect = rect.union(&node_rect);
-        }
-        rect
+        covered_box(
+            &self.nodes,
+            self.edges.iter().map(EdgeElement::info),
+            &self.mapped_ports,
+        )
     }
 }
+
+/// The box that `nodes` and the connections `edges` between them cover on the canvas, including the
+/// tags of the ports `mapped_ports` maps to the ports of the group they belong to.
+///
+/// Zoom to Fit fits this box, and the auto layout measures its candidates with it, so both agree.
+///
+/// # Arguments
+///
+/// * `nodes` - the nodes, at their positions.
+/// * `edges` - the connections; one with an end outside `nodes` is left out.
+/// * `mapped_ports` - the ports of the group, mapped to ports of `nodes`.
+///
+/// # Returns
+///
+/// The smallest box around all of them, or an empty box at the origin if there are no nodes.
+fn covered_box<'a>(
+    nodes: &HashMap<Uuid, NodeElement>,
+    edges: impl IntoIterator<Item = &'a ConnectInfo>,
+    mapped_ports: &PortMap,
+) -> Rect<f64> {
+    let node_boxes = nodes.values().map(|node| {
+        let mapped = |ports: &Vec<String>| {
+            ports
+                .iter()
+                .any(|port| mapped_ports.contains_port_of_node(node.id(), port))
+        };
+        node.get_bounding_box_with_mapped_ports(
+            mapped(node.input_ports()),
+            mapped(node.output_ports()),
+        )
+    });
+    let edge_boxes = edges.into_iter().filter_map(|edge| {
+        let output = nodes.get(&edge.src_uuid())?;
+        let input = nodes.get(&edge.target_uuid())?;
+        Some(edge_bounds(
+            output.abs_port_position(PortType::Output, edge.src_port()),
+            input.abs_port_position(PortType::Input, edge.target_port()),
+        ))
+    });
+    // From the corners rather than by `union`, which drops boxes without height.
+    Rect::from_points(
+        node_boxes
+            .chain(edge_boxes)
+            .flat_map(|covered| [covered.min(), covered.max()]),
+    )
+}
 /// Calculates optimized positions for all nodes in the graph.
-/// Places Analyzers at the top, disconnected nodes below them,
-/// and the connected Sugiyama layout at the bottom.
+///
+/// Analyzers go to the top, unconnected optical nodes below them, and the connected parts
+/// (Sugiyama layout) to the bottom. Rows too long for the view are broken into lines: of all line
+/// lengths, the one is taken at which the whole layout fits `view` at the largest zoom, and on a tie
+/// the longer one.
+///
+/// # Arguments
+///
+/// * `nodes` - the nodes to place.
+/// * `edges` - the connections between them.
+/// * `mapped_ports` - the ports of the group, mapped to ports of `nodes`; their tags take room.
+/// * `view` - the size of the canvas in pixels. An empty size breaks no line.
+///
+/// # Returns
+///
+/// The new top-left position of every node.
 #[must_use]
 pub fn optimize_layout(
     nodes: &HashMap<Uuid, NodeElement>,
     edges: &[ConnectInfo],
+    mapped_ports: &PortMap,
+    view: Size2D<f64>,
 ) -> HashMap<Uuid, Point2D<f64>> {
-    let mut new_positions = HashMap::new();
+    let blocks = layout_blocks(nodes, edges);
+    let mut line_widths: Vec<f64> = blocks
+        .iter()
+        .flatten()
+        .map(|(_, pos)| pos.x + NODE_WIDTH)
+        .collect();
+    line_widths.sort_by(f64::total_cmp);
+    line_widths.dedup();
+
+    let mut best: Option<(f64, HashMap<Uuid, Point2D<f64>>)> = None;
+    for line_width in line_widths {
+        let positions = stack_blocks(&blocks, nodes, edges, line_width);
+        let zoom = fit_zoom(&positions, nodes, edges, mapped_ports, view);
+        // The widths ascend, so `>=` hands a tie to the longer lines.
+        if best
+            .as_ref()
+            .is_none_or(|(best_zoom, _)| zoom >= *best_zoom)
+        {
+            best = Some((zoom, positions));
+        }
+    }
+    best.map_or_default(|(_, positions)| positions)
+}
+
+/// Places the nodes in blocks, before any line is broken: the analyzers in one row, the unconnected
+/// optical nodes in one row, and each connected part by the Sugiyama layout.
+///
+/// # Arguments
+///
+/// * `nodes` - the nodes to place.
+/// * `edges` - the connections between them.
+///
+/// # Returns
+///
+/// The blocks from top to bottom, each node with its position within its block.
+fn layout_blocks(
+    nodes: &HashMap<Uuid, NodeElement>,
+    edges: &[ConnectInfo],
+) -> Vec<Vec<(Uuid, Point2D<f64>)>> {
     let mut connected_node_ids = HashSet::new();
 
     // Determine which nodes are part of a connection
@@ -478,80 +561,203 @@ pub fn optimize_layout(
     analyzers.sort();
     disconnected_nodes.sort();
 
-    // Define layout spacing constants
-    let h_gap = 50.0;
-    let v_gap = 100.0;
-
-    let mut current_y = 0.0;
-
-    // --- Row 1: Analyzers ---
-    if !analyzers.is_empty() {
-        current_y = layout_horizontal_row(
-            &analyzers,
-            nodes,
-            current_y,
-            h_gap,
-            v_gap,
-            &mut new_positions,
-        );
+    let row = |ids: &[Uuid]| -> Vec<(Uuid, Point2D<f64>)> {
+        ids.iter()
+            .enumerate()
+            .map(|(i, id)| {
+                let x = to_f64(i) * (NODE_WIDTH + LAYOUT_NODE_GAP);
+                (*id, Point2D::new(x, 0.0))
+            })
+            .collect()
+    };
+    let mut blocks = vec![row(&analyzers), row(&disconnected_nodes)];
+    if !edges.is_empty() {
+        blocks.extend(layout_sugiyama_connected(nodes, edges));
     }
-
-    // --- Row 2: Disconnected Optical Nodes ---
-    if !disconnected_nodes.is_empty() {
-        current_y = layout_horizontal_row(
-            &disconnected_nodes,
-            nodes,
-            current_y,
-            h_gap,
-            v_gap,
-            &mut new_positions,
-        );
-    }
-
-    // --- Row 3: Connected Nodes (Sugiyama Layout with Post-Processing) ---
-    if !connected_node_ids.is_empty() && !edges.is_empty() {
-        layout_sugiyama_connected(nodes, edges, current_y, v_gap, &mut new_positions);
-    }
-
-    new_positions
+    blocks
 }
 
-/// Helper function to lay out a single flat row of nodes horizontally.
-/// Returns the updated next available Y position.
-fn layout_horizontal_row(
-    node_ids: &[Uuid],
+/// Breaks every block into lines no wider than `line_width` and stacks the blocks below each other.
+///
+/// # Arguments
+///
+/// * `blocks` - the blocks from [`layout_blocks`], top to bottom.
+/// * `nodes` - the nodes, for their heights and ports.
+/// * `edges` - the connections between them.
+/// * `line_width` - the widest a line may get.
+///
+/// # Returns
+///
+/// The position of every node, with the top-left corner of the layout at the origin.
+fn stack_blocks(
+    blocks: &[Vec<(Uuid, Point2D<f64>)>],
     nodes: &HashMap<Uuid, NodeElement>,
-    current_y: f64,
-    h_gap: f64,
-    v_gap: f64,
-    new_positions: &mut HashMap<Uuid, Point2D<f64>>,
+    edges: &[ConnectInfo],
+    line_width: f64,
+) -> HashMap<Uuid, Point2D<f64>> {
+    let mut positions = HashMap::new();
+    let mut top = 0.0;
+    for block in blocks {
+        top = fold_into_lines(block, nodes, edges, line_width, top, &mut positions);
+    }
+    positions
+}
+
+/// Breaks one block into lines no wider than `line_width` and stacks them, starting at `top`.
+///
+/// The block's columns (the nodes sharing an x) are taken from left to right; a column that would
+/// end beyond `line_width` from the start of its line opens the next line. Each line is moved to
+/// x = 0, its top at least [`LAYOUT_LINE_GAP`] below the bottom of the line before. A connection
+/// from one line to the next passes halfway between its ports' heights, and carries its distance
+/// field there; the gap grows until that height keeps [`EDGE_DISTANCE_FIELD_HEIGHT`] from both
+/// lines.
+///
+/// # Arguments
+///
+/// * `block` - the nodes with their positions within the block.
+/// * `nodes` - the nodes, for their heights and ports.
+/// * `edges` - the connections; those from one line to the next set the gap between the two.
+/// * `line_width` - the widest a line may get; at least [`NODE_WIDTH`], so that every line holds a
+///   column.
+/// * `top` - where the first line starts.
+/// * `positions` - receives the new position of every node of the block.
+///
+/// # Returns
+///
+/// Where the next block starts: [`LAYOUT_LINE_GAP`] below the last line, or `top` for an empty
+/// block.
+fn fold_into_lines(
+    block: &[(Uuid, Point2D<f64>)],
+    nodes: &HashMap<Uuid, NodeElement>,
+    edges: &[ConnectInfo],
+    line_width: f64,
+    top: f64,
+    positions: &mut HashMap<Uuid, Point2D<f64>>,
 ) -> f64 {
-    let mut current_x = 0.0;
-    let mut max_row_height = 0.0;
+    let mut by_x = block.to_vec();
+    by_x.sort_by(|a, b| a.1.x.total_cmp(&b.1.x));
 
-    for id in node_ids {
-        new_positions.insert(*id, Point2D::new(current_x, current_y));
-        current_x += NODE_WIDTH + h_gap;
-
-        if let Some(node) = nodes.get(id) {
-            let height = node.get_bounding_box().height();
-            if height > max_row_height {
-                max_row_height = height;
-            }
+    let mut lines: Vec<Vec<(Uuid, Point2D<f64>)>> = Vec::new();
+    let mut line_start = 0.0;
+    for (id, pos) in by_x {
+        if lines.is_empty() || pos.x - line_start + NODE_WIDTH > line_width {
+            line_start = pos.x;
+            lines.push(Vec::new());
+        }
+        if let Some(line) = lines.last_mut() {
+            line.push((id, Point2D::new(pos.x - line_start, pos.y)));
         }
     }
 
-    current_y + max_row_height + v_gap
+    let extents: Vec<(f64, f64)> = lines
+        .iter()
+        .map(|line| {
+            let line_top = line
+                .iter()
+                .map(|(_, pos)| pos.y)
+                .fold(f64::INFINITY, f64::min);
+            let line_bottom = line
+                .iter()
+                .map(|(id, pos)| pos.y + node_height(nodes, *id))
+                .fold(f64::NEG_INFINITY, f64::max);
+            (line_top, line_bottom)
+        })
+        .collect();
+    let line_and_y: HashMap<Uuid, (usize, f64)> = lines
+        .iter()
+        .enumerate()
+        .flat_map(|(i, line)| line.iter().map(move |(id, pos)| (*id, (i, pos.y))))
+        .collect();
+    let port_in_block = |id: Uuid, port_type: PortType, port: &str| {
+        let (line, y) = *line_and_y.get(&id)?;
+        let node = nodes.get(&id)?;
+        Some((
+            line,
+            y + node.abs_port_position(port_type, port).y - node.pos().y,
+        ))
+    };
+    let mut gaps_below = vec![LAYOUT_LINE_GAP; lines.len()];
+    for edge in edges {
+        if let Some((from, output_y)) =
+            port_in_block(edge.src_uuid(), PortType::Output, edge.src_port())
+            && let Some((to, input_y)) =
+                port_in_block(edge.target_uuid(), PortType::Input, edge.target_port())
+            && to == from + 1
+        {
+            let above_bottom = extents[from].1 - output_y;
+            let below_top = input_y - extents[to].0;
+            let needed =
+                2.0f64.mul_add(EDGE_DISTANCE_FIELD_HEIGHT, (above_bottom - below_top).abs());
+            gaps_below[from] = gaps_below[from].max(needed);
+        }
+    }
+
+    let mut top = top;
+    for ((line, (line_top, line_bottom)), gap_below) in
+        lines.into_iter().zip(extents).zip(gaps_below)
+    {
+        for (id, pos) in line {
+            positions.insert(id, Point2D::new(pos.x, pos.y - line_top + top));
+        }
+        top += line_bottom - line_top + gap_below;
+    }
+    top
 }
 
-/// Helper function to process the Sugiyama layout and apply custom post-processing barycenter logic.
+/// The zoom, up to [`MAX_ZOOM`], that Zoom to Fit will choose for a layout in `view`.
+///
+/// # Arguments
+///
+/// * `positions` - the layout.
+/// * `nodes` - the nodes it places.
+/// * `edges` - the connections between them.
+/// * `mapped_ports` - the ports of the group, mapped to ports of `nodes`.
+/// * `view` - the size of the canvas in pixels.
+///
+/// # Returns
+///
+/// The zoom; zero for an empty view.
+fn fit_zoom(
+    positions: &HashMap<Uuid, Point2D<f64>>,
+    nodes: &HashMap<Uuid, NodeElement>,
+    edges: &[ConnectInfo],
+    mapped_ports: &PortMap,
+    view: Size2D<f64>,
+) -> f64 {
+    let placed: HashMap<Uuid, NodeElement> = positions
+        .iter()
+        .filter_map(|(id, pos)| {
+            let mut node = nodes.get(id)?.clone();
+            node.set_pos(*pos);
+            Some((*id, node))
+        })
+        .collect();
+    let covered = covered_box(&placed, edges, mapped_ports);
+    (VIEW_PADDING_FACTOR * view.width / covered.width())
+        .min(VIEW_PADDING_FACTOR * view.height / covered.height())
+        .min(MAX_ZOOM)
+}
+
+/// The height of node `id` on the canvas, or zero if `nodes` does not hold it.
+fn node_height(nodes: &HashMap<Uuid, NodeElement>, id: Uuid) -> f64 {
+    nodes.get(&id).map_or(0.0, NodeElement::total_height)
+}
+
+/// Lays out the connected parts of the graph with Sugiyama and orders the nodes of each layer by the
+/// height of the ports that feed them (barycenter).
+///
+/// # Arguments
+///
+/// * `nodes` - the nodes, for their port positions.
+/// * `edges` - the connections; every node they name is placed.
+///
+/// # Returns
+///
+/// One block per connected part, each node with its position within its block.
 fn layout_sugiyama_connected(
     nodes: &HashMap<Uuid, NodeElement>,
     edges: &[ConnectInfo],
-    start_y: f64,
-    v_gap: f64,
-    new_positions: &mut HashMap<Uuid, Point2D<f64>>,
-) {
+) -> Vec<Vec<(Uuid, Point2D<f64>)>> {
     let sugiyama_config = Config {
         vertex_spacing: SUGIYAMA_VERTEX_SPACING,
         ..Default::default()
@@ -570,7 +776,7 @@ fn layout_sugiyama_connected(
         .collect();
 
     let layouts = from_edges(&edges_u32, &sugiyama_config);
-    let mut current_sugiyama_y = start_y;
+    let mut blocks = Vec::new();
 
     for (layout, _group_height, _) in layouts {
         // Group nodes by their X-coordinate.
@@ -590,7 +796,7 @@ fn layout_sugiyama_connected(
         }
 
         let mut subgraph_positions: HashMap<Uuid, Point2D<f64>> = HashMap::new();
-        let mut max_y_in_group = current_sugiyama_y;
+        let mut block = Vec::new();
 
         // Process each layer from left to right
         for (&orig_x_layer, node_ids_in_layer) in &layers {
@@ -660,20 +866,16 @@ fn layout_sugiyama_connected(
                 let final_x = to_f64(orig_x_layer);
 
                 let assigned_y_val = original_ys[i];
-                let final_y = assigned_y_val.mul_add(SUGIYAMA_VERT_PATH_FACTOR, current_sugiyama_y);
+                let final_y = assigned_y_val * SUGIYAMA_VERT_PATH_FACTOR;
 
                 let final_pos = Point2D::new(final_x, final_y);
                 subgraph_positions.insert(uuid, final_pos);
-                new_positions.insert(uuid, final_pos);
-
-                if final_y > max_y_in_group {
-                    max_y_in_group = final_y;
-                }
+                block.push((uuid, final_pos));
             }
         }
-        // Move down for the next disconnected subgraph
-        current_sugiyama_y = max_y_in_group + v_gap;
+        blocks.push(block);
     }
+    blocks
 }
 
 /// Registry to map UUIDs to u32 IDs.
@@ -705,5 +907,424 @@ impl UuidRegistry {
 
     fn get_uuid(&self, id: u32) -> Option<Uuid> {
         self.backward.get(&id).copied()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use opossum_core::analyzers::{AnalyzerType, EnergyConfig};
+
+    /// An optical node `id` with one input and one output port.
+    fn optical(id: u128) -> (Uuid, NodeElement) {
+        let uuid = Uuid::from_u128(id);
+        let ports = Ports::new(vec!["input_1".to_string()], vec!["output_1".to_string()]);
+        let node = NodeElement::new(
+            format!("node {id}"),
+            NodeType::Optical("dummy".to_string()),
+            uuid,
+            Point2D::zero(),
+            ports,
+            false,
+            0,
+        );
+        (uuid, node)
+    }
+
+    /// An energy analyzer `id`.
+    fn analyzer(id: u128) -> (Uuid, NodeElement) {
+        let uuid = Uuid::from_u128(id);
+        let analyzer_type = AnalyzerType::Energy(EnergyConfig::default());
+        let node = NodeElement::new(
+            String::new(),
+            NodeType::Analyzer(Box::new(analyzer_type)),
+            uuid,
+            Point2D::zero(),
+            Ports::default(),
+            false,
+            0,
+        );
+        (uuid, node)
+    }
+
+    /// The connection from the output of `src` to the input of `target`.
+    fn connect(src: Uuid, target: Uuid) -> ConnectInfo {
+        ConnectInfo::new(
+            src,
+            "output_1".to_string(),
+            target,
+            "input_1".to_string(),
+            0.0,
+            false,
+        )
+    }
+
+    /// The box node `id` covers at the position the layout gave it.
+    fn placed_box(
+        nodes: &HashMap<Uuid, NodeElement>,
+        positions: &HashMap<Uuid, Point2D<f64>>,
+        id: Uuid,
+    ) -> Rect<f64> {
+        let mut node = nodes[&id].clone();
+        node.set_pos(positions[&id]);
+        node.get_bounding_box()
+    }
+
+    #[test]
+    fn chain_lies_in_one_row_from_left_to_right() {
+        let nodes: HashMap<Uuid, NodeElement> = (1..=3).map(optical).collect();
+        let [a, b, c] = [1, 2, 3].map(Uuid::from_u128);
+
+        let positions = optimize_layout(
+            &nodes,
+            &[connect(a, b), connect(b, c)],
+            &PortMap::default(),
+            Size2D::zero(),
+        );
+
+        let [pa, pb, pc] = [a, b, c].map(|id| positions[&id]);
+        assert!((pb.x - pa.x - SUGIYAMA_VERTEX_SPACING).abs() < 1e-9);
+        assert!((pc.x - pb.x - SUGIYAMA_VERTEX_SPACING).abs() < 1e-9);
+        assert!((pb.y - pa.y).abs() < 1e-9);
+        assert!((pc.y - pa.y).abs() < 1e-9);
+    }
+
+    #[test]
+    fn analyzers_lie_above_unconnected_nodes_which_lie_above_connected_ones() {
+        let nodes: HashMap<Uuid, NodeElement> = [analyzer(1), optical(2), optical(3), optical(4)]
+            .into_iter()
+            .collect();
+        let [energy, lone, a, b] = [1, 2, 3, 4].map(Uuid::from_u128);
+
+        let positions = optimize_layout(
+            &nodes,
+            &[connect(a, b)],
+            &PortMap::default(),
+            Size2D::zero(),
+        );
+
+        let placed = |id| placed_box(&nodes, &positions, id);
+        assert!(placed(energy).max_y() <= placed(lone).min_y());
+        assert!(placed(lone).max_y() <= placed(a).min_y());
+        assert!(placed(lone).max_y() <= placed(b).min_y());
+    }
+
+    #[test]
+    fn separate_chains_are_stacked_without_overlap() {
+        let nodes: HashMap<Uuid, NodeElement> = (1..=4).map(optical).collect();
+        let [a, b, c, d] = [1, 2, 3, 4].map(Uuid::from_u128);
+
+        let positions = optimize_layout(
+            &nodes,
+            &[connect(a, b), connect(c, d)],
+            &PortMap::default(),
+            Size2D::zero(),
+        );
+
+        let (upper, lower) = if positions[&a].y < positions[&c].y {
+            ([a, b], [c, d])
+        } else {
+            ([c, d], [a, b])
+        };
+        let placed = |id| placed_box(&nodes, &positions, id);
+        for up in upper {
+            for low in lower {
+                assert!(placed(up).max_y() <= placed(low).min_y());
+            }
+        }
+    }
+
+    /// The chain 1 → 2 → … → `n` of optical nodes.
+    fn chain(n: u128) -> (HashMap<Uuid, NodeElement>, Vec<ConnectInfo>) {
+        let nodes = (1..=n).map(optical).collect();
+        let edges = (1..n)
+            .map(|i| connect(Uuid::from_u128(i), Uuid::from_u128(i + 1)))
+            .collect();
+        (nodes, edges)
+    }
+
+    /// With node height H ≈ 80.3, c columns per line and L lines, a chain is (c − 1)·250 + 130 wide,
+    /// 71 more once a connection runs back to the next line, and L·H + (L − 1)·100 high. Six nodes
+    /// in a 1200 × 500 view: 3 columns (701 × 261, zoom 1.63) beat 4 (951 × 261, zoom 1.20),
+    /// 2 (451 × 441, zoom 1.08) and 6 (1380 × 80, zoom 0.83).
+    #[test]
+    fn long_chain_wraps_into_the_lines_that_fit_the_view_best() {
+        let (nodes, edges) = chain(6);
+
+        let positions = optimize_layout(
+            &nodes,
+            &edges,
+            &PortMap::default(),
+            Size2D::new(1200.0, 500.0),
+        );
+
+        let pos = |i| positions[&Uuid::from_u128(i)];
+        let columns = [0.0, 1.0, 2.0, 0.0, 1.0, 2.0];
+        for (i, column) in (1..=6).zip(columns) {
+            assert!(f64::mul_add(column, -SUGIYAMA_VERTEX_SPACING, pos(i).x).abs() < 1e-9);
+        }
+        for (i, first_of_line) in [(2, 1), (3, 1), (5, 4), (6, 4)] {
+            assert!((pos(i).y - pos(first_of_line).y).abs() < 1e-9);
+        }
+        let placed = |i| placed_box(&nodes, &positions, Uuid::from_u128(i));
+        assert!(placed(1).max_y() <= placed(4).min_y());
+    }
+
+    /// The same six nodes in a 3000 × 200 view: one line (1380 × 80, zoom 2.07) beats two (261 high,
+    /// zoom at most 0.73).
+    #[test]
+    fn long_chain_stays_in_one_line_in_a_wide_flat_view() {
+        let (nodes, edges) = chain(6);
+
+        let positions = optimize_layout(
+            &nodes,
+            &edges,
+            &PortMap::default(),
+            Size2D::new(3000.0, 200.0),
+        );
+
+        let pos = |i| positions[&Uuid::from_u128(i)];
+        for (i, column) in (1..=6).zip([0.0, 1.0, 2.0, 3.0, 4.0, 5.0]) {
+            assert!(f64::mul_add(column, -SUGIYAMA_VERTEX_SPACING, pos(i).x).abs() < 1e-9);
+            assert!((pos(i).y - pos(1).y).abs() < 1e-9);
+        }
+    }
+
+    /// Two nodes in a 4000 × 4000 view fit at the largest zoom both side by side and one below the
+    /// other; on that tie the longer line wins.
+    #[test]
+    fn small_graph_stays_in_one_line_when_every_layout_fits_at_the_largest_zoom() {
+        let (nodes, edges) = chain(2);
+
+        let positions = optimize_layout(
+            &nodes,
+            &edges,
+            &PortMap::default(),
+            Size2D::new(4000.0, 4000.0),
+        );
+
+        let [first, second] = [1, 2].map(|i| positions[&Uuid::from_u128(i)]);
+        assert!(second.x > first.x);
+        assert!((second.y - first.y).abs() < 1e-9);
+    }
+
+    /// Four analyzers in a 700 × 600 view: with c per line their row is (c − 1)·180 + 130 wide, so
+    /// two lines of two (310 × 261, zoom 2.15) beat one line (670 × 80, zoom 0.99), three columns
+    /// (490 × 261, zoom 1.36) and one column (130 × 621, zoom 0.92).
+    #[test]
+    fn analyzer_row_wraps_like_a_chain() {
+        let nodes: HashMap<Uuid, NodeElement> = (1..=4).map(analyzer).collect();
+
+        let positions =
+            optimize_layout(&nodes, &[], &PortMap::default(), Size2D::new(700.0, 600.0));
+
+        let pos = |i| positions[&Uuid::from_u128(i)];
+        let pitch = NODE_WIDTH + LAYOUT_NODE_GAP;
+        for (i, column) in (1..=4).zip([0.0, 1.0, 0.0, 1.0]) {
+            assert!(f64::mul_add(column, -pitch, pos(i).x).abs() < 1e-9);
+        }
+        assert!((pos(2).y - pos(1).y).abs() < 1e-9);
+        assert!((pos(4).y - pos(3).y).abs() < 1e-9);
+        let placed = |i| placed_box(&nodes, &positions, Uuid::from_u128(i));
+        assert!(placed(1).max_y() <= placed(3).min_y());
+    }
+
+    /// A splitter feeding two nodes in a 200 × 1000 view: one column per line wins (201 wide with the
+    /// connections running back, against 380). The two fed nodes share a column, so they move to the
+    /// next line together.
+    #[test]
+    fn nodes_of_one_column_stay_in_one_line() {
+        let nodes: HashMap<Uuid, NodeElement> = (1..=3).map(optical).collect();
+        let [splitter, a, b] = [1, 2, 3].map(Uuid::from_u128);
+        let edges = [connect(splitter, a), connect(splitter, b)];
+
+        let positions = optimize_layout(
+            &nodes,
+            &edges,
+            &PortMap::default(),
+            Size2D::new(200.0, 1000.0),
+        );
+
+        assert!(positions[&a].x.abs() < 1e-9);
+        assert!(positions[&b].x.abs() < 1e-9);
+        assert!((positions[&a].y - positions[&b].y).abs() > 1.0);
+        let placed = |id| placed_box(&nodes, &positions, id);
+        assert!(placed(splitter).max_y() <= placed(a).min_y().min(placed(b).min_y()));
+    }
+
+    /// Optical node `id`, placed at (`x`, `y`).
+    fn optical_at(id: u128, x: f64, y: f64) -> (Uuid, NodeElement) {
+        let (uuid, mut node) = optical(id);
+        node.set_pos(Point2D::new(x, y));
+        (uuid, node)
+    }
+
+    #[test]
+    fn covered_box_spans_all_nodes() {
+        let nodes: HashMap<Uuid, NodeElement> =
+            [optical_at(1, 0.0, 0.0), optical_at(2, 300.0, 100.0)]
+                .into_iter()
+                .collect();
+        let height = nodes[&Uuid::from_u128(2)].total_height();
+
+        let covered = covered_box(&nodes, &[], &PortMap::default());
+
+        assert!(covered.min_x().abs() < 1e-9);
+        assert!(covered.min_y().abs() < 1e-9);
+        assert!((covered.max_x() - (300.0 + NODE_WIDTH)).abs() < 1e-9);
+        assert!((covered.max_y() - (100.0 + height)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn covered_box_holds_the_tags_of_mapped_ports() {
+        use crate::components::scenery_editor::constants::PORT_MAP_OVERHANG;
+        let nodes: HashMap<Uuid, NodeElement> =
+            [optical_at(1, 0.0, 0.0), optical_at(2, 300.0, 0.0)]
+                .into_iter()
+                .collect();
+        let mut mapped_ports = PortMap::default();
+        mapped_ports
+            .add("input_1", Uuid::from_u128(1), "input_1")
+            .unwrap();
+        mapped_ports
+            .add("output_1", Uuid::from_u128(2), "output_1")
+            .unwrap();
+
+        let covered = covered_box(&nodes, &[], &mapped_ports);
+
+        assert!((covered.min_x() + PORT_MAP_OVERHANG).abs() < 1e-9);
+        assert!((covered.max_x() - (300.0 + NODE_WIDTH + PORT_MAP_OVERHANG)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn covered_box_of_no_nodes_is_empty_at_the_origin() {
+        let covered = covered_box(&HashMap::new(), &[], &PortMap::default());
+
+        assert!(covered.is_empty());
+        assert!(covered.origin.x.abs() < 1e-9 && covered.origin.y.abs() < 1e-9);
+    }
+
+    /// A chain wrapped after its second node: the connection from the end of the first line back to
+    /// the start of the second reaches beyond both, and the box has to hold it.
+    #[test]
+    fn covered_box_holds_a_connection_running_back_to_the_next_line() {
+        let nodes: HashMap<Uuid, NodeElement> = [
+            optical_at(1, 0.0, 0.0),
+            optical_at(2, 250.0, 0.0),
+            optical_at(3, 0.0, 180.0),
+        ]
+        .into_iter()
+        .collect();
+        let [a, b, c] = [1, 2, 3].map(Uuid::from_u128);
+        let edges = [connect(a, b), connect(b, c)];
+
+        let covered = covered_box(&nodes, &edges, &PortMap::default());
+
+        let wrap = edge_bounds(
+            nodes[&b].abs_port_position(PortType::Output, "output_1"),
+            nodes[&c].abs_port_position(PortType::Input, "input_1"),
+        );
+        assert!(covered.contains_rect(&wrap), "{covered:?} misses {wrap:?}");
+    }
+
+    /// A connection running back between two ports at one height has a box without height, which
+    /// still counts.
+    #[test]
+    fn covered_box_holds_a_connection_back_at_one_height() {
+        let nodes: HashMap<Uuid, NodeElement> =
+            [optical_at(1, 300.0, 0.0), optical_at(2, 0.0, 0.0)]
+                .into_iter()
+                .collect();
+        let [a, b] = [1, 2].map(Uuid::from_u128);
+
+        let covered = covered_box(&nodes, &[connect(a, b)], &PortMap::default());
+
+        let back = edge_bounds(
+            nodes[&a].abs_port_position(PortType::Output, "output_1"),
+            nodes[&b].abs_port_position(PortType::Input, "input_1"),
+        );
+        assert!(covered.min_x() <= back.min_x() && back.max_x() <= covered.max_x());
+    }
+
+    /// A beam splitter `id` with one input and two output ports.
+    fn splitter(id: u128) -> (Uuid, NodeElement) {
+        let (uuid, mut node) = optical(id);
+        node.set_ports(
+            vec!["input_1".to_string()],
+            vec!["output_1".to_string(), "output_2".to_string()],
+        );
+        (uuid, node)
+    }
+
+    /// A splitter 1 with two parallel arms 2 → 3 → 4 and 5 → 6 → 7, in a tall narrow view that breaks
+    /// the arms into lines of two rows each. With the gap fixed at 100, the lower arm would run back
+    /// from one line to the next at about y = 333, through the upper arm's node at 305–385.
+    #[test]
+    fn connections_to_the_next_line_run_back_clear_of_every_node() {
+        let mut nodes: HashMap<Uuid, NodeElement> = (2..=7).map(optical).collect();
+        let (s, splitter_node) = splitter(1);
+        nodes.insert(s, splitter_node);
+        let [a1, a2, a3, b1, b2, b3] = [2, 3, 4, 5, 6, 7].map(Uuid::from_u128);
+        let lower_arm = ConnectInfo::new(
+            s,
+            "output_2".to_string(),
+            b1,
+            "input_1".to_string(),
+            0.0,
+            false,
+        );
+        let edges = [
+            connect(s, a1),
+            lower_arm,
+            connect(a1, a2),
+            connect(a2, a3),
+            connect(b1, b2),
+            connect(b2, b3),
+        ];
+
+        let positions = optimize_layout(
+            &nodes,
+            &edges,
+            &PortMap::default(),
+            Size2D::new(400.0, 2000.0),
+        );
+
+        let placed: HashMap<Uuid, NodeElement> = nodes
+            .iter()
+            .map(|(id, node)| {
+                let mut node = node.clone();
+                node.set_pos(positions[id]);
+                (*id, node)
+            })
+            .collect();
+        let mut running_back = 0;
+        for edge in &edges {
+            let start =
+                placed[&edge.src_uuid()].abs_port_position(PortType::Output, edge.src_port());
+            let end =
+                placed[&edge.target_uuid()].abs_port_position(PortType::Input, edge.target_port());
+            if end.x >= start.x {
+                continue;
+            }
+            running_back += 1;
+            let reach = edge_bounds(start, end);
+            let field = Rect::new(
+                Point2D::new(
+                    reach.min_x(),
+                    f64::midpoint(start.y, end.y) - EDGE_DISTANCE_FIELD_HEIGHT / 2.0,
+                ),
+                Size2D::new(reach.width(), EDGE_DISTANCE_FIELD_HEIGHT),
+            );
+            for (id, node) in &placed {
+                let node_box = node.get_bounding_box();
+                assert!(
+                    !node_box.intersects(&field),
+                    "{} → {} runs back through node {id}",
+                    edge.src_uuid(),
+                    edge.target_uuid()
+                );
+            }
+        }
+        assert!(running_back > 0, "the view breaks no line");
     }
 }

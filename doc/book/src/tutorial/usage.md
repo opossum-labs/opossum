@@ -72,6 +72,8 @@ You can also tidy up the node arrangement using the auto-layout function: Select
 
 ![fourth step](../images/opossum_gui_first_steps_4.PNG)
 
+Auto Layout places the analyzers at the top, unconnected nodes below them, and the connected setup at the bottom, from left to right along the light. A setup too long for the editor is broken into several lines: of all line lengths, Auto Layout takes the one that shows the whole setup at the largest zoom, then zooms to fit. A narrower or taller editor pane therefore gives more and shorter lines, and the same pane size always gives the same result. A connection that continues on the next line leaves its node to the right, runs back through the gap below its line and enters the next node from the left. The gap grows as needed, so that the connection and its distance field stay clear of the nodes. Where parallel branches, such as the two arms behind a beam splitter, are broken at the same place, their connections can share a short piece of their way.
+
 
 ### Configuring Nodes
 

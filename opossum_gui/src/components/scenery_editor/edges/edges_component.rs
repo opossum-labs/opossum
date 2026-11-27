@@ -2,8 +2,7 @@ use crate::{
     CONNECTIONS_PLACING_BY_DISTANCE,
     components::scenery_editor::{
         EditorStateStoreExt, GraphState,
-        constants::EDGE_BEZIER_OFFSET,
-        edges::{define_bezier_path, edge_component::EdgeComponent},
+        edges::{edge_component::EdgeComponent, edge_path},
         graph_workspace::{GraphStateStoreExt, GraphStoreStoreExt},
     },
 };
@@ -32,22 +31,16 @@ pub struct EdgeCreation {
     end_port: Option<EdgePort>,
     start: Point2D<f64>,
     end: Point2D<f64>,
-    bezier_offset: f64,
 }
 
 impl EdgeCreation {
     #[must_use]
-    pub fn new(
+    pub const fn new(
         src_node: Uuid,
         src_port: String,
         src_port_type: PortType,
         start: Point2D<f64>,
     ) -> Self {
-        let connection_factor = if src_port_type == PortType::Input {
-            -1.
-        } else {
-            1.
-        };
         Self {
             start_port: EdgePort {
                 node_id: src_node,
@@ -57,7 +50,6 @@ impl EdgeCreation {
             end_port: None,
             start,
             end: start,
-            bezier_offset: EDGE_BEZIER_OFFSET * connection_factor,
         }
     }
     pub fn shift_end(&mut self, shift: Point2D<f64>) {
@@ -119,7 +111,12 @@ pub fn EdgeCreationComponent() -> Element {
     editor_status.edge_in_creation().read().clone().map_or_else(
         || rsx! {},
         |edge| {
-            let new_path = define_bezier_path(edge.start, edge.end, edge.bezier_offset);
+            // A drag from an input port ends at the output the connection will come from.
+            let new_path = if edge.start_port.port_type == PortType::Input {
+                edge_path(edge.end, edge.start)
+            } else {
+                edge_path(edge.start, edge.end)
+            };
             rsx! {
                 path {
                     d: new_path,

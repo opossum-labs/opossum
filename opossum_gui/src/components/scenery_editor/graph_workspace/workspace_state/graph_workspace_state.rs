@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::components::scenery_editor::{
     DragStatus, NodeType,
-    constants::{MAX_ZOOM, MIN_ZOOM},
+    constants::{MAX_ZOOM, MIN_ZOOM, VIEW_PADDING_FACTOR},
     graph_workspace::{EditorStateStoreExt, GraphState, GraphStateStoreExt},
 };
 
@@ -80,10 +80,9 @@ impl<Lens> Store<GraphsWorkspaceState, Lens> {
         let view_center = self.get_view_port_center(graph_id);
 
         if let (Some(graph), Some(bounding_box)) = (self.tabs().get(graph_id), bounding_box_opt) {
-            let padding_fac = 0.95;
             let zoom = *graph.editor_state().zoom().read();
-            let height_fac = view_box.height * padding_fac / zoom / bounding_box.height();
-            let width_fac = view_box.width * padding_fac / zoom / bounding_box.width();
+            let height_fac = view_box.height * VIEW_PADDING_FACTOR / zoom / bounding_box.height();
+            let width_fac = view_box.width * VIEW_PADDING_FACTOR / zoom / bounding_box.width();
             graph
                 .editor_state()
                 .zoom()

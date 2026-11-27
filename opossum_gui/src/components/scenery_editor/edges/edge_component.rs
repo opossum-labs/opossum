@@ -2,8 +2,8 @@ use crate::components::{
     node_editor::inputs::input_components::{UnitHandling, UnitInput},
     scenery_editor::{
         GraphState, GraphsWorkspaceAction,
-        constants::{EDGE_BEZIER_OFFSET, EDGE_DISTANCE_FIELD_HEIGHT, EDGE_DISTANCE_FIELD_WIDTH},
-        edges::{define_bezier_path, edge_element::EdgeElement},
+        constants::{EDGE_DISTANCE_FIELD_HEIGHT, EDGE_DISTANCE_FIELD_WIDTH},
+        edges::{edge_element::EdgeElement, edge_path},
         graph_workspace::{GraphStateStoreExt, GraphStoreStoreExt},
     },
 };
@@ -51,7 +51,7 @@ pub fn EdgeComponent(edge: ReadStore<EdgeElement>, distance_places: bool) -> Ele
         }
     });
 
-    let new_path = define_bezier_path(start_position(), end_position(), EDGE_BEZIER_OFFSET);
+    let new_path = edge_path(start_position(), end_position());
     let distance_field_position = Point2D::new(
         f64::midpoint(start_position().x, end_position().x) - EDGE_DISTANCE_FIELD_WIDTH / 2.0,
         f64::midpoint(start_position().y, end_position().y) - EDGE_DISTANCE_FIELD_HEIGHT / 2.0,
