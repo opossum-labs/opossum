@@ -2,13 +2,9 @@
 
 use super::{AnalyzerInfo, OpmDocument, PositioningRun};
 use crate::{
-    analyzers::{
-        AnalyzerKind, AnalyzerRegistration, AnalyzerType, RayTraceConfig,
-        raytrace::AnalysisRayTrace,
-    },
+    analyzers::{AnalyzerKind, AnalyzerRegistration, AnalyzerType, RayTraceConfig},
     core_optics::OpticNode,
     error::{OpmResult, OpossumError},
-    light::light_result::LightResult,
     reporting::analysis_report::AnalysisReport,
 };
 use log::info;
@@ -41,6 +37,7 @@ impl OpmDocument {
         self.metric_store.clear();
         self.vector_metric_store.clear();
         let runs = self.analysis_runs()?;
+        self.reposition_for(&runs)?;
         for AnalysisRun {
             analyzer_id,
             analyzer_type,
@@ -82,14 +79,15 @@ impl OpmDocument {
     }
     /// Performs an analysis run of this [`OpmDocument`].
     ///
-    /// Executes the defined analyzers in the order they were registered.
+    /// Executes the defined analyzers in the order they were registered, all on the same
+    /// placement of the model.
     /// An analyzer referring to [`PumpScenario`](crate::gain::PumpScenario)s runs once per scenario;
     /// an analyzer with no scenario specified runs once on the passive model.
     ///
     /// # Errors
     ///
-    /// Returns an error if an analyzer refers to a non-existent pump scenario or if
-    /// an individual analyzer execution fails.
+    /// Returns an error if an analyzer refers to a non-existent pump scenario, if the model cannot
+    /// be placed for an analysis that traces rays, or if an individual analyzer execution fails.
     pub fn analyze(&mut self) -> OpmResult<Vec<AnalysisReport>> {
         if self.analyzers.is_empty() {
             info!("No analyzer defined in document. Stopping here.");
@@ -97,6 +95,7 @@ impl OpmDocument {
         }
 
         let runs = self.analysis_runs()?;
+        self.reposition_for(&runs)?;
         let mut reports = Vec::new();
 
         for AnalysisRun {
@@ -146,10 +145,8 @@ impl OpmDocument {
     /// node itself and saved with the document, and a later run leaves an already placed node
     /// alone; running one on the live document would therefore freeze whatever the drawing happened
     /// to be asked for into the model itself. The copy is a plain [`Clone`] of the scenery, which
-    /// copies every node; the rest of the document places nothing and is not copied. An edit writes
-    /// a position or a property into a node without the node rebuilding its surfaces, so the copy
-    /// rebuilds them first, as a ray trace does: a source then sends its axis from where it stands
-    /// now.
+    /// copies every node; the rest of the document places nothing and is not copied. It is
+    /// positioned exactly as an analysis positions the model (see [`NodeGroup::reposition`]).
     ///
     /// The placement is the setup's own, the same whichever analyzer examines it: see
     /// [`positioning_config`](Self::positioning_config). Without a source port there is nothing
@@ -158,13 +155,14 @@ impl OpmDocument {
     /// # Returns
     ///
     /// The run: the copy with its nodes placed, the optical axis, and the connections whose
-    /// distance placed a node. A run that stopped part way is returned as well; its copy and axis
-    /// then give the error it stopped with.
+    /// distance placed a node. A run that stopped part way - or could not start, as a node could
+    /// not rebuild its surfaces - is returned as well; its copy and axis then give the error it
+    /// stopped with.
     ///
     /// # Errors
     ///
-    /// This function returns an error if the model has no source port, if the source ports cannot
-    /// be found, or if a node cannot rebuild its surfaces.
+    /// This function returns an error if the model has no source port or if the source ports
+    /// cannot be found.
     pub fn run_positioning(&self) -> OpmResult<PositioningRun> {
         if self.scenery.find_source_ports()?.is_empty() {
             return Err(OpossumError::OpmDocument(
@@ -177,11 +175,29 @@ impl OpmDocument {
         // Only copies collect ray ends, so the scenery the copy came from holds none.
         config.set_collect_ray_ends(true);
         let mut scenery = self.scenery.clone();
-        scenery.rebuild_surfaces()?;
-        let outcome =
-            AnalysisRayTrace::calc_node_positions(&mut scenery, LightResult::default(), &config)
-                .map(|_| ());
+        let outcome = scenery.reposition(&config);
         Ok(PositioningRun::new(scenery, outcome))
+    }
+
+    /// Positions the model before `runs` analyze it, if any of them traces rays: the system is
+    /// fixed, so it is placed once, after [`positioning_config`](Self::positioning_config), and
+    /// every analysis examines that same placement. An energy analysis needs no placement and runs
+    /// on a model that cannot be placed all the same.
+    ///
+    /// # Arguments
+    ///
+    /// - `runs`: the analysis runs about to be performed
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the model cannot be placed.
+    fn reposition_for(&mut self, runs: &[AnalysisRun]) -> OpmResult<()> {
+        if runs.iter().any(|run| run.analyzer_type.has_ray_sources()) {
+            let config = self.positioning_config();
+            info!("Calculate node positions of the model.");
+            self.scenery.reposition(&config)?;
+        }
+        Ok(())
     }
 
     /// Returns the configuration this model is placed with.
@@ -720,6 +736,68 @@ mod tests {
             0.0,
             epsilon = 1e-12
         );
+        Ok(())
+    }
+
+    /// An analysis places the model as its drawing does: in the medium the setup is aligned in,
+    /// not in the one the analysis traces its light through.
+    #[test]
+    fn an_analysis_places_the_model_as_its_drawing_does() -> OpmResult<()> {
+        let at = nanometer!(1053.0);
+        let (mut document, screen) =
+            a_setup_analyzed_with(decentered_lens()?, at, at, 0.0, Some(water()?))?;
+        let drawn = screen_placed(&document, screen)?;
+
+        document.analyze()?;
+
+        let analyzed = document
+            .scenery()
+            .with_node_attr(screen, |attr| attr.effective_position().copied())?
+            .ok_or_else(|| OpossumError::Other("the analysis did not place the screen".into()))?
+            .translation();
+        assert_relative_eq!(
+            distance(
+                drawn,
+                [analyzed.x.value, analyzed.y.value, analyzed.z.value]
+            ),
+            0.0,
+            epsilon = 1e-12
+        );
+        Ok(())
+    }
+
+    /// An analysis places the model anew each time it runs: the second of two analyses follows a
+    /// distance changed between them.
+    #[test]
+    fn consecutive_analyses_follow_a_changed_distance() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let dummy = scenery.add_node(Dummy::default())?;
+        scenery.connect_nodes(source, "output_1", dummy, "input_1", millimeter!(50.0))?;
+        let mut document = OpmDocument::new(scenery);
+        let mut config = RayTraceConfig::default();
+        config.map_source(source, RayDataBuilder::default());
+        document.add_analyzer(AnalyzerType::RayTrace(config));
+        let dummy_at = |document: &OpmDocument| -> OpmResult<f64> {
+            document
+                .scenery()
+                .with_node_attr(dummy, |attr| {
+                    attr.effective_position()
+                        .map(|iso| iso.translation().z.value)
+                })?
+                .ok_or_else(|| OpossumError::Other("the dummy was not placed".into()))
+        };
+
+        document.analyze()?;
+        assert_relative_eq!(dummy_at(&document)?, 0.050, epsilon = 1e-9);
+
+        document.scenery_mut().update_connection_distance(
+            source,
+            "output_1",
+            millimeter!(120.0),
+        )?;
+        document.analyze()?;
+        assert_relative_eq!(dummy_at(&document)?, 0.120, epsilon = 1e-9);
         Ok(())
     }
 

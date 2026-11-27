@@ -198,7 +198,7 @@ mod test {
         },
         opm_document::OpmDocument,
         refractive_index::RefrIndexConst,
-        utils::geom_transformation::Isometry,
+        utils::{geom_transformation::Isometry, test_helper::helper::reposition_in_vacuum},
     };
     use approx::assert_relative_eq;
 
@@ -292,6 +292,7 @@ mod test {
         let (mut traced, source) = model(parts, grouped)?;
         let mut config = RayTraceConfig::default();
         config.map_source(source, rays()?);
+        reposition_in_vacuum(&mut traced)?;
         RayTracingAnalyzer::new(config).analyze(&mut traced)?;
 
         let (mut flown, source) = model(parts, grouped)?;
@@ -303,6 +304,7 @@ mod test {
         let mut config = GhostFocusConfig::default();
         config.set_max_bounces(1);
         config.map_source(source, rays()?);
+        reposition_in_vacuum(&mut ghosted)?;
         GhostFocusAnalyzer::new(config).analyze(&mut ghosted)?;
 
         Ok(Outcome {

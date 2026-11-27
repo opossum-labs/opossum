@@ -230,6 +230,7 @@ mod test {
         let mut ray_trace_config = RayTraceConfig::default();
         ray_trace_config.map_source(i_src, ray_data_builder);
         let analyzer = RayTracingAnalyzer::new(ray_trace_config);
+        crate::utils::test_helper::helper::reposition_in_vacuum(&mut scenery)?;
         assert!(analyzer.analyze(&mut scenery).is_ok());
         Ok(())
     }

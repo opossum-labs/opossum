@@ -579,11 +579,11 @@ fn energy_config_at(source: Uuid, wavelength: Length) -> OpmResult<EnergyConfig>
     Ok(config)
 }
 
-/// An energy analysis places a model like any other analysis: at the alignment wavelength of the
-/// source port, not at that of its own light. The untilted grating would let light of 500 nm
-/// through (|m·λ·g| = 0.87), but the port is aligned at 1000 nm, at which it swallows the axis.
+/// The light of an energy analysis does not place the model either: it is drawn at the alignment
+/// wavelength of the source port. The untilted grating would let light of 500 nm through
+/// (|m·λ·g| = 0.87), but the port is aligned at 1000 nm, at which it swallows the axis.
 #[test]
-fn an_energy_analysis_places_the_model_at_the_alignment_wavelength_of_the_port() -> OpmResult<()> {
+fn a_model_analyzed_for_energy_is_drawn_at_the_alignment_wavelength_of_the_port() -> OpmResult<()> {
     let (scenery, source, _) = source_then_untilted_grating(true)?;
     let mut document = OpmDocument::new(scenery);
     document.add_analyzer(AnalyzerType::Energy(energy_config_at(
@@ -595,6 +595,26 @@ fn an_energy_analysis_places_the_model_at_the_alignment_wavelength_of_the_port()
 
     let Err(error) = run.positioned_scenery() else {
         panic!("the axis at 1000 nm ends at the grating");
+    };
+    assert!(error.to_string().contains("evanescent"), "{error}");
+    Ok(())
+}
+
+/// An energy analysis needs no placement, so it runs on a model whose optical axis ends at the
+/// untilted grating all the same; an analysis that traces rays stops there, saying why.
+#[test]
+fn only_an_analysis_that_traces_rays_needs_the_model_placed() -> OpmResult<()> {
+    let (scenery, source, _) = source_then_untilted_grating(true)?;
+    let mut document = OpmDocument::new(scenery);
+    document.add_analyzer(AnalyzerType::Energy(energy_config_at(
+        source,
+        nanometer!(500.0),
+    )?));
+    assert_eq!(document.analyze()?.len(), 1);
+
+    document.add_analyzer(AnalyzerType::RayTrace(single_ray_config(source)?));
+    let Err(error) = document.analyze() else {
+        panic!("the ray trace needs the model placed, and its axis ends at the grating");
     };
     assert!(error.to_string().contains("evanescent"), "{error}");
     Ok(())

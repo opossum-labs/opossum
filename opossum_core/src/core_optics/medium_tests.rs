@@ -38,7 +38,10 @@ use crate::{
     properties::{Proptype, proptype::AssetRef},
     reciprocal_centimeter,
     refractive_index::RefrIndexConst,
-    utils::{geom_transformation::Isometry, test_helper::helper::metered_energy},
+    utils::{
+        geom_transformation::Isometry,
+        test_helper::helper::{metered_energy, reposition_in_vacuum},
+    },
 };
 use approx::{assert_abs_diff_eq, assert_relative_eq};
 use nalgebra::{Point3, Vector3};
@@ -379,7 +382,7 @@ fn a_scenario_amplifies_the_energy_flow() -> OpmResult<()> {
 /// Trace a collimated bundle of 1 J through the given model and return the energy its
 /// [`EnergyMeter`] recorded.
 ///
-/// The model is analyzed as a whole rather than node by node, which is what places the nodes at
+/// The model is placed and analyzed as a whole rather than node by node, which puts the nodes at
 /// the distances they are connected with - the amplifying nodes therefore sit where a real
 /// layout would put them instead of all sharing one position.
 ///
@@ -401,6 +404,7 @@ fn metered_energy_of(model: &mut NodeGroup, source: Uuid, gains: PumpScenario) -
     );
     config.set_active_pump_scenario(Some(gains));
     let analyzer = RayTracingAnalyzer::new(config);
+    reposition_in_vacuum(model)?;
     analyzer.analyze(model)?;
     metered_energy(&analyzer.report(model)?)
 }

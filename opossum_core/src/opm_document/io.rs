@@ -251,7 +251,7 @@ mod tests {
             round_collimated_ray_builder,
         },
         refractive_index::RefrIndexConst,
-        utils::test_helper::helper::check_logs,
+        utils::test_helper::helper::{check_logs, reposition_in_vacuum},
     };
     use std::path::PathBuf;
     use tempfile::NamedTempFile;
@@ -961,6 +961,7 @@ mod tests {
         config.map_source(i_0, ray_builder.clone());
 
         testing_logger::setup();
+        reposition_in_vacuum(&mut scenery)?;
         let analyzer = RayTracingAnalyzer::new(config);
         analyzer.analyze(&mut scenery)?;
         check_logs(log::Level::Warn, vec![]);

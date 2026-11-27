@@ -882,6 +882,9 @@ mod test {
             source,
             round_collimated_ray_builder(millimeter!(5.0), joule!(1.0), 3).unwrap(),
         );
+        scenery
+            .reposition(&RayTraceConfig::default().for_positioning())
+            .expect("the model is placed");
         RayTracingAnalyzer::new(config)
             .analyze(&mut scenery)
             .expect("the ray trace runs through");

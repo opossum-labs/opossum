@@ -27,13 +27,14 @@ use uom::si::f64::Length;
 use uuid::Uuid;
 
 /// Returns the sources whose light a drawing of a model shows: those of the analyzer the drawing
-/// follows, in the configuration the model is positioned with.
+/// follows (see
+/// [`AnalyzerType::drawn_light_config`](opossum_core::analyzers::AnalyzerType::drawn_light_config)).
 ///
 /// # Arguments
 ///
 /// - `document`: the model whose sources to look at
 /// - `analyzer_id`: the analyzer to take the sources from, or `None` to follow the one chosen
-///   exactly as for [`OpmDocument::run_positioning`]
+///   by [`OpmDocument::drawing_analyzer`]
 ///
 /// # Returns
 ///
@@ -50,8 +51,7 @@ pub fn drawn_light_sources(
 ) -> OpmResult<Option<RayTraceConfig>> {
     Ok(document
         .drawing_analyzer(analyzer_id)?
-        .filter(|(_, analyzer)| analyzer.analyzer_type().has_ray_sources())
-        .map(|(_, analyzer)| analyzer.analyzer_type().positioning_config()))
+        .and_then(|(_, analyzer)| analyzer.analyzer_type().drawn_light_config()))
 }
 
 /// Returns the rays of a model's sources, traced through it, for drawing them.

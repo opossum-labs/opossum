@@ -110,36 +110,34 @@ impl AnalyzerType {
             Self::GhostFocus(config) => config.set_active_pump_scenario(pump_scenario),
         }
     }
-    /// Return the configuration this analyzer places the nodes of a model with when it runs on a
-    /// bare scenery, holding the sources of its light.
+    /// Returns the configuration a drawing of the model traces the light of this analysis with:
+    /// its sources, along the primary path only.
     ///
-    /// Where the components of a model stand is the setup's own and is asked of the document
-    /// instead (see
-    /// [`OpmDocument::positioning_config`](crate::opm_document::OpmDocument::positioning_config)).
+    /// A ghost focus analysis contributes its sources with a plain ray trace: its bounce limits and
+    /// its ambient medium describe the parasitic passes.
     ///
     /// # Returns
     ///
-    /// The configuration for the positioning run.
+    /// The configuration, or `None` for an analysis that defines its light as spectra only and
+    /// has no rays to draw.
     #[must_use]
-    pub fn positioning_config(&self) -> RayTraceConfig {
+    pub fn drawn_light_config(&self) -> Option<RayTraceConfig> {
         match self {
-            Self::Energy(_) => RayTraceConfig::default().for_positioning(),
-            Self::RayTrace(config) => config.for_positioning(),
+            Self::Energy(_) => None,
+            Self::RayTrace(config) => Some(config.for_positioning()),
             Self::GhostFocus(config) => {
-                // A ghost focus analysis places its nodes with a plain ray trace and takes only the
-                // sources across: the bounce limits and the ambient medium of the ghost focus run
-                // describe the parasitic passes, not the alignment.
-                let mut positioning = RayTraceConfig::default();
-                positioning.set_source_map(config.source_map().clone());
-                positioning.set_positioning_run(true);
-                positioning
+                let mut light = RayTraceConfig::default();
+                light.set_source_map(config.source_map().clone());
+                light.set_positioning_run(true);
+                Some(light)
             }
         }
     }
-    /// Whether this analysis defines its light as rays, which can be traced and drawn.
+    /// Whether this analysis defines its light as rays, which can be traced and drawn, and has to
+    /// be traced through a placed model.
     ///
-    /// An energy analysis defines spectra only: it places a model, but has no rays of its own to
-    /// show.
+    /// An energy analysis defines spectra only: it needs no placement and has no rays of its own
+    /// to show.
     #[must_use]
     pub const fn has_ray_sources(&self) -> bool {
         match self {
@@ -170,6 +168,10 @@ impl Display for AnalyzerType {
 /// Marker trait for all Analyzers
 pub trait Analyzer {
     /// Analyze a [`NodeGroup`].
+    ///
+    /// An analysis examines the setup where it stands and does not place it: an analysis that
+    /// traces rays needs the nodes of `scenery` placed already (see [`NodeGroup::reposition`]),
+    /// as [`OpmDocument::analyze`](crate::opm_document::OpmDocument::analyze) does first.
     ///
     /// # Errors
     /// This function returns an error if the concrete implementation of the [`Analyzer`] returns an error.
@@ -210,7 +212,7 @@ mod test {
     /// The sources of an analysis whose light is rays come across: a 3D view draws that light
     /// from this configuration.
     #[test]
-    fn a_positioning_config_keeps_the_ray_sources() {
+    fn the_drawn_light_config_keeps_the_sources() {
         let source = uuid::Uuid::new_v4();
         let mut ray_trace = RayTraceConfig::default();
         ray_trace.map_source(source, RayDataBuilder::default());
@@ -221,10 +223,21 @@ mod test {
             AnalyzerType::GhostFocus(ghost_focus),
         ] {
             assert!(
-                analyzer.positioning_config().get_source(&source).is_some(),
+                analyzer
+                    .drawn_light_config()
+                    .is_some_and(|light| light.get_source(&source).is_some()),
                 "the {analyzer} analysis lost its sources on the way"
             );
         }
+    }
+    /// An energy analysis defines no rays to draw.
+    #[test]
+    fn an_energy_analysis_has_no_light_to_draw() {
+        assert!(
+            AnalyzerType::Energy(EnergyConfig::default())
+                .drawn_light_config()
+                .is_none()
+        );
     }
     #[test]
     fn debug() {

@@ -304,6 +304,7 @@ mod test {
             Dummy, EnergyMeter, NodeGroup, SourcePort, round_collimated_ray_builder,
             test_helper::helper::*,
         },
+        utils::test_helper::helper::reposition_in_vacuum,
     };
     use approx::assert_abs_diff_eq;
     use std::f64::consts::FRAC_1_SQRT_2;
@@ -719,6 +720,7 @@ mod test {
             round_collimated_ray_builder(millimeter!(1.0), joule!(1.0), 1)?,
         );
         testing_logger::setup();
+        reposition_in_vacuum(&mut scenery)?;
         RayTracingAnalyzer::new(config).analyze(&mut scenery)?;
         assert_warning("that light is lost", false);
         let (position, direction) = placed(&scenery, meter)?;

@@ -13,7 +13,10 @@ pub mod port_map;
 mod undo;
 
 use crate::{
-    analyzers::{AnalyzerKind, propagation_strategy::PropagationStrategy},
+    analyzers::{
+        AnalyzerKind, RayTraceConfig, propagation_strategy::PropagationStrategy,
+        raytrace::AnalysisRayTrace,
+    },
     core_optics::{
         NodeAttr, NodeAttrExt, OpticNode, OpticPorts, OpticRef, PortType, SurfacePorts,
         node_attr::HasNodeAttr, optic_ref::DeserializedNode,
@@ -21,7 +24,7 @@ use crate::{
     error::{OpmResult, OpossumError},
     geometry::Geometry,
     light::{
-        Rays,
+        LightResult, Rays,
         lightdata::{LightData, light_data_builder::LightDataBuilder},
     },
     nodes::{
@@ -804,6 +807,24 @@ impl NodeGroup {
     pub fn clear_cached_positions(&mut self) {
         self.node_attr_mut().clear_cached_position();
         self.graph.clear_cached_positions();
+    }
+    /// Positions this group anew along its optical axis: forgets where its automatic nodes were
+    /// placed before, rebuilds their surfaces - an edit changes a node's position or properties
+    /// without rebuilding them - and places every node from the source ports on.
+    ///
+    /// # Arguments
+    ///
+    /// - `config`: the configuration of the positioning run, see
+    ///   [`OpmDocument::positioning_config`](crate::opm_document::OpmDocument::positioning_config)
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if a node cannot rebuild its surfaces or the optical axis
+    /// cannot be traced through the group.
+    pub fn reposition(&mut self, config: &RayTraceConfig) -> OpmResult<()> {
+        self.clear_cached_positions();
+        self.rebuild_surfaces()?;
+        AnalysisRayTrace::calc_node_positions(self, LightResult::default(), config).map(|_| ())
     }
 }
 

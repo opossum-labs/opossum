@@ -332,11 +332,11 @@ impl RayTracingAnalyzer {
         Self { config }
     }
     /// Traces the light of the sources through a scenery whose nodes are positioned already,
-    /// without positioning them again: the second half of [`analyze`](Analyzer::analyze).
+    /// without positioning them again, as [`analyze`](Analyzer::analyze) does for an analysis.
     ///
     /// A copy positioned by
     /// [`OpmDocument::run_positioning`](crate::opm_document::OpmDocument::run_positioning) is
-    /// traced where its nodes stand; positioning it again would only repeat that run.
+    /// traced where its nodes stand.
     ///
     /// # Arguments
     ///
@@ -370,17 +370,6 @@ impl Analyzer for RayTracingAnalyzer {
             format!(" '{}'", scenery.node_attr().name())
         };
 
-        // Invalidate cached automatic positions so that modified connection
-        // distances and properties are recalculated from scratch along the optical axis.
-        scenery.clear_cached_positions();
-        scenery.rebuild_surfaces()?;
-
-        info!("Calculate node positions of scenery{scenery_name}.");
-        AnalysisRayTrace::calc_node_positions(
-            scenery,
-            LightResult::default(),
-            &self.config.for_positioning(),
-        )?;
         info!("Performing ray tracing analysis of scenery{scenery_name}.");
         let ray_tubes = scenery.needs_ray_tubes();
         self.trace_positioned(scenery, TracePurpose::Analysis { ray_tubes })
@@ -465,7 +454,7 @@ mod test {
         },
         properties::Proptype,
         reporting::node_report::NodeReportResult,
-        utils::test_helper::helper::check_logs,
+        utils::test_helper::helper::{check_logs, reposition_in_vacuum},
     };
     use approx::assert_relative_eq;
     #[test]
@@ -476,9 +465,9 @@ mod test {
         assert_eq!(rt_conf.min_energy_per_ray(), picojoule!(1.0));
     }
     /// A property can change without its node rebuilding its surfaces: the backend writes it into
-    /// the node's attributes directly. A ray trace rebuilds them first, so it traces a component
-    /// as its properties state it now: an absolutely placed mirror shrunk to a radius of 5 mm no
-    /// longer reflects the rays 8 mm off its axis, only the one on it.
+    /// the node's attributes directly. Placing the model rebuilds them first, so a ray trace
+    /// traces a component as its properties state it now: an absolutely placed mirror shrunk to a
+    /// radius of 5 mm no longer reflects the rays 8 mm off its axis, only the one on it.
     #[test]
     fn a_ray_trace_sees_a_component_as_its_properties_state_it_now() -> OpmResult<()> {
         let (mut scenery, source, meter) = scenery_with_a_mirror_shrunk_behind_its_back()?;
@@ -487,12 +476,14 @@ mod test {
             source,
             round_collimated_ray_builder(millimeter!(8.0), joule!(1.0), 1)?,
         );
+        reposition_in_vacuum(&mut scenery)?;
         RayTracingAnalyzer::new(config).analyze(&mut scenery)?;
         assert_eq!(rays_recorded_by_meter(&scenery, meter)?, 1);
         Ok(())
     }
     /// A positioned scenery is traced where its nodes stand, without positioning it again: a
-    /// distance changed after the positioning moves nothing, while a full analysis positions anew.
+    /// distance changed after the positioning moves nothing, in a drawing or in an analysis, until
+    /// the model is positioned anew.
     #[test]
     fn a_positioned_scenery_is_traced_where_its_nodes_stand() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
@@ -523,6 +514,10 @@ mod test {
         analyzer.trace_positioned(&mut scenery, TracePurpose::Drawing)?;
         assert_relative_eq!(end_of(&mut scenery)?, 0.05, epsilon = 1e-9);
 
+        analyzer.analyze(&mut scenery)?;
+        assert_relative_eq!(end_of(&mut scenery)?, 0.05, epsilon = 1e-9);
+
+        reposition_in_vacuum(&mut scenery)?;
         analyzer.analyze(&mut scenery)?;
         assert_relative_eq!(end_of(&mut scenery)?, 0.08, epsilon = 1e-9);
         Ok(())
@@ -662,10 +657,7 @@ mod test {
         analyzer.analyze(&mut scenery)?;
         check_logs(
             log::Level::Info,
-            vec![
-                "Calculate node positions of scenery 'test'.",
-                "Performing ray tracing analysis of scenery 'test'.",
-            ],
+            vec!["Performing ray tracing analysis of scenery 'test'."],
         );
         let mut scenery = NodeGroup::new("");
         let analyzer = RayTracingAnalyzer::default();
@@ -673,10 +665,7 @@ mod test {
         analyzer.analyze(&mut scenery)?;
         check_logs(
             log::Level::Info,
-            vec![
-                "Calculate node positions of scenery.",
-                "Performing ray tracing analysis of scenery.",
-            ],
+            vec!["Performing ray tracing analysis of scenery."],
         );
         Ok(())
     }
@@ -724,6 +713,7 @@ mod test {
             round_collimated_ray_builder(millimeter!(10.0), joule!(1.0), 3)?,
         );
         let analyzer = RayTracingAnalyzer::new(config);
+        reposition_in_vacuum(&mut group)?;
         assert!(analyzer.analyze(&mut group).is_ok());
         let node_ref = group.graph().node(i_det)?;
         let NodeReportResult::Report(report) =
@@ -816,9 +806,8 @@ mod test {
         let node1 = scenery.add_node(Dummy::new("dummy1"))?;
         let node2 = scenery.add_node(Dummy::new("dummy2"))?;
         scenery.connect_nodes(node1, "output_1", node2, "input_1", millimeter!(0.0))?;
-        let analyzer = RayTracingAnalyzer::default();
         testing_logger::setup();
-        analyzer.analyze(&mut scenery)?;
+        reposition_in_vacuum(&mut scenery)?;
         check_logs(
             log::Level::Warn,
             vec![
@@ -826,54 +815,6 @@ mod test {
                 "'dummy2' (dummy) cannot be placed: no optical axis reaches it, and it stands in front of nothing it feeds. Skipping.",
             ],
         );
-        Ok(())
-    }
-    #[test]
-    fn consecutive_raytrace_analyses_update_positions_on_distance_change() -> OpmResult<()> {
-        let mut scenery = NodeGroup::default();
-        let source = scenery.add_node(SourcePort::default())?;
-        let dummy = scenery.add_node(Dummy::default())?;
-
-        // Initial connection: 50 mm
-        scenery.connect_nodes(source, "output_1", dummy, "input_1", millimeter!(50.0))?;
-
-        let mut config = RayTraceConfig::default();
-        config.map_source(
-            source,
-            round_collimated_ray_builder(millimeter!(5.0), joule!(1.0), 1)?,
-        );
-        let analyzer = RayTracingAnalyzer::new(config);
-
-        // 1. First run: node must be placed at z = 50 mm
-        analyzer.analyze(&mut scenery)?;
-        let z_first = scenery
-            .node(dummy)?
-            .effective_position()
-            .expect("dummy must be placed")
-            .translation()
-            .z
-            .value;
-        approx::assert_relative_eq!(z_first, 0.050, epsilon = 1e-9);
-
-        // 2. Change distance to 120 mm
-        let connection_updated =
-            scenery.update_connection_distance(source, "output_1", millimeter!(120.0));
-        assert!(
-            connection_updated.is_ok(),
-            "connection distance should be updated"
-        );
-
-        // 3. Second run on the same live scenery: position must update to z = 120 mm
-        analyzer.analyze(&mut scenery)?;
-        let z_second = scenery
-            .node(dummy)?
-            .effective_position()
-            .expect("dummy must be placed")
-            .translation()
-            .z
-            .value;
-        approx::assert_relative_eq!(z_second, 0.120, epsilon = 1e-9);
-
         Ok(())
     }
 }

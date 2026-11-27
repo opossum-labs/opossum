@@ -6,19 +6,27 @@
 #[cfg(test)]
 pub mod helper {
     use crate::{
+        analyzers::RayTraceConfig,
         degree,
         distributions::position::Hexapolar,
         error::{OpmResult, OpossumError},
         joule,
         light::Rays,
         millimeter, nanometer,
-        nodes::fluence_detector::fluence_data::FluenceData,
+        nodes::{NodeGroup, fluence_detector::fluence_data::FluenceData},
         properties::Proptype,
         reporting::analysis_report::AnalysisReport,
         utils::geom_transformation::Isometry,
     };
     use nalgebra::DVector;
     use uom::si::{f64::Length, length::millimeter, radiant_exposure::joule_per_square_centimeter};
+
+    /// Places `scenery` along its optical axis as a document does before it analyzes it, with the
+    /// setup aligned in vacuum (see [`NodeGroup::reposition`]): an analysis that traces rays needs
+    /// its nodes placed.
+    pub fn reposition_in_vacuum(scenery: &mut NodeGroup) -> OpmResult<()> {
+        scenery.reposition(&RayTraceConfig::default().for_positioning())
+    }
 
     /// Read the energy an [`EnergyMeter`](crate::nodes::EnergyMeter) recorded from an analysis
     /// report.

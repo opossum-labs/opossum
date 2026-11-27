@@ -607,6 +607,7 @@ mod test {
             analyzers::{Analyzer, RayTraceConfig, raytrace::RayTracingAnalyzer},
             millimeter,
             nodes::{BoredMirror, NodeGroup, SourcePort},
+            utils::test_helper::helper::reposition_in_vacuum,
         };
         let mut scenery = NodeGroup::default();
         let source = scenery.add_node(SourcePort::default())?;
@@ -620,6 +621,7 @@ mod test {
         }
         let mut config = RayTraceConfig::default();
         config.map_source(source, light);
+        reposition_in_vacuum(&mut scenery)?;
         RayTracingAnalyzer::new(config).analyze(&mut scenery)?;
         scenery
             .node(detector)?

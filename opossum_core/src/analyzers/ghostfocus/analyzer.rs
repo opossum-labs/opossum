@@ -4,14 +4,12 @@ use uuid::Uuid;
 
 use super::{GhostFocusConfig, GhostFocusHistory};
 use crate::{
-    analyzers::{Analyzer, AnalyzerType, raytrace::AnalysisRayTrace},
+    analyzers::{Analyzer, raytrace::AnalysisRayTrace},
     core_optics::{NodeAttrExt, OpticNodeExt, node_attr::HasNodeAttr},
     error::OpmResult,
     light::{
         Rays,
-        light_result::{
-            LightRays, LightResult, light_rays_to_light_result, light_result_to_light_rays,
-        },
+        light_result::{LightRays, light_rays_to_light_result, light_result_to_light_rays},
     },
     nodes::NodeGroup,
     prelude::{OpticNode, Properties, Proptype},
@@ -120,13 +118,6 @@ impl Analyzer for GhostFocusAnalyzer {
         } else {
             format!(" '{}'", scenery.node_attr().name())
         };
-        scenery.rebuild_surfaces()?;
-        info!("Calculate node positions of scenery{scenery_name}.");
-
-        // Asked for rather than assembled here, so that whatever draws this setup places its
-        // components exactly where this analysis does.
-        let raytrace_config = AnalyzerType::GhostFocus(self.config.clone()).positioning_config();
-        AnalysisRayTrace::calc_node_positions(scenery, LightResult::default(), &raytrace_config)?;
         // Every surface follows the tubes where the estimator of the analysis does, a detector
         // where its own does.
         let mut config = self.config.clone();
@@ -232,6 +223,7 @@ mod test_ghost_focus_analyzer {
             },
         },
         percent,
+        utils::test_helper::helper::reposition_in_vacuum,
     };
     /// A fluence detector computes its map with its own estimator: a Voronoi detector gets the
     /// ray tubes it follows also when the analysis estimates with KDE.
@@ -327,6 +319,7 @@ mod test_ghost_focus_analyzer {
             source,
             round_collimated_ray_builder(millimeter!(8.0), joule!(1.0), 1)?,
         );
+        reposition_in_vacuum(&mut scenery)?;
         GhostFocusAnalyzer::new(config).analyze(&mut scenery)?;
         assert_eq!(rays_recorded_by_meter(&scenery, meter)?, 1);
         Ok(())
