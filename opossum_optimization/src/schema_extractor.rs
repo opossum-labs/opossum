@@ -2,14 +2,18 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use opossum_core::{
-    core_optics::{NodeAttrExt, node_attr::HasNodeAttr}, nodes::{NodeGroup, NodeReference}, opm_document::{
+    core_optics::{NodeAttrExt, node_attr::HasNodeAttr},
+    nodes::{NodeGroup, NodeReference},
+    opm_document::{
         OpmDocument,
         optimization::{
             DiscoveredAnalyzer, DiscoveredEdgeThicknessNode, DiscoveredObservable,
             DiscoveredVariable, ModelOptimizationSchema, ObservableAddress, ParameterAddress,
             ParameterUnit,
         },
-    }, properties::Proptype, utils::geom_transformation::{AlignmentAxis, Isometry},
+    },
+    properties::Proptype,
+    utils::geom_transformation::{AlignmentAxis, Isometry},
 };
 
 pub struct SchemaExtractor;
@@ -27,6 +31,7 @@ impl SchemaExtractor {
             _ => None,
         }
     }
+
     /// Extracts all controllable variables, observable metrics, and constraint candidates from an `OpmDocument`.
     #[must_use]
     pub fn extract(doc: &OpmDocument) -> ModelOptimizationSchema {
@@ -146,7 +151,7 @@ impl SchemaExtractor {
         }
     }
 
-    /// Recursively inspects a `NodeGroup` for controllable properties and connection distances.
+    /// Recursively inspects a `NodeGroup` for controllable properties, local alignments, and connection distances.
     fn extract_from_group(
         group: &NodeGroup,
         parent_path: &str,
@@ -165,39 +170,14 @@ impl SchemaExtractor {
             format!("{parent_path} / {raw_title}")
         };
 
-        // Collect edge connection distances inside this group with resolved node names
-        for conn in group.connections() {
-            let src_name = node_names
-                .get(&conn.src_id)
-                .cloned()
-                .unwrap_or_else(|| conn.src_id.to_string());
-            let target_name = node_names
-                .get(&conn.target_id)
-                .cloned()
-                .unwrap_or_else(|| conn.target_id.to_string());
+        Self::extract_connection_distances(
+            group,
+            group_id,
+            &current_group_name,
+            node_names,
+            schema,
+        );
 
-            let display_name = if conn.src_port == "output_1" && conn.target_port == "input_1" {
-                "Distance".to_string()
-            } else {
-                format!("Distance ({} → {})", conn.src_port, conn.target_port)
-            };
-
-            schema.controllable_variables.push(DiscoveredVariable {
-                address: ParameterAddress::ConnectionDistance {
-                    src_id: conn.src_id,
-                    src_port: conn.src_port.clone(),
-                },
-                group_id: Some(group_id),
-                group_name: current_group_name.clone(),
-                node_name: format!("{src_name} → {target_name}"),
-                display_name,
-                initial_value: conn.distance.value,
-                is_read_only: false,
-                unit: Some(ParameterUnit::length()),
-            });
-        }
-
-        // Collect node properties
         for node_ref in group.nodes() {
             let node_id = node_ref.uuid();
             let node_name = node_ref.name().to_string();
@@ -253,34 +233,93 @@ impl SchemaExtractor {
                     }
                 }
             }
-            // Expose local alignment degrees of freedom for all non-group, non-reference nodes
+
             if !is_reference_node {
-                let alignment = attr.alignment().unwrap_or_else(Isometry::identity);
-                for axis in AlignmentAxis::ALL {
-                    let (initial_value, unit, label) = match axis {
-                        AlignmentAxis::Translation(t_axis) => (
-                            alignment.translation_of_axis(t_axis).value,
-                            Some(ParameterUnit::length()),
-                            format!("Decenter {t_axis}"),
-                        ),
-                        AlignmentAxis::Rotation(r_axis) => (
-                            alignment.rotation_of_axis(r_axis).value,
-                            Some(ParameterUnit::angle_deg()),
-                            format!("Tilt {r_axis}"),
-                        ),
-                    };
-                    schema.controllable_variables.push(DiscoveredVariable {
-                        address: ParameterAddress::NodeAlignment { node_id, axis },
-                        group_id: Some(group_id),
-                        group_name: current_group_name.clone(),
-                        node_name: node_name.clone(),
-                        display_name: label,
-                        initial_value,
-                        is_read_only: false,
-                        unit,
-                    });
-                }
+                Self::extract_node_alignment(
+                    node_id,
+                    &node_name,
+                    *attr.alignment(),
+                    group_id,
+                    &current_group_name,
+                    schema,
+                );
             }
+        }
+    }
+
+    /// Collects edge connection distances inside a `NodeGroup` with resolved node names.
+    fn extract_connection_distances(
+        group: &NodeGroup,
+        group_id: Uuid,
+        current_group_name: &str,
+        node_names: &HashMap<Uuid, String>,
+        schema: &mut ModelOptimizationSchema,
+    ) {
+        for conn in group.connections() {
+            let src_name = node_names
+                .get(&conn.src_id)
+                .cloned()
+                .unwrap_or_else(|| conn.src_id.to_string());
+            let target_name = node_names
+                .get(&conn.target_id)
+                .cloned()
+                .unwrap_or_else(|| conn.target_id.to_string());
+
+            let display_name = if conn.src_port == "output_1" && conn.target_port == "input_1" {
+                "Distance".to_string()
+            } else {
+                format!("Distance ({} → {})", conn.src_port, conn.target_port)
+            };
+
+            schema.controllable_variables.push(DiscoveredVariable {
+                address: ParameterAddress::ConnectionDistance {
+                    src_id: conn.src_id,
+                    src_port: conn.src_port.clone(),
+                },
+                group_id: Some(group_id),
+                group_name: current_group_name.to_string(),
+                node_name: format!("{src_name} → {target_name}"),
+                display_name,
+                initial_value: conn.distance.value,
+                is_read_only: false,
+                unit: Some(ParameterUnit::length()),
+            });
+        }
+    }
+
+    /// Exposes all six local alignment degrees of freedom for a regular optical node.
+    fn extract_node_alignment(
+        node_id: Uuid,
+        node_name: &str,
+        alignment_opt: Option<Isometry>,
+        group_id: Uuid,
+        current_group_name: &str,
+        schema: &mut ModelOptimizationSchema,
+    ) {
+        let alignment = alignment_opt.unwrap_or_else(Isometry::identity);
+        for axis in AlignmentAxis::ALL {
+            let (initial_value, unit, label) = match axis {
+                AlignmentAxis::Translation(t_axis) => (
+                    alignment.translation_of_axis(t_axis).value,
+                    Some(ParameterUnit::length()),
+                    format!("Decenter {t_axis}"),
+                ),
+                AlignmentAxis::Rotation(r_axis) => (
+                    alignment.rotation_of_axis(r_axis).value,
+                    Some(ParameterUnit::angle_deg()),
+                    format!("Tilt {r_axis}"),
+                ),
+            };
+            schema.controllable_variables.push(DiscoveredVariable {
+                address: ParameterAddress::NodeAlignment { node_id, axis },
+                group_id: Some(group_id),
+                group_name: current_group_name.to_string(),
+                node_name: node_name.to_string(),
+                display_name: label,
+                initial_value,
+                is_read_only: false,
+                unit,
+            });
         }
     }
 }

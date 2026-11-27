@@ -171,11 +171,7 @@ fn PolygonPointList(
                                         "x: {}",
                                         format_si_with_base_unit(
                                             point.x.value,
-                                            &UnitHandling {
-                                                base_unit: "m".to_string(),
-                                                handle_prefix: true,
-                                                display_scale: 1.0,
-                                            },
+                                            &UnitHandling::new("m", true).with_display_scale(1.0),
                                             false,
                                         ),
                                     )
@@ -187,11 +183,7 @@ fn PolygonPointList(
                                         "y: {}",
                                         format_si_with_base_unit(
                                             point.y.value,
-                                            &UnitHandling {
-                                                base_unit: "m".to_string(),
-                                                handle_prefix: true,
-                                                display_scale: 1.0,
-                                            },
+                                            &UnitHandling::new("m", true).with_display_scale(1.0),
                                             false,
                                         ),
                                     )

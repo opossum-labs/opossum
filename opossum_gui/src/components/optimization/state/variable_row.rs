@@ -1,9 +1,14 @@
-use crate::components::node_editor::inputs::input_components::{NumericUnitMode, UnitHandling};
+use crate::components::node_editor::inputs::{
+    format_si_with_base_unit,
+    input_components::{NumericUnitMode, UnitHandling},
+    round_to_decimals,
+};
 use opossum_core::opm_document::optimization::{
     BoxBounds, CouplingType, ParameterAddress, ParameterUnit,
 };
 use uuid::Uuid;
 
+const VARIABLE_DISPLAY_DECIMALS: usize = 3;
 /// Formats a parameter value in SI base units for display in the UI table.
 #[must_use]
 pub fn format_parameter_value(
@@ -17,11 +22,10 @@ pub fn format_parameter_value(
                 ("Plan (R = ∞)".to_string(), Some("c = 0.0 m⁻¹".to_string()))
             } else {
                 let r_m = 1.0 / value;
-                let unit_cfg =
-                    unit.map_or_else(|| UnitHandling::new("m", true), UnitHandling::from);
-                let formatted_r = crate::components::node_editor::inputs::format_si_with_base_unit(
-                    r_m, &unit_cfg, false,
-                );
+                let unit_cfg = unit
+                    .map_or_else(|| UnitHandling::new("m", true), UnitHandling::from)
+                    .with_max_decimals(VARIABLE_DISPLAY_DECIMALS);
+                let formatted_r = format_si_with_base_unit(r_m, &unit_cfg, false);
                 (
                     format!("R = {formatted_r}"),
                     Some(format!("c = {value:.3} m⁻¹")),
@@ -29,12 +33,13 @@ pub fn format_parameter_value(
             }
         }
         _ => unit.map_or_else(
-            || (format!("{value:.4}"), None),
+            || {
+                let rounded = round_to_decimals(value, VARIABLE_DISPLAY_DECIMALS);
+                (format!("{rounded}"), None)
+            },
             |u| {
-                let unit_cfg = UnitHandling::from(u);
-                let formatted = crate::components::node_editor::inputs::format_si_with_base_unit(
-                    value, &unit_cfg, false,
-                );
+                let unit_cfg = UnitHandling::from(u).with_max_decimals(VARIABLE_DISPLAY_DECIMALS);
+                let formatted = format_si_with_base_unit(value, &unit_cfg, false);
                 (formatted, None)
             },
         ),
@@ -86,10 +91,13 @@ impl UiVariableRow {
             NumericUnitMode::Unit(
                 self.unit
                     .as_ref()
-                    .map_or_else(|| UnitHandling::new("m", true), UnitHandling::from),
+                    .map_or_else(|| UnitHandling::new("m", true), UnitHandling::from)
+                    .with_max_decimals(VARIABLE_DISPLAY_DECIMALS),
             )
         } else if let Some(u) = &self.unit {
-            NumericUnitMode::Unit(UnitHandling::from(u))
+            NumericUnitMode::Unit(
+                UnitHandling::from(u).with_max_decimals(VARIABLE_DISPLAY_DECIMALS),
+            )
         } else {
             NumericUnitMode::Dimensionless
         }

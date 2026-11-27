@@ -308,41 +308,6 @@ pub fn parse_unit_input_strict(input: &str, base_unit: &str) -> OpmResult<(Strin
     Err(OpossumError::Other("error parsing input".into()))
 }
 
-/// Formats a floating-point value using SI engineering notation.
-///
-/// The number is expressed as a mantissa multiplied by a power of ten that
-/// corresponds to an SI prefix (powers of 10³). Infinite values are rendered
-/// as `"∞"`.
-///
-/// This function is intended for human-readable display of physical quantities.
-///
-/// # Arguments
-///
-/// * `x` - The value to format.
-///
-/// # Returns
-///
-/// A `String` containing the formatted value and SI prefix.
-pub fn format_si_notation(x: f64, reciprocal: bool) -> String {
-    if x.is_infinite() {
-        return "∞".into();
-    }
-
-    let (mantissa, exponent) = get_mantissa_and_exponent(x);
-
-    let prefix = if reciprocal {
-        si_prefix_from_exponent(-exponent)
-    } else {
-        si_prefix_from_exponent(exponent)
-    };
-
-    if relative_eq!(mantissa, 0.0) {
-        return "0.0 ".into();
-    }
-
-    format!("{mantissa} {prefix}")
-}
-
 /// Formats a floating-point value in scientific notation with an exponent.
 ///
 /// The value is expressed as a mantissa multiplied by 10 raised to an integer
@@ -367,6 +332,26 @@ pub fn format_exp_number_notation(x: f64) -> String {
     }
 }
 
+fn format_si_notation_rounded(x: f64, reciprocal: bool, max_decimals: Option<usize>) -> String {
+    if x.is_infinite() {
+        return "∞".into();
+    }
+
+    let (raw_mantissa, exponent) = get_mantissa_and_exponent(x);
+    let mantissa = max_decimals.map_or(raw_mantissa, |d| round_to_decimals(raw_mantissa, d));
+
+    let prefix = if reciprocal {
+        si_prefix_from_exponent(-exponent)
+    } else {
+        si_prefix_from_exponent(exponent)
+    };
+
+    if relative_eq!(mantissa, 0.0) {
+        return "0.0 ".into();
+    }
+
+    format!("{mantissa} {prefix}")
+}
 /// Formats a floating-point value with an SI prefix and a base unit.
 ///
 /// The value is converted to engineering notation with an appropriate SI prefix,
@@ -382,13 +367,16 @@ pub fn format_si_with_base_unit(
     if unit_config.handle_prefix {
         format!(
             "{}{}",
-            format_si_notation(scaled_value, reciprocal),
+            format_si_notation_rounded(scaled_value, reciprocal, unit_config.max_decimals),
             unit_config.base_unit
         )
     } else if scaled_value.is_infinite() {
         format!("∞ {}", unit_config.base_unit)
     } else {
-        format!("{scaled_value} {}", unit_config.base_unit)
+        let display_val = unit_config
+            .max_decimals
+            .map_or(scaled_value, |d| round_to_decimals(scaled_value, d));
+        format!("{display_val} {}", unit_config.base_unit)
     }
 }
 
@@ -533,7 +521,17 @@ fn si_prefix_to_exponent(prefix: &str, reciprocal: bool) -> i32 {
     };
     if reciprocal { -exp } else { exp }
 }
-
+/// Rounds a floating-point value to at most `decimals` decimal places and normalizes `-0.0` to `0.0`.
+#[must_use]
+pub fn round_to_decimals(val: f64, decimals: usize) -> f64 {
+    if !val.is_finite() || val == 0.0 {
+        return 0.0;
+    }
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    let factor = 10f64.powi(decimals.min(12) as i32);
+    let rounded = (val * factor).round() / factor;
+    if rounded == 0.0 { 0.0 } else { rounded }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -924,7 +922,7 @@ mod tests {
         ];
 
         for (x, reciprocal, expected) in cases {
-            let result = format_si_notation(x, reciprocal);
+            let result = format_si_notation_rounded(x, reciprocal, None);
             assert_eq!(result, expected, "x={x} reciprocal={reciprocal}");
         }
     }
@@ -940,7 +938,7 @@ mod tests {
         ];
 
         for (x, reciprocal, expected) in cases {
-            let result = format_si_notation(x, reciprocal);
+            let result = format_si_notation_rounded(x, reciprocal, None);
             assert_eq!(result, expected, "x={x} reciprocal={reciprocal}");
         }
     }
@@ -950,7 +948,7 @@ mod tests {
         let zeros = vec![0.0, -0.0];
 
         for &x in &zeros {
-            let result = format_si_notation(x, false);
+            let result = format_si_notation_rounded(x, false, None);
             assert_eq!(result, "0.0 ");
         }
     }
@@ -960,7 +958,7 @@ mod tests {
         let infinities = vec![f64::INFINITY, f64::NEG_INFINITY];
 
         for &x in &infinities {
-            let result = format_si_notation(x, false);
+            let result = format_si_notation_rounded(x, false, None);
             assert_eq!(result, "∞");
         }
     }
@@ -975,7 +973,7 @@ mod tests {
         ];
 
         for (x, reciprocal, expected) in cases {
-            let result = format_si_notation(x, reciprocal);
+            let result = format_si_notation_rounded(x, reciprocal, None);
             assert_eq!(result, expected, "x={x} reciprocal={reciprocal}");
         }
     }

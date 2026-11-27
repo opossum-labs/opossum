@@ -1,8 +1,10 @@
 use opossum_core::{
-    error::{OpmResult, OpossumError}, opm_document::{
+    error::{OpmResult, OpossumError},
+    opm_document::{
         OpmDocument,
         optimization::{ObservableAddress, ParameterAddress},
-    }, utils::geom_transformation::{AlignmentAxis, Isometry},
+    },
+    utils::geom_transformation::{AlignmentAxis, Isometry},
 };
 
 pub struct MetricReader;
@@ -144,7 +146,9 @@ impl MetricReader {
                     .alignment()
                     .unwrap_or_else(Isometry::identity);
                 let val = match axis {
-                    AlignmentAxis::Translation(t_axis) => alignment.translation_of_axis(*t_axis).value,
+                    AlignmentAxis::Translation(t_axis) => {
+                        alignment.translation_of_axis(*t_axis).value
+                    }
                     AlignmentAxis::Rotation(r_axis) => alignment.rotation_of_axis(*r_axis).value,
                 };
                 Ok(val)

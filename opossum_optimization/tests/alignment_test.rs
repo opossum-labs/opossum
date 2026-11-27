@@ -35,7 +35,13 @@ fn test_optimize_folding_mirror_alignment() -> OpmResult<()> {
     let spot_id = scenery.add_node(detector)?;
 
     scenery.connect_nodes(src_id, "output_1", mirror_id, "input_1", millimeter!(100.0))?;
-    scenery.connect_nodes(mirror_id, "output_1", spot_id, "input_1", millimeter!(100.0))?;
+    scenery.connect_nodes(
+        mirror_id,
+        "output_1",
+        spot_id,
+        "input_1",
+        millimeter!(100.0),
+    )?;
 
     let mut doc = OpmDocument::new(scenery);
     let mut config = RayTraceConfig::default();
@@ -109,7 +115,13 @@ fn test_optimize_folding_mirror_alignment() -> OpmResult<()> {
 
     assert_abs_diff_eq!(optimized_pitch, 45_f64.to_radians(), epsilon = 1e-5);
     assert_abs_diff_eq!(optimized_yaw, 0.0, epsilon = 1e-5);
-    assert!(final_cx.abs() < 1e-6, "centroid x should be near 0, got {final_cx}");
-    assert!(final_cy.abs() < 1e-6, "centroid y should be near 0, got {final_cy}");
+    assert!(
+        final_cx.abs() < 1e-6,
+        "centroid x should be near 0, got {final_cx}"
+    );
+    assert!(
+        final_cy.abs() < 1e-6,
+        "centroid y should be near 0, got {final_cy}"
+    );
     Ok(())
 }

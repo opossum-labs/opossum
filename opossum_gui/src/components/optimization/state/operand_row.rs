@@ -26,7 +26,11 @@ pub fn resolve_operand_group_id(
                 .iter()
                 .find(|o| o.address.node_id == obs.node_id)
                 .and_then(|o| o.group_id),
-            MetricSource::Parameter(_) => None,
+            MetricSource::Parameter(param) => schema
+                .controllable_variables
+                .iter()
+                .find(|v| v.address == *param)
+                .and_then(|v| v.group_id),
         },
         StandardOperand::MinEdgeThickness(t) => schema
             .controllable_variables
@@ -73,7 +77,17 @@ pub fn describe_operand(
                         .unwrap_or_else(|| "Detector".to_string());
                     (aname, format!("{nname} → {}", obs.metric_name), symbol)
                 }
-                MetricSource::Parameter(p) => ("Parameter".to_string(), p.to_string(), symbol),
+                MetricSource::Parameter(p) => {
+                    let label = schema
+                        .and_then(|s| {
+                            s.controllable_variables
+                                .iter()
+                                .find(|v| v.address == *p)
+                                .map(|v| format!("{} → {}", v.node_name, v.display_name))
+                        })
+                        .unwrap_or_else(|| p.to_string());
+                    ("Parameter".to_string(), label, symbol)
+                }
             }
         }
         StandardOperand::MinEdgeThickness(t) => {

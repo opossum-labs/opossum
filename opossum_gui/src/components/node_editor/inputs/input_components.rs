@@ -406,6 +406,8 @@ pub struct UnitHandling {
     pub handle_prefix: bool,
     /// Multiplier from internal SI base unit to display base unit (`1.0` for SI units, `180.0 / PI` for `"°"`).
     pub display_scale: f64,
+    /// Optional limit on displayed decimal places after SI scaling.
+    pub max_decimals: Option<usize>,
 }
 impl UnitHandling {
     pub fn new(base_unit: &str, handle_prefix: bool) -> Self {
@@ -413,11 +415,17 @@ impl UnitHandling {
             base_unit: base_unit.to_string(),
             handle_prefix,
             display_scale: 1.0,
+            max_decimals: None,
         }
     }
     #[must_use]
     pub const fn with_display_scale(mut self, display_scale: f64) -> Self {
         self.display_scale = display_scale;
+        self
+    }
+    #[must_use]
+    pub const fn with_max_decimals(mut self, decimals: usize) -> Self {
+        self.max_decimals = Some(decimals);
         self
     }
 }
@@ -427,6 +435,7 @@ impl From<&ParameterUnit> for UnitHandling {
             base_unit: unit.base_unit.clone(),
             handle_prefix: unit.handle_prefix,
             display_scale: unit.display_scale,
+            max_decimals: None,
         }
     }
 }

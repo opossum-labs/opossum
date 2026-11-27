@@ -1,7 +1,13 @@
 use opossum_core::{
-    error::OpmResult, opm_document::{OpmDocument, optimization::ParameterAddress}, utils::geom_transformation::{AlignmentAxis, Isometry},
+    error::OpmResult,
+    opm_document::{OpmDocument, optimization::ParameterAddress},
+    utils::geom_transformation::{AlignmentAxis, Isometry},
 };
-use uom::si::{angle::radian, f64::{Angle, Length}, length::meter};
+use uom::si::{
+    angle::radian,
+    f64::{Angle, Length},
+    length::meter,
+};
 
 pub struct ParameterApplier;
 
@@ -55,7 +61,8 @@ impl ParameterApplier {
                     let mut alignment = attr.alignment().unwrap_or_else(Isometry::identity);
                     match axis {
                         AlignmentAxis::Translation(t_axis) => {
-                            alignment.set_translation_of_axis(*t_axis, Length::new::<meter>(value))?;
+                            alignment
+                                .set_translation_of_axis(*t_axis, Length::new::<meter>(value))?;
                         }
                         AlignmentAxis::Rotation(r_axis) => {
                             alignment.set_rotation_of_axis(*r_axis, Angle::new::<radian>(value))?;

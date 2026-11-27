@@ -335,7 +335,8 @@ impl Command {
                 for addr in undo.parameter_diff.keys() {
                     match addr {
                         ParameterAddress::NodeProperty { node_id, .. }
-                        | ParameterAddress::SurfaceCurvature { node_id, .. } => {
+                        | ParameterAddress::SurfaceCurvature { node_id, .. }
+                        | ParameterAddress::NodeAlignment { node_id, .. } => {
                             if let Ok((_, parent_id)) = document.scenery().node_recursive(*node_id)
                             {
                                 graph_ids.insert(parent_id);
