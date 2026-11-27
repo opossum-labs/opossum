@@ -777,8 +777,11 @@ mod tests {
         BoxBounds, MetricOperand, OperandMode, ParameterUnit,
     };
 
-    #[test]
-    fn test_populate_from_schema_with_saved_config() {
+    /// A schema whose saved config tunes one lens thickness against one DLS operand.
+    ///
+    /// # Returns
+    /// The schema and the address of the tuned thickness.
+    fn schema_with_saved_config() -> (ModelOptimizationSchema, ParameterAddress) {
         let node_id = Uuid::new_v4();
         let addr = ParameterAddress::NodeProperty {
             node_id,
@@ -811,6 +814,12 @@ mod tests {
             is_read_only: false,
             unit: Some(ParameterUnit::length()),
         });
+        (schema, addr)
+    }
+
+    #[test]
+    fn test_populate_from_schema_with_saved_config() {
+        let (schema, addr) = schema_with_saved_config();
 
         let mut model = OptimizationModel::default();
         model.populate_from_schema(schema);
@@ -825,6 +834,22 @@ mod tests {
         assert!(row.is_enabled);
         assert_eq!(model.operands.len(), 1);
         assert!(model.operands[0].is_enabled);
+        assert!(matches!(model.algorithm, OptimizationAlgorithm::Dls { .. }));
+    }
+
+    #[test]
+    fn populate_from_schema_without_saved_config_drops_previous_rows() {
+        let mut model = OptimizationModel::default();
+        model.populate_from_schema(schema_with_saved_config().0);
+        model.set_scope(Some(Uuid::new_v4()));
+        model.set_algorithm_kind("NelderMead");
+
+        model.populate_from_schema(ModelOptimizationSchema::default());
+
+        assert_eq!(model.variable_rows.len(), 0);
+        assert_eq!(model.operands.len(), 0);
+        assert!(model.validation_issues.is_empty());
+        assert_eq!(model.scope_group_id, None);
         assert!(matches!(model.algorithm, OptimizationAlgorithm::Dls { .. }));
     }
 }
