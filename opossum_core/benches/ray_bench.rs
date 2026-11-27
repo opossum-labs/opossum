@@ -4,7 +4,6 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use nalgebra::{Point3, vector};
 use num_traits::Zero;
 use opossum_core::{
-    J_per_cm2,
     coatings::IdealAR,
     degree,
     error::OpossumError,
@@ -141,39 +140,10 @@ fn bench_diffract_on_periodic_structure(c: &mut Criterion) {
     });
 }
 
-/// Benchmarks `helper_ray_fluence`, which involves vector math on helper rays.
-fn bench_helper_ray_fluence(c: &mut Criterion) {
-    c.bench_function("ray_helper_ray_fluence", |b| {
-        let mut ray = Ray::new_collimated_w_fluence_helper(
-            Point3::origin(),
-            nanometer!(1000.),
-            joule!(1.),
-            J_per_cm2!(1.),
-        )
-        .expect("Setup of ray failed");
-
-        // Propagate the helper rays a bit to make the calculation non-trivial
-        if let Some(helpers) = ray.helper_rays_mut() {
-            for r in helpers {
-                r.propagate(millimeter!(10.0))
-                    .expect("Error while propagating");
-                r.set_direction(vector![0.1, 0.1, 1.0])
-                    .expect("Error setting ray direction");
-                r.propagate(millimeter!(5.0))
-                    .expect("Error while propagating");
-            }
-        }
-
-        b.iter(|| {
-            std::hint::black_box(ray.helper_ray_fluence());
-        });
-    });
-}
-
 // Define the group of benchmarks, now applying the custom configuration.
 criterion_group! {
     name = benches;
     config = configure_criterion();
-    targets = bench_propagate, bench_refract_paraxial, bench_refract_on_surface, bench_diffract_on_periodic_structure, bench_helper_ray_fluence
+    targets = bench_propagate, bench_refract_paraxial, bench_refract_on_surface, bench_diffract_on_periodic_structure
 }
 criterion_main!(benches);

@@ -5,7 +5,7 @@ mod gaussian;
 use crate::{
     error::{OpmResult, OpossumError},
     millimeter,
-    nodes::fluence_detector::Fluence,
+    nodes::fluence_detector::{Fluence, fluence_grid::FluenceGrid},
     utils::to_f64,
 };
 use gaussian::Gaussian2D;
@@ -117,11 +117,19 @@ impl Kde {
             .sum()
     }
 
+    /// Returns the fluence of the given data at the points of a map (see [`FluenceGrid`]).
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - the data, each with a position and an energy.
+    /// * `accessor` - how to get the position and the energy of a datum.
+    /// * `ranges` - the ranges the map covers along x and y, both ends included.
+    /// * `dimensions` - the number of points along x and y.
     #[must_use]
     pub fn kde_2d<T, F>(
         &self,
-        data: &[T],  // GENERIC: Reference to original data
-        accessor: F, // GENERIC: How to get (x,y,E) from T
+        data: &[T],
+        accessor: F,
         ranges: &(Range<Length>, Range<Length>),
         dimensions: (usize, usize),
     ) -> DMatrix<Fluence>
@@ -129,21 +137,17 @@ impl Kde {
         T: Sync,
         F: Fn(&T) -> (Point2<Length>, Energy) + Sync + Send + Copy,
     {
-        let dx = (ranges.0.end - ranges.0.start) / to_f64(dimensions.0);
-        let dy = (ranges.1.end - ranges.1.start) / to_f64(dimensions.1);
+        let (xs, ys) = FluenceGrid::new(&ranges.0, &ranges.1, dimensions).points();
         let mut matrix = DMatrix::<Fluence>::zeros(dimensions.1, dimensions.0);
-
         matrix
             .par_column_iter_mut()
             .enumerate()
-            .for_each(|(col_idx, mut col)| {
-                for point in col.iter_mut().enumerate() {
-                    let eval_point = point![
-                        ranges.0.start + to_f64(col_idx) * dx,
-                        ranges.1.start + to_f64(point.0) * dy
-                    ];
-                    // Pass reference and accessor down
-                    *point.1 = self.kde_value(data, &accessor, eval_point);
+            .for_each(|(column, mut values)| {
+                let Some(x) = xs.get(column) else {
+                    return;
+                };
+                for (value, y) in values.iter_mut().zip(ys.iter()) {
+                    *value = self.kde_value(data, &accessor, point![*x, *y]);
                 }
             });
         matrix

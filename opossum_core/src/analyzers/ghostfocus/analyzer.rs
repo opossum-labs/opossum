@@ -36,14 +36,16 @@ impl GhostFocusAnalyzer {
         &self.config
     }
 
-    fn node_group_report(
-        &self,
-        group: &NodeGroup,
-        analysis_report: &mut AnalysisReport,
-    ) -> OpmResult<()> {
+    /// Adds a report for every critical fluence on the surfaces of the given group, its nested
+    /// groups included, to the given analysis report.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if a report property cannot be created.
+    fn node_group_report(group: &NodeGroup, analysis_report: &mut AnalysisReport) -> OpmResult<()> {
         for node_ref in group.graph().nodes() {
             if let Some(g) = node_ref.as_any().downcast_ref::<NodeGroup>() {
-                self.node_group_report(g, analysis_report)?;
+                Self::node_group_report(g, analysis_report)?;
             } else {
                 let node_name = &node_ref.name().to_string();
                 for (surface_name, surface) in node_ref.surfaces_with_hits() {
@@ -51,7 +53,7 @@ impl GhostFocusAnalyzer {
                     let critical_positions = hit_map.critical_fluences();
                     let lidt = *surface.lidt();
                     if !critical_positions.is_empty() {
-                        for (i, (rays_uuid, (fluence, hist_idx, bounce))) in
+                        for (i, (rays_uuid, (fluence_data, hist_idx))) in
                             critical_positions.iter().enumerate()
                         {
                             let critical_ghost_hist = GhostFocusHistory::from((
@@ -67,23 +69,13 @@ impl GhostFocusAnalyzer {
                                 "Surface bounces that enabled this fluence",
                                 origin_str.into(),
                             )?;
-                            let fluence_data = hit_map
-                                .get_rays_hit_map(*bounce, *rays_uuid)
-                                .unwrap()
-                                .calc_fluence_map(
-                                    (101, 101),
-                                    self.config().fluence_estimator(),
-                                    None,
-                                    None,
-                                )?;
-
                             hit_map_props.create(
                                 &format!("Peak fluence ({})", fluence_data.estimator()),
-                                "Peak fluence on this surface using Voronoi estimator",
+                                "Peak fluence on this surface",
                                 format!(
                                     "{}J/cm², (LIDT of surface: {}J/cm²)",
                                     format_value_with_prefix(
-                                        fluence.get::<joule_per_square_centimeter>()
+                                        fluence_data.peak().get::<joule_per_square_centimeter>()
                                     ),
                                     format_value_with_prefix(
                                         lidt.get::<joule_per_square_centimeter>()
@@ -99,7 +91,7 @@ impl GhostFocusAnalyzer {
                             hit_map_props.create(
                                 "Fluence",
                                 "2D spatial energy distribution",
-                                fluence_data.into(),
+                                fluence_data.clone().into(),
                             )?;
                             let hit_map_report = NodeReport::new(
                                 "surface",
@@ -135,14 +127,20 @@ impl Analyzer for GhostFocusAnalyzer {
         // components exactly where this analysis does.
         let raytrace_config = AnalyzerType::GhostFocus(self.config.clone()).positioning_config();
         AnalysisRayTrace::calc_node_positions(scenery, LightResult::default(), &raytrace_config)?;
+        // Every surface follows the tubes where the estimator of the analysis does, a detector
+        // where its own does.
+        let mut config = self.config.clone();
+        config.set_ray_tubes(
+            config.fluence_estimator().needs_ray_tubes() || scenery.needs_ray_tubes(),
+        );
         scenery.reset_data();
-        scenery.prepare_volume(self.config())?;
+        scenery.prepare_volume(&config)?;
         info!(
             "Performing ghost focus analysis of scenery{scenery_name} up to {} ray bounces.",
-            self.config.max_bounces()
+            config.max_bounces()
         );
         scenery.clear_edges();
-        for bounce in 0..=self.config.max_bounces() {
+        for bounce in 0..=config.max_bounces() {
             let mut ray_collection = Vec::<Rays>::new();
             if bounce % 2 == 0 {
                 scenery.set_inverted(false)?;
@@ -154,7 +152,7 @@ impl Analyzer for GhostFocusAnalyzer {
             AnalysisGhostFocus::analyze(
                 scenery,
                 LightRays::default(),
-                self.config(),
+                &config,
                 &mut ray_collection,
                 bounce,
             )?;
@@ -180,7 +178,7 @@ impl Analyzer for GhostFocusAnalyzer {
         node_report.set_show_item(true);
         analysis_report.add_node_report(node_report);
 
-        self.node_group_report(scenery, &mut analysis_report)?;
+        Self::node_group_report(scenery, &mut analysis_report)?;
         analysis_report.set_analysis_type("Ghost Focus Analysis");
         Ok(analysis_report)
     }
@@ -220,20 +218,103 @@ mod test_ghost_focus_analyzer {
     use crate::{
         analyzers::Analyzer,
         coatings::CoatingConstantR,
-        core_optics::optic_node::Alignable,
+        core_optics::{hit_map::fluence_estimator::FluenceEstimator, optic_node::Alignable},
         degree,
         geometry::Extruded,
         joule,
         light::LightResult,
         millimeter,
         nodes::{
-            Lens, NodeGroup, SourcePort, SpotDiagram, ThinMirror, round_collimated_ray_builder,
+            EnergyMeter, FluenceDetector, Lens, NodeGroup, SourcePort, SpotDiagram, ThinMirror,
+            round_collimated_ray_builder,
             test_helper::helper::{
-                rays_recorded_by_meter, scenery_with_a_mirror_shrunk_behind_its_back,
+                rays_at_meter, rays_recorded_by_meter, scenery_with_a_mirror_shrunk_behind_its_back,
             },
         },
         percent,
     };
+    /// A fluence detector computes its map with its own estimator: a Voronoi detector gets the
+    /// ray tubes it follows also when the analysis estimates with KDE.
+    #[test]
+    fn a_voronoi_detector_gets_its_tubes_whatever_the_analysis_estimates_with() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let detector = scenery.add_node(FluenceDetector::default())?;
+        scenery.connect_nodes(source, "output_1", detector, "input_1", millimeter!(50.0))?;
+        let mut config = GhostFocusConfig::default();
+        config.set_fluence_estimator(FluenceEstimator::KDE);
+        config.set_max_bounces(0);
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(5.0), joule!(1.0), 5)?,
+        );
+        GhostFocusAnalyzer::new(config).analyze(&mut scenery)?;
+        let map = scenery
+            .node(detector)?
+            .as_any()
+            .downcast_ref::<FluenceDetector>()
+            .map(FluenceDetector::calc_fluence_data);
+        assert!(matches!(map, Some(Ok(Some(_)))), "{map:?}");
+        Ok(())
+    }
+    /// An analysis estimating with KDE spans no ray tubes for a model whose fluence maps do not
+    /// follow them either.
+    #[test]
+    fn a_kde_analysis_of_a_kde_model_spans_no_tubes() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let mut detector = FluenceDetector::default();
+        detector
+            .node_attr_mut()
+            .set_property("fluence estimator", FluenceEstimator::KDE.into())?;
+        let detector = scenery.add_node(detector)?;
+        let meter = scenery.add_node(EnergyMeter::default())?;
+        scenery.connect_nodes(source, "output_1", detector, "input_1", millimeter!(50.0))?;
+        scenery.connect_nodes(detector, "output_1", meter, "input_1", millimeter!(50.0))?;
+        let mut config = GhostFocusConfig::default();
+        config.set_fluence_estimator(FluenceEstimator::KDE);
+        config.set_max_bounces(0);
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(5.0), joule!(1.0), 5)?,
+        );
+        GhostFocusAnalyzer::new(config).analyze(&mut scenery)?;
+        let rays = rays_at_meter(&scenery, meter)?;
+        assert!(!rays.is_empty());
+        assert!(rays.iter().all(|ray| ray.source().is_none()));
+        Ok(())
+    }
+    /// A ghost focus analysis with the Voronoi estimator estimates the peak fluence of every
+    /// bundle on every surface, the ghosts a lens sends back included.
+    #[test]
+    fn a_ghost_focus_analysis_estimates_every_peak_fluence() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let mut lens = Lens::default();
+        for face in [Extruded::FRONT, Extruded::REAR] {
+            lens.set_coating(face, &CoatingConstantR::new(percent!(20.0))?.into())?;
+        }
+        let lens = scenery.add_node(lens)?;
+        let detector = scenery.add_node(FluenceDetector::default())?;
+        scenery.connect_nodes(source, "output_1", lens, "input_1", millimeter!(50.0))?;
+        scenery.connect_nodes(lens, "output_1", detector, "input_1", millimeter!(50.0))?;
+        let mut config = GhostFocusConfig::default();
+        config.set_max_bounces(1);
+        config.map_source(
+            source,
+            round_collimated_ray_builder(millimeter!(5.0), joule!(1.0), 5)?,
+        );
+        testing_logger::setup();
+        GhostFocusAnalyzer::new(config).analyze(&mut scenery)?;
+        testing_logger::validate(|logs| {
+            let failed = logs
+                .iter()
+                .filter(|log| log.body.contains("Could not estimate maximum fluence"))
+                .count();
+            assert_eq!(failed, 0, "{failed} peak fluences could not be estimated");
+        });
+        Ok(())
+    }
     /// A ghost focus analysis rebuilds the surfaces first, so it sees a component as its
     /// properties state it now, also when a property was changed without the node rebuilding its
     /// surfaces: a mirror shrunk to a radius of 5 mm reflects only the ray on its axis.
@@ -326,8 +407,10 @@ mod test_ghost_analysis_nested_groups_inversion {
         nodes::{Dummy, Lens, NodeGroup, SourcePort, round_collimated_ray_builder},
         percent,
         prelude::{AnalyzerType, CollimatedSrc, OpmDocument, RayDataSource, RefrIndexConst},
+        properties::{Proptype, proptype::format_value_with_prefix},
         radian,
     };
+    use uom::si::radiant_exposure::joule_per_square_centimeter;
     use uuid::Uuid;
 
     fn create_doc(bounces: usize) -> OpmResult<OpmDocument> {
@@ -597,6 +680,30 @@ mod test_ghost_analysis_nested_groups_inversion {
             report.node_reports().len() > 1,
             "Expected at least one critical fluence node report to be generated"
         );
+        // the peak each critical fluence report names is the peak of the map it shows
+        let critical = report
+            .node_reports()
+            .iter()
+            .filter(|node_report| node_report.node_type() == "surface")
+            .collect::<Vec<_>>();
+        assert_ne!(critical.len(), 0, "a critical fluence report");
+        for node_report in critical {
+            let props = node_report.properties();
+            let Proptype::FluenceData(map) = props.get("Fluence")? else {
+                panic!("a critical fluence report shows its map");
+            };
+            let Proptype::String(peak) =
+                props.get(&format!("Peak fluence ({})", map.estimator()))?
+            else {
+                panic!("a critical fluence report names its peak");
+            };
+            let expected =
+                format_value_with_prefix(map.peak().get::<joule_per_square_centimeter>());
+            assert!(
+                peak.starts_with(&format!("{expected}J/cm²")),
+                "{peak} vs {expected}"
+            );
+        }
         Ok(())
     }
 }

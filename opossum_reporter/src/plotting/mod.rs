@@ -15,7 +15,7 @@ use nalgebra::{
 };
 use num_traits::ToPrimitive;
 use opossum_core::error::{OpmResult, OpossumError};
-use opossum_core::utils::griddata::create_valued_voronoi_cells;
+use opossum_core::utils::griddata::triangulate_scatter_data;
 use opossum_core::utils::{filter_data::get_min_max_filter_nonfinite, griddata::linspace};
 #[cfg(not(target_arch = "wasm32"))]
 use plotters::prelude::SVGBackend;
@@ -1146,7 +1146,7 @@ impl PlotData {
     ) -> OpmResult<Self> {
         if xyz_dat.is_empty() {
             return Err(OpossumError::Other(
-                "No z-data provided! Cannot create `PlotData::TriangulatedSurface`!".into(),
+                "No xyz-data provided! Cannot create `PlotData::TriangulatedSurface`!".into(),
             ));
         }
         if let (Some(triangle_idx), Some(triangle_face_normals)) =
@@ -1189,53 +1189,7 @@ impl PlotData {
                 })
             }
         } else {
-            let voronoi = create_valued_voronoi_cells(xyz_dat)?;
-            let z_data = voronoi.get_z_data().as_ref().map_or_else(
-            || {
-                Err(OpossumError::Other(
-                    "Could not extract z data from voronoi diagram! Cannot create `PlotData::TriangulatedSurface`!"
-                        .into(),
-                ))
-            },
-            |z_data| Ok(DVector::from(z_data.column(0))),
-        )?;
-            let triangles = voronoi.get_voronoi_diagram().delaunay.triangles.clone();
-            let mut filtered_triangles = Vec::<usize>::with_capacity(triangles.len());
-            let triangle_idx = Matrix3xX::from_vec(triangles).transpose();
-            let len_dat = xyz_dat.shape().0;
-            for row in triangle_idx.row_iter() {
-                if row[0] < len_dat && row[1] < len_dat && row[2] < len_dat {
-                    filtered_triangles.push(row[0]);
-                    filtered_triangles.push(row[1]);
-                    filtered_triangles.push(row[2]);
-                }
-            }
-            let triangle_idx_filtered = Matrix3xX::from_vec(filtered_triangles).transpose();
-            let xyz_dat = MatrixXx3::from_columns(&[
-                xyz_dat.column(0),
-                xyz_dat.column(1),
-                z_data.rows(0, len_dat),
-            ]);
-
-            let triangle_normals = Matrix3xX::from_vec(
-                triangle_idx_filtered
-                    .row_iter()
-                    .flat_map(|tri_idx| {
-                        let p1 = xyz_dat.row(tri_idx[0]);
-                        let p2 = xyz_dat.row(tri_idx[1]);
-                        let p3 = xyz_dat.row(tri_idx[2]);
-                        let normal = ((p2 - p1).cross(&(p3 - p1))).normalize();
-                        [normal[0], normal[1], normal[2]]
-                    })
-                    .collect_vec(),
-            )
-            .transpose();
-
-            Ok(Self::TriangulatedSurface {
-                triangle_idx: triangle_idx_filtered,
-                xyz_dat,
-                triangle_face_normals: triangle_normals,
-            })
+            Self::new_triangulatedsurface(xyz_dat, Some(&triangulate_scatter_data(xyz_dat)?), None)
         }
     }
 }
@@ -3422,6 +3376,39 @@ mod test {
         assert_relative_eq!(axlims.y.unwrap().max, 2.1);
         assert_relative_eq!(axlims.z.unwrap().min, 1.9);
         assert_relative_eq!(axlims.z.unwrap().max, 4.1);
+        Ok(())
+    }
+    /// Triangulated from its points alone, a surface covers the hull of its points once.
+    #[test]
+    fn a_surface_from_points_alone_covers_their_hull() -> OpmResult<()> {
+        let mut points = Vec::new();
+        for i in 0..4 {
+            for j in 0..3 {
+                points.extend([f64::from(i), f64::from(j), 0.0]);
+            }
+        }
+        points.extend([0.5, 0.7, 0.0, 2.2, 1.4, 0.0]);
+        let xyz = MatrixXx3::from_row_slice(&points);
+        let PlotData::TriangulatedSurface {
+            triangle_idx,
+            xyz_dat,
+            ..
+        } = PlotData::new_triangulatedsurface(&xyz, None, None)?
+        else {
+            return Err(OpossumError::Other("no triangulated surface".into()));
+        };
+        let area: f64 = triangle_idx
+            .row_iter()
+            .map(|t| {
+                let (a, b, c) = (xyz_dat.row(t[0]), xyz_dat.row(t[1]), xyz_dat.row(t[2]));
+                (b[0] - a[0])
+                    .mul_add(c[1] - a[1], -(b[1] - a[1]) * (c[0] - a[0]))
+                    .abs()
+                    / 2.0
+            })
+            .sum();
+        // the hull reaches from 0 to 3 along x and from 0 to 2 along y
+        assert_relative_eq!(area, 6.0);
         Ok(())
     }
     #[test]

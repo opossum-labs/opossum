@@ -15,7 +15,6 @@ use crate::{
     error::{OpmResult, OpossumError},
     geometry::Geometry,
     properties::{Properties, Proptype, validator::Validator},
-    types::{SiScalarSchema, schema_helper_types::Point2Schema},
     utils::{file_utils::sanitize_filename, geom_transformation::Isometry},
 };
 fn deserialize_name<'de, D>(deserializer: D) -> Result<String, D::Error>
@@ -144,7 +143,7 @@ impl<'de> Deserialize<'de> for NodePositioning {
 ///
 /// `NodeAttr` encapsulates metadata and configuration for an optical node, including its type,
 /// name, ports, unique identifier, properties, geometric placement, alignment, and GUI position.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeAttr {
     /// The type of the node (e.g., "lens", "mirror").
     node_type: String,
@@ -168,10 +167,8 @@ pub struct NodeAttr {
     #[serde(skip_serializing_if = "Option::is_none")]
     alignment: Option<Isometry>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[schemars(with = "Option<(Uuid, SiScalarSchema)>")]
     align_like_node_at_distance: Option<(Uuid, Length)>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[schemars(with = "Option<Point2Schema>")]
     gui_position: Option<Point2<f64>>,
 }
 

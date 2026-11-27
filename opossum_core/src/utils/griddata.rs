@@ -4,25 +4,21 @@
 use super::AxLims;
 use super::filter_data::filter_nan_infinite;
 use crate::error::{OpmResult, OpossumError};
-use approx::abs_diff_ne;
 use itertools::Itertools;
 use log::warn;
-use nalgebra::{DMatrix, DVector, DVectorView, MatrixXx2, MatrixXx3, Point2, Scalar};
-use num_traits::{Float, NumCast, ToPrimitive};
+use nalgebra::{DMatrix, DVector, DVectorView, MatrixXx3, Scalar};
+use num_traits::{Float, NumCast};
 use spade::{DelaunayTriangulation, HasPosition, Point2 as SpadeP, Triangulation};
-use std::ops::Add;
-use voronator::{
-    VoronoiDiagram,
-    delaunator::{Coord, Point as VPoint},
-    polygon,
-};
 
-struct PointWithHeight {
+/// A point of scattered data in a triangulation: where it lies, its value, and its row in the
+/// data.
+struct ScatteredPoint {
     position: SpadeP<f64>,
     height: f64,
+    row: usize,
 }
 
-impl HasPosition for PointWithHeight {
+impl HasPosition for ScatteredPoint {
     type Scalar = f64;
 
     fn position(&self) -> SpadeP<f64> {
@@ -30,191 +26,102 @@ impl HasPosition for PointWithHeight {
     }
 }
 
-/// Storage struct for voronoi diagram cells and associated values of its vertices
-#[derive(Clone, Debug)]
-pub struct VoronoiedData {
-    voronoi_diagram: VoronoiDiagram<VPoint>,
-    z_data: Option<DVector<f64>>,
-}
-
-impl VoronoiedData {
-    /// Creates a new [`VoronoiedData`] struct by voronating thhe coordinates and combining them with data, if provided
-    /// # Attributes
-    /// `xy_coordinates`: coordinates of the data points
-    /// `data`: data to combine with voronoi cells
-    /// # Errors
-    /// This function errors if the number of voronoi cells and data points are not equal or if the creation of voronoi cells fails
-    pub fn new(
-        xy_coordinates: &MatrixXx2<f64>,
-        z_data_opt: Option<DVector<f64>>,
-    ) -> OpmResult<Self> {
-        let (voronoi_diagram, _) = create_voronoi_cells(xy_coordinates)?;
-
-        let z_data = if let Some(z_data) = z_data_opt {
-            if xy_coordinates.shape().0 != z_data.len() {
-                return Err(OpossumError::Other("Number of point coordinates and data value is not the same! Cannot assign values to voronoi cells!".into()));
-            }
-            let mut z_data_voronoi = DVector::from_element(voronoi_diagram.sites.len(), f64::NAN);
-            z_data_voronoi
-                .view_mut((0, 0), (z_data.len(), 1))
-                .set_column(0, &z_data);
-
-            Some(z_data_voronoi)
-        } else {
-            None
-        };
-
-        Ok(Self {
-            voronoi_diagram,
-            z_data,
-        })
-    }
-
-    /// Creates a new [`VoronoiedData`] struct by combining an exisiting voronoi diagram with data
-    /// # Attributes
-    /// `voronoi`: voronoi diagram created with voronator crate
-    /// `data`: data to combine with voronoi cells
-    /// # Errors
-    /// This function errors if the number of voronoi cells and data points are not equal
-    pub fn combine_data_with_voronoi_diagram(
-        voronoi: VoronoiDiagram<VPoint>,
-        data: DVector<f64>,
-    ) -> OpmResult<Self> {
-        if voronoi.sites.len() == data.len() {
-            Ok(Self {
-                voronoi_diagram: voronoi,
-                z_data: Some(data),
-            })
-        } else {
-            Err(OpossumError::Other("Number of voronoi-diagram sites and data values is not the same! Cannot combine data and voronoi cells!".into()))
-        }
-    }
-    /// Get the voronoi diagram of the [`VoronoiedData`]
-    #[must_use]
-    pub const fn get_voronoi_diagram(&self) -> &VoronoiDiagram<VPoint> {
-        &self.voronoi_diagram
-    }
-
-    /// Get the z dataset of the [`VoronoiedData`]
-    #[must_use]
-    pub const fn get_z_data(&self) -> &Option<DVector<f64>> {
-        &self.z_data
-    }
-}
-
-/// Calculate the area of a closed polygon using the shoelace formula
-/// # Attributes
-/// `poly_coords`: array of x-y coordinates of the polygon vertices
+/// Triangulates scattered data: x, y and a value in each row. The rows whose value is not finite
+/// are left out.
+///
 /// # Errors
-/// This function returns an errror if the numer of coordinates is below 3
-pub fn calc_closed_poly_area(poly_coords: &[Point2<f64>]) -> OpmResult<f64> {
-    let mut area = 0.;
-    let num_points = poly_coords.len();
-    if num_points < 3 {
-        Err(OpossumError::Other(
-            "Not enough points to define a polygon!".into(),
-        ))
-    } else {
-        for i in 0..num_points {
-            let j = (i + 1) % num_points;
-            if !poly_coords[i].x.is_finite() || !poly_coords[i].y.is_finite() {
-                return Err(OpossumError::Other(
-                    "Non-finite polygon coordinates!".into(),
-                ));
-            }
-            area = poly_coords[i].x.mul_add(poly_coords[j].y, area);
-            area = poly_coords[i].y.mul_add(-poly_coords[j].x, area);
+/// This function returns an error if a coordinate is not finite or if the points span no
+/// triangle, being fewer than three or all on one line.
+fn triangulate(
+    scattered_data: &MatrixXx3<f64>,
+) -> OpmResult<DelaunayTriangulation<ScatteredPoint>> {
+    let mut triangulation = DelaunayTriangulation::new();
+    for (row, point) in scattered_data.row_iter().enumerate() {
+        let (position, height) = (SpadeP::new(point[0], point[1]), point[2]);
+        if !(position.x.is_finite() && position.y.is_finite()) {
+            return Err(OpossumError::Other(
+                "the coordinates of scattered data must be finite".into(),
+            ));
         }
-        Ok(area.abs() / 2.)
+        if height.is_finite() {
+            triangulation
+                .insert(ScatteredPoint {
+                    position,
+                    height,
+                    row,
+                })
+                .map_err(|e| {
+                    OpossumError::Other(format!(
+                        "Inserting Point into Spade triangulation failed: {e}"
+                    ))
+                })?;
+        }
     }
+    if triangulation.num_inner_faces() == 0 {
+        return Err(OpossumError::Other(
+            "the scattered data span no triangle: they are fewer than three or lie on one line"
+                .into(),
+        ));
+    }
+    Ok(triangulation)
 }
 
 /// Interpolation of scattered 3d data
 ///
 /// Interpolation of scattered 3d data (not on a regular grid), meaning a set of "x" and "y" coordinates and a value for each data point.
-/// The interpolation is done via delaunay triangulation of the data points and interpolating on the desired points (`x_interp`, `y_interp`) using barycentric coordinates of the triangles
+/// The interpolation runs over the Delaunay triangulation of the data points, by natural
+/// neighbors, onto the desired points (`x_interp`, `y_interp`); points outside the hull of the data
+/// stay NaN. Data points whose value is not finite are left out.
 /// # Attributes
 /// `scattered_data`: Scattered data to be interpolated. The data should be structures as x-column, y-column, data-column
 /// `x_interp`: x-coordinates of the points on which this function should interpolate
 /// `y_interp`: y-coordinates of the points on which this function should interpolate
+/// # Returns
+/// The interpolated values, a row per y and a column per x, and a mask that is 1 where a value
+/// was interpolated and 0 elsewhere.
 /// # Errors
 /// This function errors if
-/// - The Axlimits can not be created
-/// - The triangulation (voronoi diagram) generation fails
+/// - fewer than two finite interpolation points are given along an axis
+/// - a coordinate of the data is not finite, or the data span no triangle
 pub fn grid_interpolate_3d_scatter_data(
     scattered_data: &MatrixXx3<f64>,
     x_interp: &DVector<f64>,
     y_interp: &DVector<f64>,
 ) -> OpmResult<(DMatrix<f64>, DMatrix<f64>)> {
-    let x_interp_filtered = DVector::from_vec(filter_nan_infinite(x_interp.as_slice()));
-    let y_interp_filtered = DVector::from_vec(filter_nan_infinite(y_interp.as_slice()));
-    if x_interp_filtered.len() < 2 || y_interp_filtered.len() < 2 {
+    let x_interp = filter_nan_infinite(x_interp.as_slice());
+    let y_interp = filter_nan_infinite(y_interp.as_slice());
+    if x_interp.len() < 2 || y_interp.len() < 2 {
         return Err(OpossumError::Other(
             "Length of interpolation ranges must be larger than 1 to define the interpolation bounds".into(),
         ));
     }
-    if scattered_data.column(0).len() < 3 {
-        return Err(OpossumError::Other(
-            "Number of scattered data points must be at least 3 to define a triangle, which is necessary to interpolate!".into(),
-        ));
-    }
-    let voronoi_data = create_valued_voronoi_cells(scattered_data)?;
-
-    grid_interpolate_3d_triangulated_scatter_data(
-        &voronoi_data,
-        &x_interp_filtered,
-        &y_interp_filtered,
-    )
+    let triangulation = triangulate(scattered_data)?;
+    let interpolation = triangulation.natural_neighbor();
+    let values = DMatrix::from_fn(y_interp.len(), x_interp.len(), |row, column| {
+        match (x_interp.get(column), y_interp.get(row)) {
+            (Some(x), Some(y)) => interpolation
+                .interpolate(|v| v.data().height, SpadeP::new(*x, *y))
+                .unwrap_or(f64::NAN),
+            _ => f64::NAN,
+        }
+    });
+    let mask = values.map(|value| if value.is_nan() { 0. } else { 1. });
+    Ok((values, mask))
 }
 
-/// - The triangulation (voronoi diagram) generation fails
+/// Returns the Delaunay triangles of scattered data: a row per triangle, holding the rows of the
+/// data at its three corners, counterclockwise. Data points whose value is not finite are left
+/// out.
 ///
 /// # Errors
-/// Returns an error if coronoi cell creation fails
-pub fn vec_interpolate_3d_scatter_data(
-    scattered_data: &MatrixXx3<f64>,
-    xy_interp: &MatrixXx2<f64>,
-) -> OpmResult<(DVector<f64>, DVector<f64>)> {
-    let filtered_rows: Vec<[f64; 2]> = xy_interp
-        .row_iter()
-        .filter_map(|row| {
-            let x = row[0];
-            let y = row[1];
-            if x.is_finite() && y.is_finite() {
-                Some([x, y])
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    let n = filtered_rows.len();
-
-    // column-major: first all x, then all y
-    let mut col_major: Vec<f64> = Vec::with_capacity(2 * n);
-    for r in &filtered_rows {
-        col_major.push(r[0]);
-    } // all x
-    for r in &filtered_rows {
-        col_major.push(r[1]);
-    } // alle y
-
-    // Variante A: mit from_vec (rows, cols, vec) — nalgebra erwartet column-major
-    let xy_interp_filtered = MatrixXx2::<f64>::from_column_slice(&col_major);
-
-    if xy_interp_filtered.column(0).len() < 2 {
-        return Err(OpossumError::Other(
-            "Length of interpolation ranges must be larger than 1 to define the interpolation bounds".into(),
-        ));
-    }
-    if scattered_data.column(0).len() < 3 {
-        return Err(OpossumError::Other(
-            "Number of scattered data points must be at least 3 to define a triangle, which is necessary to interpolate!".into(),
-        ));
-    }
-    let voronoi_data = create_valued_voronoi_cells(scattered_data)?;
-
-    vec_interpolate_3d_triangulated_scatter_data(&voronoi_data, &xy_interp_filtered)
+/// This function errors if a coordinate of the data is not finite, or if the data span no
+/// triangle.
+pub fn triangulate_scatter_data(scattered_data: &MatrixXx3<f64>) -> OpmResult<MatrixXx3<usize>> {
+    let corners = triangulate(scattered_data)?
+        .inner_faces()
+        .flat_map(|face| face.vertices().map(|vertex| vertex.data().row))
+        .collect_vec();
+    Ok(MatrixXx3::from_row_slice(&corners))
 }
 
 /// Creation of arrays from `x` and `y` coordinates
@@ -307,406 +214,12 @@ pub fn create_linspace_axes(
     }
 }
 
-/// Creates a set of voronoi cells from scattered 2d-coordinates
-/// # Attributes
-/// - `xy_coord`: Matrix of x-y coordinates of scattered points with the first column being the x coordinates and the second column being the y coordinates of these points
-/// # Errors
-/// This function errors if
-/// - coordinate values are non-finite or NAN.
-/// - all points are on the same line and can therefore not be triangulated properly.
-/// - the generation of the voronoi diagram fails.
-/// # Panics
-/// This function panics if the number of triangles cannot be converted to f64.
-pub fn create_voronoi_cells(xy_coord: &MatrixXx2<f64>) -> OpmResult<(VoronoiDiagram<VPoint>, f64)> {
-    //collect data to a vector of Points that can be used to create the triangulation
-    let points = Iterator::map(xy_coord.row_iter(), |c| {
-        if c[0].is_finite() && c[1].is_finite() {
-            Ok(VPoint::from_xy(c[0], c[1]))
-        } else {
-            Err(OpossumError::Other(
-                "Coordinate values for voronoi-diagram generation must be finite!".into(),
-            ))
-        }
-    })
-    .collect::<OpmResult<Vec<VPoint>>>()?;
-
-    if all_points_on_same_line(xy_coord) {
-        Err(OpossumError::Other(
-            "All passed points lie on the same line! Triangulation not possible!".into(),
-        ))
-    } else {
-        //create the voronoi diagram with the minimum and maximum values of the axes as bounds
-        // let convex_hull_points =
-        let triangulation = voronator::delaunator::triangulate(&points)
-            .ok_or_else(|| OpossumError::Other("Could not create voronoi diagram!".into()))?;
-        let (convex_hull_points, num_triangles) = {
-            let convex_hull = triangulation.hull;
-            (
-                Iterator::map(convex_hull.iter().rev(), |idx| {
-                    Point2::new(points[*idx].x, points[*idx].y)
-                })
-                .collect_vec(),
-                triangulation.triangles.len() / 3,
-            )
-        };
-
-        let area_hull = calc_closed_poly_area(convex_hull_points.as_slice())?;
-        let area_triangle = area_hull
-            / num_triangles
-                .to_f64()
-                .ok_or_else(|| OpossumError::Other("to_f64 failed".to_string()))?;
-        let side_length_triangle = (area_triangle * 4. / (3.).sqrt()).sqrt();
-        let base_height = (side_length_triangle / 2.)
-            .mul_add(-(side_length_triangle / 2.), side_length_triangle.powi(2))
-            .sqrt();
-
-        let num_points = convex_hull_points.len();
-        let mut shifted_hull = Vec::<VPoint>::with_capacity(num_points * 2);
-        //shoose points in between the scaled ones
-        for i in 0..num_points {
-            let j = (i + 1) % num_points;
-            let new_point = VPoint {
-                x: convex_hull_points[i].x
-                    + (convex_hull_points[j].x - convex_hull_points[i].x) / 2.,
-                y: convex_hull_points[i].y
-                    + (convex_hull_points[j].y - convex_hull_points[i].y) / 2.,
-            };
-            shifted_hull.push(VPoint::from_xy(
-                convex_hull_points[i].x,
-                convex_hull_points[i].y,
-            ));
-            shifted_hull.push(new_point);
-        }
-
-        let num_points_in_hull = shifted_hull
-            .len()
-            .to_f64()
-            .ok_or_else(|| OpossumError::Other("to_f64 failed".to_string()))?;
-        let mut hull_centroid = shifted_hull.iter().fold(Point2::new(0., 0.), |arg0, p| {
-            let average_val_x = f64::add(arg0.x, p.x);
-            let average_val_y = f64::add(arg0.y, p.y);
-            Point2::new(average_val_x, average_val_y)
-        });
-        hull_centroid.x /= num_points_in_hull;
-        hull_centroid.y /= num_points_in_hull;
-
-        let scaled_convex_hull = Iterator::map(shifted_hull.iter(), |p| {
-            let centroid_vec = Point2::new(p.x, p.y) - hull_centroid;
-            let dist_from_centroid = centroid_vec.norm();
-            let scale_factor = (dist_from_centroid + base_height / 2.) / dist_from_centroid;
-            VPoint::from_xy(
-                scale_factor.mul_add(centroid_vec.x, hull_centroid.x),
-                scale_factor.mul_add(centroid_vec.y, hull_centroid.y),
-            )
-        })
-        .collect_vec();
-        let convex_hull_polygon = polygon::Polygon::from_points(scaled_convex_hull);
-        Ok((
-            VoronoiDiagram::<VPoint>::with_bounding_polygon(points, &convex_hull_polygon)
-                .ok_or_else(|| OpossumError::Other("Could not create voronoi diagram!".into()))?,
-            area_hull,
-        ))
-    }
-}
-
-/// Creates a set of voronoi cells from scattered 2d-coordinates with associated values
-/// # Attributes
-/// - `xyz_data`: Matrix of x-y-z coordinates of scattered points with the first column being the x coordinates and the second column being the y coordinates of these points and the third column being the z valus at these points
-/// # Errors
-/// This function errors if the voronoir-diagram generation fails
-pub fn create_valued_voronoi_cells(xyz_data: &MatrixXx3<f64>) -> OpmResult<VoronoiedData> {
-    let (voronoi_diagram, _) = create_voronoi_cells(&MatrixXx2::from_columns(&[
-        xyz_data.column(0),
-        xyz_data.column(1),
-    ]))?;
-
-    let z_data = xyz_data.column(2);
-    let mut z_data_voronoi = DVector::from_element(voronoi_diagram.sites.len(), f64::NAN);
-    z_data_voronoi
-        .view_mut((0, 0), (z_data.len(), 1))
-        .set_column(0, &z_data);
-
-    VoronoiedData::combine_data_with_voronoi_diagram(voronoi_diagram, z_data_voronoi)
-}
-
-/// Interpolation of scattered 3d data onto a grid
-///
-/// Interpolation of scattered 3d data (not on a regular grid), meaning a set of "x" and "y" coordinates and a value for each data point.
-/// The interpolation is done via delaunay triangulation (retrieved from a voronoi diagram, created with voronator) of the data points and interpolating on the desired points (`x_interp`, `y_interp`) using barycentric coordinates of the triangles
-/// # Attributes
-/// `voronoi`: Reference to a `VoronoiDiagram` struct
-/// `z_data`: values referring to the voronoi cell
-/// `x_interp`: x-coordinates of the points on which this function should interpolate
-/// `y_interp`: y-coordinates of the points on which this function should interpolate
-/// # Returns
-/// This function returns the interpolated data and a mask that marks the points that have been interpolated.
-/// # Errors
-/// This function errors if any of the interpolation vectors have zero length.
-/// # Panics
-/// This function panics if the conversion from usize to f64 fails. May be the case for extremely large numbers.
-#[allow(clippy::too_many_lines)]
-pub fn grid_interpolate_3d_triangulated_scatter_data(
-    voronoi: &VoronoiedData,
-    x_interp: &DVector<f64>,
-    y_interp: &DVector<f64>,
-) -> OpmResult<(DMatrix<f64>, DMatrix<f64>)> {
-    let num_axes_points_x = x_interp.len();
-    let num_axes_points_y = y_interp.len();
-    let Some(z_data) = voronoi.get_z_data() else {
-        return Err(OpossumError::Other(
-            "No data defined! Cannot interpolate!".into(),
-        ));
-    };
-    if num_axes_points_x < 1 || num_axes_points_y < 1 {
-        return Err(OpossumError::Other(
-            "Cannot interpolate data, as one of the interpolation vectors have zero length".into(),
-        ));
-    }
-    let mut triangulation: DelaunayTriangulation<PointWithHeight> = DelaunayTriangulation::new();
-    //copy points of voronoi diag into spade triangulation
-    for (p, z) in voronoi.voronoi_diagram.sites.iter().zip(z_data.iter()) {
-        if z.is_finite() {
-            triangulation
-                .insert(PointWithHeight {
-                    position: SpadeP::new(p.x, p.y),
-                    height: *z,
-                    // normal
-                })
-                .map_err(|e| {
-                    OpossumError::Other(format!(
-                        "Inserting Point into Spade triangulation failed: {e}"
-                    ))
-                })?;
-        }
-    }
-    let mut interp_data =
-        DMatrix::<f64>::from_element(num_axes_points_y, num_axes_points_x, f64::NAN);
-    let mut mask = DMatrix::from_element(num_axes_points_y, num_axes_points_x, 0.);
-    let mm = triangulation.natural_neighbor();
-    for (x_index, x) in x_interp.iter().enumerate() {
-        for (y_index, y) in y_interp.iter().enumerate() {
-            let interp_point = mm.interpolate(|v| v.data().height, SpadeP::new(*x, *y));
-            if let Some(p) = interp_point {
-                interp_data[(y_index, x_index)] = p;
-                mask[(y_index, x_index)] = 1.;
-            }
-        }
-    }
-    Ok((interp_data, mask))
-}
-
-/// Interpolation of scattered 3d data at specific points
-///
-/// Interpolation of scattered 3d data (not on a regular grid), meaning a set of "x" and "y" coordinates and a value for each data point.
-/// The interpolation is done via delaunay triangulation (retrieved from a voronoi diagram, created with voronator) of the data points and interpolating on the desired points (`x_interp`, `y_interp`) using barycentric coordinates of the triangles
-/// # Attributes
-/// `voronoi`: Reference to a `VoronoiDiagram` struct
-/// `z_data`: values referring to the voronoi cell
-/// `x_interp`: x-coordinates of the points on which this function should interpolate
-/// `y_interp`: y-coordinates of the points on which this function should interpolate
-/// # Returns
-/// This function returns the interpolated data and a mask that marks the points that have been interpolated.
-/// # Errors
-/// This function errors if any of the interpolation vectors have zero length.
-/// # Panics
-/// This function panics if the conversion from usize to f64 fails. May be the case for extremely large numbers.
-pub fn vec_interpolate_3d_triangulated_scatter_data(
-    voronoi: &VoronoiedData,
-    x_y_interp: &MatrixXx2<f64>,
-) -> OpmResult<(DVector<f64>, DVector<f64>)> {
-    let num_axes_points = x_y_interp.column(0).len();
-    let Some(z_data) = voronoi.get_z_data() else {
-        return Err(OpossumError::Other(
-            "No data defined! Cannot interpolate!".into(),
-        ));
-    };
-    if num_axes_points < 1 {
-        return Err(OpossumError::Other(
-            "Cannot interpolate data, as one of the interpolation vectors have zero length".into(),
-        ));
-    }
-    let mut triangulation: DelaunayTriangulation<PointWithHeight> = DelaunayTriangulation::new();
-    //copy points of voronoi diag into spade triangulation
-    for (p, z) in voronoi.voronoi_diagram.sites.iter().zip(z_data.iter()) {
-        if z.is_finite() {
-            triangulation
-                .insert(PointWithHeight {
-                    position: SpadeP::new(p.x, p.y),
-                    height: *z,
-                    // normal
-                })
-                .map_err(|e| {
-                    OpossumError::Other(format!(
-                        "Inserting Point into Spade triangulation failed: {e}"
-                    ))
-                })?;
-        }
-    }
-    let mut interp_data = DVector::<f64>::from_element(num_axes_points, f64::NAN);
-    let mut mask = DVector::from_element(num_axes_points, 0.);
-    let mm = triangulation.natural_neighbor();
-    for (index, row) in x_y_interp.row_iter().enumerate() {
-        let interp_point = mm.interpolate(|v| v.data().height, SpadeP::new(row[0], row[1]));
-        if let Some(p) = interp_point {
-            interp_data[index] = p;
-            mask[index] = 1.;
-        }
-    }
-    Ok((interp_data, mask))
-}
-
-fn all_points_on_same_line(point_coords: &MatrixXx2<f64>) -> bool {
-    let num_points = point_coords.column(0).len();
-    if num_points < 3 {
-        //two points are always on the same line
-        true
-    } else {
-        let line_1 = point_coords.row(1) - point_coords.row(0);
-        let mut on_line = true;
-        for i in 2..num_points {
-            let line_2 = point_coords.row(i) - point_coords.row(0);
-            if abs_diff_ne!(line_1[0].mul_add(line_2[1], -(line_1[1] * line_2[0])), 0.) {
-                on_line = false;
-                break;
-            }
-        }
-        on_line
-    }
-}
-
 #[cfg(test)]
 mod test {
     use approx::{assert_abs_diff_eq, assert_relative_eq};
-    use nalgebra::{Matrix2xX, Matrix3xX};
+    use nalgebra::Matrix3xX;
 
     use super::*;
-    #[test]
-    fn all_points_on_same_line_test() {
-        let points = Matrix2xX::from_vec(vec![0., 0., 1., 1., 2., 2.]).transpose();
-        assert!(all_points_on_same_line(&points));
-
-        let points = Matrix2xX::from_vec(vec![0., 0., 1., 1., 2., 2., 2., 3.]).transpose();
-        assert!(!all_points_on_same_line(&points));
-
-        let points = Matrix2xX::from_vec(vec![0., 0., 1., 1.]).transpose();
-        assert!(all_points_on_same_line(&points));
-
-        let points = Matrix2xX::from_vec(vec![0., f64::NAN, 1., 1., 2., 2.]).transpose();
-        assert!(!all_points_on_same_line(&points));
-
-        let points = Matrix2xX::from_vec(vec![0., f64::INFINITY, 1., 1., 2., 2.]).transpose();
-        assert!(!all_points_on_same_line(&points));
-
-        let points = Matrix2xX::from_vec(vec![0., f64::NEG_INFINITY, 1., 1., 2., 2.]).transpose();
-        assert!(!all_points_on_same_line(&points));
-    }
-    #[test]
-    fn new_voronoi_data() {
-        let xy_coord = Matrix2xX::from_vec(vec![1.0, 1.5, 0.0, 2.5, 3.0, 15.]).transpose();
-        let z_data = DVector::from_vec(vec![-10., 0., 500.]);
-        assert!(VoronoiedData::new(&xy_coord, Some(z_data)).is_ok());
-
-        let xy_coord = Matrix2xX::from_vec(vec![1.0, 1.5, 0.0, 2.5]).transpose();
-        let z_data = DVector::from_vec(vec![-10., 0., 500.]);
-        assert!(VoronoiedData::new(&xy_coord, Some(z_data)).is_err());
-    }
-    #[test]
-    fn get_voronoi_diagram_test() -> OpmResult<()> {
-        let xy_coord = Matrix2xX::from_vec(vec![1.0, 1.5, 0.0, 2.5, 3.0, 15.]).transpose();
-        let (voronoi, _) = create_voronoi_cells(&xy_coord)?;
-
-        let xy_coord = Matrix2xX::from_vec(vec![1.0, 1.5, 0.0, 2.5, 3.0, 15.]).transpose();
-        let z_data = DVector::from_vec(vec![-10., 0., 500.]);
-        let v_dat = VoronoiedData::new(&xy_coord, Some(z_data))?;
-
-        let v_diag = v_dat.get_voronoi_diagram();
-
-        assert_eq!(voronoi, v_diag.clone());
-        Ok(())
-    }
-    #[test]
-    fn get_z_data_test() -> OpmResult<()> {
-        let xy_coord = Matrix2xX::from_vec(vec![1.0, 1.5, 0.0, 2.5, 3.0, 15.]).transpose();
-        let v_dat = VoronoiedData::new(&xy_coord, Some(DVector::from_vec(vec![-10., 0., 500.])))?;
-
-        let z_dat = v_dat.get_z_data();
-        assert!(z_dat.is_some());
-        let z_dat = z_dat
-            .clone()
-            .ok_or_else(|| OpossumError::Other("z_data empty".into()))?;
-
-        assert_relative_eq!(-10., z_dat[0]);
-        assert_relative_eq!(0., z_dat[1]);
-        assert_relative_eq!(500., z_dat[2]);
-        assert!(z_dat[3].is_nan());
-        assert!(z_dat[4].is_nan());
-        assert!(z_dat[5].is_nan());
-        assert!(z_dat[6].is_nan());
-
-        let v_dat = VoronoiedData::new(&xy_coord, None)?;
-
-        let z_dat = v_dat.get_z_data();
-        assert!(z_dat.is_none());
-        Ok(())
-    }
-    #[test]
-    fn calc_closed_poly_area_test() -> OpmResult<()> {
-        let poly_triangle = vec![
-            Point2::new(0., 0.),
-            Point2::new(1., 0.),
-            Point2::new(0., 1.),
-        ];
-        let poly_rect = vec![
-            Point2::new(0., 0.),
-            Point2::new(1., 0.),
-            Point2::new(1., 1.),
-            Point2::new(0., 1.),
-        ];
-        let poly_oct = vec![
-            Point2::new(0., 0.),
-            Point2::new(1., 0.),
-            Point2::new(2., 1.),
-            Point2::new(2., 2.),
-            Point2::new(1., 3.),
-            Point2::new(0., 3.),
-            Point2::new(-1., 2.),
-            Point2::new(-1., 1.),
-        ];
-        let poly_same_line = vec![
-            Point2::new(0., 0.),
-            Point2::new(1., 1.),
-            Point2::new(2., 2.),
-        ];
-
-        assert_relative_eq!(calc_closed_poly_area(&poly_triangle)?, 0.5);
-        assert_relative_eq!(calc_closed_poly_area(&poly_rect)?, 1.);
-        assert_relative_eq!(calc_closed_poly_area(&poly_oct)?, 7.);
-        assert_relative_eq!(calc_closed_poly_area(&poly_same_line)?, 0.);
-        Ok(())
-    }
-    #[test]
-    fn calc_closed_poly_area_invalid_polygon_test() {
-        let poly_triangle = vec![Point2::new(0., 0.), Point2::new(1., 0.)];
-        assert!(calc_closed_poly_area(&poly_triangle).is_err());
-        let poly_triangle = vec![
-            Point2::new(0., 0.),
-            Point2::new(1., 0.),
-            Point2::new(0., f64::NAN),
-        ];
-        assert!(calc_closed_poly_area(&poly_triangle).is_err());
-        let poly_triangle = vec![
-            Point2::new(0., 0.),
-            Point2::new(1., 0.),
-            Point2::new(0., f64::INFINITY),
-        ];
-        assert!(calc_closed_poly_area(&poly_triangle).is_err());
-        let poly_triangle = vec![
-            Point2::new(0., 0.),
-            Point2::new(1., 0.),
-            Point2::new(0., f64::NEG_INFINITY),
-        ];
-        assert!(calc_closed_poly_area(&poly_triangle).is_err());
-    }
     #[test]
     fn interpolate_3d_scatter_data_value_test() -> OpmResult<()> {
         let scattered_data =
@@ -733,6 +246,42 @@ mod test {
         assert_abs_diff_eq!(interp_data[(3, 1)], 1.0);
         assert_abs_diff_eq!(interp_data[(3, 2)], 1.0);
         assert_abs_diff_eq!(interp_data[(3, 3)], 1.0);
+        Ok(())
+    }
+    /// Inside the hull of its data, natural neighbor interpolation shows a linear function as it
+    /// is, however the data are scattered.
+    #[test]
+    fn interpolation_shows_a_linear_function_as_it_is() -> OpmResult<()> {
+        let linear = |x: f64, y: f64| 2.0f64.mul_add(x, (-3.0f64).mul_add(y, 1.0));
+        let points = [
+            (0.0, 0.0),
+            (3.0, 0.5),
+            (1.0, 2.5),
+            (-1.0, 1.5),
+            (2.0, 3.0),
+            (0.5, 1.0),
+            (-0.5, 3.5),
+            (2.5, 2.0),
+            (1.5, 0.2),
+            (0.2, 2.0),
+        ];
+        let scattered_data = MatrixXx3::from_row_iterator(
+            points.len(),
+            points.iter().flat_map(|(x, y)| [*x, *y, linear(*x, *y)]),
+        );
+        let (x_interp, y_interp) = (linspace(-1., 3., 9)?, linspace(0., 3.5, 8)?);
+        let (values, mask) =
+            grid_interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp)?;
+        let mut inside = 0;
+        for (column, x) in x_interp.iter().enumerate() {
+            for (row, y) in y_interp.iter().enumerate() {
+                if mask[(row, column)] > 0.0 {
+                    assert_abs_diff_eq!(values[(row, column)], linear(*x, *y), epsilon = 1e-12);
+                    inside += 1;
+                }
+            }
+        }
+        assert!(inside > 20, "only {inside} points inside");
         Ok(())
     }
     #[test]
@@ -799,24 +348,24 @@ mod test {
         assert!(grid_interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_err());
         Ok(())
     }
+    /// A data point without a finite value is left out; the others must still span a triangle.
     #[test]
     fn interpolate_3d_scatter_data_finite_values_test() -> OpmResult<()> {
         let x_interp = linspace(-0.5, 1., 4)?;
         let y_interp = linspace(-0.5, 1., 4)?;
-
-        let scattered_data =
-            Matrix3xX::from_vec(vec![-1., 0., f64::NAN, 1., 0., 0., 0., 1., 0.]).transpose();
-        assert!(grid_interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_ok());
-
-        let scattered_data =
-            Matrix3xX::from_vec(vec![-1., 0., f64::NEG_INFINITY, 1., 0., 0., 0., 1., 0.])
-                .transpose();
-        assert!(grid_interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_ok());
-
-        let scattered_data =
-            Matrix3xX::from_vec(vec![-1., 0., f64::INFINITY, 1., 0., 0., 0., 1., 0.]).transpose();
-        assert!(grid_interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_ok());
-
+        for value in [f64::NAN, f64::NEG_INFINITY, f64::INFINITY] {
+            let scattered_data =
+                Matrix3xX::from_vec(vec![-1., 0., value, 1., 0., 0., 0., 1., 0., 0., -1., 0.])
+                    .transpose();
+            let (values, _) =
+                grid_interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp)?;
+            assert!(values.iter().filter(|v| !v.is_nan()).all(|v| *v == 0.0));
+            let scattered_data =
+                Matrix3xX::from_vec(vec![-1., 0., value, 1., 0., 0., 0., 1., 0.]).transpose();
+            assert!(
+                grid_interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_err()
+            );
+        }
         let scattered_data =
             Matrix3xX::from_vec(vec![-1., 0., -1., 1., 0., 0., 0., 1., 0.]).transpose();
         assert!(grid_interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_ok());
@@ -846,34 +395,6 @@ mod test {
             Matrix3xX::from_vec(vec![0., 0., 0., 1., 0., 0., 0., 1., 0.]).transpose();
 
         assert!(grid_interpolate_3d_scatter_data(&scattered_data, &x_interp, &y_interp).is_ok());
-        Ok(())
-    }
-    #[test]
-    fn interpolate_3d_triangulated_scatter_data_test() -> OpmResult<()> {
-        let xy_coord = Matrix2xX::from_vec(vec![0.0, 0.0, 1.0, 0.0, 0.5, 1.]).transpose();
-        let z_data = DVector::from_vec(vec![0., 0., 1.]);
-        let v_data = VoronoiedData::new(&xy_coord, Some(z_data))?;
-
-        let x_interp = linspace(0.5, 1., 1)?;
-        let y_interp = linspace(0.5, 1., 1)?;
-        let (interp_data, _) =
-            grid_interpolate_3d_triangulated_scatter_data(&v_data, &x_interp, &y_interp)?;
-        assert_relative_eq!(interp_data[(0, 0)], 0.5);
-
-        let x_interp = linspace(0., 1., 3)?;
-        let y_interp = linspace(0., 1., 3)?;
-        let (interp_data, _interp_mask) =
-            grid_interpolate_3d_triangulated_scatter_data(&v_data, &x_interp, &y_interp)?;
-
-        assert_relative_eq!(interp_data[(0, 0)], 0.);
-        assert_relative_eq!(interp_data[(0, 1)], 0.);
-        assert_relative_eq!(interp_data[(0, 2)], 0.);
-        assert!(interp_data[(1, 0)].is_nan());
-        assert_relative_eq!(interp_data[(1, 1)], 0.5);
-        assert!(interp_data[(1, 2)].is_nan());
-        assert!(interp_data[(2, 0)].is_nan());
-        assert_relative_eq!(interp_data[(2, 1)], 1.);
-        assert!(interp_data[(2, 2)].is_nan());
         Ok(())
     }
     #[test]
@@ -964,61 +485,42 @@ mod test {
         assert!(create_linspace_axes(DVectorView::from(&x_dat), 0).is_err());
         Ok(())
     }
+    /// The triangles of scattered data hold the rows of their corners, counterclockwise; a row
+    /// without a finite value is no corner.
     #[test]
-    fn create_voronoi_cells_same_line_test() {
-        let xy_coord = Matrix2xX::from_vec(vec![0., 0., 1., 1., 2., 2., 1000., 1000.]).transpose();
-        let voronoi = create_voronoi_cells(&xy_coord);
-        assert!(voronoi.is_err());
-    }
-    #[test]
-    fn create_voronoi_cells_site_coordinates_test() -> OpmResult<()> {
-        let xy_coord = Matrix2xX::from_vec(vec![1.0, 1.5, 0.0, 2.5, 3.0, 15.]).transpose();
-        let voronoi = create_voronoi_cells(&xy_coord);
-        assert!(voronoi.is_ok());
-
-        let (unwrapped_voronoi, _) = voronoi?;
-        assert_relative_eq!(unwrapped_voronoi.sites[0].x, 1.0);
-        assert_relative_eq!(unwrapped_voronoi.sites[0].y, 1.5);
-        assert_relative_eq!(unwrapped_voronoi.sites[1].x, 0.0);
-        assert_relative_eq!(unwrapped_voronoi.sites[1].y, 2.5);
-        assert_relative_eq!(unwrapped_voronoi.sites[2].x, 3.0);
-        assert_relative_eq!(unwrapped_voronoi.sites[2].y, 15.);
+    fn triangles_hold_the_rows_of_their_corners() -> OpmResult<()> {
+        let scattered_data = Matrix3xX::from_vec(vec![
+            0.,
+            0.,
+            1., //
+            5.,
+            5.,
+            f64::NAN, //
+            1.,
+            0.,
+            2., //
+            0.,
+            1.,
+            3.,
+        ])
+        .transpose();
+        let triangles = triangulate_scatter_data(&scattered_data)?;
+        assert_eq!(triangles.nrows(), 1);
+        // rotated to start at its lowest row, the triangle runs from row 0 over 2 to 3
+        let corners = triangles.row(0).iter().copied().collect_vec();
+        let start = corners.iter().position_min().unwrap_or(0);
+        let rotated = [0, 1, 2].map(|i| corners[(start + i) % 3]);
+        assert_eq!(rotated, [0, 2, 3]);
         Ok(())
     }
+    /// Data on one line span no triangle.
     #[test]
-    fn create_voronoi_cells_invalid_site_coordinates_test() {
-        let xy_coord = Matrix2xX::from_vec(vec![1.0, f64::NAN]).transpose();
-        let voronoi = create_voronoi_cells(&xy_coord);
-        assert!(voronoi.is_err());
-    }
-    #[test]
-    fn create_valued_voronoi_cells_test() -> OpmResult<()> {
-        let xyz_coord = MatrixXx3::<f64>::zeros(0);
-        let voronoi = create_valued_voronoi_cells(&xyz_coord);
-        assert!(voronoi.is_err());
-
-        let xyz_coord = Matrix3xX::from_vec(vec![1.0, 1.5, 10.]).transpose();
-        let voronoi = create_valued_voronoi_cells(&xyz_coord);
-        assert!(voronoi.is_err());
-
-        let xyz_coord =
-            Matrix3xX::from_vec(vec![1.0, 1.5, 10., 2.0, 2.5, 20., -1.0, -3.5, 30.]).transpose();
-        let voronoi = create_valued_voronoi_cells(&xyz_coord);
-        assert!(voronoi.is_ok());
-
-        let unwrapped_voronoi = voronoi?;
-        let z_data = unwrapped_voronoi
-            .z_data
-            .ok_or_else(|| OpossumError::Other("z_data empty".into()))?;
-        assert_relative_eq!(unwrapped_voronoi.voronoi_diagram.sites[0].x, 1.0);
-        assert_relative_eq!(unwrapped_voronoi.voronoi_diagram.sites[0].y, 1.5);
-        assert_relative_eq!(z_data[0], 10.);
-        assert_relative_eq!(unwrapped_voronoi.voronoi_diagram.sites[1].x, 2.0);
-        assert_relative_eq!(unwrapped_voronoi.voronoi_diagram.sites[1].y, 2.5);
-        assert_relative_eq!(z_data[1], 20.);
-        assert_relative_eq!(unwrapped_voronoi.voronoi_diagram.sites[2].x, -1.0);
-        assert_relative_eq!(unwrapped_voronoi.voronoi_diagram.sites[2].y, -3.5);
-        assert_relative_eq!(z_data[2], 30.);
-        Ok(())
+    fn data_on_one_line_span_no_triangle() {
+        let scattered_data =
+            Matrix3xX::from_vec(vec![0., 0., 0., 1., 1., 0., 2., 2., 0., 1000., 1000., 0.])
+                .transpose();
+        assert!(triangulate_scatter_data(&scattered_data).is_err());
+        let x_interp = DVector::from_vec(vec![0., 1.]);
+        assert!(grid_interpolate_3d_scatter_data(&scattered_data, &x_interp, &x_interp).is_err());
     }
 }

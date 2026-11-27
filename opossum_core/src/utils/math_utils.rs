@@ -77,6 +77,12 @@ pub fn distance_3d_point(point1: &Point3<Length>, point2: &Point3<Length>) -> Le
     (dx * dx + dy * dy + dz * dz).sqrt()
 }
 
+/// The signed area of a triangle: positive if its corners run counterclockwise.
+#[must_use]
+pub fn signed_area([a, b, c]: [Point2<f64>; 3]) -> f64 {
+    (b - a).perp(&(c - a)) / 2.0
+}
+
 #[cfg(test)]
 mod test {
     use super::*; // Use super to import from the parent module

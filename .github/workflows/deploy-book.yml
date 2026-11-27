@@ -38,6 +38,10 @@ jobs:
         with:
           mdbook-version: 'latest'
 
+      # Install the KaTeX preprocessor that renders the formulas of the book
+      - name: Install mdbook-katex
+        run: cargo install mdbook-katex --locked
+
       # Build book using the path doc/book
       - name: Build mdBook
         run: mdbook build doc/book

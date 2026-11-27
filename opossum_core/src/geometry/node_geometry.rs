@@ -316,13 +316,8 @@ impl Geometry {
     /// Let the surface of one face of this component act on a bundle of rays.
     ///
     /// The geometry answers where each valid ray hits the face (see [`Geometry::intersect`]). A ray
-    /// that misses it follows the missed surface strategy. At a hit, the effect acts first on the
-    /// helper rays of the ray, each at its own hit, and then on the ray (see
-    /// [`SurfaceEffect::act_at`]), so the fluence the ray records is the one on the surface. The
-    /// part going back, which on total reflection is the ray itself, takes the reflected helper
-    /// rays along. A part whose helper rays did not all go its way (one missed the face, passed a
-    /// bore, or was sent back alone while the ray was split) drops them (see
-    /// [`Ray::drop_helper_rays`]). The surface records the hit in its hit map. Which of the two
+    /// that misses it follows the missed surface strategy. At a hit, the effect acts on the ray (see
+    /// [`SurfaceEffect::act_at`]), and the surface records the hit in its hit map. Which of the two
     /// parts is the intended beam is recorded on both (see [`ReflectedPart`]). The coating of the
     /// surface is built once for the whole bundle. A ray in a bore passes untouched, whatever the
     /// missed surface strategy, unless the effect acts there as well (see
@@ -344,8 +339,8 @@ impl Geometry {
     ///
     /// # Warnings
     ///
-    /// This function warns if a ray missed the surface or sent nothing back, if the helper rays of
-    /// a ray split up, and if the bundle has no valid ray.
+    /// This function warns if a ray missed the surface or sent nothing back, and if the bundle has
+    /// no valid ray.
     ///
     /// # Errors
     ///
@@ -363,7 +358,6 @@ impl Geometry {
         let uuid = rays.uuid();
         let mut valid_rays_found = false;
         let mut rays_missed = false;
-        let mut helpers_split_up = false;
         let mut reflected_rays = Rays::with_capacity(rays.nr_of_rays(false));
         // The hits are recorded once the geometry has answered for every ray.
         let mut hit_points = Vec::new();
@@ -378,10 +372,7 @@ impl Geometry {
             if !surface_hit.is_acted_on_by(effect) {
                 continue;
             }
-            let helpers =
-                self.interact_with_helper_rays(face, ray, effect, coating.as_ref(), missed)?;
-            let (mut reflected, hit_point) = effect.act_at(ray, &surface_hit, coating.as_ref())?;
-            helpers_split_up |= helpers.hand_over(ray, reflected.as_mut());
+            let (reflected, hit_point) = effect.act_at(ray, &surface_hit, coating.as_ref())?;
             if let Some(mut reflected) = reflected {
                 part.record_split(ray, &mut reflected);
                 reflected_rays.add_ray(reflected);
@@ -390,82 +381,21 @@ impl Geometry {
                 part.record_stop(ray, &mut reflected_rays);
             }
             if let Some(hit_point) = hit_point {
-                hit_points.push((hit_point, ray.number_of_bounces()));
+                hit_points.push((hit_point, ray.number_of_bounces(), ray.source().cloned()));
             }
         }
         let surface = self.surface_of_mut(face)?;
-        for (hit_point, bounces) in hit_points {
-            surface.add_to_hit_map(hit_point, bounces, uuid)?;
+        for (hit_point, bounces, source) in hit_points {
+            surface.add_to_hit_map(hit_point, bounces, uuid, source.as_ref())?;
         }
         if rays_missed {
             warn!("rays totally reflected or missed a surface");
-        }
-        if helpers_split_up {
-            warn!(
-                "the helper rays of a ray split up at a surface - no fluence is recorded for it from there on"
-            );
         }
         if !valid_rays_found {
             warn!("ray bundle contains no valid rays - not propagating");
         }
         part.link_bundles(rays, &mut reflected_rays);
         Ok(reflected_rays)
-    }
-    /// Let the surface of one face of this component act on the helper rays of a ray, each at its
-    /// own hit, before it acts on the ray itself (see [`Geometry::interact_with_rays`]).
-    ///
-    /// A helper ray that misses the face follows the missed surface strategy, and one in a bore
-    /// passes untouched. If one of them did not reach the surface, the triangle is torn on it
-    /// already: the ray drops its helper rays (see [`Ray::drop_helper_rays`]).
-    ///
-    /// # Arguments
-    ///
-    /// * `face` - the number of the face.
-    /// * `ray` - the ray whose helper rays meet the surface.
-    /// * `effect` - what the surface does to a ray that hits it.
-    /// * `coating` - the coating of the surface.
-    /// * `missed` - what happens to a helper ray that misses the surface.
-    ///
-    /// # Returns
-    ///
-    /// What the surface did to the helper rays, to hand them over to the parts of the ray once the
-    /// surface has acted on it (see [`HelperRaysAtSurface::hand_over`]).
-    ///
-    /// # Errors
-    ///
-    /// This function returns an error if the effect fails for a helper ray.
-    fn interact_with_helper_rays(
-        &self,
-        face: FaceIndex,
-        ray: &mut Ray,
-        effect: &dyn SurfaceEffect,
-        coating: &dyn Coating,
-        missed: MissedSurfaceStrategy,
-    ) -> OpmResult<HelperRaysAtSurface> {
-        let mut helpers = HelperRaysAtSurface::default();
-        for helper in ray.helper_rays_mut().into_iter().flat_map(Rays::iter_mut) {
-            let reflection = match self.intersect(face, helper) {
-                Some(hit) if hit.is_acted_on_by(effect) => {
-                    let (reflection, _) = effect.act_at(helper, &hit, coating)?;
-                    helpers.sent_back_alone |= reflection.is_none();
-                    reflection
-                }
-                Some(_) => {
-                    helpers.lost = true;
-                    None
-                }
-                None => {
-                    missed.apply_to(helper);
-                    helpers.lost = true;
-                    None
-                }
-            };
-            helpers.reflections.push(reflection);
-        }
-        if helpers.lost {
-            ray.drop_helper_rays();
-        }
-        Ok(helpers)
     }
     /// Let the surface of one face of this component act on the bundles of an analysis (see
     /// [`Geometry::interact`](crate::geometry::Geometry)).
@@ -512,53 +442,6 @@ impl Geometry {
         }
         bundles.extend_from_slice(self.surface_of_mut(face)?.get_rays_cache(backward));
         Ok(())
-    }
-}
-
-/// What a surface did to the helper rays of a ray before acting on the ray itself (see
-/// [`Geometry::interact_with_helper_rays`]).
-#[derive(Default)]
-struct HelperRaysAtSurface {
-    /// The part each helper ray sent back, if any, in the order of the helper rays.
-    reflections: Vec<Option<Ray>>,
-    /// Whether a helper ray did not reach the surface: it missed it or passed a bore.
-    lost: bool,
-    /// Whether the surface sent a helper ray back alone, as on total reflection.
-    sent_back_alone: bool,
-}
-
-impl HelperRaysAtSurface {
-    /// Hand the helper rays over to the parts of their ray, once the surface has acted on it.
-    ///
-    /// The part going back, which on total reflection is the ray itself, takes the reflected
-    /// helper rays. If the ray was split while the surface sent a helper ray back alone, the
-    /// transmitted part has no triangle left: the ray drops its helper rays (see
-    /// [`Ray::drop_helper_rays`]).
-    ///
-    /// # Arguments
-    ///
-    /// * `ray` - the ray, after the surface acted on it.
-    /// * `reflected` - the part the surface sent back, if any.
-    ///
-    /// # Returns
-    ///
-    /// Whether the helper rays split up at the surface, so that a part lost them.
-    fn hand_over(self, ray: &mut Ray, reflected: Option<&mut Ray>) -> bool {
-        let torn_behind = self.sent_back_alone && reflected.is_some();
-        if torn_behind {
-            ray.drop_helper_rays();
-        }
-        let going_back = reflected.unwrap_or(ray);
-        let going_back_helpers = going_back
-            .helper_rays_mut()
-            .into_iter()
-            .flat_map(Rays::iter_mut);
-        for (helper, reflection) in going_back_helpers.zip(self.reflections) {
-            if let Some(reflection) = reflection {
-                *helper = reflection;
-            }
-        }
-        self.lost || torn_behind
     }
 }
 
@@ -827,28 +710,24 @@ impl GeometryKind for SurfaceGeometry {
 mod test {
     use super::*;
     use crate::{
-        J_per_cm2,
         analyzers::RayTraceConfig,
         apertures::{Bore, CircleShape},
         coatings::{CoatingConstantR, CoatingType, SplittingConfig, SplittingConfigBuilder},
         core_optics::{hit_map::fluence_estimator::FluenceEstimator, surface_effect::Refraction},
         degree,
-        distributions::{fluence::general_gaussian::General2DGaussian, position::Hexapolar},
+        distributions::position::Hexapolar,
         gain::Inversion,
         geometry::{Parabola, Part, Side, Sphere},
         joule, meter, millimeter, nanometer,
         nodes::ideal_filter::{EdgeFilter, EdgeFilterType, SpectralFilterBuilder},
-        percent, radian,
+        percent,
         refractive_index::{RefrIndexConst, RefractiveIndexType, refr_index_vaccuum},
         utils::test_helper::helper::check_logs,
     };
     use approx::assert_abs_diff_eq;
     use nalgebra::Vector3;
     use nalgebra::vector;
-    use uom::si::{
-        energy::joule, f64::Energy, length::millimeter,
-        radiant_exposure::joule_per_square_centimeter,
-    };
+    use uom::si::{energy::joule, f64::Energy, length::millimeter};
 
     fn circle() -> OpmResult<Outline> {
         Outline::new(CircleShape::new(millimeter!(12.5))?, None)
@@ -1386,6 +1265,44 @@ mod test {
             MissedSurfaceStrategy::Stop,
         )
     }
+    /// Both parts of a ray split at a surface keep its place in the ray tubes of its source,
+    /// whichever part the node intends.
+    #[test]
+    fn both_parts_of_a_split_ray_keep_its_source() -> OpmResult<()> {
+        for part in [
+            ReflectedPart::Ghost,
+            ReflectedPart::Main,
+            ReflectedPart::Branch,
+        ] {
+            let mut rays = Rays::new_uniform_collimated(
+                nanometer!(1000.0),
+                joule!(1.0),
+                &Hexapolar::new(millimeter!(1.0), 1)?,
+            )?
+            .transformed_by_iso(&Isometry::new_along_z(millimeter!(-10.0))?);
+            rays.attach_mesh()?;
+            let sources = rays
+                .iter()
+                .map(|ray| ray.source().cloned())
+                .collect::<Vec<_>>();
+            let mut plane = coated(Geometry::plane(None), twenty_percent()?)?;
+            let reflected = plane.interact_with_rays(
+                FaceIndex::new(0),
+                &mut rays,
+                &Refraction(Some(&refr_index_vaccuum())),
+                part,
+                MissedSurfaceStrategy::Stop,
+            )?;
+            for parts in [&rays, &reflected] {
+                let kept = parts
+                    .iter()
+                    .map(|ray| ray.source().cloned())
+                    .collect::<Vec<_>>();
+                assert_eq!(kept, sources, "{part:?}");
+            }
+        }
+        Ok(())
+    }
     #[test]
     fn refraction_of_an_empty_bundle() -> OpmResult<()> {
         let mut rays = Rays::default();
@@ -1398,234 +1315,34 @@ mod test {
         assert_eq!(reflected.nr_of_rays(false), 0);
         Ok(())
     }
-    #[test]
-    fn refraction_of_helper_rays() -> OpmResult<()> {
-        let tot_energy = joule!(1.);
-        let pos_strategy = Hexapolar::new(millimeter!(15.), 5)?;
-        let fluence_strategy = General2DGaussian::new(
-            tot_energy,
-            millimeter!(0., 0.),
-            millimeter!(2.5, 2.5),
-            radian!(0.),
-        )?;
-        let mut rays = Rays::new_collimated_w_fluence_helper(
-            nanometer!(1000.),
-            &fluence_strategy,
-            &pos_strategy,
-        )?;
-        refract(&mut Geometry::plane(None), &mut rays)?;
-        Ok(())
-    }
-    /// A ray along z at the given z, with helper rays for a fluence of 1 J/cm².
-    fn ray_with_helpers_at(z: f64) -> OpmResult<Ray> {
-        Ray::new_collimated_w_fluence_helper(
-            millimeter!(0.0, 0.0, z),
-            nanometer!(1000.0),
-            joule!(1.0),
-            J_per_cm2!(1.0),
-        )
-    }
     /// An unbounded plane at the given z on the axis, tilted by the given angle about the x axis.
     fn plane_tilted_about_x(z: f64, angle: f64) -> OpmResult<Geometry> {
         let frame = Isometry::new(millimeter!(0.0, 0.0, z), degree!(angle, 0.0, 0.0))?;
         Ok(Geometry::from(Face::new(SurfaceShape::Plane, frame)))
     }
-    /// Assert that each of the three helper rays of the given ray lies within the given distance
-    /// of it and points its way.
-    fn assert_helpers_follow(ray: &mut Ray, within: Length) {
-        let (position, direction) = (ray.position(), ray.direction());
-        let helpers = ray.helper_rays_mut().expect("a ray with helper rays");
-        assert_eq!(helpers.nr_of_rays(false), 3);
-        for helper in helpers.iter() {
-            let distance = (helper.position() - position).map(|c| c.value).norm();
-            assert!(distance <= within.value, "a helper ray {distance} m off");
-            assert_abs_diff_eq!(helper.direction(), direction, epsilon = 1e-12);
-        }
-    }
-    /// The intended beam of a mirror takes its helper rays from the surface: they start where the
-    /// reflected ray starts, not where they came from.
-    #[test]
-    fn a_reflected_ray_takes_its_helper_rays_from_the_surface() -> OpmResult<()> {
-        let mut mirror = coated(
-            plane_tilted_about_x(0.0, 45.0)?,
-            CoatingConstantR::new(percent!(100.0))?.into(),
-        )?;
-        let mut rays = Rays::from(ray_with_helpers_at(-100.0)?);
-        let mut reflected = mirror.interact_with_rays(
-            SurfaceGeometry::FACE,
-            &mut rays,
-            &Refraction(None),
-            ReflectedPart::Main,
-            MissedSurfaceStrategy::Stop,
-        )?;
-        let reflected_ray = reflected.iter_mut().next().expect("a reflected ray");
-        assert_helpers_follow(reflected_ray, millimeter!(0.002));
-        Ok(())
-    }
     /// A surface records the fluence that lies on itself: met at 60°, the beam spreads over twice
     /// the area, so the surface sees half the fluence.
     #[test]
     fn a_surface_records_the_fluence_on_itself() -> OpmResult<()> {
-        let mut plane = plane_tilted_about_x(0.0, 60.0)?;
-        let mut rays = Rays::from(ray_with_helpers_at(-10.0)?);
-        plane.interact_with_rays(
-            SurfaceGeometry::FACE,
-            &mut rays,
-            &Refraction(None),
-            ReflectedPart::Ghost,
-            MissedSurfaceStrategy::Stop,
-        )?;
-        let fluence = plane
-            .surface_of_mut(SurfaceGeometry::FACE)?
-            .get_rays_hit_map(0, rays.uuid())
-            .ok_or_else(|| OpossumError::Other("the surface recorded no hit".into()))?
-            .get_max_fluence(&FluenceEstimator::HelperRays)?;
-        assert_abs_diff_eq!(
-            fluence.get::<joule_per_square_centimeter>(),
-            0.5,
-            epsilon = 1e-9
-        );
-        Ok(())
-    }
-    /// A ray totally reflected inside glass takes its helper rays along: they are reflected on the
-    /// surface as well.
-    #[test]
-    fn a_totally_reflected_ray_takes_its_helper_rays_along() -> OpmResult<()> {
-        let glass = RefractiveIndexType::from(RefrIndexConst::new(1.5)?);
-        let mut rays = Rays::from(ray_with_helpers_at(-10.0)?);
-        // Entering the glass at 0°, the ray meets the exit face at 60°: 1.5 · sin 60° > 1.
-        for (mut surface, index) in [
-            (Geometry::plane(None), &glass),
-            (plane_tilted_about_x(10.0, 60.0)?, &refr_index_vaccuum()),
-        ] {
-            surface.interact_with_rays(
+        let middle_at = |angle: f64| -> OpmResult<f64> {
+            let mut plane = plane_tilted_about_x(10.0, angle)?;
+            let mut rays = crate::utils::test_helper::helper::hexapolar_bundle(5)?;
+            rays.attach_mesh()?;
+            plane.interact_with_rays(
                 SurfaceGeometry::FACE,
                 &mut rays,
-                &Refraction(Some(index)),
+                &Refraction(None),
                 ReflectedPart::Ghost,
                 MissedSurfaceStrategy::Stop,
             )?;
-        }
-        let ray = rays.iter_mut().next().expect("the ray in the glass");
-        assert_eq!(ray.number_of_bounces(), 1, "the ray is totally reflected");
-        assert_helpers_follow(ray, millimeter!(0.005));
-        Ok(())
-    }
-    /// The warning that the helper rays of a ray went different ways at a surface.
-    const HELPER_RAYS_SPLIT_UP: &str = "the helper rays of a ray split up at a surface - no fluence is recorded for it from there on";
-    /// A ray with helper rays in glass of index 1.5, 1 µm before a face through the origin, one of
-    /// its helper rays turned about the x axis by the given angle in degrees.
-    fn ray_in_glass_with_a_turned_helper(turn: f64) -> OpmResult<Ray> {
-        let mut ray = ray_with_helpers_at(-0.001)?;
-        ray.set_refractive_index(1.5)?;
-        let helpers = ray
-            .helper_rays_mut()
-            .ok_or_else(|| OpossumError::Other("the ray has no helper rays".into()))?;
-        for helper in helpers.iter_mut() {
-            helper.set_refractive_index(1.5)?;
-        }
-        let turned = helpers
-            .iter_mut()
-            .next()
-            .ok_or_else(|| OpossumError::Other("the ray has no helper rays".into()))?;
-        turned.set_direction(
-            Isometry::new_rotation(degree!(turn, 0.0, 0.0))?.transform_vector_f64(&Vector3::z()),
-        )?;
-        Ok(ray)
-    }
-    /// A ray totally reflected while one of its helper rays is refracted takes the reflected part
-    /// of that helper ray: all three run back into the glass with it.
-    #[test]
-    fn a_totally_reflected_ray_takes_the_reflected_part_of_a_refracted_helper_ray() -> OpmResult<()>
-    {
-        // The critical angle is 41.8°: the ray meets the face at 42°, the turned helper ray at 41°.
-        let mut rays = Rays::from(ray_in_glass_with_a_turned_helper(1.0)?);
-        plane_tilted_about_x(0.0, 42.0)?.interact_with_rays(
-            SurfaceGeometry::FACE,
-            &mut rays,
-            &Refraction(Some(&refr_index_vaccuum())),
-            ReflectedPart::Ghost,
-            MissedSurfaceStrategy::Stop,
-        )?;
-        let ray = rays.iter_mut().next().expect("the ray in the glass");
-        assert_eq!(ray.number_of_bounces(), 1, "the ray is totally reflected");
-        let direction = ray.direction();
-        let helpers = ray
-            .helper_rays_mut()
-            .expect("the ray keeps its helper rays");
-        assert_eq!(helpers.nr_of_rays(false), 3);
-        for helper in helpers.iter() {
-            let angle = helper.direction().angle(&direction).to_degrees();
-            assert!(angle < 3.0, "a helper ray {angle}° off the ray");
-        }
-        Ok(())
-    }
-    /// A ray refracted while one of its helper rays is totally reflected drops its helper rays: the
-    /// face records the fluence, since the triangle lay whole on it, but behind it the triangle is
-    /// torn. The reflected part keeps its helper rays.
-    #[test]
-    fn a_ray_drops_its_helper_rays_when_one_of_them_is_totally_reflected() -> OpmResult<()> {
-        // The critical angle is 41.8°: the ray meets the face at 41°, the turned helper ray at 42°.
-        let mut face = plane_tilted_about_x(0.0, 41.0)?;
-        let mut rays = Rays::from(ray_in_glass_with_a_turned_helper(-1.0)?);
-        testing_logger::setup();
-        let reflected = face.interact_with_rays(
-            SurfaceGeometry::FACE,
-            &mut rays,
-            &Refraction(Some(&refr_index_vaccuum())),
-            ReflectedPart::Ghost,
-            MissedSurfaceStrategy::Stop,
-        )?;
-        let hits = face
-            .surface_of_mut(SurfaceGeometry::FACE)?
-            .get_rays_hit_map(0, rays.uuid())
-            .map(|hit_map| hit_map.hit_map().len());
-        assert_eq!(hits, Some(1), "the face records the fluence on itself");
-        let through = rays.iter().next().expect("the refracted ray");
-        assert!(
-            through.helper_ray_fluence().is_none(),
-            "the ray drops its helper rays"
-        );
-        let back = reflected.iter().next().expect("the reflected part");
-        assert!(
-            back.helper_ray_fluence().is_some(),
-            "the reflected part keeps them"
-        );
-        check_logs(log::Level::Warn, vec![HELPER_RAYS_SPLIT_UP]);
-        Ok(())
-    }
-    /// A ray whose triangle reaches into a bore drops its helper rays: the helper ray in the bore
-    /// passes untouched, so the triangle is torn on the face already and the face records nothing.
-    #[test]
-    fn a_ray_drops_its_helper_rays_when_one_of_them_passes_a_bore() -> OpmResult<()> {
-        let mut ring = ring_plane()?;
-        // One helper ray lies 0.26 µm inside the bore of 2 mm, the ray and the others beside it.
-        let mut rays = Rays::from(Ray::new_collimated_w_fluence_helper(
-            millimeter!(0.0, 2.0005, -10.0),
-            nanometer!(1000.0),
-            joule!(1.0),
-            J_per_cm2!(1.0),
-        )?);
-        testing_logger::setup();
-        ring.interact_with_rays(
-            SurfaceGeometry::FACE,
-            &mut rays,
-            &Refraction(None),
-            ReflectedPart::Ghost,
-            MissedSurfaceStrategy::Stop,
-        )?;
-        let ray = rays.iter().next().expect("the ray on the material");
-        assert!(
-            ray.helper_ray_fluence().is_none(),
-            "the ray drops its helper rays"
-        );
-        assert!(
-            ring.surface_of_mut(SurfaceGeometry::FACE)?
+            let map = plane
+                .surface_of_mut(SurfaceGeometry::FACE)?
                 .get_rays_hit_map(0, rays.uuid())
-                .is_none(),
-            "the face records no fluence from a torn triangle"
-        );
-        check_logs(log::Level::Warn, vec![HELPER_RAYS_SPLIT_UP]);
+                .ok_or_else(|| OpossumError::Other("the surface recorded no hit".into()))?
+                .calc_fluence_map((101, 101), &FluenceEstimator::Voronoi, None, None)?;
+            crate::utils::test_helper::helper::fluence_near(&map, 0.0, 0.0)
+        };
+        approx::assert_relative_eq!(middle_at(60.0)?, middle_at(0.0)? / 2.0, max_relative = 1e-9);
         Ok(())
     }
     /// The intended beam of a reflection continues the incoming bundle.
@@ -1935,7 +1652,7 @@ mod test {
         let hits = ring
             .surface_of_mut(SurfaceGeometry::FACE)?
             .get_rays_hit_map(0, rays.uuid())
-            .map(|hit_map| hit_map.hit_map().len());
+            .map(|hit_map| hit_map.hit_points().len());
         assert_eq!(hits, Some(1), "only the ray on the material leaves a hit");
         Ok(())
     }

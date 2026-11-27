@@ -82,13 +82,21 @@ Follow these steps to generate and preview the handbook.
    cd ..
    ```
 
-2. Install mdBook if it is not already installed.
+2. Install mdBook and its KaTeX preprocessor, which renders the formulas, if they are not already
+   installed. Without `mdbook-katex`, the build stops with an error.
 
    ```bash
    cargo install mdbook
+   cargo install mdbook-katex
    ```
 
    If prompted during the installation, select `Yes`.
+
+   On Windows with the MSVC toolchain, the default build of `mdbook-katex` needs GCC. Instead,
+   download `x86_64-pc-windows-gnu.zip` from its
+   [releases](https://github.com/lzanini/mdbook-katex/releases) and put `mdbook-katex.exe` on the
+   `PATH`, or build it with `cargo install mdbook-katex --no-default-features --features duktape`,
+   which renders everything the handbook uses but no matrices.
 
 3. Navigate to the handbook directory.
 

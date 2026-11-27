@@ -6,7 +6,6 @@ use log::warn;
 pub use property::Property;
 pub use proptype::Proptype;
 use schemars::JsonSchema;
-use std::collections::HashMap;
 
 use crate::{
     error::{OpmResult, OpossumError},
@@ -22,7 +21,6 @@ use std::fmt::Debug;
 #[derive(Default, Serialize, Debug, Clone, PartialEq, JsonSchema)]
 #[serde(transparent)]
 pub struct Properties {
-    #[schemars(with = "HashMap<String, Property>")]
     props: IndexMap<String, Property>,
 }
 
