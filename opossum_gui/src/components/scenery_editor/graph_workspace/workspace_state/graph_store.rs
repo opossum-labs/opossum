@@ -1,8 +1,8 @@
 use crate::components::scenery_editor::{
     NodeElement, NodeType, SelectedNode,
     constants::{
-        LAYOUT_LINE_GAP, LAYOUT_NODE_GAP, MAX_ZOOM, NODE_WIDTH, SUGIYAMA_VERT_PATH_FACTOR,
-        SUGIYAMA_VERTEX_SPACING, VIEW_PADDING_FACTOR,
+        EDGE_DISTANCE_FIELD_HEIGHT, LAYOUT_LINE_GAP, LAYOUT_NODE_GAP, MAX_ZOOM, NODE_WIDTH,
+        SUGIYAMA_VERT_PATH_FACTOR, SUGIYAMA_VERTEX_SPACING, VIEW_PADDING_FACTOR,
     },
     edges::{edge_bounds, edge_element::EdgeElement},
     graph_workspace::{
@@ -506,7 +506,7 @@ pub fn optimize_layout(
 
     let mut best: Option<(f64, HashMap<Uuid, Point2D<f64>>)> = None;
     for line_width in line_widths {
-        let positions = stack_blocks(&blocks, nodes, line_width);
+        let positions = stack_blocks(&blocks, nodes, edges, line_width);
         let zoom = fit_zoom(&positions, nodes, edges, mapped_ports, view);
         // The widths ascend, so `>=` hands a tie to the longer lines.
         if best
@@ -582,7 +582,8 @@ fn layout_blocks(
 /// # Arguments
 ///
 /// * `blocks` - the blocks from [`layout_blocks`], top to bottom.
-/// * `nodes` - the nodes, for their heights.
+/// * `nodes` - the nodes, for their heights and ports.
+/// * `edges` - the connections between them.
 /// * `line_width` - the widest a line may get.
 ///
 /// # Returns
@@ -591,12 +592,13 @@ fn layout_blocks(
 fn stack_blocks(
     blocks: &[Vec<(Uuid, Point2D<f64>)>],
     nodes: &HashMap<Uuid, NodeElement>,
+    edges: &[ConnectInfo],
     line_width: f64,
 ) -> HashMap<Uuid, Point2D<f64>> {
     let mut positions = HashMap::new();
     let mut top = 0.0;
     for block in blocks {
-        top = fold_into_lines(block, nodes, line_width, top, &mut positions);
+        top = fold_into_lines(block, nodes, edges, line_width, top, &mut positions);
     }
     positions
 }
@@ -605,12 +607,16 @@ fn stack_blocks(
 ///
 /// The block's columns (the nodes sharing an x) are taken from left to right; a column that would
 /// end beyond `line_width` from the start of its line opens the next line. Each line is moved to
-/// x = 0, its top [`LAYOUT_LINE_GAP`] below the bottom of the line before.
+/// x = 0, its top at least [`LAYOUT_LINE_GAP`] below the bottom of the line before. A connection
+/// from one line to the next passes halfway between its ports' heights, and carries its distance
+/// field there; the gap grows until that height keeps [`EDGE_DISTANCE_FIELD_HEIGHT`] from both
+/// lines.
 ///
 /// # Arguments
 ///
 /// * `block` - the nodes with their positions within the block.
-/// * `nodes` - the nodes, for their heights.
+/// * `nodes` - the nodes, for their heights and ports.
+/// * `edges` - the connections; those from one line to the next set the gap between the two.
 /// * `line_width` - the widest a line may get; at least [`NODE_WIDTH`], so that every line holds a
 ///   column.
 /// * `top` - where the first line starts.
@@ -623,6 +629,7 @@ fn stack_blocks(
 fn fold_into_lines(
     block: &[(Uuid, Point2D<f64>)],
     nodes: &HashMap<Uuid, NodeElement>,
+    edges: &[ConnectInfo],
     line_width: f64,
     top: f64,
     positions: &mut HashMap<Uuid, Point2D<f64>>,
@@ -642,20 +649,57 @@ fn fold_into_lines(
         }
     }
 
+    let extents: Vec<(f64, f64)> = lines
+        .iter()
+        .map(|line| {
+            let line_top = line
+                .iter()
+                .map(|(_, pos)| pos.y)
+                .fold(f64::INFINITY, f64::min);
+            let line_bottom = line
+                .iter()
+                .map(|(id, pos)| pos.y + node_height(nodes, *id))
+                .fold(f64::NEG_INFINITY, f64::max);
+            (line_top, line_bottom)
+        })
+        .collect();
+    let line_and_y: HashMap<Uuid, (usize, f64)> = lines
+        .iter()
+        .enumerate()
+        .flat_map(|(i, line)| line.iter().map(move |(id, pos)| (*id, (i, pos.y))))
+        .collect();
+    let port_in_block = |id: Uuid, port_type: PortType, port: &str| {
+        let (line, y) = *line_and_y.get(&id)?;
+        let node = nodes.get(&id)?;
+        Some((
+            line,
+            y + node.abs_port_position(port_type, port).y - node.pos().y,
+        ))
+    };
+    let mut gaps_below = vec![LAYOUT_LINE_GAP; lines.len()];
+    for edge in edges {
+        if let Some((from, output_y)) =
+            port_in_block(edge.src_uuid(), PortType::Output, edge.src_port())
+            && let Some((to, input_y)) =
+                port_in_block(edge.target_uuid(), PortType::Input, edge.target_port())
+            && to == from + 1
+        {
+            let above_bottom = extents[from].1 - output_y;
+            let below_top = input_y - extents[to].0;
+            let needed =
+                2.0f64.mul_add(EDGE_DISTANCE_FIELD_HEIGHT, (above_bottom - below_top).abs());
+            gaps_below[from] = gaps_below[from].max(needed);
+        }
+    }
+
     let mut top = top;
-    for line in lines {
-        let line_top = line
-            .iter()
-            .map(|(_, pos)| pos.y)
-            .fold(f64::INFINITY, f64::min);
-        let line_bottom = line
-            .iter()
-            .map(|(id, pos)| pos.y + node_height(nodes, *id))
-            .fold(f64::NEG_INFINITY, f64::max);
+    for ((line, (line_top, line_bottom)), gap_below) in
+        lines.into_iter().zip(extents).zip(gaps_below)
+    {
         for (id, pos) in line {
             positions.insert(id, Point2D::new(pos.x, pos.y - line_top + top));
         }
-        top += line_bottom - line_top + LAYOUT_LINE_GAP;
+        top += line_bottom - line_top + gap_below;
     }
     top
 }
@@ -1200,5 +1244,87 @@ mod tests {
             nodes[&b].abs_port_position(PortType::Input, "input_1"),
         );
         assert!(covered.min_x() <= back.min_x() && back.max_x() <= covered.max_x());
+    }
+
+    /// A beam splitter `id` with one input and two output ports.
+    fn splitter(id: u128) -> (Uuid, NodeElement) {
+        let (uuid, mut node) = optical(id);
+        node.set_ports(
+            vec!["input_1".to_string()],
+            vec!["output_1".to_string(), "output_2".to_string()],
+        );
+        (uuid, node)
+    }
+
+    /// A splitter 1 with two parallel arms 2 → 3 → 4 and 5 → 6 → 7, in a tall narrow view that breaks
+    /// the arms into lines of two rows each. With the gap fixed at 100, the lower arm would run back
+    /// from one line to the next at about y = 333, through the upper arm's node at 305–385.
+    #[test]
+    fn connections_to_the_next_line_run_back_clear_of_every_node() {
+        let mut nodes: HashMap<Uuid, NodeElement> = (2..=7).map(optical).collect();
+        let (s, splitter_node) = splitter(1);
+        nodes.insert(s, splitter_node);
+        let [a1, a2, a3, b1, b2, b3] = [2, 3, 4, 5, 6, 7].map(Uuid::from_u128);
+        let lower_arm = ConnectInfo::new(
+            s,
+            "output_2".to_string(),
+            b1,
+            "input_1".to_string(),
+            0.0,
+            false,
+        );
+        let edges = [
+            connect(s, a1),
+            lower_arm,
+            connect(a1, a2),
+            connect(a2, a3),
+            connect(b1, b2),
+            connect(b2, b3),
+        ];
+
+        let positions = optimize_layout(
+            &nodes,
+            &edges,
+            &PortMap::default(),
+            Size2D::new(400.0, 2000.0),
+        );
+
+        let placed: HashMap<Uuid, NodeElement> = nodes
+            .iter()
+            .map(|(id, node)| {
+                let mut node = node.clone();
+                node.set_pos(positions[id]);
+                (*id, node)
+            })
+            .collect();
+        let mut running_back = 0;
+        for edge in &edges {
+            let start =
+                placed[&edge.src_uuid()].abs_port_position(PortType::Output, edge.src_port());
+            let end =
+                placed[&edge.target_uuid()].abs_port_position(PortType::Input, edge.target_port());
+            if end.x >= start.x {
+                continue;
+            }
+            running_back += 1;
+            let reach = edge_bounds(start, end);
+            let field = Rect::new(
+                Point2D::new(
+                    reach.min_x(),
+                    f64::midpoint(start.y, end.y) - EDGE_DISTANCE_FIELD_HEIGHT / 2.0,
+                ),
+                Size2D::new(reach.width(), EDGE_DISTANCE_FIELD_HEIGHT),
+            );
+            for (id, node) in &placed {
+                let node_box = node.get_bounding_box();
+                assert!(
+                    !node_box.intersects(&field),
+                    "{} → {} runs back through node {id}",
+                    edge.src_uuid(),
+                    edge.target_uuid()
+                );
+            }
+        }
+        assert!(running_back > 0, "the view breaks no line");
     }
 }
