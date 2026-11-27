@@ -769,6 +769,33 @@ impl NodeGroup {
         result
     }
 
+    /// Returns where the last positioning run of this group stopped: the node it was handling,
+    /// after the groups around it from this group's own nodes inward.
+    ///
+    /// The chain ends at a reference, even one to a group: the reference is what was handled
+    /// here.
+    ///
+    /// # Returns
+    ///
+    /// The chain, outermost first; empty if the run finished, never ran, or stopped before it
+    /// handled any node.
+    #[must_use]
+    pub fn positioning_stopped_at(&self) -> Vec<Uuid> {
+        let Some(node_id) = self.graph.stopped_at else {
+            return Vec::new();
+        };
+        let mut chain = vec![node_id];
+        if let Some(group) = self
+            .graph
+            .uuid_to_idx
+            .get(&node_id)
+            .and_then(|idx| self.graph.g[*idx].as_any().downcast_ref::<Self>())
+        {
+            chain.extend(group.positioning_stopped_at());
+        }
+        chain
+    }
+
     /// Returns where each node of this group and of the groups nested in it is placed: its
     /// placement without its alignment - what an absolute position of the node states - or `None`
     /// if it is not placed.

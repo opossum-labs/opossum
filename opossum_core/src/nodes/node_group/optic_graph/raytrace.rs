@@ -112,6 +112,10 @@ impl OpticGraph {
     /// what it feeds, and then their axes are traced front to back: an axis meeting a node visited
     /// before ends there, checked against where that node sits.
     ///
+    /// The node being handled is noted in the graph as it goes, so a run that stops leaves behind
+    /// where it stopped (see [`NodeGroup::positioning_stopped_at`](crate::nodes::NodeGroup::positioning_stopped_at));
+    /// a run that finishes leaves nothing.
+    ///
     /// # Arguments
     ///
     /// * `incoming_data` - the optical axis entering the graph through its external input ports.
@@ -129,6 +133,7 @@ impl OpticGraph {
         config: &RayTraceConfig,
         mut ray_ends: Option<&mut Vec<Rays>>,
     ) -> OpmResult<LightResult> {
+        self.stopped_at = None;
         let mut order = PlacingOrder::new(self)?;
         let mut light_result = LightResult::default();
         for flow in self.g.edge_weights_mut() {
@@ -137,6 +142,7 @@ impl OpticGraph {
 
         while let Some(idx) = order.next() {
             let node_id = self.g[idx].uuid();
+            self.stopped_at = Some(node_id);
             if self.placement_of(idx)?.is_none()
                 && self.get_incoming(node_id, incoming_data)?.is_empty()
             {
@@ -170,11 +176,13 @@ impl OpticGraph {
 
         let put_back = order.into_put_back();
         for &idx in put_back.iter().rev() {
+            self.stopped_at = Some(self.g[idx].uuid());
             if self.placement_of(idx)?.is_none() {
                 self.place_in_front_of_successor(idx, config)?;
             }
         }
         for &idx in &put_back {
+            self.stopped_at = Some(self.g[idx].uuid());
             if self.placement_of(idx)?.is_none() {
                 warn!(
                     "{} cannot be placed: no optical axis reaches it, and it stands in front of nothing it feeds. Skipping.",
@@ -193,6 +201,7 @@ impl OpticGraph {
             self.end_axes_where_they_arrive(idx, &put_back, ray_ends.as_deref_mut())?;
         }
 
+        self.stopped_at = None;
         Ok(light_result)
     }
 

@@ -493,6 +493,67 @@ fn positioning_stops_at_an_evanescent_grating_with_a_clear_error() -> OpmResult<
     Ok(())
 }
 
+/// A run that stops tells where: at the untilted grating that swallows the axis, ahead of the
+/// mirror after it.
+#[test]
+fn a_stopped_run_tells_the_node_it_stopped_at() -> OpmResult<()> {
+    let (scenery, _, grating) = source_then_untilted_grating(true)?;
+    let run = OpmDocument::new(scenery).run_positioning()?;
+    assert_eq!(run.stopped_at(), vec![grating]);
+    Ok(())
+}
+
+/// A run that stops inside a group tells the group and, within it, the node it stopped at. The
+/// group feeds a screen, so its failure stops the run rather than ending a terminal strand.
+#[test]
+fn a_stop_inside_a_group_names_the_group_and_the_node() -> OpmResult<()> {
+    let mut bench = NodeGroup::new("bench");
+    let grating = bench.add_node(ReflectiveGrating::default())?;
+    let mirror = bench.add_node(ThinMirror::default())?;
+    bench.connect_nodes(grating, "output_1", mirror, "input_1", millimeter!(50.0))?;
+    bench.map_input_port(grating, "input_1", "input_1")?;
+    bench.map_output_port(mirror, "output_1", "output_1")?;
+    let mut scenery = NodeGroup::default();
+    let mut source = SourcePort::default();
+    source.set_property(ALIGNMENT_WAVELENGTH, nanometer!(1000.0).into())?;
+    let source = scenery.add_node(source)?;
+    let bench = scenery.add_node(bench)?;
+    let screen = scenery.add_node(Dummy::new("screen"))?;
+    scenery.connect_nodes(source, "output_1", bench, "input_1", millimeter!(50.0))?;
+    scenery.connect_nodes(bench, "output_1", screen, "input_1", millimeter!(50.0))?;
+
+    let run = OpmDocument::new(scenery).run_positioning()?;
+
+    assert_eq!(run.stopped_at(), vec![bench, grating]);
+    Ok(())
+}
+
+/// A run that finishes leaves no stop behind.
+#[test]
+fn a_finished_run_tells_no_stop() -> OpmResult<()> {
+    let (document, ..) = lined_up_model()?;
+    assert!(document.run_positioning()?.stopped_at().is_empty());
+    Ok(())
+}
+
+/// Positioned again once the cause is gone, the same scenery no longer tells the stop of the run
+/// before: at 500 nm the untilted grating lets the axis through.
+#[test]
+fn a_second_run_forgets_where_the_first_stopped() -> OpmResult<()> {
+    let (mut scenery, source, _) = source_then_untilted_grating(true)?;
+    let config = OpmDocument::default().positioning_config();
+    assert!(scenery.reposition(&config).is_err());
+    assert!(!scenery.positioning_stopped_at().is_empty());
+
+    scenery.with_node_attr_mut(source, |attr| {
+        attr.set_property(ALIGNMENT_WAVELENGTH, nanometer!(500.0).into())
+    })??;
+    scenery.reposition(&config)?;
+
+    assert!(scenery.positioning_stopped_at().is_empty());
+    Ok(())
+}
+
 /// With nothing after it, a grating that swallows the optical axis leaves nothing unplaced, while
 /// the light does reach the grating itself - so the run finishes and the grating can be drawn. Its
 /// empty outgoing bundle used to fail the whole run.

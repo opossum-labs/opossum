@@ -72,6 +72,17 @@ impl PositioningRun {
         self.scenery.connections_placing_by_distance()
     }
 
+    /// Returns where the run stopped, if it did: the node it was handling, after the groups around
+    /// it, outermost first (see [`NodeGroup::positioning_stopped_at`]).
+    ///
+    /// # Returns
+    ///
+    /// The chain; empty if the run finished, or if it stopped before it handled any node.
+    #[must_use]
+    pub fn stopped_at(&self) -> Vec<Uuid> {
+        self.scenery.positioning_stopped_at()
+    }
+
     /// Returns where the run placed each node of the model, or `None` for a node it could not
     /// place (see [`NodeGroup::placements`]).
     ///

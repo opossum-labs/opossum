@@ -56,6 +56,10 @@ pub struct OpticGraph {
     /// Lookup table for better performance
     #[serde(skip)]
     pub(crate) uuid_to_idx: HashMap<Uuid, NodeIndex>,
+    /// The node the last positioning run of this graph was handling when it stopped, or `None` if
+    /// it finished or never ran (see [`OpticGraph::calc_node_positions`]).
+    #[serde(skip)]
+    pub(crate) stopped_at: Option<Uuid>,
 }
 
 impl OpticGraph {
@@ -91,8 +95,10 @@ impl OpticGraph {
         &self.external_distances
     }
     /// Clears the cached 3D runtime isometry of all automatically positioned nodes
-    /// in this graph and recurses into nested node groups.
+    /// in this graph and recurses into nested node groups. Where an earlier positioning run
+    /// stopped is forgotten with them.
     pub fn clear_cached_positions(&mut self) {
+        self.stopped_at = None;
         for node in self.g.node_weights_mut() {
             // Reset Automatic(Some(iso)) to Automatic(None)
             node.node_attr_mut().clear_cached_position();
