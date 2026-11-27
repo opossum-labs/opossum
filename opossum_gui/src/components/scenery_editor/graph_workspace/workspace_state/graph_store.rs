@@ -1,6 +1,9 @@
 use crate::components::scenery_editor::{
     NodeElement, NodeType, SelectedNode,
-    constants::{NODE_WIDTH, SUGIYAMA_VERT_PATH_FACTOR, SUGIYAMA_VERTEX_SPACING},
+    constants::{
+        LAYOUT_LINE_GAP, LAYOUT_NODE_GAP, MAX_ZOOM, NODE_WIDTH, SUGIYAMA_VERT_PATH_FACTOR,
+        SUGIYAMA_VERTEX_SPACING, VIEW_PADDING_FACTOR,
+    },
     edges::edge_element::EdgeElement,
     graph_workspace::{
         EditorState,
@@ -443,14 +446,66 @@ impl GraphStore {
     }
 }
 /// Calculates optimized positions for all nodes in the graph.
-/// Places Analyzers at the top, disconnected nodes below them,
-/// and the connected Sugiyama layout at the bottom.
+///
+/// Analyzers go to the top, unconnected optical nodes below them, and the connected parts
+/// (Sugiyama layout) to the bottom. Rows too long for the view are broken into lines: of all line
+/// lengths, the one is taken at which the whole layout fits `view` at the largest zoom, and on a tie
+/// the longer one.
+///
+/// # Arguments
+///
+/// * `nodes` - the nodes to place.
+/// * `edges` - the connections between them.
+/// * `view` - the size of the canvas in pixels. An empty size breaks no line.
+///
+/// # Returns
+///
+/// The new top-left position of every node.
 #[must_use]
 pub fn optimize_layout(
     nodes: &HashMap<Uuid, NodeElement>,
     edges: &[ConnectInfo],
+    view: Size2D<f64>,
 ) -> HashMap<Uuid, Point2D<f64>> {
-    let mut new_positions = HashMap::new();
+    let blocks = layout_blocks(nodes, edges);
+    let mut line_widths: Vec<f64> = blocks
+        .iter()
+        .flatten()
+        .map(|(_, pos)| pos.x + NODE_WIDTH)
+        .collect();
+    line_widths.sort_by(f64::total_cmp);
+    line_widths.dedup();
+
+    let mut best: Option<(f64, HashMap<Uuid, Point2D<f64>>)> = None;
+    for line_width in line_widths {
+        let positions = stack_blocks(&blocks, nodes, line_width);
+        let zoom = fit_zoom(&positions, nodes, view);
+        // The widths ascend, so `>=` hands a tie to the longer lines.
+        if best
+            .as_ref()
+            .is_none_or(|(best_zoom, _)| zoom >= *best_zoom)
+        {
+            best = Some((zoom, positions));
+        }
+    }
+    best.map(|(_, positions)| positions).unwrap_or_default()
+}
+
+/// Places the nodes in blocks, before any line is broken: the analyzers in one row, the unconnected
+/// optical nodes in one row, and each connected part by the Sugiyama layout.
+///
+/// # Arguments
+///
+/// * `nodes` - the nodes to place.
+/// * `edges` - the connections between them.
+///
+/// # Returns
+///
+/// The blocks from top to bottom, each node with its position within its block.
+fn layout_blocks(
+    nodes: &HashMap<Uuid, NodeElement>,
+    edges: &[ConnectInfo],
+) -> Vec<Vec<(Uuid, Point2D<f64>)>> {
     let mut connected_node_ids = HashSet::new();
 
     // Determine which nodes are part of a connection
@@ -478,80 +533,156 @@ pub fn optimize_layout(
     analyzers.sort();
     disconnected_nodes.sort();
 
-    // Define layout spacing constants
-    let h_gap = 50.0;
-    let v_gap = 100.0;
-
-    let mut current_y = 0.0;
-
-    // --- Row 1: Analyzers ---
-    if !analyzers.is_empty() {
-        current_y = layout_horizontal_row(
-            &analyzers,
-            nodes,
-            current_y,
-            h_gap,
-            v_gap,
-            &mut new_positions,
-        );
+    let row = |ids: &[Uuid]| -> Vec<(Uuid, Point2D<f64>)> {
+        ids.iter()
+            .enumerate()
+            .map(|(i, id)| {
+                let x = to_f64(i) * (NODE_WIDTH + LAYOUT_NODE_GAP);
+                (*id, Point2D::new(x, 0.0))
+            })
+            .collect()
+    };
+    let mut blocks = vec![row(&analyzers), row(&disconnected_nodes)];
+    if !edges.is_empty() {
+        blocks.extend(layout_sugiyama_connected(nodes, edges));
     }
-
-    // --- Row 2: Disconnected Optical Nodes ---
-    if !disconnected_nodes.is_empty() {
-        current_y = layout_horizontal_row(
-            &disconnected_nodes,
-            nodes,
-            current_y,
-            h_gap,
-            v_gap,
-            &mut new_positions,
-        );
-    }
-
-    // --- Row 3: Connected Nodes (Sugiyama Layout with Post-Processing) ---
-    if !connected_node_ids.is_empty() && !edges.is_empty() {
-        layout_sugiyama_connected(nodes, edges, current_y, v_gap, &mut new_positions);
-    }
-
-    new_positions
+    blocks
 }
 
-/// Helper function to lay out a single flat row of nodes horizontally.
-/// Returns the updated next available Y position.
-fn layout_horizontal_row(
-    node_ids: &[Uuid],
+/// Breaks every block into lines no wider than `line_width` and stacks the blocks below each other.
+///
+/// # Arguments
+///
+/// * `blocks` - the blocks from [`layout_blocks`], top to bottom.
+/// * `nodes` - the nodes, for their heights.
+/// * `line_width` - the widest a line may get.
+///
+/// # Returns
+///
+/// The position of every node, with the top-left corner of the layout at the origin.
+fn stack_blocks(
+    blocks: &[Vec<(Uuid, Point2D<f64>)>],
     nodes: &HashMap<Uuid, NodeElement>,
-    current_y: f64,
-    h_gap: f64,
-    v_gap: f64,
-    new_positions: &mut HashMap<Uuid, Point2D<f64>>,
+    line_width: f64,
+) -> HashMap<Uuid, Point2D<f64>> {
+    let mut positions = HashMap::new();
+    let mut top = 0.0;
+    for block in blocks {
+        top = fold_into_lines(block, nodes, line_width, top, &mut positions);
+    }
+    positions
+}
+
+/// Breaks one block into lines no wider than `line_width` and stacks them, starting at `top`.
+///
+/// The block's columns (the nodes sharing an x) are taken from left to right; a column that would
+/// end beyond `line_width` from the start of its line opens the next line. Each line is moved to
+/// x = 0, its top [`LAYOUT_LINE_GAP`] below the bottom of the line before.
+///
+/// # Arguments
+///
+/// * `block` - the nodes with their positions within the block.
+/// * `nodes` - the nodes, for their heights.
+/// * `line_width` - the widest a line may get; at least [`NODE_WIDTH`], so that every line holds a
+///   column.
+/// * `top` - where the first line starts.
+/// * `positions` - receives the new position of every node of the block.
+///
+/// # Returns
+///
+/// Where the next block starts: [`LAYOUT_LINE_GAP`] below the last line, or `top` for an empty
+/// block.
+fn fold_into_lines(
+    block: &[(Uuid, Point2D<f64>)],
+    nodes: &HashMap<Uuid, NodeElement>,
+    line_width: f64,
+    top: f64,
+    positions: &mut HashMap<Uuid, Point2D<f64>>,
 ) -> f64 {
-    let mut current_x = 0.0;
-    let mut max_row_height = 0.0;
+    let mut by_x = block.to_vec();
+    by_x.sort_by(|a, b| a.1.x.total_cmp(&b.1.x));
 
-    for id in node_ids {
-        new_positions.insert(*id, Point2D::new(current_x, current_y));
-        current_x += NODE_WIDTH + h_gap;
-
-        if let Some(node) = nodes.get(id) {
-            let height = node.get_bounding_box().height();
-            if height > max_row_height {
-                max_row_height = height;
-            }
+    let mut lines: Vec<Vec<(Uuid, Point2D<f64>)>> = Vec::new();
+    let mut line_start = 0.0;
+    for (id, pos) in by_x {
+        if lines.is_empty() || pos.x - line_start + NODE_WIDTH > line_width {
+            line_start = pos.x;
+            lines.push(Vec::new());
+        }
+        if let Some(line) = lines.last_mut() {
+            line.push((id, Point2D::new(pos.x - line_start, pos.y)));
         }
     }
 
-    current_y + max_row_height + v_gap
+    let mut top = top;
+    for line in lines {
+        let line_top = line
+            .iter()
+            .map(|(_, pos)| pos.y)
+            .fold(f64::INFINITY, f64::min);
+        let line_bottom = line
+            .iter()
+            .map(|(id, pos)| pos.y + node_height(nodes, *id))
+            .fold(f64::NEG_INFINITY, f64::max);
+        for (id, pos) in line {
+            positions.insert(id, Point2D::new(pos.x, pos.y - line_top + top));
+        }
+        top += line_bottom - line_top + LAYOUT_LINE_GAP;
+    }
+    top
 }
 
-/// Helper function to process the Sugiyama layout and apply custom post-processing barycenter logic.
+/// The largest zoom, up to [`MAX_ZOOM`], at which a layout fits `view` with the margin Zoom to Fit
+/// keeps.
+///
+/// # Arguments
+///
+/// * `positions` - a non-empty layout, with its top-left corner at the origin.
+/// * `nodes` - the nodes, for their heights.
+/// * `view` - the size of the canvas in pixels.
+///
+/// # Returns
+///
+/// The zoom; zero for an empty view.
+fn fit_zoom(
+    positions: &HashMap<Uuid, Point2D<f64>>,
+    nodes: &HashMap<Uuid, NodeElement>,
+    view: Size2D<f64>,
+) -> f64 {
+    let (width, height) =
+        positions
+            .iter()
+            .fold((0.0_f64, 0.0_f64), |(width, height), (id, pos)| {
+                (
+                    width.max(pos.x + NODE_WIDTH),
+                    height.max(pos.y + node_height(nodes, *id)),
+                )
+            });
+    (VIEW_PADDING_FACTOR * view.width / width)
+        .min(VIEW_PADDING_FACTOR * view.height / height)
+        .min(MAX_ZOOM)
+}
+
+/// The height of node `id` on the canvas, or zero if `nodes` does not hold it.
+fn node_height(nodes: &HashMap<Uuid, NodeElement>, id: Uuid) -> f64 {
+    nodes.get(&id).map_or(0.0, NodeElement::total_height)
+}
+
+/// Lays out the connected parts of the graph with Sugiyama and orders the nodes of each layer by the
+/// height of the ports that feed them (barycenter).
+///
+/// # Arguments
+///
+/// * `nodes` - the nodes, for their port positions.
+/// * `edges` - the connections; every node they name is placed.
+///
+/// # Returns
+///
+/// One block per connected part, each node with its position within its block.
 fn layout_sugiyama_connected(
     nodes: &HashMap<Uuid, NodeElement>,
     edges: &[ConnectInfo],
-    start_y: f64,
-    v_gap: f64,
-    new_positions: &mut HashMap<Uuid, Point2D<f64>>,
-) {
+) -> Vec<Vec<(Uuid, Point2D<f64>)>> {
     let sugiyama_config = Config {
         vertex_spacing: SUGIYAMA_VERTEX_SPACING,
         ..Default::default()
@@ -570,7 +701,7 @@ fn layout_sugiyama_connected(
         .collect();
 
     let layouts = from_edges(&edges_u32, &sugiyama_config);
-    let mut current_sugiyama_y = start_y;
+    let mut blocks = Vec::new();
 
     for (layout, _group_height, _) in layouts {
         // Group nodes by their X-coordinate.
@@ -590,7 +721,7 @@ fn layout_sugiyama_connected(
         }
 
         let mut subgraph_positions: HashMap<Uuid, Point2D<f64>> = HashMap::new();
-        let mut max_y_in_group = current_sugiyama_y;
+        let mut block = Vec::new();
 
         // Process each layer from left to right
         for (&orig_x_layer, node_ids_in_layer) in &layers {
@@ -660,20 +791,16 @@ fn layout_sugiyama_connected(
                 let final_x = to_f64(orig_x_layer);
 
                 let assigned_y_val = original_ys[i];
-                let final_y = assigned_y_val.mul_add(SUGIYAMA_VERT_PATH_FACTOR, current_sugiyama_y);
+                let final_y = assigned_y_val * SUGIYAMA_VERT_PATH_FACTOR;
 
                 let final_pos = Point2D::new(final_x, final_y);
                 subgraph_positions.insert(uuid, final_pos);
-                new_positions.insert(uuid, final_pos);
-
-                if final_y > max_y_in_group {
-                    max_y_in_group = final_y;
-                }
+                block.push((uuid, final_pos));
             }
         }
-        // Move down for the next disconnected subgraph
-        current_sugiyama_y = max_y_in_group + v_gap;
+        blocks.push(block);
     }
+    blocks
 }
 
 /// Registry to map UUIDs to u32 IDs.
@@ -773,7 +900,7 @@ mod tests {
         let nodes: HashMap<Uuid, NodeElement> = (1..=3).map(optical).collect();
         let [a, b, c] = [1, 2, 3].map(Uuid::from_u128);
 
-        let positions = optimize_layout(&nodes, &[connect(a, b), connect(b, c)]);
+        let positions = optimize_layout(&nodes, &[connect(a, b), connect(b, c)], Size2D::zero());
 
         let [pa, pb, pc] = [a, b, c].map(|id| positions[&id]);
         assert!((pb.x - pa.x - SUGIYAMA_VERTEX_SPACING).abs() < 1e-9);
@@ -789,7 +916,7 @@ mod tests {
             .collect();
         let [energy, lone, a, b] = [1, 2, 3, 4].map(Uuid::from_u128);
 
-        let positions = optimize_layout(&nodes, &[connect(a, b)]);
+        let positions = optimize_layout(&nodes, &[connect(a, b)], Size2D::zero());
 
         let placed = |id| placed_box(&nodes, &positions, id);
         assert!(placed(energy).max_y() <= placed(lone).min_y());
@@ -802,7 +929,7 @@ mod tests {
         let nodes: HashMap<Uuid, NodeElement> = (1..=4).map(optical).collect();
         let [a, b, c, d] = [1, 2, 3, 4].map(Uuid::from_u128);
 
-        let positions = optimize_layout(&nodes, &[connect(a, b), connect(c, d)]);
+        let positions = optimize_layout(&nodes, &[connect(a, b), connect(c, d)], Size2D::zero());
 
         let (upper, lower) = if positions[&a].y < positions[&c].y {
             ([a, b], [c, d])
@@ -815,5 +942,100 @@ mod tests {
                 assert!(placed(up).max_y() <= placed(low).min_y());
             }
         }
+    }
+
+    /// The chain 1 → 2 → … → `n` of optical nodes.
+    fn chain(n: u128) -> (HashMap<Uuid, NodeElement>, Vec<ConnectInfo>) {
+        let nodes = (1..=n).map(optical).collect();
+        let edges = (1..n)
+            .map(|i| connect(Uuid::from_u128(i), Uuid::from_u128(i + 1)))
+            .collect();
+        (nodes, edges)
+    }
+
+    /// With node height H ≈ 80.3, c columns per line and L lines, a chain is (c − 1)·250 + 130 wide
+    /// and L·H + (L − 1)·100 high. Six nodes in a 1200 × 500 view: 3 columns (630 × 261, zoom 1.81)
+    /// beat 4 (880 × 261, zoom 1.30), 2 (380 × 441, zoom 1.08) and 6 (1380 × 80, zoom 0.83).
+    #[test]
+    fn long_chain_wraps_into_the_lines_that_fit_the_view_best() {
+        let (nodes, edges) = chain(6);
+
+        let positions = optimize_layout(&nodes, &edges, Size2D::new(1200.0, 500.0));
+
+        let pos = |i| positions[&Uuid::from_u128(i)];
+        let columns = [0.0, 1.0, 2.0, 0.0, 1.0, 2.0];
+        for (i, column) in (1..=6).zip(columns) {
+            assert!((pos(i).x - column * SUGIYAMA_VERTEX_SPACING).abs() < 1e-9);
+        }
+        for (i, first_of_line) in [(2, 1), (3, 1), (5, 4), (6, 4)] {
+            assert!((pos(i).y - pos(first_of_line).y).abs() < 1e-9);
+        }
+        let placed = |i| placed_box(&nodes, &positions, Uuid::from_u128(i));
+        assert!(placed(1).max_y() <= placed(4).min_y());
+    }
+
+    /// The same six nodes in a 3000 × 200 view: one line (1380 × 80, zoom 2.07) beats two (261 high,
+    /// zoom at most 0.73).
+    #[test]
+    fn long_chain_stays_in_one_line_in_a_wide_flat_view() {
+        let (nodes, edges) = chain(6);
+
+        let positions = optimize_layout(&nodes, &edges, Size2D::new(3000.0, 200.0));
+
+        let pos = |i| positions[&Uuid::from_u128(i)];
+        for (i, column) in (1..=6).zip([0.0, 1.0, 2.0, 3.0, 4.0, 5.0]) {
+            assert!((pos(i).x - column * SUGIYAMA_VERTEX_SPACING).abs() < 1e-9);
+            assert!((pos(i).y - pos(1).y).abs() < 1e-9);
+        }
+    }
+
+    /// Two nodes in a 4000 × 4000 view fit at the largest zoom both side by side and one below the
+    /// other; on that tie the longer line wins.
+    #[test]
+    fn small_graph_stays_in_one_line_when_every_layout_fits_at_the_largest_zoom() {
+        let (nodes, edges) = chain(2);
+
+        let positions = optimize_layout(&nodes, &edges, Size2D::new(4000.0, 4000.0));
+
+        let [first, second] = [1, 2].map(|i| positions[&Uuid::from_u128(i)]);
+        assert!(second.x > first.x);
+        assert!((second.y - first.y).abs() < 1e-9);
+    }
+
+    /// Four analyzers in a 700 × 600 view: with c per line their row is (c − 1)·180 + 130 wide, so
+    /// two lines of two (310 × 261, zoom 2.15) beat one line (670 × 80, zoom 0.99), three columns
+    /// (490 × 261, zoom 1.36) and one column (130 × 621, zoom 0.92).
+    #[test]
+    fn analyzer_row_wraps_like_a_chain() {
+        let nodes: HashMap<Uuid, NodeElement> = (1..=4).map(analyzer).collect();
+
+        let positions = optimize_layout(&nodes, &[], Size2D::new(700.0, 600.0));
+
+        let pos = |i| positions[&Uuid::from_u128(i)];
+        let pitch = NODE_WIDTH + LAYOUT_NODE_GAP;
+        for (i, column) in (1..=4).zip([0.0, 1.0, 0.0, 1.0]) {
+            assert!((pos(i).x - column * pitch).abs() < 1e-9);
+        }
+        assert!((pos(2).y - pos(1).y).abs() < 1e-9);
+        assert!((pos(4).y - pos(3).y).abs() < 1e-9);
+        let placed = |i| placed_box(&nodes, &positions, Uuid::from_u128(i));
+        assert!(placed(1).max_y() <= placed(3).min_y());
+    }
+
+    /// A splitter feeding two nodes in a 200 × 1000 view: one column per line wins (130 wide against
+    /// 380). The two fed nodes share a column, so they move to the next line together.
+    #[test]
+    fn nodes_of_one_column_stay_in_one_line() {
+        let nodes: HashMap<Uuid, NodeElement> = (1..=3).map(optical).collect();
+        let [splitter, a, b] = [1, 2, 3].map(Uuid::from_u128);
+        let edges = [connect(splitter, a), connect(splitter, b)];
+
+        let positions = optimize_layout(&nodes, &edges, Size2D::new(200.0, 1000.0));
+
+        assert!(positions[&a].x.abs() < 1e-9);
+        assert!(positions[&b].x.abs() < 1e-9);
+        assert!((positions[&a].y - positions[&b].y).abs() > 1.0);
+        let placed = |id| placed_box(&nodes, &positions, id);
+        assert!(placed(splitter).max_y() <= placed(a).min_y().min(placed(b).min_y()));
     }
 }

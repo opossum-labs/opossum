@@ -1677,8 +1677,8 @@ async fn process_optimize_layout(
     ws_handler: WorkSpaceSignalHandlers,
     graph_id: Uuid,
 ) {
-    // --- READ PHASE: Fetch nodes and edges ---
-    let (nodes, edges) = {
+    // --- READ PHASE: Fetch nodes, edges and the size of the view ---
+    let (nodes, edges, view) = {
         let graph = workspace.tabs().get(graph_id);
         let Some(graph) = graph else {
             OPOSSUM_UI_LOGS.write().add_log(&format!(
@@ -1694,11 +1694,15 @@ async fn process_optimize_layout(
         // Extract inner ConnectInfo instances from EdgeElements for layout calculation
         let connect_infos: Vec<ConnectInfo> = raw_edges.iter().map(|e| e.info().clone()).collect();
 
-        (store.nodes().read().clone(), connect_infos)
+        (
+            store.nodes().read().clone(),
+            connect_infos,
+            workspace.get_view_port_size(graph_id),
+        )
     };
 
     // --- CALCULATION PHASE: Determine new positions (Pure) ---
-    let new_positions = optimize_layout(&nodes, &edges);
+    let new_positions = optimize_layout(&nodes, &edges, view);
 
     // --- ASYNC PHASE: sync with backend, batched into a single undo step ---
     let updates: Vec<PositionUpdate> = new_positions
