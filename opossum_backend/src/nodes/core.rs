@@ -153,7 +153,9 @@ pub async fn get_node(
 
     let mut node_info = NodeInfo::from_analyzable(&*node_ref, None);
 
-    if let Ok(opossum_core::properties::Proptype::Uuid(referenced_node_id)) = node_ref.node_attr().get_property("reference id"){
+    if let Ok(opossum_core::properties::Proptype::Uuid(referenced_node_id)) =
+        node_ref.node_attr().get_property("reference id")
+    {
         let referenced_node = document.scenery().node_recursive(*referenced_node_id)?.0;
         node_info.alignment = referenced_node.alignment();
         node_info.positioning = *referenced_node.positioning();
