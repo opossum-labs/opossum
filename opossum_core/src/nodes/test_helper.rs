@@ -395,6 +395,28 @@ pub mod helper {
         scenery.with_node_attr_mut(mirror, |node_attr| node_attr.set_property(name, value))??;
         Ok((scenery, source, meter))
     }
+    /// Return the rays, of all bundles, the energy meter with the given id recorded.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the scenery has no such node.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the node is no energy meter or recorded no rays.
+    pub fn rays_at_meter(scenery: &NodeGroup, meter: Uuid) -> OpmResult<Vec<Ray>> {
+        let node = scenery.node(meter)?;
+        let Some(meter) = node.as_any().downcast_ref::<EnergyMeter>() else {
+            panic!("the node is no energy meter");
+        };
+        match meter.light_data() {
+            Some(LightData::Geometric(rays)) => Ok(rays.iter().cloned().collect()),
+            Some(LightData::GhostFocus(bundles)) => {
+                Ok(bundles.iter().flat_map(Rays::iter).cloned().collect())
+            }
+            _ => panic!("the energy meter recorded no rays"),
+        }
+    }
     /// Return the number of valid rays the energy meter with the given id recorded.
     ///
     /// # Errors
@@ -405,17 +427,10 @@ pub mod helper {
     ///
     /// Panics if the node is no energy meter or recorded no rays.
     pub fn rays_recorded_by_meter(scenery: &NodeGroup, meter: Uuid) -> OpmResult<usize> {
-        let node = scenery.node(meter)?;
-        let Some(meter) = node.as_any().downcast_ref::<EnergyMeter>() else {
-            panic!("the node is no energy meter");
-        };
-        match meter.light_data() {
-            Some(LightData::Geometric(rays)) => Ok(rays.nr_of_rays(true)),
-            Some(LightData::GhostFocus(bundles)) => {
-                Ok(bundles.iter().map(|rays| rays.nr_of_rays(true)).sum())
-            }
-            _ => panic!("the energy meter recorded no rays"),
-        }
+        Ok(rays_at_meter(scenery, meter)?
+            .iter()
+            .filter(|ray| ray.valid())
+            .count())
     }
     /// Return the start points of two rays, 12.4 mm and 12.6 mm off the axis: just inside and
     /// just outside the default optic shape of 12.5 mm, 10 mm in front of a node at the origin.

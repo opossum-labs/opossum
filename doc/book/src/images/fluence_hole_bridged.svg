@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="350" viewBox="0 0 720 350"
+     font-family="Helvetica, Arial, sans-serif">
+  <title>What a map built from the hits alone makes of a hole</title>
+  <desc>Two panels show the same hits: a ring of light around the hole a bore left, an inner ring
+        of six hits next to the bore (dashed circle) and an outer ring of twelve. Left: a
+        triangulation of the hits. Its triangles between the rings cover the light, but four
+        triangles (red) span the hole between the six inner hits, so the map fills the hole.
+        Right: the Voronoi cell of one inner hit, the region nearer to it than to any other hit.
+        Nothing bounds it towards the hole, so it reaches as a wedge to the middle of the hole.
+        The energy of the ray spreads over the whole wedge, and the fluence next to the bore comes
+        out too low.</desc>
+
+  <defs>
+    <g id="hits">
+      <circle cx="60" cy="0" r="4"/><circle cx="30" cy="-51.96" r="4"/>
+      <circle cx="-30" cy="-51.96" r="4"/><circle cx="-60" cy="0" r="4"/>
+      <circle cx="-30" cy="51.96" r="4"/><circle cx="30" cy="51.96" r="4"/>
+      <circle cx="110" cy="0" r="4"/><circle cx="95.26" cy="-55" r="4"/>
+      <circle cx="55" cy="-95.26" r="4"/><circle cx="0" cy="-110" r="4"/>
+      <circle cx="-55" cy="-95.26" r="4"/><circle cx="-95.26" cy="-55" r="4"/>
+      <circle cx="-110" cy="0" r="4"/><circle cx="-95.26" cy="55" r="4"/>
+      <circle cx="-55" cy="95.26" r="4"/><circle cx="0" cy="110" r="4"/>
+      <circle cx="55" cy="95.26" r="4"/><circle cx="95.26" cy="55" r="4"/>
+    </g>
+  </defs>
+
+  <!-- A background of its own keeps the figure readable on the dark book themes. -->
+  <rect x="0" y="0" width="720" height="350" rx="8" fill="#ffffff"/>
+
+  <!-- ── left: a triangulation of the hits ───────────────────────────────── -->
+  <text x="180" y="40" font-size="14" font-weight="bold" text-anchor="middle"
+        fill="#1a202c">a triangulation of the hits</text>
+  <g transform="translate(180,175)" stroke-linejoin="round">
+    <!-- the light: triangles between the two rings, p = inner, q = outer hits -->
+    <g fill="#bee3f8" stroke="#2b6cb0" stroke-width="1">
+      <polygon points="60,0 110,0 95.26,-55"/>
+      <polygon points="60,0 95.26,-55 30,-51.96"/>
+      <polygon points="30,-51.96 95.26,-55 55,-95.26"/>
+      <polygon points="30,-51.96 55,-95.26 0,-110"/>
+      <polygon points="30,-51.96 0,-110 -30,-51.96"/>
+      <polygon points="-30,-51.96 0,-110 -55,-95.26"/>
+      <polygon points="-30,-51.96 -55,-95.26 -95.26,-55"/>
+      <polygon points="-30,-51.96 -95.26,-55 -60,0"/>
+      <polygon points="-60,0 -95.26,-55 -110,0"/>
+      <polygon points="-60,0 -110,0 -95.26,55"/>
+      <polygon points="-60,0 -95.26,55 -30,51.96"/>
+      <polygon points="-30,51.96 -95.26,55 -55,95.26"/>
+      <polygon points="-30,51.96 -55,95.26 0,110"/>
+      <polygon points="-30,51.96 0,110 30,51.96"/>
+      <polygon points="30,51.96 0,110 55,95.26"/>
+      <polygon points="30,51.96 55,95.26 95.26,55"/>
+      <polygon points="30,51.96 95.26,55 60,0"/>
+      <polygon points="60,0 95.26,55 110,0"/>
+    </g>
+    <!-- the triangles across the hole -->
+    <g fill="#fed7d7" stroke="#e53e3e" stroke-width="1.2">
+      <polygon points="60,0 30,-51.96 -30,-51.96"/>
+      <polygon points="-30,-51.96 -60,0 -30,51.96"/>
+      <polygon points="-30,51.96 30,51.96 60,0"/>
+      <polygon points="60,0 -30,-51.96 -30,51.96"/>
+    </g>
+    <circle r="48" fill="none" stroke="#4a5568" stroke-width="1.5" stroke-dasharray="5 3"/>
+    <use href="#hits" fill="#2b6cb0"/>
+  </g>
+  <text x="180" y="315" font-size="12" text-anchor="middle" fill="#c53030">its triangles span the
+    hole:</text>
+  <text x="180" y="331" font-size="12" text-anchor="middle" fill="#c53030">the map fills it with
+    light</text>
+
+  <!-- ── right: the Voronoi cell of a hit next to the bore ───────────────── -->
+  <text x="540" y="40" font-size="14" font-weight="bold" text-anchor="middle"
+        fill="#1a202c">the Voronoi cell of a hit next to the bore</text>
+  <g transform="translate(540,175)">
+    <polygon points="0,0 63.42,-36.61 85,-22.78 85,22.78 63.42,36.61"
+             fill="#feebc8" stroke="#dd6b20" stroke-width="1.5" stroke-linejoin="round"/>
+    <circle r="48" fill="none" stroke="#4a5568" stroke-width="1.5" stroke-dasharray="5 3"/>
+    <use href="#hits" fill="#2b6cb0"/>
+    <circle cx="60" cy="0" r="5" fill="#dd6b20"/>
+    <circle cx="0" cy="0" r="2.5" fill="#4a5568"/>
+    <line x1="0" y1="4" x2="0" y2="60" stroke="#4a5568" stroke-width="1"
+          stroke-dasharray="2 2"/>
+    <text x="0" y="74" font-size="11" text-anchor="middle" fill="#4a5568">middle of the hole</text>
+  </g>
+  <text x="540" y="315" font-size="12" text-anchor="middle" fill="#c05621">the cell reaches to the
+    middle of the hole:</text>
+  <text x="540" y="331" font-size="12" text-anchor="middle" fill="#c05621">the edge shows too
+    little fluence</text>
+</svg>

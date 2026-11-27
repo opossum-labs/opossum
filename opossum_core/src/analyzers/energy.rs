@@ -123,6 +123,14 @@ impl PropagationStrategy for EnergyConfig {
     fn pump_config(&self, node_id: Uuid) -> PumpConfig {
         self.active_pump_scenario.config(node_id)
     }
+    /// An energy analysis traces no rays.
+    fn needs_ray_tubes(&self) -> bool {
+        false
+    }
+    /// An energy analysis sends out no rays.
+    fn spreads_energy_over_cells(&self) -> bool {
+        false
+    }
 }
 /// Analyzer for simulating a simple energy flow
 #[derive(Debug, Default)]

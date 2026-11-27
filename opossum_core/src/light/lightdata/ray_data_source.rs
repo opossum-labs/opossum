@@ -587,6 +587,14 @@ impl Default for RayDataSource {
     }
 }
 impl RayDataSource {
+    /// Returns whether the rays of this source sample a distribution of its energy, as the rays
+    /// of all but raw sources do: each gets the value of the distribution where it lies, and an
+    /// analysis spreads the energy over the area each ray stands for (see
+    /// [`Rays::spread_energy_over_cells`]). Raw rays carry the energies they were given.
+    #[must_use]
+    pub const fn samples_its_energy(&self) -> bool {
+        !matches!(self, Self::Raw(_))
+    }
     /// Create [`Rays`] from the builder definition.
     ///
     /// # Errors

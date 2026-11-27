@@ -1,0 +1,51 @@
+{
+  // Ablegen als .vscode/launch.json. Braucht die Extension "C/C++" (ms-vscode.cpptools)
+  // und die MSVC-Toolchain (rustup show → ...-pc-windows-msvc).
+  // cppvsdbg baut nicht selbst → preLaunchTask aus .vscode/tasks.json.
+  // Falls CARGO_TARGET_DIR umgebogen ist, die program-Pfade anpassen.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug (MSVC): opossum_cli",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/target/debug/opossum_cli.exe",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "environment": [{ "name": "RUST_BACKTRACE", "value": "1" }],
+      "console": "integratedTerminal",
+      "preLaunchTask": "cargo build opossum_cli"
+    },
+    {
+      "name": "Debug (MSVC): opossum_backend",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/target/debug/opossum_backend.exe",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "environment": [{ "name": "RUST_BACKTRACE", "value": "1" }],
+      "console": "integratedTerminal",
+      "preLaunchTask": "cargo build opossum_backend"
+    },
+    {
+      // Nur sinnvoll, wenn die GUI als Desktop-App läuft (nicht als Web/WASM).
+      "name": "Debug (MSVC): opossum_gui",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/target/debug/opossum_gui.exe",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "environment": [{ "name": "RUST_BACKTRACE", "value": "1" }],
+      "console": "integratedTerminal",
+      "preLaunchTask": "cargo build opossum_gui"
+    },
+    {
+      // An einen schon laufenden Prozess hängen (z. B. das actix-Backend).
+      "name": "Attach (MSVC): laufender Prozess",
+      "type": "cppvsdbg",
+      "request": "attach",
+      "processId": "${command:pickProcess}"
+    }
+  ]
+}
+ 

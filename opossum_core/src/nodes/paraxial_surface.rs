@@ -223,7 +223,6 @@ impl AnalysisRayTrace for ParaxialSurface {
 mod test {
     use super::*;
     use crate::{
-        J_per_cm2,
         analyzers::{RayTraceConfig, propagation_strategy::MissedSurfaceStrategy},
         core_optics::{NodeAttrExt, PortType, node_attr::NodePositioning},
         degree,
@@ -360,20 +359,14 @@ mod test {
         );
         Ok(())
     }
-    /// A ray that hits the lens takes its helper rays along; a ray that misses it keeps its
-    /// direction, and so do its helper rays.
+    /// A ray that hits the lens is deflected; a ray that misses it keeps its direction.
     #[test]
-    fn a_lens_deflects_the_helper_rays_of_a_hit_and_leaves_a_miss_alone() -> OpmResult<()> {
+    fn a_lens_deflects_a_hit_and_leaves_a_miss_alone() -> OpmResult<()> {
         let (mut plane, lens) = lens_at_origin()?;
-        let with_helpers = |y: f64| {
-            Ray::new_collimated_w_fluence_helper(
-                millimeter!(0.0, y, -10.0),
-                nanometer!(1000.0),
-                joule!(1.0),
-                J_per_cm2!(1.0),
-            )
+        let along_z = |y: f64| {
+            Ray::new_collimated(millimeter!(0.0, y, -10.0), nanometer!(1000.0), joule!(1.0))
         };
-        let mut rays = Rays::from(vec![with_helpers(5.0)?, with_helpers(20.0)?]);
+        let mut rays = Rays::from(vec![along_z(5.0)?, along_z(20.0)?]);
         plane.interact_with_rays(
             SurfaceGeometry::FACE,
             &mut rays,
@@ -381,46 +374,9 @@ mod test {
             ReflectedPart::Ghost,
             MissedSurfaceStrategy::Ignore,
         )?;
-        for (ray, deflected) in rays.iter_mut().zip([true, false]) {
+        for (ray, deflected) in rays.iter().zip([true, false]) {
             assert_eq!(ray.direction() != Vector3::z(), deflected);
-            let helpers = ray.helper_rays_mut().expect("a ray with helper rays");
-            assert_eq!(helpers.nr_of_rays(false), 3, "a ray with three helper rays");
-            for helper in helpers.iter() {
-                assert_eq!(helper.direction() != Vector3::z(), deflected);
-            }
         }
-        Ok(())
-    }
-    /// A ray 0.5 µm inside the 12.5 mm optic shape has one helper ray 0.38 µm beyond it: the ray is
-    /// focused, but its triangle tore at the edge, so it drops its helper rays.
-    #[test]
-    fn a_ray_on_the_edge_of_the_optic_shape_drops_its_helper_rays() -> OpmResult<()> {
-        let mut node = placed_at_origin::<ParaxialSurface>()?;
-        node.set_property(OPTIC_SHAPE, default_optic_shape().into())?;
-        node.update_surfaces()?;
-        let ray = Ray::new_collimated_w_fluence_helper(
-            millimeter!(12.4995, 0.0, -10.0),
-            nanometer!(1000.0),
-            joule!(1.0),
-            J_per_cm2!(1.0),
-        )?;
-        let output = AnalysisGhostFocus::analyze(
-            &mut node,
-            LightRays::from([("input_1".into(), vec![Rays::from(ray)])]),
-            &GhostFocusConfig::default(),
-            &mut Vec::new(),
-            0,
-        )?;
-        let ray = output
-            .get("output_1")
-            .and_then(|bundles| bundles.first())
-            .and_then(|bundle| bundle.iter().next())
-            .expect("the ray at the output port");
-        assert_ne!(ray.direction(), Vector3::z(), "the ray inside is focused");
-        assert!(
-            ray.helper_ray_fluence().is_none(),
-            "the ray drops its helper rays"
-        );
         Ok(())
     }
     #[test]

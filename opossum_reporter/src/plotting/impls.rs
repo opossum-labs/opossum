@@ -6,7 +6,7 @@ use nalgebra::{DMatrix, DVector, DVectorView, Matrix2xX, MatrixXx2, MatrixXx3, P
 use opossum_core::{
     analyzers::ghostfocus::GhostFocusHistory,
     apertures::{Aperture, ApertureShape, CircleShape},
-    core_optics::hit_map::HitMap,
+    core_optics::hit_map::{HitMap, rays_hit_map::HitPoint},
     error::{OpmResult, OpossumError},
     light::Spectrum,
     meter,
@@ -16,7 +16,7 @@ use opossum_core::{
     },
     prelude::Isometry,
     utils::{
-        griddata::{create_linspace_axes, grid_interpolate_3d_scatter_data, linspace},
+        griddata::{create_linspace_axes, grid_interpolate_3d_scatter_data},
         math_distribution_functions::ellipse,
         unit_format::{
             get_exponent_for_base_unit_in_e3_steps, get_prefix_for_base_unit,
@@ -60,17 +60,10 @@ impl Plottable for FluenceData {
 
         match plt_type {
             PlotType::ColorMesh(_) => {
+                let (x, y) = self.grid().points();
                 let plt_data = PlotData::ColorMesh {
-                    x_dat_n: linspace(
-                        self.x_range().start.get::<millimeter>(),
-                        self.x_range().end.get::<millimeter>(),
-                        self.interp_distribution().ncols(),
-                    )?,
-                    y_dat_m: linspace(
-                        self.y_range().start.get::<millimeter>(),
-                        self.y_range().end.get::<millimeter>(),
-                        self.interp_distribution().nrows(),
-                    )?,
+                    x_dat_n: x.map(|x| x.get::<millimeter>()),
+                    y_dat_m: y.map(|y| y.get::<millimeter>()),
                     z_dat_nxm: DMatrix::from_iterator(
                         nrows,
                         ncols,
@@ -394,7 +387,7 @@ impl Plottable for HitMap {
             for (i, bounced_ray_bundles) in self.hit_map().iter().enumerate() {
                 xy_positions.push(Vec::<Point2<Length>>::new());
                 for rays_hitmap in bounced_ray_bundles.hit_map().values() {
-                    for p in rays_hitmap.hit_map().positions() {
+                    for p in rays_hitmap.hit_points().iter().map(HitPoint::position) {
                         xy_positions[i].push(Point2::new(p.x, p.y));
                         x_max = x_max.max(p.x.value);
                         y_max = y_max.max(p.y.value);

@@ -38,6 +38,10 @@ pub struct GhostFocusConfig {
     ambient_material: AssetRef<Material>,
     #[serde(skip)]
     active_pump_scenario: ActiveScenario,
+    /// Whether the sources span ray tubes, because a fluence map of the run follows them. Set by
+    /// the analysis for its run; not saved to file.
+    #[serde(skip)]
+    ray_tubes: bool,
 }
 
 impl GhostFocusConfig {
@@ -58,6 +62,11 @@ impl GhostFocusConfig {
     /// Sets the fluence estimator to be considered during ghost focus analysis.
     pub const fn set_fluence_estimator(&mut self, fluence_estimator: FluenceEstimator) {
         self.fluence_estimator = fluence_estimator;
+    }
+    /// Sets whether the sources of the run span ray tubes (see
+    /// [`RayMesh`](crate::light::RayMesh)).
+    pub const fn set_ray_tubes(&mut self, ray_tubes: bool) {
+        self.ray_tubes = ray_tubes;
     }
     /// Maps an ray data builder to the given source UUID
     ///
@@ -133,6 +142,7 @@ impl Default for GhostFocusConfig {
             source_map: BTreeMap::new(),
             ambient_material: AssetRef::Inline(Material::vacuum()),
             active_pump_scenario: ActiveScenario::default(),
+            ray_tubes: false,
         }
     }
 }
@@ -143,6 +153,14 @@ impl PropagationStrategy for GhostFocusConfig {
 
     fn pump_config(&self, node_id: Uuid) -> PumpConfig {
         self.active_pump_scenario.config(node_id)
+    }
+    /// Set for the run by the analysis (see [`GhostFocusConfig::set_ray_tubes`]).
+    fn needs_ray_tubes(&self) -> bool {
+        self.ray_tubes
+    }
+    /// A ghost focus run is always an analysis.
+    fn spreads_energy_over_cells(&self) -> bool {
+        true
     }
     fn on_surface_interaction(
         &self,
@@ -182,8 +200,8 @@ mod test {
     #[test]
     fn set_fluence_estimator() {
         let mut c = GhostFocusConfig::default();
-        c.set_fluence_estimator(FluenceEstimator::HelperRays);
-        assert_eq!(c.fluence_estimator(), &FluenceEstimator::HelperRays);
+        c.set_fluence_estimator(FluenceEstimator::KDE);
+        assert_eq!(c.fluence_estimator(), &FluenceEstimator::KDE);
     }
     #[test]
     fn test_map_and_get_source() {

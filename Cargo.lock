@@ -5209,15 +5209,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "maybe_parallel_iterator"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5069b219d51d2ba2d9388623bd7eead5d4e7974bc8ff3ec9edbe36b09c0ef477"
-dependencies = [
- "rayon",
-]
-
-[[package]]
 name = "memchr"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5876,7 +5867,6 @@ dependencies = [
  "uom",
  "utoipa",
  "uuid",
- "voronator",
 ]
 
 [[package]]
@@ -7443,6 +7433,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab508826f74a77ca9d5aba6ff19b522583ee3eaf28a19384ff3d0e5835fadf6e"
 dependencies = [
  "dyn-clone",
+ "indexmap 2.14.2",
  "ref-cast",
  "schemars_derive",
  "serde",
@@ -8947,15 +8938,6 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
-
-[[package]]
-name = "voronator"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07d8e6fe4b9b3b443f2e4ada327cf4b08ab5cdd27a42cd5c9f38dd29092c10ee"
-dependencies = [
- "maybe_parallel_iterator",
-]
 
 [[package]]
 name = "walkdir"

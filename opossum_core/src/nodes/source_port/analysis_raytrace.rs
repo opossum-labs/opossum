@@ -30,12 +30,7 @@ impl AnalysisRayTrace for SourcePort {
         else {
             return Ok(LightResult::default());
         };
-        let mut rays = ray_data_builder.clone().build()?;
-
-        // Apply the ambient refractive index to all newly created rays
-        rays.set_refractive_index(&config.ambient_refractive_index())?;
-
-        rays = rays.transformed_by_iso(&self.effective_surface_iso("output_1")?);
+        let mut rays = self.sent_out_rays(ray_data_builder, config)?;
         rays.invalidate_by_threshold_energy(config.min_energy_per_ray())?;
         Ok(LightResult::from([(
             "output_1".into(),

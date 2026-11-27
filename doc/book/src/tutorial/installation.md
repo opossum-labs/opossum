@@ -103,11 +103,14 @@ The **OPOSSUM suite** has three main sources of documentation:
 
 The book is built using [`mdBook`](https://rust-lang.github.io/mdBook/). This system compiles the Markdown source files into a static, readable website.
 
-1. **Install `mdBook`:**
+1. **Install `mdBook` and `mdbook-katex`:**
 
    ```bash
    cargo binstall mdbook
+   cargo install mdbook-katex
    ```
+
+   `mdbook-katex` renders the formulas; without it, the build stops with an error. On Windows with the MSVC toolchain, its default build needs GCC. Instead, download `x86_64-pc-windows-gnu.zip` from its [releases](https://github.com/lzanini/mdbook-katex/releases) and put `mdbook-katex.exe` on the `PATH`, or build it with `cargo install mdbook-katex --no-default-features --features duktape`, which renders everything the handbook uses but no matrices.
 
 2. **Navigate and Build:**
 

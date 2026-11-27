@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="560" viewBox="0 0 760 560"
+     font-family="Helvetica, Arial, sans-serif">
+  <title>How the map deviates from the light, and how the estimate tries to catch it</title>
+  <desc>Top left, a cut through a Gaussian beam, with rays (dots) one sigma apart. The map (blue)
+        runs straight between the rays, the light (red dashed) is curved. The orange areas between
+        them are the deviation of the map from the light: the map lies below the light where the
+        light bends down, above it where the light bends up. Top right, at one ray: a parabola
+        (green) through the values at the ray and its two neighbors gives the curvature there; on
+        the surface, the fit uses five or more neighbors, by least squares. Bottom, the tube with
+        the peak, enlarged: the estimate sets a parabola bent by the mean curvature of the corners
+        of the tube onto the map (green, hatched). In the middle of the tube it catches about 60
+        percent of the deviation. The orange left above it is what the estimate misses; it shrinks
+        one order faster than the deviation as the rays move closer together.</desc>
+
+  <defs>
+    <pattern id="estimate" width="6" height="6" patternUnits="userSpaceOnUse"
+             patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="6" stroke="#2f855a" stroke-width="1.6"/>
+    </pattern>
+    <marker id="tick" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="8" markerHeight="8"
+            orient="auto">
+      <path d="M 5 0 L 5 10" stroke="#4a5568" stroke-width="1.5"/>
+    </marker>
+  </defs>
+
+  <!-- A background of its own keeps the figure readable on the dark book themes. -->
+  <rect x="0" y="0" width="760" height="560" rx="8" fill="#ffffff"/>
+
+  <!-- ── the light and the map, along a cut ──────────────────────────────── -->
+  <text x="215" y="30" font-size="14" font-weight="bold" text-anchor="middle"
+        fill="#1a202c">the light and the map, along a cut</text>
+  <line x1="50" y1="250" x2="380" y2="250" stroke="#a0aec0" stroke-width="1"/>
+  <!-- the deviation of the map in each tube -->
+  <g fill="#fbd38d" stroke="none">
+    <polygon points="65,249.31 77.5,248.44 90,246.73 102.5,243.53 115,237.99"/>
+    <polygon points="115,237.99 127.5,229.05 140,215.68 152.5,197.17 165,173.79"/>
+    <polygon points="165,173.79 177.5,146.25 190,117.61 202.5,91.30 215,71.29"/>
+    <polygon points="215,71.29 220,65.85 225,62.13 232.5,60 240,62.13 245,65.85 252.5,74.61
+                     265,96.18"/>
+    <polygon points="265,96.18 277.5,123.27 290,151.92 302.5,178.69 315,201.30"/>
+    <polygon points="315,201.30 327.5,218.75 340,231.16 352.5,239.33 365,244.33"/>
+  </g>
+  <polyline points="65,249.31 115,237.99 165,173.79 215,71.29 265,96.18 315,201.30 365,244.33"
+            fill="none" stroke="#2b6cb0" stroke-width="3" stroke-linejoin="round"/>
+  <polyline points="50,249.76 65,249.31 77.5,248.44 90,246.73 102.5,243.53 115,237.99
+                    127.5,229.05 140,215.68 152.5,197.17 165,173.79 177.5,146.25 190,117.61
+                    202.5,91.30 215,71.29 220,65.85 225,62.13 232.5,60 240,62.13 245,65.85
+                    252.5,74.61 265,96.18 277.5,123.27 290,151.92 302.5,178.69 315,201.30
+                    327.5,218.75 340,231.16 352.5,239.33 365,244.33 380,247.55"
+            fill="none" stroke="#e53e3e" stroke-width="1.8" stroke-dasharray="6 3"/>
+  <g fill="#2b6cb0">
+    <circle cx="65" cy="249.31" r="3.5"/><circle cx="115" cy="237.99" r="3.5"/>
+    <circle cx="165" cy="173.79" r="3.5"/><circle cx="215" cy="71.29" r="3.5"/>
+    <circle cx="265" cy="96.18" r="3.5"/><circle cx="315" cy="201.30" r="3.5"/>
+    <circle cx="365" cy="244.33" r="3.5"/>
+  </g>
+  <rect x="208" y="52" width="64" height="52" fill="none" stroke="#4a5568" stroke-width="1"
+        stroke-dasharray="4 3"/>
+  <text x="278" y="64" font-size="11" fill="#4a5568">enlarged below</text>
+
+  <!-- ── the curvature at a ray ──────────────────────────────────────────── -->
+  <text x="570" y="30" font-size="14" font-weight="bold" text-anchor="middle"
+        fill="#1a202c">the curvature at a ray</text>
+  <polyline points="457.5,232.83 480,205.75 502.5,173.86 525,140.70 547.5,110.24 570,87.07
+                    579,80.77 588,76.46 601.5,74 615,76.46 624,80.77 637.5,90.91 660,115.89
+                    682.5,147.26 687,153.90"
+            fill="none" stroke="#e53e3e" stroke-width="1.8" stroke-dasharray="6 3"/>
+  <!-- the parabola through the ray and its neighbors -->
+  <path d="M 471 225.73 Q 579 -22.89 687 153.31" fill="none" stroke="#2f855a"
+        stroke-width="2"/>
+  <circle cx="480" cy="205.75" r="4" fill="#2b6cb0"/>
+  <circle cx="660" cy="115.89" r="4" fill="#2b6cb0"/>
+  <circle cx="570" cy="87.07" r="5" fill="#1a202c"/>
+  <g font-size="11">
+    <text x="578" y="104" fill="#1a202c">the ray</text>
+    <text x="472" y="200" text-anchor="end" fill="#2b6cb0">neighbor</text>
+    <text x="650" y="135" text-anchor="end" fill="#2b6cb0">neighbor</text>
+  </g>
+  <g font-size="11.5" text-anchor="middle">
+    <text x="600" y="192" fill="#2f855a">a parabola through the values at</text>
+    <text x="600" y="206" fill="#2f855a">the ray and its neighbors gives</text>
+    <text x="600" y="220" fill="#2f855a">the curvature at the ray</text>
+    <text x="600" y="236" fill="#4a5568">(on the surface: a curved surface</text>
+    <text x="600" y="250" fill="#4a5568">through five or more neighbors,</text>
+    <text x="600" y="264" fill="#4a5568">fitted by least squares)</text>
+  </g>
+
+  <!-- ── one tube, enlarged ──────────────────────────────────────────────── -->
+  <text x="240" y="300" font-size="14" font-weight="bold" text-anchor="middle"
+        fill="#1a202c">one tube, enlarged: the deviation and the estimate</text>
+  <g stroke="#a0aec0" stroke-width="1" stroke-dasharray="2 3">
+    <line x1="90" y1="326" x2="90" y2="522"/>
+    <line x1="390" y1="326" x2="390" y2="522"/>
+  </g>
+  <!-- the deviation of the map, and over it the part the estimate catches -->
+  <polygon points="90,375.58 120,354.95 150,340.86 180,333.70 195,332.80 210,333.70 240,340.86
+                   270,354.95 300,375.58 330,402.13 360,433.86 390,469.91"
+           fill="#fbd38d" stroke="none"/>
+  <path d="M 90 375.58 Q 240 324.40 390 469.91 Z" fill="url(#estimate)" stroke="none"/>
+  <!-- the map: this tube, and the start of its neighbors -->
+  <path d="M 60 414.42 L 90 375.58 M 390 469.91 L 420 509.74" fill="none" stroke="#2b6cb0"
+        stroke-width="3" opacity="0.4"/>
+  <line x1="90" y1="375.58" x2="390" y2="469.91" stroke="#2b6cb0" stroke-width="3"/>
+  <!-- the estimate: the map plus a parabola bent by the mean curvature of the corners -->
+  <path d="M 90 375.58 Q 240 324.40 390 469.91" fill="none" stroke="#2f855a"
+        stroke-width="2"/>
+  <polyline points="60,402.13 90,375.58 120,354.95 150,340.86 180,333.70 195,332.80 210,333.70
+                    240,340.86 270,354.95 300,375.58 330,402.13 360,433.86 390,469.91
+                    420,509.32"
+            fill="none" stroke="#e53e3e" stroke-width="1.8" stroke-dasharray="6 3"/>
+  <circle cx="90" cy="375.58" r="5" fill="#2b6cb0"/>
+  <circle cx="390" cy="469.91" r="5" fill="#2b6cb0"/>
+
+  <!-- in the middle of the tube: what the estimate catches, what it misses, and the whole -->
+  <path d="M 240 422.74 L 240 373.57" stroke="#2f855a" stroke-width="1.5"
+        marker-start="url(#tick)" marker-end="url(#tick)"/>
+  <path d="M 240 373.57 L 240 340.86" stroke="#c05621" stroke-width="1.5"
+        marker-end="url(#tick)"/>
+  <path d="M 252 426.52 L 252 345.68" stroke="#1a202c" stroke-width="1.5"
+        marker-start="url(#tick)" marker-end="url(#tick)"/>
+  <g font-size="11" font-weight="bold" stroke="#ffffff" stroke-width="3" paint-order="stroke"
+     stroke-linejoin="round">
+    <text x="234" y="400" text-anchor="end" fill="#276749">estimate</text>
+    <text x="234" y="360" text-anchor="end" fill="#c05621">missed</text>
+    <text x="258" y="342" fill="#1a202c">deviation</text>
+  </g>
+  <g font-size="11" text-anchor="middle" fill="#4a5568">
+    <text x="90" y="538">ray</text>
+    <text x="390" y="538">ray</text>
+  </g>
+
+  <!-- ── what it means ───────────────────────────────────────────────────── -->
+  <g font-size="12" fill="#2d3748">
+    <line x1="450" y1="334" x2="472" y2="334" stroke="#e53e3e" stroke-width="1.8"
+          stroke-dasharray="6 3"/>
+    <text x="482" y="338">the light: its fluence is curved</text>
+
+    <line x1="450" y1="356" x2="472" y2="356" stroke="#2b6cb0" stroke-width="3"/>
+    <circle cx="461" cy="356" r="3.5" fill="#2b6cb0"/>
+    <text x="482" y="360">the map: straight between the rays</text>
+
+    <rect x="450" y="371" width="22" height="14" fill="#fbd38d"/>
+    <text x="482" y="382">the deviation of the map from the light</text>
+
+    <rect x="450" y="394" width="22" height="14" fill="#fbd38d"/>
+    <rect x="450" y="394" width="22" height="14" fill="url(#estimate)" stroke="#2f855a"/>
+    <text x="482" y="405">the estimate: a parabola set on the map,</text>
+    <text x="482" y="419">bent by the mean curvature at the</text>
+    <text x="482" y="433">corners of the tube (three on the surface)</text>
+
+    <text x="450" y="462">What the estimate misses, the orange</text>
+    <text x="450" y="476">above it, shrinks one order faster than</text>
+    <text x="450" y="490">the deviation as the rays move closer.</text>
+  </g>
+</svg>

@@ -10,4 +10,3 @@ edition = "2024"
 
 [preprocessor.katex]
 after = ["links"]
-optional = true

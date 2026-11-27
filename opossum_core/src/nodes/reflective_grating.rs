@@ -408,7 +408,6 @@ impl OpticNode for ReflectiveGrating {
 mod test {
     use super::*;
     use crate::{
-        J_per_cm2,
         analyzers::{RayTraceConfig, energy::EnergyConfig},
         core_optics::{NodeAttrExt, PortType, node_attr::NodePositioning},
         degree, joule,
@@ -683,43 +682,6 @@ mod test {
         assert_eq!(ray.energy(), joule!(1.0));
         assert_eq!(ray.number_of_bounces(), 0);
         assert_eq!(ray.position_history()[(0, 2)], millimeter!(-10.0));
-        Ok(())
-    }
-    /// A diffracted ray takes its helper rays along: in a ghost focus analysis they leave the grating
-    /// in the direction of the ray they belong to.
-    #[test]
-    fn a_diffracted_ray_takes_its_helper_rays_along() -> OpmResult<()> {
-        let mut node =
-            ReflectiveGrating::default().with_rot_from_littrow(nanometer!(1000.), degree!(0.))?;
-        node.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
-        let ray = Ray::new_collimated_w_fluence_helper(
-            millimeter!(0.0, 0.0, -10.0),
-            nanometer!(1000.0),
-            joule!(1.0),
-            J_per_cm2!(1.0),
-        )?;
-        let output = AnalysisGhostFocus::analyze(
-            &mut node,
-            LightRays::from([("input_1".into(), vec![Rays::from(ray)])]),
-            &GhostFocusConfig::default(),
-            &mut Vec::new(),
-            0,
-        )?;
-        let mut diffracted = output
-            .get("output_1")
-            .and_then(|bundles| bundles.first())
-            .and_then(|bundle| bundle.iter().next())
-            .cloned()
-            .expect("the diffracted ray at the output port");
-        let direction = diffracted.direction();
-        assert_relative_eq!(direction, vector![0.0, 0.0, -1.0], epsilon = 1e-15);
-        let helpers = diffracted
-            .helper_rays_mut()
-            .expect("the ray keeps its helper rays");
-        assert_eq!(helpers.nr_of_rays(false), 3);
-        for helper in helpers.iter() {
-            assert_relative_eq!(helper.direction(), direction, epsilon = 1e-12);
-        }
         Ok(())
     }
     /// An order the grating cannot diffract into lets no light out, and the analysis warns: at

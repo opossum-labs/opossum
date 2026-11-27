@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="430" viewBox="0 0 900 430"
+     font-family="Helvetica, Arial, sans-serif">
+  <title>Light folding over itself behind a lens with spherical aberration</title>
+  <desc>A cut through the light behind a lens with spherical aberration: five rays of the upper half,
+        numbered 1 near the axis to 5 at the edge, and the lower half drawn faintly. Outer rays
+        focus closer to the lens than inner ones. At plane A, before any ray crossed another, the
+        rays arrive in their order and every tube between two neighboring rays keeps its turn (+).
+        At plane B the outer rays have crossed the inner ones: seen from the axis, the rays arrive
+        in the order 1, 5, 2, 4, 3. The inset magnifies plane B ten times: the tubes 1-2 and 2-3
+        keep their turn (+), the tubes 3-4 and 4-5 arrive turned over (−). The light folds back at
+        ray 3, and between the fold and ray 5 two layers of light lie on top of each other; their
+        fluences add.</desc>
+
+  <!-- A background of its own keeps the figure readable on the dark book themes. -->
+  <rect x="0" y="0" width="900" height="430" rx="8" fill="#ffffff"/>
+
+  <text x="330" y="30" font-size="14" font-weight="bold" text-anchor="middle"
+        fill="#1a202c">behind a lens with spherical aberration, in a cut</text>
+
+  <!-- the axis and the lens -->
+  <line x1="30" y1="210" x2="620" y2="210" stroke="#a0aec0" stroke-width="1"
+        stroke-dasharray="8 4"/>
+  <path d="M 80 40 Q 102 210 80 380 Q 58 210 80 40 Z" fill="#e6fffa" stroke="#319795"
+        stroke-width="1.5"/>
+
+  <!-- the lower half, faint -->
+  <g stroke="#cbd5e0" stroke-width="1">
+    <line x1="80" y1="240" x2="600" y2="207.1"/>
+    <line x1="80" y1="270" x2="600" y2="201.9"/>
+    <line x1="80" y1="300" x2="600" y2="191.5"/>
+    <line x1="80" y1="330" x2="600" y2="171.5"/>
+    <line x1="80" y1="360" x2="600" y2="133.9"/>
+  </g>
+  <!-- the upper half: rays 1 (near the axis) to 5 (at the edge) -->
+  <g stroke="#2b6cb0" stroke-width="1.3">
+    <line x1="80" y1="180" x2="600" y2="212.9"/>
+    <line x1="80" y1="150" x2="600" y2="218.1"/>
+    <line x1="80" y1="120" x2="600" y2="228.5"/>
+    <line x1="80" y1="90" x2="600" y2="248.5"/>
+    <line x1="80" y1="60" x2="600" y2="286.1"/>
+  </g>
+  <g font-size="12" fill="#2b6cb0" text-anchor="end">
+    <text x="62" y="184">1</text><text x="62" y="154">2</text><text x="62" y="124">3</text>
+    <text x="62" y="94">4</text><text x="62" y="64">5</text>
+  </g>
+
+  <!-- plane A: the rays arrive in their order -->
+  <line x1="230" y1="112" x2="230" y2="202" stroke="#2d3748" stroke-width="2"/>
+  <text x="230" y="104" font-size="13" font-weight="bold" text-anchor="middle"
+        fill="#2d3748">A</text>
+  <g font-size="11" fill="#2b6cb0" font-weight="bold">
+    <text x="236" y="183">+</text><text x="236" y="164">+</text>
+    <text x="236" y="147">+</text><text x="236" y="134">+</text>
+  </g>
+
+  <!-- plane B, and the part the inset magnifies -->
+  <line x1="400" y1="168" x2="400" y2="214" stroke="#2d3748" stroke-width="2"/>
+  <text x="400" y="160" font-size="13" font-weight="bold" text-anchor="middle"
+        fill="#2d3748">B</text>
+  <rect x="392" y="182" width="16" height="22" fill="none" stroke="#718096"
+        stroke-dasharray="2 2"/>
+  <g stroke="#cbd5e0" stroke-width="1" stroke-dasharray="4 3">
+    <line x1="408" y1="182" x2="640" y2="70"/>
+    <line x1="408" y1="204" x2="640" y2="350"/>
+  </g>
+
+  <!-- ── the inset: plane B, ten times magnified ─────────────────────────── -->
+  <rect x="640" y="70" width="250" height="280" rx="6" fill="#f7fafc" stroke="#a0aec0"/>
+  <text x="765" y="90" font-size="12" text-anchor="middle" fill="#4a5568">plane B, ten times
+    magnified</text>
+  <g stroke-width="3" stroke-linecap="round">
+    <line x1="700" y1="277.5" x2="700" y2="194" stroke="#2b6cb0"/>
+    <line x1="700" y1="194" x2="722" y2="142.7" stroke="#2b6cb0"/>
+    <line x1="722" y1="142.7" x2="744" y2="150.4" stroke="#e53e3e"/>
+    <line x1="744" y1="150.4" x2="744" y2="266.4" stroke="#e53e3e"/>
+  </g>
+  <g fill="#1a202c">
+    <circle cx="700" cy="277.5" r="4"/><circle cx="700" cy="194" r="4"/>
+    <circle cx="722" cy="142.7" r="4"/><circle cx="744" cy="150.4" r="4"/>
+    <circle cx="744" cy="266.4" r="4"/>
+  </g>
+  <g font-size="12" fill="#1a202c">
+    <text x="686" y="282" text-anchor="end">1</text>
+    <text x="686" y="198" text-anchor="end">2</text>
+    <text x="722" y="132" text-anchor="middle">3</text>
+    <text x="754" y="154">4</text>
+    <text x="754" y="271">5</text>
+  </g>
+  <g font-size="13" font-weight="bold">
+    <text x="688" y="240" fill="#2b6cb0" text-anchor="end">+</text>
+    <text x="700" y="166" fill="#2b6cb0" text-anchor="end">+</text>
+    <text x="736" y="140" fill="#e53e3e">−</text>
+    <text x="752" y="215" fill="#e53e3e">−</text>
+  </g>
+  <path d="M 772 152 L 780 152 L 780 264 L 772 264" fill="none" stroke="#4a5568"
+        stroke-width="1.2"/>
+  <g font-size="11" fill="#4a5568">
+    <text x="786" y="196">two layers</text>
+    <text x="786" y="210">of light:</text>
+    <text x="786" y="224">they add</text>
+  </g>
+  <line x1="735" y1="125" x2="725" y2="137" stroke="#c53030" stroke-width="1"/>
+  <g font-size="11" fill="#c53030">
+    <text x="652" y="108">fold (caustic): the fluence</text>
+    <text x="652" y="121">near it is unreliable</text>
+  </g>
+  <text x="765" y="334" font-size="11" text-anchor="middle" fill="#4a5568">read from the axis:
+    1 5 2 4 3</text>
+
+  <!-- ── what the planes show ────────────────────────────────────────────── -->
+  <g font-size="12" fill="#2d3748">
+    <text x="40" y="396">A: the rays arrive in their order, every tube keeps its turn (+): no fold.</text>
+    <text x="40" y="412">B: rays 3 to 5 crossed rays 1 and 2, their tubes arrive turned over (−): a warning.</text>
+  </g>
+</svg>

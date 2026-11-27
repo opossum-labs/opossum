@@ -9,7 +9,7 @@ use plotters::style::RGBAColor;
 use uom::si::{length::millimeter, radiant_exposure::joule_per_square_centimeter};
 
 fn main() -> OpmResult<()> {
-    let rays = Rays::new_collimated(
+    let mut rays = Rays::new_collimated(
         nanometer!(1000.),
         &General2DGaussian::new(
             joule!(3.),
@@ -21,9 +21,10 @@ fn main() -> OpmResult<()> {
         )?,
         &FibonacciRectangle::new(millimeter!(10.), millimeter!(10.), 1000)?,
     )?;
+    rays.attach_mesh()?;
 
     let fluence_data = rays.calc_fluence_at_position(&Isometry::identity())?;
-    let (fl_x, fl_y, fl_d) = fluence_data.get_fluence_distribution()?;
+    let (fl_x, fl_y, fl_d) = fluence_data.get_fluence_distribution();
 
     let mut plt_params = PlotParameters::default();
     plt_params

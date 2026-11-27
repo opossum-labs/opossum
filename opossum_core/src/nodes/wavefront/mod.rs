@@ -451,7 +451,7 @@ impl OpticNode for WaveFront {
                 let centered_opds = opds.iter().map(|&val| (val - mean) * wvl_factor).collect();
                 Some(centered_opds)
             }
-            _ => self.read_observable(metric_name).map(|v| vec![v]),
+            _ => None,
         }
     }
 }

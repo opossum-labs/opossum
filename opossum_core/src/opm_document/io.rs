@@ -991,7 +991,15 @@ mod tests {
         config.map_source(i_0, ray_builder);
         let analyzer = GhostFocusAnalyzer::new(config);
         analyzer.analyze(&mut scenery)?;
-        check_logs(log::Level::Warn, vec![]);
+        // the main beam folds over itself on the last mirror: the tilted grating gives the
+        // converging beam coma
+
+        check_logs(
+            log::Level::Warn,
+            vec![
+                "light folds over itself on this surface (caustic): the fluence near the fold is unreliable",
+            ],
+        );
 
         Ok(())
     }

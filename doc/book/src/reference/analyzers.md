@@ -83,4 +83,7 @@ The following analyzers are implemented:
 
 
     Additionally, it provides a `Fluence Estimator` option, which allows selecting the fluence estimator used for the analysis.
-   For further details on the available fluence estimators and their differences,see the [Fluence Estimators](../concepts/fluence.md) section.
+    With `Voronoi`, the default, the maps on the surfaces follow the ray tubes the source spans (see
+    [Voronoi: fluence from ray tubes](../concepts/fluence.md#voronoi-fluence-from-ray-tubes)). A fluence detector keeps its own
+    `fluence estimator`. For further details on the available fluence estimators and their differences, see the
+    [Fluence Estimators](../concepts/fluence.md) section.
