@@ -1677,8 +1677,8 @@ async fn process_optimize_layout(
     ws_handler: WorkSpaceSignalHandlers,
     graph_id: Uuid,
 ) {
-    // --- READ PHASE: Fetch nodes, edges and the size of the view ---
-    let (nodes, edges, view) = {
+    // --- READ PHASE: Fetch nodes, edges, mapped ports and the size of the view ---
+    let (nodes, edges, mapped_ports, view) = {
         let graph = workspace.tabs().get(graph_id);
         let Some(graph) = graph else {
             OPOSSUM_UI_LOGS.write().add_log(&format!(
@@ -1697,12 +1697,13 @@ async fn process_optimize_layout(
         (
             store.nodes().read().clone(),
             connect_infos,
+            store.mapped_ports().read().clone(),
             workspace.get_view_port_size(graph_id),
         )
     };
 
     // --- CALCULATION PHASE: Determine new positions (Pure) ---
-    let new_positions = optimize_layout(&nodes, &edges, view);
+    let new_positions = optimize_layout(&nodes, &edges, &mapped_ports, view);
 
     // --- ASYNC PHASE: sync with backend, batched into a single undo step ---
     let updates: Vec<PositionUpdate> = new_positions

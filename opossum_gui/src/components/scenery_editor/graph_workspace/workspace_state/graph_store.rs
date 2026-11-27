@@ -416,34 +416,41 @@ impl GraphStore {
         selected_nodes
     }
 
+    /// The box the graph covers on the canvas; see [`covered_box`].
     pub fn get_bounding_box(&self) -> Rect<f64> {
-        if self.nodes.is_empty() {
-            return Rect::new(Point2D::zero(), Size2D::zero());
-        }
-        let mut node_boxes =
-            self.nodes.values().map(|node| {
-                let node_id = node.id();
-                let has_mapped_input = !self.mapped_ports.is_empty()
-                    && node.input_ports().iter().any(|port_name| {
-                        self.mapped_ports.contains_port_of_node(node_id, port_name)
-                    });
-                let has_mapped_output = !self.mapped_ports.is_empty()
-                    && node.output_ports().iter().any(|port_name| {
-                        self.mapped_ports.contains_port_of_node(node_id, port_name)
-                    });
-
-                node.get_bounding_box_with_mapped_ports(has_mapped_input, has_mapped_output)
-            });
-
-        // Initialize with the first node's bounding box
-        let mut rect = node_boxes.next().unwrap();
-
-        // Iterate over the rest of the nodes to expand the combined bounding box
-        for node_rect in node_boxes {
-            rect = rect.union(&node_rect);
-        }
-        rect
+        covered_box(&self.nodes, &self.mapped_ports)
     }
+}
+
+/// The box that `nodes` cover on the canvas, including the tags of the ports `mapped_ports` maps to
+/// the ports of the group they belong to.
+///
+/// Zoom to Fit fits this box, and the auto layout measures its candidates with it, so both agree.
+///
+/// # Arguments
+///
+/// * `nodes` - the nodes, at their positions.
+/// * `mapped_ports` - the ports of the group, mapped to ports of `nodes`.
+///
+/// # Returns
+///
+/// The smallest box around all nodes, or an empty box at the origin if there are none.
+fn covered_box(nodes: &HashMap<Uuid, NodeElement>, mapped_ports: &PortMap) -> Rect<f64> {
+    nodes
+        .values()
+        .map(|node| {
+            let mapped = |ports: &Vec<String>| {
+                ports
+                    .iter()
+                    .any(|port| mapped_ports.contains_port_of_node(node.id(), port))
+            };
+            node.get_bounding_box_with_mapped_ports(
+                mapped(node.input_ports()),
+                mapped(node.output_ports()),
+            )
+        })
+        .reduce(|covered, node_box| covered.union(&node_box))
+        .unwrap_or_else(|| Rect::new(Point2D::zero(), Size2D::zero()))
 }
 /// Calculates optimized positions for all nodes in the graph.
 ///
@@ -456,6 +463,7 @@ impl GraphStore {
 ///
 /// * `nodes` - the nodes to place.
 /// * `edges` - the connections between them.
+/// * `mapped_ports` - the ports of the group, mapped to ports of `nodes`; their tags take room.
 /// * `view` - the size of the canvas in pixels. An empty size breaks no line.
 ///
 /// # Returns
@@ -465,6 +473,7 @@ impl GraphStore {
 pub fn optimize_layout(
     nodes: &HashMap<Uuid, NodeElement>,
     edges: &[ConnectInfo],
+    mapped_ports: &PortMap,
     view: Size2D<f64>,
 ) -> HashMap<Uuid, Point2D<f64>> {
     let blocks = layout_blocks(nodes, edges);
@@ -479,7 +488,7 @@ pub fn optimize_layout(
     let mut best: Option<(f64, HashMap<Uuid, Point2D<f64>>)> = None;
     for line_width in line_widths {
         let positions = stack_blocks(&blocks, nodes, line_width);
-        let zoom = fit_zoom(&positions, nodes, view);
+        let zoom = fit_zoom(&positions, nodes, mapped_ports, view);
         // The widths ascend, so `>=` hands a tie to the longer lines.
         if best
             .as_ref()
@@ -632,13 +641,13 @@ fn fold_into_lines(
     top
 }
 
-/// The largest zoom, up to [`MAX_ZOOM`], at which a layout fits `view` with the margin Zoom to Fit
-/// keeps.
+/// The zoom, up to [`MAX_ZOOM`], that Zoom to Fit will choose for a layout in `view`.
 ///
 /// # Arguments
 ///
-/// * `positions` - a non-empty layout, with its top-left corner at the origin.
-/// * `nodes` - the nodes, for their heights.
+/// * `positions` - the layout.
+/// * `nodes` - the nodes it places.
+/// * `mapped_ports` - the ports of the group, mapped to ports of `nodes`.
 /// * `view` - the size of the canvas in pixels.
 ///
 /// # Returns
@@ -647,19 +656,20 @@ fn fold_into_lines(
 fn fit_zoom(
     positions: &HashMap<Uuid, Point2D<f64>>,
     nodes: &HashMap<Uuid, NodeElement>,
+    mapped_ports: &PortMap,
     view: Size2D<f64>,
 ) -> f64 {
-    let (width, height) =
-        positions
-            .iter()
-            .fold((0.0_f64, 0.0_f64), |(width, height), (id, pos)| {
-                (
-                    width.max(pos.x + NODE_WIDTH),
-                    height.max(pos.y + node_height(nodes, *id)),
-                )
-            });
-    (VIEW_PADDING_FACTOR * view.width / width)
-        .min(VIEW_PADDING_FACTOR * view.height / height)
+    let placed: HashMap<Uuid, NodeElement> = positions
+        .iter()
+        .filter_map(|(id, pos)| {
+            let mut node = nodes.get(id)?.clone();
+            node.set_pos(*pos);
+            Some((*id, node))
+        })
+        .collect();
+    let covered = covered_box(&placed, mapped_ports);
+    (VIEW_PADDING_FACTOR * view.width / covered.width())
+        .min(VIEW_PADDING_FACTOR * view.height / covered.height())
         .min(MAX_ZOOM)
 }
 
@@ -900,7 +910,12 @@ mod tests {
         let nodes: HashMap<Uuid, NodeElement> = (1..=3).map(optical).collect();
         let [a, b, c] = [1, 2, 3].map(Uuid::from_u128);
 
-        let positions = optimize_layout(&nodes, &[connect(a, b), connect(b, c)], Size2D::zero());
+        let positions = optimize_layout(
+            &nodes,
+            &[connect(a, b), connect(b, c)],
+            &PortMap::default(),
+            Size2D::zero(),
+        );
 
         let [pa, pb, pc] = [a, b, c].map(|id| positions[&id]);
         assert!((pb.x - pa.x - SUGIYAMA_VERTEX_SPACING).abs() < 1e-9);
@@ -916,7 +931,12 @@ mod tests {
             .collect();
         let [energy, lone, a, b] = [1, 2, 3, 4].map(Uuid::from_u128);
 
-        let positions = optimize_layout(&nodes, &[connect(a, b)], Size2D::zero());
+        let positions = optimize_layout(
+            &nodes,
+            &[connect(a, b)],
+            &PortMap::default(),
+            Size2D::zero(),
+        );
 
         let placed = |id| placed_box(&nodes, &positions, id);
         assert!(placed(energy).max_y() <= placed(lone).min_y());
@@ -929,7 +949,12 @@ mod tests {
         let nodes: HashMap<Uuid, NodeElement> = (1..=4).map(optical).collect();
         let [a, b, c, d] = [1, 2, 3, 4].map(Uuid::from_u128);
 
-        let positions = optimize_layout(&nodes, &[connect(a, b), connect(c, d)], Size2D::zero());
+        let positions = optimize_layout(
+            &nodes,
+            &[connect(a, b), connect(c, d)],
+            &PortMap::default(),
+            Size2D::zero(),
+        );
 
         let (upper, lower) = if positions[&a].y < positions[&c].y {
             ([a, b], [c, d])
@@ -960,7 +985,12 @@ mod tests {
     fn long_chain_wraps_into_the_lines_that_fit_the_view_best() {
         let (nodes, edges) = chain(6);
 
-        let positions = optimize_layout(&nodes, &edges, Size2D::new(1200.0, 500.0));
+        let positions = optimize_layout(
+            &nodes,
+            &edges,
+            &PortMap::default(),
+            Size2D::new(1200.0, 500.0),
+        );
 
         let pos = |i| positions[&Uuid::from_u128(i)];
         let columns = [0.0, 1.0, 2.0, 0.0, 1.0, 2.0];
@@ -980,7 +1010,12 @@ mod tests {
     fn long_chain_stays_in_one_line_in_a_wide_flat_view() {
         let (nodes, edges) = chain(6);
 
-        let positions = optimize_layout(&nodes, &edges, Size2D::new(3000.0, 200.0));
+        let positions = optimize_layout(
+            &nodes,
+            &edges,
+            &PortMap::default(),
+            Size2D::new(3000.0, 200.0),
+        );
 
         let pos = |i| positions[&Uuid::from_u128(i)];
         for (i, column) in (1..=6).zip([0.0, 1.0, 2.0, 3.0, 4.0, 5.0]) {
@@ -995,7 +1030,12 @@ mod tests {
     fn small_graph_stays_in_one_line_when_every_layout_fits_at_the_largest_zoom() {
         let (nodes, edges) = chain(2);
 
-        let positions = optimize_layout(&nodes, &edges, Size2D::new(4000.0, 4000.0));
+        let positions = optimize_layout(
+            &nodes,
+            &edges,
+            &PortMap::default(),
+            Size2D::new(4000.0, 4000.0),
+        );
 
         let [first, second] = [1, 2].map(|i| positions[&Uuid::from_u128(i)]);
         assert!(second.x > first.x);
@@ -1009,7 +1049,8 @@ mod tests {
     fn analyzer_row_wraps_like_a_chain() {
         let nodes: HashMap<Uuid, NodeElement> = (1..=4).map(analyzer).collect();
 
-        let positions = optimize_layout(&nodes, &[], Size2D::new(700.0, 600.0));
+        let positions =
+            optimize_layout(&nodes, &[], &PortMap::default(), Size2D::new(700.0, 600.0));
 
         let pos = |i| positions[&Uuid::from_u128(i)];
         let pitch = NODE_WIDTH + LAYOUT_NODE_GAP;
@@ -1030,12 +1071,69 @@ mod tests {
         let [splitter, a, b] = [1, 2, 3].map(Uuid::from_u128);
         let edges = [connect(splitter, a), connect(splitter, b)];
 
-        let positions = optimize_layout(&nodes, &edges, Size2D::new(200.0, 1000.0));
+        let positions = optimize_layout(
+            &nodes,
+            &edges,
+            &PortMap::default(),
+            Size2D::new(200.0, 1000.0),
+        );
 
         assert!(positions[&a].x.abs() < 1e-9);
         assert!(positions[&b].x.abs() < 1e-9);
         assert!((positions[&a].y - positions[&b].y).abs() > 1.0);
         let placed = |id| placed_box(&nodes, &positions, id);
         assert!(placed(splitter).max_y() <= placed(a).min_y().min(placed(b).min_y()));
+    }
+
+    /// Optical node `id`, placed at (`x`, `y`).
+    fn optical_at(id: u128, x: f64, y: f64) -> (Uuid, NodeElement) {
+        let (uuid, mut node) = optical(id);
+        node.set_pos(Point2D::new(x, y));
+        (uuid, node)
+    }
+
+    #[test]
+    fn covered_box_spans_all_nodes() {
+        let nodes: HashMap<Uuid, NodeElement> =
+            [optical_at(1, 0.0, 0.0), optical_at(2, 300.0, 100.0)]
+                .into_iter()
+                .collect();
+        let height = nodes[&Uuid::from_u128(2)].total_height();
+
+        let covered = covered_box(&nodes, &PortMap::default());
+
+        assert!(covered.min_x().abs() < 1e-9);
+        assert!(covered.min_y().abs() < 1e-9);
+        assert!((covered.max_x() - (300.0 + NODE_WIDTH)).abs() < 1e-9);
+        assert!((covered.max_y() - (100.0 + height)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn covered_box_holds_the_tags_of_mapped_ports() {
+        use crate::components::scenery_editor::constants::PORT_MAP_OVERHANG;
+        let nodes: HashMap<Uuid, NodeElement> =
+            [optical_at(1, 0.0, 0.0), optical_at(2, 300.0, 0.0)]
+                .into_iter()
+                .collect();
+        let mut mapped_ports = PortMap::default();
+        mapped_ports
+            .add("input_1", Uuid::from_u128(1), "input_1")
+            .unwrap();
+        mapped_ports
+            .add("output_1", Uuid::from_u128(2), "output_1")
+            .unwrap();
+
+        let covered = covered_box(&nodes, &mapped_ports);
+
+        assert!((covered.min_x() + PORT_MAP_OVERHANG).abs() < 1e-9);
+        assert!((covered.max_x() - (300.0 + NODE_WIDTH + PORT_MAP_OVERHANG)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn covered_box_of_no_nodes_is_empty_at_the_origin() {
+        let covered = covered_box(&HashMap::new(), &PortMap::default());
+
+        assert!(covered.is_empty());
+        assert!(covered.origin.x.abs() < 1e-9 && covered.origin.y.abs() < 1e-9);
     }
 }
