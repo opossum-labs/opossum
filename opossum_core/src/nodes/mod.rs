@@ -63,7 +63,7 @@ pub use reflective_grating::ReflectiveGrating;
 pub use source_helper::{
     collimated_line_ray_builder, point_ray_builder, round_collimated_ray_builder,
 };
-pub use source_port::SourcePort;
+pub use source_port::{ALIGNMENT_WAVELENGTH, SourcePort};
 pub use spectrometer::{Spectrometer, SpectrometerType};
 pub use spot_diagram::{SpotDiagram, SpotDiagramData};
 pub use thin_mirror::ThinMirror;

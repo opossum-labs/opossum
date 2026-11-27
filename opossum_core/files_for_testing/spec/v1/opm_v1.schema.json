@@ -3683,7 +3683,7 @@
       ]
     },
     "RayDataBuilder": {
-      "description": "Builder struct for generating geometric [`Rays`].\n\nThis struct combines a specific [`RayDataSource`] (e.g., collimated, point source, or image)\nwith global physical properties that apply to the entire generated light field.\nThis includes its 3D position and orientation in the optical system ([`Isometry`]),\nas well as an optional alignment wavelength used by analyzers.",
+      "description": "Builder struct for generating geometric [`Rays`].\n\nThis struct combines a specific [`RayDataSource`] (e.g., collimated, point source, or image)\nwith global physical properties that apply to the entire generated light field.\nThis includes its 3D position and orientation in the optical system ([`Isometry`]).\n\nIt describes only the light an analysis sends in; where the setup stands follows from the\nsource ports themselves (see [`SourcePort`](crate::nodes::SourcePort)).",
       "type": "object",
       "properties": {
         "source": {
@@ -3693,16 +3693,6 @@
           "anyOf": [
             {
               "$ref": "#/definitions/Isometry"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "alignment_wavelength": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/SiScalarSchema"
             },
             {
               "type": "null"

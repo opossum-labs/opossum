@@ -4,7 +4,7 @@ use opossum_core::prelude::*;
 use opossum_core::{
     apertures::CircleShape, core_optics::NodeAttrExt, distributions::energy::UniformDist,
     distributions::position::Hexapolar, distributions::spectral::Gaussian,
-    geometry::body::OPTIC_SHAPE,
+    geometry::body::OPTIC_SHAPE, nodes::ALIGNMENT_WAVELENGTH,
 };
 use std::path::Path;
 
@@ -12,7 +12,9 @@ pub fn main() -> OpmResult<()> {
     let alignment_wvl = nanometer!(1054.);
     let nbk7 = RefrIndexSellmeier1::default(); // default is N-BK7
     let mut scenery = NodeGroup::default();
-    let i_src = scenery.add_node(SourcePort::new("collimated ray source"))?;
+    let mut source = SourcePort::new("collimated ray source");
+    source.set_property(ALIGNMENT_WAVELENGTH, alignment_wvl.into())?;
+    let i_src = scenery.add_node(source)?;
 
     // focal length = 996.7 mm (Thorlabs LA1779-B). The beam of 10 mm radius passes the lens 20 mm
     // off its center, so the lens is 3 inches in diameter.
@@ -78,8 +80,7 @@ pub fn main() -> OpmResult<()> {
         )?
         .into(),
     ));
-    let mut ray_data_builder: RayDataBuilder = ray_data_source.into();
-    ray_data_builder.set_alignment_wavelength(Some(alignment_wvl));
+    let ray_data_builder: RayDataBuilder = ray_data_source.into();
     config.map_source(i_src, ray_data_builder);
     doc.add_analyzer(AnalyzerType::RayTrace(config));
     doc.save_to_file(Path::new("./opossum_core/playground/folded_telescope.opm"))

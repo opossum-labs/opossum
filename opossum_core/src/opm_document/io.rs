@@ -260,15 +260,15 @@ mod tests {
             ghostfocus::GhostFocusAnalyzer, raytrace::RayTracingAnalyzer,
         },
         coatings::{CoatingType, SplittingConfigBuilder},
-        core_optics::{Alignable, OpticNode, PortType, node_attr::NodePositioning},
+        core_optics::{Alignable, NodeAttrExt, OpticNode, PortType, node_attr::NodePositioning},
         degree,
         gain::{ConstGain, GainModel},
         joule,
         material::{MATERIAL, Material},
         millimeter, nanometer,
         nodes::{
-            BeamSplitter, BoredMirror, CylindricLens, Dummy, EnergyMeter, FluenceDetector,
-            IdealFilter, Lens, NodeGroup, ParabolicMirror, ParaxialSurface,
+            ALIGNMENT_WAVELENGTH, BeamSplitter, BoredMirror, CylindricLens, Dummy, EnergyMeter,
+            FluenceDetector, IdealFilter, Lens, NodeGroup, ParabolicMirror, ParaxialSurface,
             RayPropagationVisualizer, ReflectiveGrating, SourcePort, Spectrometer, SpotDiagram,
             ThinMirror, WaveFront, Wedge, collimated_line_ray_builder,
             ideal_filter::{EdgeFilter, EdgeFilterType, SpectralFilterBuilder},
@@ -934,7 +934,10 @@ mod tests {
     #[test]
     fn all_nodes_integration_test() -> OpmResult<()> {
         let mut scenery = NodeGroup::default();
-        let i_0 = scenery.add_node(SourcePort::default())?;
+        // Aligned at the wavelength the grating is turned for and the light shines at.
+        let mut source = SourcePort::default();
+        source.set_property(ALIGNMENT_WAVELENGTH, nanometer!(1000.0).into())?;
+        let i_0 = scenery.add_node(source)?;
         let i_1 = scenery.add_node(BeamSplitter::default())?;
         let i_2 = scenery.add_node(CylindricLens::default())?;
         let i_3 = scenery.add_node(FluenceDetector::default())?;

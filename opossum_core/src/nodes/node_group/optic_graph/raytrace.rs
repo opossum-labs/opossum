@@ -8,8 +8,10 @@ use crate::{
     core_optics::{NodeAttrExt, OpticNodeExt, OpticRef, PortType, node_attr::NodePositioning},
     error::{OpmResult, OpossumError},
     joule,
-    light::{LightData, LightResult, Ray, Rays, lightdata::ray_data_builder::RayDataBuilder},
-    millimeter, radian,
+    light::{LightData, LightResult, Ray, Rays},
+    millimeter,
+    nodes::SourcePort,
+    radian,
     utils::geom_transformation::Isometry,
 };
 use log::{info, warn};
@@ -425,7 +427,7 @@ impl OpticGraph {
         else {
             return Ok(None);
         };
-        let wavelength = self.feeding_wavelength(idx, config)?;
+        let wavelength = self.feeding_wavelength(idx)?;
         let inverted = self.g[idx].inverted();
         let mut probe = self.passed_node_mut(idx)?.clone();
         if probe.create_geometry()?.is_none() {
@@ -457,22 +459,26 @@ impl OpticGraph {
             .transpose()
     }
 
-    /// Returns the wavelength of the optical axis the node at `idx` gets: the axis wavelength of
-    /// the source at the start of the connections leading to it, followed back through the first
-    /// connection into each node; the default axis wavelength if `config` defines no light there.
+    /// Returns the wavelength of the optical axis the node at `idx` gets: the alignment wavelength
+    /// of the source port at the start of the connections leading to it, followed back through
+    /// the first connection into each node; the default alignment wavelength if they start at
+    /// something else, as at an input of this group.
     ///
     /// # Errors
     ///
-    /// Returns an error if the wavelength of that light cannot be found.
-    fn feeding_wavelength(&self, idx: NodeIndex, config: &RayTraceConfig) -> OpmResult<Length> {
+    /// Returns an error if that wavelength cannot be read.
+    fn feeding_wavelength(&self, idx: NodeIndex) -> OpmResult<Length> {
         let mut start = idx;
         while let Some(edge) = self.g.edges_directed(start, Direction::Incoming).next() {
             start = edge.source();
         }
-        config.get_source(&self.g[start].uuid()).map_or_else(
-            || RayDataBuilder::default().axis_wavelength(),
-            RayDataBuilder::axis_wavelength,
-        )
+        self.g[start]
+            .as_any()
+            .downcast_ref::<SourcePort>()
+            .map_or_else(
+                SourcePort::default_alignment_wavelength,
+                SourcePort::alignment_wavelength,
+            )
     }
 
     /// Returns whether the node at `idx` is the same component as a node feeding it directly: a
@@ -834,12 +840,12 @@ mod test {
         error::{OpmResult, OpossumError},
         geometry::body::{OPTIC_SHAPE, default_optic_shape},
         joule,
-        light::{LightResult, lightdata::ray_data_builder::RayDataBuilder},
+        light::LightResult,
         material::Material,
         millimeter, nanometer,
         nodes::{
-            BeamSplitter, Dummy, IdealFilter, Lens, NodeGroup, NodeReference, ParaxialSurface,
-            ReflectiveGrating, SourcePort, SpotDiagram, ThinMirror,
+            ALIGNMENT_WAVELENGTH, BeamSplitter, Dummy, IdealFilter, Lens, NodeGroup, NodeReference,
+            ParaxialSurface, ReflectiveGrating, SourcePort, SpotDiagram, ThinMirror,
             ideal_filter::{FilterConst, FilterTypeBuilder},
             round_collimated_ray_builder,
         },
@@ -857,7 +863,7 @@ mod test {
     /// The focal length of the default N-BK7 lens in millimeter: a thick lens with
     /// R1 = -R2 = 500 mm and d = 10 mm, so 1/f = (n-1) (2/R - (n-1) d / (n R²)).
     fn default_lens_focal_length() -> OpmResult<f64> {
-        let wavelength = RayDataBuilder::default().axis_wavelength()?;
+        let wavelength = SourcePort::default_alignment_wavelength()?;
         let n = Material::n_bk7().refractive_index(wavelength)?;
         let (radius, thickness) = (500.0, 10.0);
         Ok(1.0 / ((n - 1.0) * (2.0 / radius - (n - 1.0) * thickness / (n * radius * radius))))
@@ -1636,12 +1642,13 @@ mod test {
                 millimeter!(200.0),
             )?))?;
             let screen = scenery.add_node(screen)?;
-            let source = scenery.add_node(automatic_source("chain")?)?;
+            let mut source = automatic_source("chain")?;
+            source.set_property(ALIGNMENT_WAVELENGTH, nanometer!(1053.0).into())?;
+            let source = scenery.add_node(source)?;
             let turning = scenery.add_node_ref(turning)?;
             scenery.connect_nodes(source, "output_1", turning, "input_1", millimeter!(100.0))?;
             scenery.connect_nodes(turning, "output_1", screen, "input_1", millimeter!(50.0))?;
-            let mut light = round_collimated_ray_builder(millimeter!(1.0), joule!(1.0), 1)?;
-            light.set_alignment_wavelength(Some(nanometer!(1053.0)));
+            let light = round_collimated_ray_builder(millimeter!(1.0), joule!(1.0), 1)?;
             let mut config = RayTraceConfig::default();
             config.map_source(source, light);
             let mut config = config.for_positioning();

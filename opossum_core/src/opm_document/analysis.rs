@@ -148,10 +148,11 @@ impl OpmDocument {
     /// rebuilds them first, as a ray trace does: a source then sends its axis from where it stands
     /// now.
     ///
-    /// Which source the axis starts from comes from an analyzer, because that is where source data
-    /// lives; see [`AnalyzerType::positioning_config`]. Unless one is named, it is the first
-    /// analyzer whose light is rays, or else the first of all. Without a source port, or without an
-    /// analyzer to define its light, there is nothing to start the axis from.
+    /// The axis leaves every source port at the port's own alignment wavelength, whatever light an
+    /// analyzer sends in; the ambient medium still comes from an analyzer (see
+    /// [`AnalyzerType::positioning_config`]). Unless one is named, it is the first analyzer whose
+    /// light is rays, or else the first of all. Without a source port there is nothing to start the
+    /// axis from, and without an analyzer no medium to send it through.
     ///
     /// # Arguments
     ///
@@ -289,8 +290,9 @@ mod tests {
     use super::*;
     use crate::{
         analyzers::{AnalyzerType, RayTraceConfig, energy::EnergyConfig},
-        core_optics::{OpticNode, node_attr::NodePositioning},
+        core_optics::{NodeAttrExt, OpticNode, node_attr::NodePositioning},
         degree,
+        distributions::{energy::UniformDist, position::Hexapolar, spectral::LaserLines},
         gain::{ConstGain, GainModel},
         joule,
         light::{
@@ -301,10 +303,15 @@ mod tests {
             },
         },
         millimeter, nanometer,
-        nodes::{Dummy, EnergyMeter, Lens, NodeGroup, NodeReference, SourcePort},
+        nodes::{
+            ALIGNMENT_WAVELENGTH, Dummy, EnergyMeter, Lens, NodeGroup, NodeReference,
+            ReflectiveGrating, SourcePort,
+        },
+        prelude::{CollimatedSrc, RayDataSource},
         utils::{geom_transformation::Isometry, test_helper::helper::metered_energy},
     };
     use approx::assert_relative_eq;
+    use uom::si::f64::Length;
     use uuid::Uuid;
 
     /// Helper to assemble a minimal document with one source, one meter, and an energy analyzer.
@@ -547,6 +554,90 @@ mod tests {
             .map(Ray::position_history_with_current)
             .ok_or_else(|| OpossumError::Other("no axis ray".into()))?;
         assert_relative_eq!(path[(0, 1)].value, 0.010, epsilon = 1e-12);
+        Ok(())
+    }
+
+    /// A source port aligned at `port_wavelength`, a grating turned for 1053 nm and a screen
+    /// behind it, with two ray trace analyzers whose light differs in wavelength and enters
+    /// shifted and tilted. Returns the document, the screen and the two analyzers.
+    fn a_grating_seen_by_two_analyzers(
+        port_wavelength: Length,
+    ) -> OpmResult<(OpmDocument, Uuid, Vec<Uuid>)> {
+        let mut scenery = NodeGroup::default();
+        let mut source = SourcePort::default();
+        source.set_property(ALIGNMENT_WAVELENGTH, port_wavelength.into())?;
+        let source = scenery.add_node(source)?;
+        let grating = scenery.add_node(
+            ReflectiveGrating::default()
+                .with_rot_from_littrow(nanometer!(1053.0), degree!(10.0))?,
+        )?;
+        let screen = scenery.add_node(Dummy::new("screen"))?;
+        scenery.connect_nodes(source, "output_1", grating, "input_1", millimeter!(100.0))?;
+        scenery.connect_nodes(grating, "output_1", screen, "input_1", millimeter!(100.0))?;
+        let mut document = OpmDocument::new(scenery);
+        let mut analyzers = Vec::new();
+        for (wavelength, shift) in [(nanometer!(1053.0), 0.0), (nanometer!(1000.0), 5.0)] {
+            let mut light = RayDataBuilder::from(RayDataSource::Collimated(CollimatedSrc::new(
+                Hexapolar::new(millimeter!(1.0), 1)?.into(),
+                UniformDist::new(joule!(1.0))?.into(),
+                LaserLines::new(vec![(wavelength, 1.0)])?.into(),
+            )));
+            light.set_isometry(Some(Isometry::new(
+                millimeter!(shift, 0.0, 0.0),
+                degree!(0.0, shift, 0.0),
+            )?));
+            let mut config = RayTraceConfig::default();
+            config.map_source(source, light);
+            analyzers.push(document.add_analyzer(AnalyzerType::RayTrace(config)));
+        }
+        Ok((document, screen, analyzers))
+    }
+
+    /// Where `node` stands, in meters, after a positioning run that follows `analyzer`.
+    fn placed_after(document: &OpmDocument, node: Uuid, analyzer: Uuid) -> OpmResult<[f64; 3]> {
+        let at = document
+            .run_positioning(Some(analyzer))?
+            .positioned_scenery()?
+            .with_node_attr(node, |attr| attr.effective_position().copied())?
+            .ok_or_else(|| OpossumError::Other("the node was not placed".into()))?
+            .translation();
+        Ok([at.x.value, at.y.value, at.z.value])
+    }
+
+    /// The distance between two points given in meters.
+    fn distance(a: [f64; 3], b: [f64; 3]) -> f64 {
+        a.iter()
+            .zip(b)
+            .map(|(a, b)| (a - b).powi(2))
+            .sum::<f64>()
+            .sqrt()
+    }
+
+    /// The system is fixed and the analyzers examine it: two analyzers whose light differs in
+    /// wavelength and in where it enters place the setup alike.
+    #[test]
+    fn two_analyzers_with_different_light_place_the_setup_alike() -> OpmResult<()> {
+        let (document, screen, analyzers) = a_grating_seen_by_two_analyzers(nanometer!(1053.0))?;
+        let first = placed_after(&document, screen, analyzers[0])?;
+        let second = placed_after(&document, screen, analyzers[1])?;
+        assert_relative_eq!(distance(first, second), 0.0, epsilon = 1e-12);
+        Ok(())
+    }
+
+    /// The alignment wavelength of the source port is what decides where a grating sends the
+    /// axis, and so where the setup behind it stands.
+    #[test]
+    fn the_alignment_wavelength_of_the_port_places_the_setup() -> OpmResult<()> {
+        let (at_1053, screen_1053, analyzers_1053) =
+            a_grating_seen_by_two_analyzers(nanometer!(1053.0))?;
+        let (at_1000, screen_1000, analyzers_1000) =
+            a_grating_seen_by_two_analyzers(nanometer!(1000.0))?;
+        let screen_at_1053 = placed_after(&at_1053, screen_1053, analyzers_1053[0])?;
+        let screen_at_1000 = placed_after(&at_1000, screen_1000, analyzers_1000[0])?;
+        assert!(
+            distance(screen_at_1053, screen_at_1000) > 1e-3,
+            "the screen stands at {screen_at_1053:?} either way"
+        );
         Ok(())
     }
 

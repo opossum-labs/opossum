@@ -4,7 +4,7 @@ use crate::{
         AnalyzerType, GhostFocusConfig, RayTraceConfig, energy::EnergyConfig,
         raytrace::AnalysisRayTrace,
     },
-    core_optics::{Alignable, node_attr::HasNodeAttr},
+    core_optics::{Alignable, NodeAttrExt, node_attr::HasNodeAttr},
     degree,
     gain::{ConstGain, GainModel},
     joule,
@@ -17,8 +17,8 @@ use crate::{
     },
     millimeter, nanometer,
     nodes::{
-        BeamSplitter, Dummy, Lens, NodeReference, ReflectiveGrating, SourcePort, ThinMirror,
-        round_collimated_ray_builder,
+        ALIGNMENT_WAVELENGTH, BeamSplitter, Dummy, Lens, NodeReference, ReflectiveGrating,
+        SourcePort, ThinMirror, round_collimated_ray_builder,
     },
     opm_document::optimization::{MetricOperand, OperandMode},
 };
@@ -333,28 +333,24 @@ fn a_model_without_a_source_port_is_not_placed() -> OpmResult<()> {
     Ok(())
 }
 
-/// Two analyses can place the same model differently, so a drawing follows the one named, or else
-/// the first. Named, a ghost focus analysis that defines no light for the source sends out no
-/// optical axis, so nothing after the source is placed; unnamed, the ray trace added before it
-/// places the model.
+/// The setup is placed by its source ports, not by the light an analysis sends in: a ghost focus
+/// analysis that defines no light for the source places the model just as the ray trace does.
 #[test]
-fn a_model_analyzed_several_ways_is_drawn_after_its_first_analysis_unless_one_is_named()
--> OpmResult<()> {
+fn an_analysis_without_light_for_the_source_places_the_model_all_the_same() -> OpmResult<()> {
     let (mut document, source, first, _) = lined_up_model()?;
     let mut config = RayTraceConfig::default();
     config.map_source(source, RayDataBuilder::default());
-    document.add_analyzer(AnalyzerType::RayTrace(config));
+    let ray_trace = document.add_analyzer(AnalyzerType::RayTrace(config));
     let ghost_focus = document.add_analyzer(AnalyzerType::GhostFocus(GhostFocusConfig::default()));
 
-    let run = document.run_positioning(None)?;
-    assert_relative_eq!(
-        placed_at(run.positioned_scenery()?, first)?,
-        0.1,
-        epsilon = 1e-12
-    );
-
-    let run = document.run_positioning(Some(ghost_focus))?;
-    assert_eq!(z_of(run.positioned_scenery()?, first)?, None);
+    for analyzer in [ray_trace, ghost_focus] {
+        let run = document.run_positioning(Some(analyzer))?;
+        assert_relative_eq!(
+            placed_at(run.positioned_scenery()?, first)?,
+            0.1,
+            epsilon = 1e-12
+        );
+    }
     Ok(())
 }
 
@@ -473,14 +469,16 @@ fn a_group_and_a_reference_are_placed_as_through_the_file_form() -> OpmResult<()
     Ok(())
 }
 
-/// A source port, an untilted default grating 50 mm along and, if asked for, a mirror 50 mm after
-/// that.
+/// A source port aligned at 1000 nm, an untilted default grating 50 mm along and, if asked for, a
+/// mirror 50 mm after that.
 ///
 /// Untilted, the grating's order -1 does not propagate at 1000 nm (|m·λ·g| = 1.74 > 1), so the
 /// optical axis ends at the grating.
 fn source_then_untilted_grating(mirror_after: bool) -> OpmResult<(NodeGroup, Uuid, Uuid)> {
     let mut scenery = NodeGroup::default();
-    let source = scenery.add_node(SourcePort::default())?;
+    let mut source = SourcePort::default();
+    source.set_property(ALIGNMENT_WAVELENGTH, nanometer!(1000.0).into())?;
+    let source = scenery.add_node(source)?;
     let grating = scenery.add_node(ReflectiveGrating::default())?;
     scenery.connect_nodes(source, "output_1", grating, "input_1", millimeter!(50.0))?;
     if mirror_after {
@@ -607,12 +605,12 @@ fn energy_config_at(source: Uuid, wavelength: Length) -> OpmResult<EnergyConfig>
     Ok(config)
 }
 
-/// An energy analysis places a model at the wavelength of its own light. The untilted grating
-/// that swallows the optical axis at 1000 nm lets it through at 500 nm (|m·λ·g| = 0.87), so the
-/// run gets past the grating to the mirror behind it.
+/// An energy analysis places a model like any other analysis: at the alignment wavelength of the
+/// source port, not at that of its own light. The untilted grating would let light of 500 nm
+/// through (|m·λ·g| = 0.87), but the port is aligned at 1000 nm, at which it swallows the axis.
 #[test]
-fn an_energy_analysis_places_the_model_at_the_wavelength_of_its_light() -> OpmResult<()> {
-    let (scenery, source, grating) = source_then_untilted_grating(true)?;
+fn an_energy_analysis_places_the_model_at_the_alignment_wavelength_of_the_port() -> OpmResult<()> {
+    let (scenery, source, _) = source_then_untilted_grating(true)?;
     let mut document = OpmDocument::new(scenery);
     document.add_analyzer(AnalyzerType::Energy(energy_config_at(
         source,
@@ -621,14 +619,16 @@ fn an_energy_analysis_places_the_model_at_the_wavelength_of_its_light() -> OpmRe
 
     let run = document.run_positioning(None)?;
 
-    assert!(is_placed(run.positioned_scenery()?, grating)?);
+    let Err(error) = run.positioned_scenery() else {
+        panic!("the axis at 1000 nm ends at the grating");
+    };
+    assert!(error.to_string().contains("evanescent"), "{error}");
     Ok(())
 }
 
 /// An energy analysis only knows a wavelength for each source, while one whose light is rays
 /// knows how that light runs. Unless the energy analysis is named, a drawing follows the one with
-/// rays, even when it comes second: here the ray trace at 1000 nm, at which the untilted grating
-/// swallows the axis.
+/// rays, even when it comes second.
 #[test]
 fn an_energy_analysis_is_passed_over_for_one_whose_light_is_rays() -> OpmResult<()> {
     let (scenery, source, _) = source_then_untilted_grating(true)?;
@@ -637,15 +637,13 @@ fn an_energy_analysis_is_passed_over_for_one_whose_light_is_rays() -> OpmResult<
         source,
         nanometer!(500.0),
     )?));
-    document.add_analyzer(AnalyzerType::RayTrace(single_ray_config(source)?));
+    let ray_trace = document.add_analyzer(AnalyzerType::RayTrace(single_ray_config(source)?));
 
-    let run = document.run_positioning(None)?;
-    let Err(error) = run.positioned_scenery() else {
-        panic!("the ray trace's axis ends at the grating");
+    let followed = |named| -> OpmResult<Option<Uuid>> {
+        Ok(document.drawing_analyzer(named)?.map(|(id, _)| id))
     };
-    assert!(error.to_string().contains("evanescent"), "{error}");
-    let run = document.run_positioning(Some(energy))?;
-    assert!(run.positioned_scenery().is_ok());
+    assert_eq!(followed(None)?, Some(ray_trace));
+    assert_eq!(followed(Some(energy))?, Some(energy));
     Ok(())
 }
 

@@ -2,7 +2,11 @@ use nalgebra::Vector3;
 use opossum_core::distributions::{energy::UniformDist, position::Hexapolar, spectral::Gaussian};
 use opossum_core::light::lightdata::ray_data_builder::RayDataBuilder;
 use opossum_core::prelude::*;
-use opossum_core::{apertures::CircleShape, core_optics::NodeAttrExt, geometry::body::OPTIC_SHAPE};
+use opossum_core::{
+    apertures::CircleShape, core_optics::NodeAttrExt, geometry::body::OPTIC_SHAPE,
+    nodes::ALIGNMENT_WAVELENGTH,
+};
+use uom::si::f64::Length;
 
 mod folded_martinez;
 use folded_martinez::folded_martinez;
@@ -40,8 +44,7 @@ fn main() -> OpmResult<()> {
         )?
         .into(),
     ));
-    let mut ray_data_builder: RayDataBuilder = ray_data_source.into();
-    ray_data_builder.set_alignment_wavelength(Some(alignment_wvl));
+    let ray_data_builder: RayDataBuilder = ray_data_source.into();
 
     let mut ray_tracing_config = RayTraceConfig::default();
 
@@ -50,7 +53,7 @@ fn main() -> OpmResult<()> {
     ////////////////////////////////////
     let mut scenery = NodeGroup::new("treacy compressor");
 
-    let i_src = scenery.add_node(SourcePort::default())?;
+    let i_src = scenery.add_node(source_aligned_at(alignment_wvl)?)?;
     let compressor_node = scenery.add_node(treacy_compressor(alignment_wvl)?)?;
 
     let detectors = scenery.add_node(detector_group()?)?;
@@ -83,7 +86,7 @@ fn main() -> OpmResult<()> {
     let telescope_distance = millimeter!(1015.515 * 0.995);
     let mut scenery = NodeGroup::new("non-ideal folded Martinez stretcher");
 
-    let i_src = scenery.add_node(SourcePort::default())?;
+    let i_src = scenery.add_node(source_aligned_at(alignment_wvl)?)?;
     let stretcher_node =
         scenery.add_node(folded_martinez(telescope_distance, &nbk7, alignment_wvl)?)?;
     let detectors = scenery.add_node(detector_group()?)?;
@@ -118,7 +121,7 @@ fn main() -> OpmResult<()> {
     let telescope_distance = millimeter!(1017.14885);
     let mut scenery = NodeGroup::new("ideal folded Martinez stretcher");
 
-    let i_src = scenery.add_node(SourcePort::default())?;
+    let i_src = scenery.add_node(source_aligned_at(alignment_wvl)?)?;
     let stretcher_node =
         scenery.add_node(folded_martinez(telescope_distance, &nbk7, alignment_wvl)?)?;
     let detectors = scenery.add_node(detector_group()?)?;
@@ -153,7 +156,7 @@ fn main() -> OpmResult<()> {
     let telescope_distance = millimeter!(1015.515);
     let mut scenery = NodeGroup::new("ideal folded Martinez stretcher circle of least conf");
 
-    let i_src = scenery.add_node(SourcePort::default())?;
+    let i_src = scenery.add_node(source_aligned_at(alignment_wvl)?)?;
     let stretcher_node =
         scenery.add_node(folded_martinez(telescope_distance, &nbk7, alignment_wvl)?)?;
     let detectors = scenery.add_node(detector_group()?)?;
@@ -188,7 +191,7 @@ fn main() -> OpmResult<()> {
     let telescope_distance = millimeter!(2467.1);
     let mut scenery = NodeGroup::new("ideal folded Martinez stretcher longer f");
 
-    let i_src = scenery.add_node(SourcePort::default())?;
+    let i_src = scenery.add_node(source_aligned_at(alignment_wvl)?)?;
     let stretcher_node = scenery.add_node(folded_martinez_longer_f(
         telescope_distance,
         &nbk7,
@@ -226,7 +229,7 @@ fn main() -> OpmResult<()> {
     let telescope_distance = millimeter!(1017.14885);
     let mut scenery = NodeGroup::new("achromatic ideal folded Martinez stretcher");
 
-    let i_src = scenery.add_node(SourcePort::default())?;
+    let i_src = scenery.add_node(source_aligned_at(alignment_wvl)?)?;
     let stretcher_node = scenery.add_node(folded_martinez(
         telescope_distance,
         RefrIndexConst::new(nbk7.get_refractive_index(nanometer!(1054.))?)?,
@@ -264,7 +267,7 @@ fn main() -> OpmResult<()> {
     let telescope_distance = millimeter!(1017.14885);
     let mut scenery = NodeGroup::new("paraxial folded Martinez stretcher");
 
-    let i_src = scenery.add_node(SourcePort::default())?;
+    let i_src = scenery.add_node(source_aligned_at(alignment_wvl)?)?;
     let stretcher_node = scenery.add_node(folded_martinez_paraxial_lens(
         telescope_distance,
         alignment_wvl,
@@ -319,10 +322,9 @@ fn main() -> OpmResult<()> {
         )?
         .into(),
     ));
-    let mut ray_data_builder: RayDataBuilder = ray_data_source.into();
-    ray_data_builder.set_alignment_wavelength(Some(alignment_wvl));
+    let ray_data_builder: RayDataBuilder = ray_data_source.into();
 
-    let i_src = scenery.add_node(SourcePort::default())?;
+    let i_src = scenery.add_node(source_aligned_at(alignment_wvl)?)?;
     // Both lenses take the beam of 50 mm radius: they are 4 inches in diameter.
     let a_4inch: OpticShape = CircleShape::new(millimeter!(50.8))?.into();
     // focal length = 996.7 mm (Thorlabs LA1779-B)
@@ -385,4 +387,11 @@ fn main() -> OpmResult<()> {
     ray_tracing_config.map_source(i_src, ray_data_builder);
     doc.add_analyzer(AnalyzerType::RayTrace(ray_tracing_config));
     doc.save_to_file(Path::new("./opossum_core/playground/telescope.opm"))
+}
+
+/// A source port that places the setup at `alignment_wvl`.
+fn source_aligned_at(alignment_wvl: Length) -> OpmResult<SourcePort> {
+    let mut source = SourcePort::default();
+    source.set_property(ALIGNMENT_WAVELENGTH, alignment_wvl.into())?;
+    Ok(source)
 }

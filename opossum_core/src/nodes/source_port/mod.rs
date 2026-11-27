@@ -3,18 +3,23 @@ use std::{fmt::Display, sync::Arc};
 use crate::{
     analyzers::propagation_strategy::PropagationStrategy,
     core_optics::{NodeAttr, OpticNodeExt, SurfacePorts, node_attr::NodePositioning},
-    error::OpmResult,
+    error::{OpmResult, OpossumError},
     geometry::{Geometry, SurfaceGeometry},
     light::{RayMesh, Rays, lightdata::ray_data_builder::RayDataBuilder},
     nodes::NodeRegistration,
-    prelude::{Isometry, OpticNode},
+    prelude::{Isometry, OpticNode, RayDataSource},
+    properties::{Proptype, validator::Validator},
 };
 use log::warn;
 use opm_macros_lib::OpmNode;
+use uom::si::f64::Length;
 
 mod analysis_energy;
 mod analysis_ghostfocus;
 mod analysis_raytrace;
+
+/// The name of the [`SourcePort`] property holding the wavelength its optical axis is placed at.
+pub const ALIGNMENT_WAVELENGTH: &str = "alignment wavelength";
 
 #[derive(OpmNode, Clone)]
 #[opm_node("slateblue")]
@@ -25,6 +30,10 @@ mod analysis_raytrace;
 /// During analysis it looks up its data in a source map given by the current analyzer. This allows for a decoupling of the actual light data
 /// from its position and orientation in the scene. This way the same source port can be used for different light sources in different analyses,
 /// e.g. for ray tracing and energy analysis.
+///
+/// Where the setup stands does not depend on the analysis, though: the optical axis a source port
+/// places the setup with leaves it at its own [`ALIGNMENT_WAVELENGTH`], whatever light an analysis
+/// sends in through it.
 pub struct SourcePort {
     node_attr: NodeAttr,
 }
@@ -35,7 +44,17 @@ inventory::submit! {
 
 impl Default for SourcePort {
     fn default() -> Self {
-        let node_attr = NodeAttr::new("source port");
+        let mut node_attr = NodeAttr::new("source port");
+        node_attr
+            .create_property_with_validator(
+                ALIGNMENT_WAVELENGTH,
+                "wavelength of the optical axis this source places the setup with",
+                Validator::AndValidator {
+                    validators: vec![Validator::NumericIsFinite, Validator::NumericIsPositive],
+                },
+                Self::default_alignment_wavelength().unwrap().into(),
+            )
+            .unwrap();
 
         let mut src = Self { node_attr };
         src.create_default_surface_properties().unwrap();
@@ -53,6 +72,32 @@ impl SourcePort {
         let mut node = Self::default();
         node.node_attr.set_name(name);
         node
+    }
+
+    /// Returns the wavelength a new source port places the setup with: the central wavelength of
+    /// the default light source.
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the central wavelength of the default source cannot be
+    /// determined.
+    pub fn default_alignment_wavelength() -> OpmResult<Length> {
+        RayDataSource::default().central_wavelength()
+    }
+
+    /// Returns the wavelength the optical axis of this source port is placed at, its
+    /// [`ALIGNMENT_WAVELENGTH`].
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the property is missing or holds no length.
+    pub fn alignment_wavelength(&self) -> OpmResult<Length> {
+        match self.node_attr.get_property(ALIGNMENT_WAVELENGTH)? {
+            Proptype::Length(wavelength) => Ok(*wavelength),
+            _ => Err(OpossumError::Properties(format!(
+                "the {ALIGNMENT_WAVELENGTH} of {self} is not a length"
+            ))),
+        }
     }
 
     /// Returns the light an analysis defines for this source, warning if it defines none: the

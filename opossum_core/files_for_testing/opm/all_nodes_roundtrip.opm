@@ -16,6 +16,7 @@
                     name: "source port",
                     uuid: "c40b427c-392a-4109-9c33-f38bb1f037d3",
                     props: {
+                        "alignment wavelength": Length(1.054e-6),
                         "surface": SurfaceConfig(
                             coating: IdealAR,
                         ),

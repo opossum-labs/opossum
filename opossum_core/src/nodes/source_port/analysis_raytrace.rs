@@ -1,4 +1,4 @@
-use log::{info, warn};
+use log::warn;
 
 use crate::{
     analyzers::{propagation_strategy::PropagationStrategy, raytrace::AnalysisRayTrace},
@@ -38,27 +38,21 @@ impl AnalysisRayTrace for SourcePort {
         )]))
     }
 
+    /// Sends out the optical axis: one ray from the center of the output face, along its normal,
+    /// at the [`alignment wavelength`](SourcePort::alignment_wavelength) of this source port.
+    ///
+    /// The light an analysis defines for the source plays no part: the setup stands where it
+    /// stands, whatever is sent through it.
     fn calc_node_positions(
         &mut self,
         _incoming_data: LightResult,
         config: &RayTraceConfig,
     ) -> OpmResult<LightResult> {
-        // Retrieve the source builder to read the alignment wavelength
-        let Some(ray_data_builder) =
-            self.light_or_warn(config.get_source(&self.node_attr().uuid()))
-        else {
-            return Ok(LightResult::default());
-        };
-        // The axis is a single ray: the source's rays are only built when no alignment wavelength
-        // is given and their central wavelength has to stand in for it.
-        let mut axis_ray = if let Some(alignment_wvl) = ray_data_builder.alignment_wavelength() {
-            Ray::new_collimated(millimeter!(0.0, 0.0, 0.0), alignment_wvl, joule!(1.0))?
-        } else {
-            info!(
-                "No alignment wavelength defined, using energy-weighted central wavelength for alignment"
-            );
-            ray_data_builder.build()?.get_optical_axis_ray()?
-        };
+        let mut axis_ray = Ray::new_collimated(
+            millimeter!(0.0, 0.0, 0.0),
+            self.alignment_wavelength()?,
+            joule!(1.0),
+        )?;
 
         // Explicitly assign the ambient refractive index for the axis ray at its specific wavelength
         let ambient_n = config
@@ -82,12 +76,14 @@ mod test {
     use super::*;
     use crate::{
         core_optics::{OpticNode, node_attr::NodePositioning},
+        degree,
         distributions::{energy::UniformDist, position::Hexapolar, spectral::LaserLines},
         error::OpossumError,
         light::lightdata::ray_data_builder::RayDataBuilder,
         nanometer,
+        nodes::ALIGNMENT_WAVELENGTH,
         prelude::{CollimatedSrc, ImageSrc, RayDataSource},
-        utils::test_helper::helper::assert_warned,
+        utils::{geom_transformation::Isometry, test_helper::helper::assert_warned},
     };
     use approx::assert_relative_eq;
     use uom::si::{f64::Length, length::nanometer};
@@ -123,59 +119,73 @@ mod test {
             .ok_or_else(|| OpossumError::Other("no axis ray".into()))
     }
 
-    /// The axis leaves a source at its alignment wavelength, whatever its rays shine at.
+    /// The axis leaves a source port at its own alignment wavelength, whatever the light the
+    /// analysis sends in through it shines at.
     #[test]
-    fn the_axis_leaves_at_the_alignment_wavelength() -> OpmResult<()> {
+    fn the_axis_leaves_at_the_alignment_wavelength_of_the_port() -> OpmResult<()> {
         let mut node = SourcePort::default();
-        let mut builder = collimated_at(nanometer!(1000.0))?;
-        builder.set_alignment_wavelength(Some(nanometer!(500.0)));
-        let config = feeding(&node, builder);
-        let axis = axis_ray_of(&mut node, &config)?;
-        assert_relative_eq!(axis.wavelength().get::<nanometer>(), 500.0, epsilon = 1e-9);
-        Ok(())
-    }
-
-    /// Without an alignment wavelength the axis takes the central wavelength of the source's rays.
-    #[test]
-    fn without_an_alignment_wavelength_the_axis_takes_that_of_the_rays() -> OpmResult<()> {
-        let mut node = SourcePort::default();
+        node.set_property(ALIGNMENT_WAVELENGTH, nanometer!(500.0).into())?;
         let config = feeding(&node, collimated_at(nanometer!(1000.0))?);
         let axis = axis_ray_of(&mut node, &config)?;
-        assert_relative_eq!(axis.wavelength().get::<nanometer>(), 1000.0, epsilon = 1e-9);
+        assert_relative_eq!(axis.wavelength().get::<nanometer>(), 500.0, epsilon = 1e-9);
         Ok(())
     }
 
-    /// The axis carries the ambient medium's refractive index, with an alignment wavelength or
-    /// without.
+    /// A new source port places the setup at the central wavelength of the default source.
     #[test]
-    fn the_axis_carries_the_ambient_refractive_index() -> OpmResult<()> {
-        for alignment in [Some(nanometer!(500.0)), None] {
-            let mut node = SourcePort::default();
-            let mut builder = collimated_at(nanometer!(1000.0))?;
-            builder.set_alignment_wavelength(alignment);
-            let mut config = feeding(&node, builder);
-            config.set_ambient_material(crate::material::Material::new_draft(
-                "ambient",
-                None,
-                None,
-                crate::refractive_index::RefrIndexConst::new(1.45)?.into(),
-            ));
-            let axis = axis_ray_of(&mut node, &config)?;
-            assert_relative_eq!(axis.refractive_index(), 1.45, epsilon = 1e-12);
-        }
-        Ok(())
-    }
-
-    /// The axis is one ray, so with an alignment wavelength the source's own rays are never built:
-    /// an image source whose file is missing still sends out its axis.
-    #[test]
-    fn an_alignment_wavelength_spares_building_the_rays() -> OpmResult<()> {
+    fn a_new_port_is_aligned_at_the_default_wavelength() -> OpmResult<()> {
         let mut node = SourcePort::default();
-        let mut builder = RayDataBuilder::from(RayDataSource::Image(ImageSrc::default()));
-        builder.set_alignment_wavelength(Some(nanometer!(500.0)));
+        let axis = axis_ray_of(&mut node, &RayTraceConfig::default())?;
+        assert_relative_eq!(
+            axis.wavelength().get::<nanometer>(),
+            SourcePort::default_alignment_wavelength()?.get::<nanometer>(),
+            epsilon = 1e-9
+        );
+        Ok(())
+    }
+
+    /// Light the analysis places off the port - shifted and tilted - does not move the axis: it
+    /// still leaves the center of the output face along its normal.
+    #[test]
+    fn the_light_of_the_analysis_does_not_move_the_axis() -> OpmResult<()> {
+        let mut node = SourcePort::default();
+        let mut builder = collimated_at(nanometer!(1000.0))?;
+        builder.set_isometry(Some(Isometry::new(
+            millimeter!(5.0, 0.0, 0.0),
+            degree!(0.0, 10.0, 0.0),
+        )?));
         let config = feeding(&node, builder);
         let axis = axis_ray_of(&mut node, &config)?;
-        assert_relative_eq!(axis.wavelength().get::<nanometer>(), 500.0, epsilon = 1e-9);
+        assert_relative_eq!(axis.position().x.value, 0.0, epsilon = 1e-12);
+        assert_relative_eq!(axis.direction().x, 0.0, epsilon = 1e-12);
+        assert_relative_eq!(axis.direction().y, 0.0, epsilon = 1e-12);
+        Ok(())
+    }
+
+    /// The axis carries the ambient medium's refractive index.
+    #[test]
+    fn the_axis_carries_the_ambient_refractive_index() -> OpmResult<()> {
+        let mut node = SourcePort::default();
+        let mut config = RayTraceConfig::default();
+        config.set_ambient_material(crate::material::Material::new_draft(
+            "ambient",
+            None,
+            None,
+            crate::refractive_index::RefrIndexConst::new(1.45)?.into(),
+        ));
+        let axis = axis_ray_of(&mut node, &config)?;
+        assert_relative_eq!(axis.refractive_index(), 1.45, epsilon = 1e-12);
+        Ok(())
+    }
+
+    /// The axis is one ray, so the source's own rays are never built for it: an image source
+    /// whose file is missing still sends out its axis.
+    #[test]
+    fn the_axis_never_builds_the_rays_of_the_source() -> OpmResult<()> {
+        let mut node = SourcePort::default();
+        let builder = RayDataBuilder::from(RayDataSource::Image(ImageSrc::default()));
+        let config = feeding(&node, builder);
+        axis_ray_of(&mut node, &config)?;
         Ok(())
     }
 
@@ -193,18 +203,13 @@ mod test {
         Ok(())
     }
 
-    /// A source the analysis defines no light for sends out none, neither rays nor an optical
-    /// axis, and says so.
+    /// A source the analysis defines no light for sends out no rays, and says so.
     #[test]
     fn analyze_raytrace_no_source_definition() -> OpmResult<()> {
         let mut node = SourcePort::default();
         let config = RayTraceConfig::default();
         testing_logger::setup();
         assert!(AnalysisRayTrace::analyze(&mut node, LightResult::default(), &config)?.is_empty());
-        assert!(
-            AnalysisRayTrace::calc_node_positions(&mut node, LightResult::default(), &config)?
-                .is_empty()
-        );
         assert_warned("has no light in this analysis");
         Ok(())
     }
