@@ -6,7 +6,8 @@ pub const MIN_ZOOM: f64 = 0.4;
 pub const VIEW_PADDING_FACTOR: f64 = 0.95;
 
 // constants for EDGE drawing
-pub const EDGE_BEZIER_OFFSET: f64 = 50.0;
+/// Length of the straight piece with which a connection leaves and enters a port.
+pub const EDGE_PORT_STUB: f64 = 15.0;
 pub const EDGE_DISTANCE_FIELD_WIDTH: f64 = 80.0;
 pub const EDGE_DISTANCE_FIELD_HEIGHT: f64 = 30.0;
 
