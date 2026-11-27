@@ -516,7 +516,7 @@ pub fn optimize_layout(
             best = Some((zoom, positions));
         }
     }
-    best.map(|(_, positions)| positions).unwrap_or_default()
+    best.map_or_default(|(_, positions)| positions)
 }
 
 /// Places the nodes in blocks, before any line is broken: the analyzers in one row, the unconnected
@@ -1061,7 +1061,7 @@ mod tests {
         let pos = |i| positions[&Uuid::from_u128(i)];
         let columns = [0.0, 1.0, 2.0, 0.0, 1.0, 2.0];
         for (i, column) in (1..=6).zip(columns) {
-            assert!((pos(i).x - column * SUGIYAMA_VERTEX_SPACING).abs() < 1e-9);
+            assert!(f64::mul_add(column, -SUGIYAMA_VERTEX_SPACING, pos(i).x).abs() < 1e-9);
         }
         for (i, first_of_line) in [(2, 1), (3, 1), (5, 4), (6, 4)] {
             assert!((pos(i).y - pos(first_of_line).y).abs() < 1e-9);
@@ -1085,7 +1085,7 @@ mod tests {
 
         let pos = |i| positions[&Uuid::from_u128(i)];
         for (i, column) in (1..=6).zip([0.0, 1.0, 2.0, 3.0, 4.0, 5.0]) {
-            assert!((pos(i).x - column * SUGIYAMA_VERTEX_SPACING).abs() < 1e-9);
+            assert!(f64::mul_add(column, -SUGIYAMA_VERTEX_SPACING, pos(i).x).abs() < 1e-9);
             assert!((pos(i).y - pos(1).y).abs() < 1e-9);
         }
     }
@@ -1121,7 +1121,7 @@ mod tests {
         let pos = |i| positions[&Uuid::from_u128(i)];
         let pitch = NODE_WIDTH + LAYOUT_NODE_GAP;
         for (i, column) in (1..=4).zip([0.0, 1.0, 0.0, 1.0]) {
-            assert!((pos(i).x - column * pitch).abs() < 1e-9);
+            assert!(f64::mul_add(column, -pitch, pos(i).x).abs() < 1e-9);
         }
         assert!((pos(2).y - pos(1).y).abs() < 1e-9);
         assert!((pos(4).y - pos(3).y).abs() < 1e-9);

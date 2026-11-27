@@ -35,7 +35,7 @@ pub struct EdgeCreation {
 
 impl EdgeCreation {
     #[must_use]
-    pub fn new(
+    pub const fn new(
         src_node: Uuid,
         src_port: String,
         src_port_type: PortType,
