@@ -834,7 +834,8 @@ mod test {
         error::{OpmResult, OpossumError},
         geometry::body::{OPTIC_SHAPE, default_optic_shape},
         joule,
-        light::LightResult,
+        light::{LightResult, lightdata::ray_data_builder::RayDataBuilder},
+        material::Material,
         millimeter, nanometer,
         nodes::{
             BeamSplitter, Dummy, IdealFilter, Lens, NodeGroup, NodeReference, ParaxialSurface,
@@ -853,11 +854,13 @@ mod test {
 
     /// How far the lens behind which the screen is placed is shifted off the axis, in millimeter.
     const DECENTRE: f64 = 20.0;
-    /// The focal length of the default lens in millimeter: a thick lens with R1 = -R2 = 500 mm,
-    /// d = 10 mm and n = 1.5, so 1/f = (n-1) (2/R - (n-1) d / (n R²)).
-    fn default_lens_focal_length() -> f64 {
-        let (n, radius, thickness) = (1.5, 500.0, 10.0);
-        1.0 / ((n - 1.0) * (2.0 / radius - (n - 1.0) * thickness / (n * radius * radius)))
+    /// The focal length of the default N-BK7 lens in millimeter: a thick lens with
+    /// R1 = -R2 = 500 mm and d = 10 mm, so 1/f = (n-1) (2/R - (n-1) d / (n R²)).
+    fn default_lens_focal_length() -> OpmResult<f64> {
+        let wavelength = RayDataBuilder::default().axis_wavelength()?;
+        let n = Material::n_bk7().refractive_index(wavelength)?;
+        let (radius, thickness) = (500.0, 10.0);
+        Ok(1.0 / ((n - 1.0) * (2.0 / radius - (n - 1.0) * thickness / (n * radius * radius))))
     }
     /// A default lens shifted [`DECENTRE`] up, so the optical axis crosses it that far below its
     /// own axis, with the given optic shape.
@@ -918,13 +921,14 @@ mod test {
     }
     /// Assert that the screen was placed along the optical axis as the decentred lens bends it:
     /// towards the lens's own axis, by h / f.
-    fn assert_bent_by_the_decentred_lens(screen: &Isometry) {
+    fn assert_bent_by_the_decentred_lens(screen: &Isometry) -> OpmResult<()> {
         let direction = screen.transform_vector_f64(&Vector3::z());
         assert_relative_eq!(
             direction.y / direction.z,
-            DECENTRE / default_lens_focal_length(),
+            DECENTRE / default_lens_focal_length()?,
             max_relative = 0.01
         );
+        Ok(())
     }
     /// The optical axis has to pass every component it is connected through: running outside one,
     /// it would be bent where there is no glass. Positioning stops there and names the component.
@@ -940,7 +944,7 @@ mod test {
         let mut scenery = NodeGroup::default();
         let large = CircleShape::new(millimeter!(50.0))?.into();
         let lens = scenery.add_node(decentred_lens(large)?)?;
-        assert_bent_by_the_decentred_lens(&place_screen_behind(scenery, &[lens])?);
+        assert_bent_by_the_decentred_lens(&place_screen_behind(scenery, &[lens])?)?;
         Ok(())
     }
     /// With nothing after it, a component the optical axis misses leaves nothing unplaced: the run
@@ -965,7 +969,7 @@ mod test {
         let filter = scenery.add_node(blocking)?;
         let large = CircleShape::new(millimeter!(50.0))?.into();
         let lens = scenery.add_node(decentred_lens(large)?)?;
-        assert_bent_by_the_decentred_lens(&place_screen_behind(scenery, &[filter, lens])?);
+        assert_bent_by_the_decentred_lens(&place_screen_behind(scenery, &[filter, lens])?)?;
         Ok(())
     }
     /// A detector does not bend the axis, so the axis running outside its optic shape does not
