@@ -34,7 +34,7 @@ use opossum_scene::{
     manifest_of, scene_glb, source_wavelength_range,
 };
 use serde::Deserialize;
-use std::{path::PathBuf, str::FromStr};
+use std::{path::PathBuf, str::FromStr, sync::Arc};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use utoipa::IntoParams;
@@ -118,8 +118,9 @@ fn drawn_rays(max_rays: Option<usize>, full_spectrum: Option<bool>) -> (usize, S
 ///
 /// # Arguments
 ///
-/// - `light`: the positioning run of the model with the sources whose light to draw, or `None`
-///   if the model has no light of its own
+/// - `light`: the positioning run of the model (see
+///   [`LastPositioning`](crate::positioning::LastPositioning)) with the sources whose light to
+///   draw, or `None` if the model has no light of its own
 /// - `max_rays`, `full_spectrum`: what the view asks for, see [`drawn_rays`]
 ///
 /// # Returns
@@ -128,18 +129,19 @@ fn drawn_rays(max_rays: Option<usize>, full_spectrum: Option<bool>) -> (usize, S
 ///
 /// # Errors
 ///
-/// This function returns an error if the positioning run stopped part way or the light cannot be
-/// drawn.
+/// This function returns an error if the model could not be positioned, the positioning run
+/// stopped part way or the light cannot be drawn.
 async fn traced_light(
-    light: Option<(PositioningRun, RayTraceConfig)>,
+    light: Option<(Arc<OpmResult<PositioningRun>>, RayTraceConfig)>,
     max_rays: Option<usize>,
     full_spectrum: Option<bool>,
 ) -> OpmResult<Vec<u8>> {
     let (max_rays, drawing) = drawn_rays(max_rays, full_spectrum);
     web::block(move || {
-        let light = light
-            .as_ref()
-            .map(|(run, sources)| OpmResult::Ok((run.positioned_scenery()?, sources)));
+        let light = light.as_ref().map(|(run, sources)| {
+            let run = (**run).as_ref().map_err(Clone::clone)?;
+            OpmResult::Ok((run.positioned_scenery()?, sources))
+        });
         light_glb(light.transpose()?, max_rays, drawing)
     })
     .await
@@ -336,7 +338,11 @@ async fn get_document(data: web::Data<AppState>) -> Result<impl Responder, BackE
 async fn get_scene(data: web::Data<AppState>) -> Result<impl Responder, BackEndErrorResponse> {
     // Only the copy needs the live model. Meshing it is by far the longer half of the work, and
     // holding the document across that would block every other edit for as long as it takes.
-    let run = data.document.lock().run_positioning()?;
+    let run = {
+        let document = data.document.lock();
+        data.last_positioning.lock().run_for(&document)
+    };
+    let run = (*run).as_ref().map_err(Clone::clone)?;
     let glb = scene_glb(run.positioned_scenery()?)?;
     Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
 }
@@ -394,8 +400,8 @@ async fn get_scene_manifest(
                 name: info.display_name(),
             });
         let sources = drawn_light_sources(&document, asked)?;
-        let run = document.run_positioning();
-        let placing = run.as_ref().map_or_else(
+        let run = data.last_positioning.lock().run_for(&document);
+        let placing = (*run).as_ref().map_or_else(
             |_| Vec::new(),
             |run| connect_infos(document.scenery(), &run.connections_placing_by_distance()),
         );
@@ -486,7 +492,11 @@ async fn get_scene_axis(
     let glb = if let Some(glb) = built {
         glb
     } else {
-        axis_glb(&data.document.lock().run_positioning()?)?
+        let run = {
+            let document = data.document.lock();
+            data.last_positioning.lock().run_for(&document)
+        };
+        axis_glb((*run).as_ref().map_err(Clone::clone)?)?
     };
     Ok(HttpResponse::Ok().content_type(GLB_MEDIA_TYPE).body(glb))
 }
@@ -538,8 +548,7 @@ async fn get_scene_rays(
             let analyzer = analyzer_still_there(&document, query.analyzer);
             // A model without light of its own is not positioned for it.
             let light = drawn_light_sources(&document, analyzer)?
-                .map(|sources| OpmResult::Ok((document.run_positioning()?, sources)))
-                .transpose()?;
+                .map(|sources| (data.last_positioning.lock().run_for(&document), sources));
             drop(document);
             light
         };

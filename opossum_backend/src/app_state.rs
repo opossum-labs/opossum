@@ -5,15 +5,17 @@ use std::{
 
 use actix_web::dev::ServerHandle;
 use opossum_core::{
-    core_optics::OpticRef,
-    opm_document::{OpmDocument, optimization::OptimizationProgressEvent},
+    core_optics::OpticRef, opm_document::optimization::OptimizationProgressEvent,
     types::api_types::AnalyzerItemDto,
 };
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 
-use crate::{drawn_light::DrawnLight, undo::Command};
+use crate::{
+    drawn_light::DrawnLight, live_document::LiveDocument, positioning::LastPositioning,
+    undo::Command,
+};
 
 /// Maximum number of entries kept per undo/redo stack. Entries are small (single-field diffs, or at
 /// most a handful of captured nodes for a delete/paste), so this is a generous ceiling, not a tight
@@ -53,7 +55,8 @@ impl OptimizationManager {
 
 #[derive(Default)]
 pub struct AppState {
-    pub document: parking_lot::Mutex<OpmDocument>,
+    /// The live document, see [`LiveDocument`].
+    pub document: LiveDocument,
     pub server_handle: Mutex<Option<ServerHandle>>,
     pub node_copy_cache: Mutex<Vec<NodeCacheItem>>,
     pub undo_stack: Mutex<VecDeque<Command>>,
@@ -61,6 +64,9 @@ pub struct AppState {
     pub optimization: OptimizationManager,
     /// The light files the last `/scene/manifest` built, see [`DrawnLight`].
     pub last_drawn_light: Mutex<DrawnLight>,
+    /// The last positioning run of the document, see [`LastPositioning`]. Locked only while
+    /// `document` is locked, after it.
+    pub last_positioning: Mutex<LastPositioning>,
 }
 impl AppState {
     /// Sets the server handle to stop.
@@ -90,13 +96,14 @@ impl AppState {
 impl Clone for AppState {
     fn clone(&self) -> Self {
         Self {
-            document: Mutex::new(self.document.lock().clone()),
+            document: self.document.clone(),
             server_handle: Mutex::new(self.server_handle.lock().clone()),
             node_copy_cache: Mutex::new(Vec::new()),
             undo_stack: Mutex::new(VecDeque::new()),
             redo_stack: Mutex::new(VecDeque::new()),
             optimization: self.optimization.clone(),
             last_drawn_light: Mutex::new(self.last_drawn_light.lock().clone()),
+            last_positioning: Mutex::new(self.last_positioning.lock().clone()),
         }
     }
 }

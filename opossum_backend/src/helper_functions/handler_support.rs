@@ -3,10 +3,11 @@ use opossum_core::{
     gain::PumpScenario,
     opm_document::{AnalyzerInfo, OpmDocument},
 };
-use parking_lot::MutexGuard;
 use uuid::Uuid;
 
-use crate::{app_state::AppState, error::BackEndErrorResponse, undo::Command};
+use crate::{
+    app_state::AppState, error::BackEndErrorResponse, live_document::DocumentGuard, undo::Command,
+};
 
 /// Looks up the analyzer with the given `id` in `document`, mutably.
 ///
@@ -48,7 +49,7 @@ pub fn pump_scenario_mut_or_404(
 /// Returns an error if `command.apply` fails.
 pub fn apply_and_push_undo(
     data: &AppState,
-    mut document: MutexGuard<'_, OpmDocument>,
+    mut document: DocumentGuard<'_>,
     command: Command,
     record_undo: bool,
 ) -> Result<HttpResponse, BackEndErrorResponse> {
