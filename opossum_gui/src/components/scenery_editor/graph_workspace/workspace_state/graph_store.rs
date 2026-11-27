@@ -707,3 +707,113 @@ impl UuidRegistry {
         self.backward.get(&id).copied()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use opossum_core::analyzers::{AnalyzerType, EnergyConfig};
+
+    /// An optical node `id` with one input and one output port.
+    fn optical(id: u128) -> (Uuid, NodeElement) {
+        let uuid = Uuid::from_u128(id);
+        let ports = Ports::new(vec!["input_1".to_string()], vec!["output_1".to_string()]);
+        let node = NodeElement::new(
+            format!("node {id}"),
+            NodeType::Optical("dummy".to_string()),
+            uuid,
+            Point2D::zero(),
+            ports,
+            false,
+            0,
+        );
+        (uuid, node)
+    }
+
+    /// An energy analyzer `id`.
+    fn analyzer(id: u128) -> (Uuid, NodeElement) {
+        let uuid = Uuid::from_u128(id);
+        let analyzer_type = AnalyzerType::Energy(EnergyConfig::default());
+        let node = NodeElement::new(
+            String::new(),
+            NodeType::Analyzer(Box::new(analyzer_type)),
+            uuid,
+            Point2D::zero(),
+            Ports::default(),
+            false,
+            0,
+        );
+        (uuid, node)
+    }
+
+    /// The connection from the output of `src` to the input of `target`.
+    fn connect(src: Uuid, target: Uuid) -> ConnectInfo {
+        ConnectInfo::new(
+            src,
+            "output_1".to_string(),
+            target,
+            "input_1".to_string(),
+            0.0,
+            false,
+        )
+    }
+
+    /// The box node `id` covers at the position the layout gave it.
+    fn placed_box(
+        nodes: &HashMap<Uuid, NodeElement>,
+        positions: &HashMap<Uuid, Point2D<f64>>,
+        id: Uuid,
+    ) -> Rect<f64> {
+        let mut node = nodes[&id].clone();
+        node.set_pos(positions[&id]);
+        node.get_bounding_box()
+    }
+
+    #[test]
+    fn chain_lies_in_one_row_from_left_to_right() {
+        let nodes: HashMap<Uuid, NodeElement> = (1..=3).map(optical).collect();
+        let [a, b, c] = [1, 2, 3].map(Uuid::from_u128);
+
+        let positions = optimize_layout(&nodes, &[connect(a, b), connect(b, c)]);
+
+        let [pa, pb, pc] = [a, b, c].map(|id| positions[&id]);
+        assert!((pb.x - pa.x - SUGIYAMA_VERTEX_SPACING).abs() < 1e-9);
+        assert!((pc.x - pb.x - SUGIYAMA_VERTEX_SPACING).abs() < 1e-9);
+        assert!((pb.y - pa.y).abs() < 1e-9);
+        assert!((pc.y - pa.y).abs() < 1e-9);
+    }
+
+    #[test]
+    fn analyzers_lie_above_unconnected_nodes_which_lie_above_connected_ones() {
+        let nodes: HashMap<Uuid, NodeElement> = [analyzer(1), optical(2), optical(3), optical(4)]
+            .into_iter()
+            .collect();
+        let [energy, lone, a, b] = [1, 2, 3, 4].map(Uuid::from_u128);
+
+        let positions = optimize_layout(&nodes, &[connect(a, b)]);
+
+        let placed = |id| placed_box(&nodes, &positions, id);
+        assert!(placed(energy).max_y() <= placed(lone).min_y());
+        assert!(placed(lone).max_y() <= placed(a).min_y());
+        assert!(placed(lone).max_y() <= placed(b).min_y());
+    }
+
+    #[test]
+    fn separate_chains_are_stacked_without_overlap() {
+        let nodes: HashMap<Uuid, NodeElement> = (1..=4).map(optical).collect();
+        let [a, b, c, d] = [1, 2, 3, 4].map(Uuid::from_u128);
+
+        let positions = optimize_layout(&nodes, &[connect(a, b), connect(c, d)]);
+
+        let (upper, lower) = if positions[&a].y < positions[&c].y {
+            ([a, b], [c, d])
+        } else {
+            ([c, d], [a, b])
+        };
+        let placed = |id| placed_box(&nodes, &positions, id);
+        for up in upper {
+            for low in lower {
+                assert!(placed(up).max_y() <= placed(low).min_y());
+            }
+        }
+    }
+}
