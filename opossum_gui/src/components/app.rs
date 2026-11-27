@@ -11,7 +11,7 @@ use crate::{
             menu_bar_component::{AppCommand, MenuBar},
             project_helper::{select_open_path, select_save_path},
         },
-        optimization::OptimizationModal,
+        // optimization::OptimizationModal,
         primitives::alert_dialog::{
             AlertDialog, AlertDialogAction, AlertDialogActions, AlertDialogCancel,
             AlertDialogDescription, AlertDialogTitle,
@@ -575,7 +575,7 @@ pub fn App() -> Element {
         SettingsDialog { open: show_settings }
         MaterialCatalog { open: show_material_catalog }
         CatalogSynchronizer { open: show_catalog_synchronizer }
-        OptimizationModal { open: show_optimization }
+        // OptimizationModal { open: show_optimization }
         // Invisible master sprite containing all icon definitions
         div {
             style: "position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none;",
@@ -608,7 +608,7 @@ pub fn App() -> Element {
         }
         SettingsDialog { open: show_settings }
         CatalogSynchronizer { open: show_catalog_synchronizer }
-        OptimizationModal { open: show_optimization }
+        // OptimizationModal { open: show_optimization }
     }
 }
 

@@ -64,7 +64,7 @@ pub fn use_workspace_processor(
                 match action {
                     GraphsWorkspaceAction::LoadFromFile(path) => {
                         // 1. Abort any running optimization/simulation session first
-                        let _ = api::post_abort_optimization().await;
+                        // let _ = api::post_abort_optimization().await;
                         // A freshly loaded document's scenario ids have nothing to do with whatever
                         // was active before - the old selection would silently point at nothing, or
                         // worse, at an unrelated scenario the new document happens to reuse the id
@@ -108,7 +108,7 @@ pub fn use_workspace_processor(
                     }
                     GraphsWorkspaceAction::DeleteRootScenery => {
                         // 1. Abort any running optimization/simulation session first
-                        let _ = api::post_abort_optimization().await;
+                        // let _ = api::post_abort_optimization().await;
                         *crate::ACTIVE_PUMP_SCENARIO.write() = None;
                         crate::ACTIVE_SCENARIO_GAIN_MODELS.write().clear();
                         // A reset document is genuinely empty (`OpmDocument::default()`), so clearing
@@ -129,7 +129,7 @@ pub fn use_workspace_processor(
                     }
                     GraphsWorkspaceAction::ResetAndInitializeRootScenery { name } => {
                         // 1. Abort any running optimization/simulation session first
-                        let _ = api::post_abort_optimization().await;
+                        // let _ = api::post_abort_optimization().await;
                         process_reset_and_initialize_root_scenery(
                             workspace,
                             workspace_handlers,

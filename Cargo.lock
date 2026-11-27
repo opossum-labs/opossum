@@ -5898,7 +5898,6 @@ dependencies = [
  "nalgebra",
  "opm_macros_lib",
  "opossum_core",
- "opossum_optimization",
  "opossum_registry",
  "regex",
  "reqwest 0.13.5",

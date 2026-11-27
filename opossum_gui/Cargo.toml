@@ -16,7 +16,7 @@ readme = "README.md"
 opossum_core = { workspace = true }
 opm_macros_lib = { workspace = true }
 opossum_registry = { workspace = true }
-opossum_optimization = { workspace = true }
+# opossum_optimization = { workspace = true }
 
 # Common workspace dependencies
 approx.workspace = true
