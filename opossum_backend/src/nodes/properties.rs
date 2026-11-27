@@ -217,7 +217,10 @@ mod test {
             };
             material.refractive_index_type().clone()
         };
-        assert_eq!(index_model_of_node(), index_model(1.5));
+        assert_eq!(
+            index_model_of_node(),
+            Material::n_bk7().refractive_index_type().clone()
+        );
 
         let app = test::init_service(
             App::new()

@@ -23,7 +23,6 @@ use opossum_core::{
             OptimizationAlgorithm, ParameterAddress::SurfaceCurvature,
         },
     },
-    refractive_index::RefrIndexConst,
     utils::geom_transformation::Isometry,
 };
 use std::path::Path;
@@ -41,25 +40,19 @@ fn build_comprehensive_v1_document() -> opossum_core::error::OpmResult<OpmDocume
 
     // Nested group (telescope) with multiple mapped ports to test deterministic PortMap order
     let mut telescope = NodeGroup::new("Telescope");
-    let mat_bk7 = Material::new_draft(
-        "N-BK7",
-        Some("Schott".into()),
-        None,
-        RefrIndexConst::new(1.5068)?.into(),
-    );
     let l1 = telescope.add_node(Lens::new(
         "Input Lens",
         millimeter!(100.0),
         millimeter!(-100.0),
         millimeter!(10.0),
-        mat_bk7.clone(),
+        Material::n_bk7(),
     )?)?;
     let l2 = telescope.add_node(Lens::new(
         "Exit Lens",
         millimeter!(200.0),
         millimeter!(-200.0),
         millimeter!(15.0),
-        mat_bk7,
+        Material::n_bk7(),
     )?)?;
     telescope.connect_nodes(l1, "output_1", l2, "input_1", millimeter!(250.0))?;
     telescope.map_input_port(l1, "input_1", "telescope_in")?;
@@ -175,7 +168,7 @@ fn serialization_is_strictly_deterministic_and_idempotent() -> opossum_core::err
         ron_first, ron_third,
         "Reloading and re-saving an .opm file must be completely idempotent"
     );
-    assert_eq!(reloaded.embedded_materials().len(), 4);
+    assert_eq!(reloaded.embedded_materials().len(), 2);
     assert!(!ron_first.contains("18446744073709551615"));
 
     Ok(())

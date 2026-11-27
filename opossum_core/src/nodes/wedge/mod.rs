@@ -13,7 +13,6 @@ use crate::{
     millimeter,
     nodes::NodeRegistration,
     properties::{Proptype, validator::Validator},
-    refractive_index::RefrIndexConst,
 };
 use num_traits::Zero;
 use opm_macros_lib::OpmNode;
@@ -64,17 +63,7 @@ impl Default for Wedge {
             )
             .unwrap();
         node_attr
-            .create_property(
-                MATERIAL,
-                "material of the wedge",
-                Material::new_draft(
-                    "lens material",
-                    None,
-                    None,
-                    RefrIndexConst::new(1.5).unwrap().into(),
-                )
-                .into(),
-            )
+            .create_property(MATERIAL, "material of the wedge", Material::n_bk7().into())
             .unwrap();
         node_attr
             .create_property_with_validator(
@@ -180,6 +169,7 @@ mod test {
         core_optics::{NodeAttrExt, PortType, node_attr::NodePositioning},
         degree, joule,
         light::{LightData, LightResult, Ray, Rays, spectrum_helper::create_he_ne_spec},
+        material::RefrIndexConst,
         nanometer,
         nodes::test_helper::helper::*,
         properties::{Proptype, proptype::AssetRef},
@@ -206,16 +196,15 @@ mod test {
         } else {
             panic!("could not read angle.");
         }
-        if let Ok(Proptype::Material(AssetRef::Inline(p))) = node.properties().get(MATERIAL) {
-            if let RefractiveIndexType::Const(val) = &p.optical.refractive_index {
-                let idx = val.get_refractive_index(nanometer!(1000.0))?;
-                assert_eq!(idx, 1.5);
-            } else {
-                panic!("could not read refractive index constant.");
-            }
-        } else {
-            panic!("could not read material.");
-        }
+        let Ok(Proptype::Material(AssetRef::Inline(material))) =
+            node.node_attr.get_property(MATERIAL)
+        else {
+            panic!("could not read material.")
+        };
+        assert_eq!(
+            (*material).refractive_index(nanometer!(500.0))?,
+            Material::n_bk7().refractive_index(nanometer!(500.0))?
+        );
         Ok(())
     }
     #[test]

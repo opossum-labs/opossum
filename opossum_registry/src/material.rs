@@ -23,7 +23,7 @@ impl IndexableAsset for Material {
 
     fn create_index_data(&self) -> Self::IndexData {
         let d_line_wvl = Length::new::<nanometer>(WAVELENGTH_D_LINE_NM);
-        let nd = self.get_refractive_index(d_line_wvl).ok();
+        let nd = self.refractive_index(d_line_wvl).ok();
 
         MaterialIndexData { nd }
     }

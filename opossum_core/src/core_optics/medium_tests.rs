@@ -48,16 +48,29 @@ use uom::si::{
 };
 use uuid::Uuid;
 
-/// A lens sitting at the origin, ready to be traced through.
+/// A default-geometry lens with lossless host material (`AbsorptionModel::None`),
+/// isolating gain and passivity tests from intrinsic glass absorption.
 ///
 /// # Errors
 ///
-/// Returns an error if the lens cannot be placed.
-fn placed_lens() -> OpmResult<Lens> {
+/// Returns an error if the material property cannot be set.
+fn lossless_lens() -> OpmResult<Lens> {
     let mut lens = Lens::default();
+    lens.set_property(MATERIAL, Material::default().into())?;
+    Ok(lens)
+}
+
+/// A lossless lens sitting at the origin, ready to be traced through.
+///
+/// # Errors
+///
+/// Returns an error if the lens cannot be built or placed.
+fn placed_lens() -> OpmResult<Lens> {
+    let mut lens = lossless_lens()?;
     lens.set_positioning(NodePositioning::Absolute(Isometry::identity()))?;
     Ok(lens)
 }
+
 /// An operating point in which the node with the given [`Uuid`] amplifies by a constant factor.
 ///
 /// # Errors
@@ -428,7 +441,7 @@ fn a_chain_of_amplifiers_multiplies_their_factors() -> OpmResult<()> {
     let mut scenario = PumpScenario::new("full power");
     let mut upstream = source;
     for gain in gains {
-        let stage = model.add_node(Lens::default())?;
+        let stage = model.add_node(lossless_lens()?)?;
         model.connect_nodes(upstream, "output_1", stage, "input_1", millimeter!(20.0))?;
         scenario.set_gain_model(stage, GainModel::Const(ConstGain::new(gain)?));
         upstream = stage;
@@ -507,7 +520,7 @@ fn a_mirror_folding_the_beam_back_amplifies_on_both_passes() -> OpmResult<()> {
     let gain = 2.0;
     let mut model = NodeGroup::default();
     let source = model.add_node(SourcePort::default())?;
-    let head = model.add_node(Lens::default())?;
+    let head = model.add_node(lossless_lens()?)?;
     // Tilted, so the returning beam is separated from the incoming one instead of running back
     // into the source - which is what a real double pass does too.
     let fold = model.add_node(ThinMirror::new("fold").with_tilt(degree!(2.0, 0.0, 0.0))?)?;

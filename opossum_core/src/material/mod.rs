@@ -13,9 +13,18 @@ use schemars::JsonSchema;
 pub use thermal::ThermalProperties;
 
 use serde::{Deserialize, Serialize};
-use uom::si::f64::Length;
+use uom::si::{
+    f64::{Length, MassDensity, Pressure, TemperatureCoefficient, ThermalConductivity},
+    mass_density::kilogram_per_cubic_meter,
+    pressure::pascal,
+    temperature_coefficient::per_kelvin,
+    thermal_conductivity::watt_per_meter_kelvin,
+};
 use uuid::Uuid;
 
+use crate::{
+    absorption::absorption_model::AbsorptionModel, light::Spectrum, micrometer, millimeter,
+};
 pub use crate::{
     asset::AssetHeader,
     error::OpmResult,
@@ -106,12 +115,84 @@ impl Material {
 
     /// Creates a [`Material`] representing standard air.
     #[must_use]
-    pub fn material_air() -> Self {
+    pub fn air() -> Self {
         let mut material: Self = RefractiveIndexType::Air(RefrIndexAir::default()).into();
         material.header.name = "air".to_string();
         material
     }
 
+    /// Creates a [`Material`] representing Schott N-BK7 matching catalog version 1.
+    ///
+    /// Keeps the official catalog UUID (`2728135b-faef-40e4-bf55-1f2f9d1f7504`) and
+    /// version `1` so catalog updates can be matched against embedded default lenses.
+    ///
+    /// # Panics
+    ///
+    /// This function might theoretically panic because of illegal default values.
+    #[must_use]
+    pub fn n_bk7() -> Self {
+        const N_BK7_CATALOG_ID: Uuid = Uuid::from_u128(0x2728_135b_faef_40e4_bf55_1f2f_9d1f_7504);
+
+        let mut transmittance_spectrum =
+            Spectrum::new(micrometer!(0.29)..micrometer!(2.5), micrometer!(0.01))
+                .expect("valid N-BK7 transmittance wavelength range");
+        transmittance_spectrum
+            .set_data(vec![
+                (0.29, 0.063),
+                (0.3, 0.292),
+                (0.31, 0.574),
+                (0.32, 0.77),
+                (0.334, 0.905),
+                (0.35, 0.967),
+                (0.365, 0.988),
+                (0.37, 0.991),
+                (0.38, 0.993),
+                (0.39, 0.996),
+                (0.4, 0.997),
+                (0.405, 0.997),
+                (0.42, 0.997),
+                (0.436, 0.997),
+                (0.46, 0.997),
+                (0.5, 0.998),
+                (0.546, 0.998),
+                (0.58, 0.998),
+                (0.62, 0.998),
+                (0.66, 0.998),
+                (0.7, 0.998),
+                (1.06, 0.999),
+                (1.53, 0.992),
+                (1.97, 0.933),
+                (2.325, 0.793),
+                (2.5, 0.665),
+            ])
+            .expect("valid N-BK7 transmittance spectrum data");
+
+        let absorption =
+            AbsorptionModel::new_catalog_transmittance(millimeter!(10.0), transmittance_spectrum)
+                .expect("valid N-BK7 reference thickness");
+
+        Self {
+            header: AssetHeader::new(
+                N_BK7_CATALOG_ID,
+                1,
+                "N-BK7",
+                Some("Schott".to_string()),
+                Some("Optical glass imported from Schott catalog".to_string()),
+            ),
+            optical: OpticalProperties::with_absorption(
+                RefrIndexSellmeier1::default().into(),
+                absorption,
+            ),
+            thermal: Some(ThermalProperties::new(
+                Some(ThermalConductivity::new::<watt_per_meter_kelvin>(1.114)),
+                Some(TemperatureCoefficient::new::<per_kelvin>(7.1e-6)),
+            )),
+            mechanical: Some(MechanicalProperties::new(
+                Some(MassDensity::new::<kilogram_per_cubic_meter>(2510.0)),
+                Some(Pressure::new::<pascal>(82.0e9)),
+            )),
+        }
+    }
     /// Creates an independent ad-hoc copy with a new random UUID and version 0.
     ///
     /// This detaches the material from any catalog identity.
@@ -178,16 +259,6 @@ impl Material {
     #[must_use]
     pub fn name(&self) -> &str {
         &self.header.name
-    }
-
-    /// Calculates the refractive index for a given wavelength.
-    ///
-    /// # Errors
-    ///
-    /// Returns an [`OpmResult::Err`] if the dispersion formula fails or the wavelength
-    /// is outside the validity range.
-    pub fn get_refractive_index(&self, wavelength: Length) -> OpmResult<f64> {
-        self.refractive_index(wavelength)
     }
 
     /// Returns a reference to the refractive index type of this [`Material`].
@@ -300,7 +371,7 @@ mod tests {
         assert_eq!(material.version(), 0);
 
         let wvl = nanometer!(550.0);
-        let n = material.get_refractive_index(wvl)?;
+        let n = material.refractive_index(wvl)?;
         assert!((n - 1.5).abs() < 1e-12);
 
         Ok(())
@@ -312,7 +383,7 @@ mod tests {
         assert_eq!(vacuum.id(), Uuid::nil());
         assert_eq!(vacuum.name(), "vacuum");
 
-        let air = Material::material_air();
+        let air = Material::air();
         assert_eq!(air.name(), "air");
 
         let wvl = nanometer!(589.3);
@@ -381,7 +452,55 @@ mod tests {
         assert!(material.thermal.is_none());
         assert!(material.mechanical.is_none());
     }
+    #[test]
+    fn test_n_bk7_catalog_constructor() -> OpmResult<()> {
+        let bk7 = Material::n_bk7();
 
+        assert_eq!(
+            bk7.id(),
+            Uuid::parse_str("2728135b-faef-40e4-bf55-1f2f9d1f7504").unwrap()
+        );
+        assert_eq!(bk7.version(), 1);
+        assert_eq!(bk7.name(), "N-BK7");
+        assert_eq!(bk7.header.manufacturer.as_deref(), Some("Schott"));
+        assert_eq!(
+            bk7.header.description.as_deref(),
+            Some("Optical glass imported from Schott catalog")
+        );
+
+        // Verify dispersion and internal transmittance at 1060 nm / 10 mm
+        let n_1060 = bk7.refractive_index(nanometer!(1060.0))?;
+        assert!((n_1060 - 1.506_69).abs() < 1e-4);
+
+        let t_1060 = bk7.transmission(nanometer!(1060.0), millimeter!(10.0))?;
+        assert!((t_1060 - 0.999).abs() < 1e-12);
+
+        // Verify thermal and mechanical properties
+        let thermal = bk7.thermal.as_ref().expect("thermal properties present");
+        assert_eq!(
+            thermal.thermal_conductivity,
+            Some(ThermalConductivity::new::<watt_per_meter_kelvin>(1.114))
+        );
+        assert_eq!(
+            thermal.expansion_coefficient,
+            Some(TemperatureCoefficient::new::<per_kelvin>(7.1e-6))
+        );
+
+        let mechanical = bk7
+            .mechanical
+            .as_ref()
+            .expect("mechanical properties present");
+        assert_eq!(
+            mechanical.density,
+            Some(MassDensity::new::<kilogram_per_cubic_meter>(2510.0))
+        );
+        assert_eq!(
+            mechanical.youngs_modulus,
+            Some(Pressure::new::<pascal>(82.0e9))
+        );
+
+        Ok(())
+    }
     #[test]
     fn test_from_conversions_all_models() {
         // 1. RefractiveIndexType & &RefractiveIndexType

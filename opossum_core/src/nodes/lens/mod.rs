@@ -13,7 +13,6 @@ use crate::{
     millimeter,
     nodes::{EdgeThickness, NodeRegistration},
     properties::{Proptype, validator::Validator},
-    refractive_index::RefrIndexConst,
 };
 use log::warn;
 use num_traits::Zero;
@@ -89,17 +88,7 @@ impl Default for Lens {
             )
             .unwrap();
         node_attr
-            .create_property(
-                MATERIAL,
-                "material of the lens",
-                Material::new_draft(
-                    "lens material",
-                    None,
-                    None,
-                    RefrIndexConst::new(1.5).unwrap().into(),
-                )
-                .into(),
-            )
+            .create_property(MATERIAL, "material of the lens", Material::n_bk7().into())
             .unwrap();
         node_attr
             .create_property_with_validator(
@@ -294,6 +283,7 @@ mod test {
         distributions::position::Hexapolar,
         joule,
         light::{LightData, LightResult, Rays},
+        material::RefrIndexConst,
         millimeter, nanometer,
         nodes::test_helper::helper::*,
         properties::{Proptype, proptype::AssetRef},
@@ -331,7 +321,10 @@ mod test {
         else {
             panic!()
         };
-        assert_eq!((*material).get_refractive_index(Length::zero())?, 1.5);
+        assert_eq!(
+            (*material).refractive_index(nanometer!(500.0))?,
+            Material::n_bk7().refractive_index(nanometer!(500.0))?
+        );
         Ok(())
     }
     #[test]
@@ -489,7 +482,7 @@ mod test {
         else {
             panic!()
         };
-        assert_eq!((*material).get_refractive_index(Length::zero())?, 2.0);
+        assert_eq!((*material).refractive_index(Length::zero())?, 2.0);
         Ok(())
     }
     #[test]
