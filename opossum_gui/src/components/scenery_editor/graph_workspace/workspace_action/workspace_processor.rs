@@ -547,6 +547,12 @@ pub fn use_workspace_processor(
                         )
                         .await;
                     }
+                    GraphsWorkspaceAction::SetAmbientMaterial(material) => {
+                        eval_action_run(
+                            api::patch_ambient_material(material).await,
+                            Some(move |()| workspace_handlers.workspace.set_needs_saving(true)),
+                        );
+                    }
                     GraphsWorkspaceAction::RevealNode {
                         node_id,
                         graph_id,
@@ -700,6 +706,7 @@ const fn is_document_edit_action(action: &GraphsWorkspaceAction) -> bool {
             | GraphsWorkspaceAction::SetScenarioGainModel { .. }
             | GraphsWorkspaceAction::SetScenarioPumpSource { .. }
             | GraphsWorkspaceAction::SetAmplifierCandidate { .. }
+            | GraphsWorkspaceAction::SetAmbientMaterial(_)
     )
 }
 
@@ -1131,6 +1138,9 @@ async fn apply_document_changes(
                 // reasoning `PumpScenarioAdded` above follows.
                 *crate::PUMP_SCENARIO_LIST_REFRESH.write() += 1;
             }
+            // Nothing to replay here: the undo/redo raised `SCENE_REVISION`, on which the Setup
+            // view and the 3D view fetch the medium and the placement again.
+            DocumentChange::AmbientMaterialChanged => {}
             DocumentChange::ViewportChanged {
                 graph_id,
                 zoom,

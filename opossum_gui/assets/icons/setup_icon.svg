@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" fill="none" stroke="#b5b5b5" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+  <!-- the optical table the setup stands on -->
+  <rect x="28" y="92" width="344" height="216" rx="28"/>
+  <!-- the beam, from the source through a lens -->
+  <line x1="78" y1="200" x2="322" y2="200"/>
+  <path d="M200 142 C232 170 232 230 200 258 C168 230 168 170 200 142 Z"/>
+  <!-- the medium the setup is aligned in -->
+  <path d="M74 138 C92 124 110 152 128 138"/>
+  <path d="M272 262 C290 248 308 276 326 262"/>
+</svg>

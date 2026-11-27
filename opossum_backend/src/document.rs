@@ -3,12 +3,17 @@ use crate::{
     app_state::AppState,
     drawn_light::{DigestedFile, DrawnLight},
     error::BackEndErrorResponse,
-    helper_functions::{analyzer_mut_or_404, connect_infos},
+    helper_functions::{
+        Ron, analyzer_mut_or_404, apply_and_push_undo, connect_infos, ron_or_json_response,
+    },
     sse_logger::SENDER,
-    undo::{Command, PatchNode, RepositionAnalyzer, SetViewport, capture_old_node_request},
+    undo::{
+        Command, PatchAmbientMaterial, PatchNode, RepositionAnalyzer, SetViewport,
+        capture_old_node_request,
+    },
 };
 use actix_web::{
-    Error, HttpResponse, Responder, delete, get, patch, post, put,
+    Error, HttpRequest, HttpResponse, Responder, delete, get, patch, post, put,
     web::{self, Json},
 };
 use futures_util::StreamExt;
@@ -17,6 +22,7 @@ use opossum_core::{
     analyzers::RayTraceConfig,
     core_optics::node_attr::HasNodeAttr,
     error::{OpmResult, OpossumError},
+    material::Material,
     opm_document::{OpmDocument, PositioningRun},
     types::api_types::{
         DocumentChange, ErrorResponse, JumpTarget, LoadDocumentResponse, PositionUpdate,
@@ -251,6 +257,50 @@ async fn delete_document(data: web::Data<AppState>) -> impl Responder {
 async fn get_root_uuid(data: web::Data<AppState>) -> impl Responder {
     let document = data.document.lock();
     web::Json(document.scenery().node_attr().uuid())
+}
+
+/// Get the medium the setup is aligned in
+///
+/// This function returns the material the model is placed in: the optical axis is sent through it,
+/// whichever analysis examines the model. It is answered as RON if asked for, else as JSON.
+#[utoipa::path(tag = "document",
+    responses(
+        (status = 200, description = "the ambient medium of the setup, as a material"),
+        (status = 400, description = "the medium cannot be read", body = ErrorResponse)
+    )
+)]
+#[get("/ambient_material")]
+async fn get_ambient_material(
+    data: web::Data<AppState>,
+    req: HttpRequest,
+) -> Result<HttpResponse, BackEndErrorResponse> {
+    let material = data.document.lock().ambient_material()?.clone();
+    ron_or_json_response(&req, &material)
+}
+
+/// Set the medium the setup is aligned in
+///
+/// This function replaces the material the model is placed in. It moves the setup wherever the
+/// medium bends the optical axis differently, and it can be undone.
+#[utoipa::path(tag = "document",
+    request_body(content = String, description = "the new ambient medium, as a material in RON", content_type = "application/ron"),
+    responses(
+        (status = NO_CONTENT, description = "the medium was replaced"),
+        (status = 400, description = "invalid RON, or the current medium cannot be read", body = ErrorResponse)
+    )
+)]
+#[patch("/ambient_material")]
+async fn patch_ambient_material(
+    data: web::Data<AppState>,
+    body: Ron<Material>,
+) -> Result<HttpResponse, BackEndErrorResponse> {
+    let document = data.document.lock();
+    let old = document.ambient_material()?.clone();
+    let command = Command::PatchAmbientMaterial(Box::new(PatchAmbientMaterial {
+        old,
+        new: body.into_inner(),
+    }));
+    apply_and_push_undo(&data, document, command, true)
 }
 
 /// Get the document as an (OPM file) string
@@ -829,6 +879,8 @@ pub fn config(cfg: &mut ServiceConfig<'_>) {
     cfg.service(delete_document);
 
     cfg.service(get_root_uuid);
+    cfg.service(get_ambient_material);
+    cfg.service(patch_ambient_material);
     cfg.service(get_scene);
     cfg.service(get_scene_manifest);
     cfg.service(get_scene_node);
@@ -851,6 +903,57 @@ pub(crate) mod test {
         meter,
         nodes::{ConnectionInfo, GraphDelta, create_node_ref},
     };
+
+    /// The medium of the setup is read and replaced through its endpoint, and the replacement is
+    /// undone in one step that tells the GUI the medium changed.
+    #[actix_web::test]
+    async fn the_medium_of_the_setup_is_replaced_and_the_replacement_undone() {
+        use opossum_core::refractive_index::RefrIndexConst;
+
+        let app_state = Data::new(AppState::default());
+        let app = test::init_service(
+            App::new()
+                .app_data(app_state.clone())
+                .service(get_ambient_material)
+                .service(patch_ambient_material)
+                .service(undo_document),
+        )
+        .await;
+        let medium = async || -> Material {
+            let req = test::TestRequest::get()
+                .uri("/ambient_material")
+                .to_request();
+            test::read_body_json(app.call(req).await.unwrap()).await
+        };
+        assert_eq!(medium().await, Material::vacuum());
+
+        let water = Material::new_draft(
+            "water",
+            None,
+            None,
+            RefrIndexConst::new(1.33).unwrap().into(),
+        );
+        let req = test::TestRequest::patch()
+            .uri("/ambient_material")
+            .insert_header((actix_web::http::header::CONTENT_TYPE, "application/ron"))
+            .set_payload(ron::to_string(&water).unwrap())
+            .to_request();
+        assert_eq!(
+            app.call(req).await.unwrap().status(),
+            StatusCode::NO_CONTENT
+        );
+        assert_eq!(medium().await, water);
+
+        let req = test::TestRequest::post().uri("/undo").to_request();
+        let undone: UndoRedoResponse = test::read_body_json(app.call(req).await.unwrap()).await;
+        assert!(
+            undone
+                .changes
+                .iter()
+                .any(|change| matches!(change, DocumentChange::AmbientMaterialChanged))
+        );
+        assert_eq!(medium().await, Material::vacuum());
+    }
 
     #[actix_web::test]
     async fn test_undo_redo_empty_stack_returns_409() {

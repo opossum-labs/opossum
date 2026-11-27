@@ -5,6 +5,7 @@ use dioxus::{
 };
 use opossum_core::{
     gain::{GainModel, PumpSource},
+    material::Material,
     prelude::{AnalyzerType, PortType},
     types::api_types::{ConnectInfo, NewRefNode},
 };
@@ -408,6 +409,10 @@ pub enum GraphsWorkspaceAction {
         /// Whether the node is an amplifier candidate from now on.
         is_amplifier: bool,
     },
+
+    /// Replaces the medium the setup is aligned in - what the Setup view sends. The model is placed
+    /// in it, so it moves the setup wherever the medium bends the optical axis differently.
+    SetAmbientMaterial(Material),
 
     /// Brings a node into view: makes its graph the active tab (opening it first if needed) and
     /// selects it. Used by the amplifier overview to take the user to a listed node, and by a 3D

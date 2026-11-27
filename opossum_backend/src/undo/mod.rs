@@ -20,6 +20,7 @@ use uuid::Uuid;
 
 use crate::error::BackEndErrorResponse;
 
+mod ambient_material_commands;
 mod amplifier_node_commands;
 mod analyzer_commands;
 mod graph_commands;
@@ -28,6 +29,7 @@ mod node_commands;
 mod pump_scenario_commands;
 mod viewport_commands;
 
+pub use ambient_material_commands::PatchAmbientMaterial;
 pub use amplifier_node_commands::PatchAmplifierNodes;
 pub use analyzer_commands::{PatchAnalyzer, PatchAnalyzerName, RepositionAnalyzer};
 pub use group_commands::{GroupConversion, MoveNodes, ReroutedMapping};
@@ -89,6 +91,8 @@ pub enum Command {
     PatchAnalyzerPumpScenarios(PatchAnalyzerPumpScenarios),
     /// See [`PatchAmplifierNodes`]. Replaces the whole document-wide amplifier-candidate set.
     PatchAmplifierNodes(PatchAmplifierNodes),
+    /// See [`PatchAmbientMaterial`]. Replaces the medium the setup is aligned in.
+    PatchAmbientMaterial(Box<PatchAmbientMaterial>),
     /// See [`MoveNodes`]. Moves nodes between two groups.
     MoveNodes(MoveNodes),
     /// See [`GroupConversion`]. Converts flat members into the group.
@@ -144,6 +148,9 @@ impl Command {
             Self::PatchAmplifierNodes(cmd) => Ok(
                 amplifier_node_commands::apply_patch_amplifier_nodes(document, cmd),
             ),
+            Self::PatchAmbientMaterial(cmd) => Ok(
+                ambient_material_commands::apply_patch_ambient_material(document, *cmd),
+            ),
             Self::MoveNodes(cmd) => group_commands::apply_move_nodes(document, cmd),
             Self::InsertGroup(cmd) => group_commands::apply_insert_group(document, cmd),
             Self::ExtractGroup(cmd) => group_commands::apply_extract_group(document, cmd),
@@ -190,6 +197,7 @@ impl Command {
             | Self::PatchPumpScenario(_)
             | Self::PatchAnalyzerPumpScenarios(_)
             | Self::PatchAmplifierNodes(_)
+            | Self::PatchAmbientMaterial(_)
             | Self::SetViewport(_)
             | Self::ApplyOptimization(_) => false,
             Self::UndoGraph(_)
@@ -252,7 +260,8 @@ impl Command {
             | Self::PatchPumpScenario(_)
             | Self::PatchAnalyzerPumpScenarios(_)
             | Self::ApplyOptimization(_)
-            | Self::PatchAmplifierNodes(_) => None,
+            | Self::PatchAmplifierNodes(_)
+            | Self::PatchAmbientMaterial(_) => None,
             Self::SetViewport(cmd) => Some(JumpTarget::new_from_graph_id(cmd.to.graph_id)),
             Self::Batch(commands) => batch_jump_target(commands, root_id),
         }
@@ -300,6 +309,7 @@ impl Command {
                 vec![DocumentChange::PumpScenarioChanged { id: *id }]
             }
             Self::PatchAmplifierNodes(_) => vec![DocumentChange::AmplifierNodesChanged],
+            Self::PatchAmbientMaterial(_) => vec![DocumentChange::AmbientMaterialChanged],
             Self::RepositionAnalyzer(cmd) => vec![DocumentChange::AnalyzerMoved {
                 id: cmd.id,
                 gui_position: cmd.new_pos,
@@ -413,6 +423,7 @@ fn dedup_against_full_refreshes(changes: Vec<DocumentChange>) -> Vec<DocumentCha
             | DocumentChange::PumpScenarioRemoved { .. }
             | DocumentChange::PumpScenarioChanged { .. }
             | DocumentChange::AmplifierNodesChanged
+            | DocumentChange::AmbientMaterialChanged
             | DocumentChange::GraphClosed { .. }
             | DocumentChange::ViewportChanged { .. } => true,
         })

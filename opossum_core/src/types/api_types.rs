@@ -892,6 +892,9 @@ pub enum DocumentChange {
     /// carried; anything showing candidacy (the context-menu toggle's state, every scenario editor's
     /// row list) should re-fetch it.
     AmplifierNodesChanged,
+    /// The medium the setup is aligned in changed, and with it where the setup stands. Anything
+    /// showing the medium or the placement should re-fetch it.
+    AmbientMaterialChanged,
     /// One tab's nodes/edges/port-maps should be re-fetched from scratch (see the type's own doc
     /// comment for which operations use this).
     GraphNeedsRefresh { graph_id: Uuid },

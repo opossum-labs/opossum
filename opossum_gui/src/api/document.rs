@@ -1,6 +1,9 @@
-use opossum_core::types::api_types::{
-    LoadDocumentResponse, PositionUpdate, SceneManifest, UndoRedoResponse, Viewport,
-    ViewportChangeRequest,
+use opossum_core::{
+    material::Material,
+    types::api_types::{
+        LoadDocumentResponse, PositionUpdate, SceneManifest, UndoRedoResponse, Viewport,
+        ViewportChangeRequest,
+    },
 };
 use uuid::Uuid;
 
@@ -17,6 +20,26 @@ pub async fn delete_document() -> Result<String, String> {
 }
 pub async fn get_document_root_uuid() -> Result<Uuid, String> {
     HTTP_API_CLIENT().get("/api/document/root_uuid").await
+}
+/// Ask for the medium the setup is aligned in, which the model is placed in.
+///
+/// # Errors
+///
+/// This function will return an error if the medium cannot be read or deserialized.
+pub async fn get_ambient_material() -> Result<Material, String> {
+    HTTP_API_CLIENT()
+        .get_ron::<Material>("/api/document/ambient_material")
+        .await
+}
+/// Replace the medium the setup is aligned in. The backend records the change for undo.
+///
+/// # Errors
+///
+/// This function will return an error if the request fails.
+pub async fn patch_ambient_material(material: Material) -> Result<(), String> {
+    HTTP_API_CLIENT()
+        .patch_ron::<Material>("/api/document/ambient_material", material)
+        .await
 }
 /// Send request to receive the `OPM` file representation (as string) of the scenery.
 /// This function is used to while saving a model file to disk.

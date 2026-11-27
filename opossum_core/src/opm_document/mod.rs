@@ -114,6 +114,17 @@ impl OpmDocument {
     pub const fn opm_file_version(&self) -> u32 {
         self.opm_file_version
     }
+    /// Returns the medium the setup is aligned in (see [`OpmDocument::positioning_config`]).
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if the medium is named by an id that was not resolved
+    /// against the materials the file embeds.
+    pub fn ambient_material(&self) -> OpmResult<&Material> {
+        self.ambient_material.as_inline().ok_or_else(|| {
+            OpossumError::OpmDocument("the ambient medium of the setup is not resolved".into())
+        })
+    }
     /// Sets the medium the setup is aligned in, which the optical axis is sent through when the
     /// model is placed (see [`OpmDocument::positioning_config`]).
     ///

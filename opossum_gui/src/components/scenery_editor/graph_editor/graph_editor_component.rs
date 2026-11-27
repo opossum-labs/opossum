@@ -1,7 +1,7 @@
 use crate::components::{
     app::SIDEBAR_SWITCHER_WIDTH,
     context_menu::cx_menu::CxMenu,
-    node_editor::{NodeConfigEditor, PumpScenarioEditor},
+    node_editor::{NodeConfigEditor, PumpScenarioEditor, SetupEditor},
     scene_view::SceneView,
     scenery_editor::{
         DragStatus, NodeEditorCommand, SelectedNode,
@@ -385,6 +385,9 @@ pub fn GraphEditor(
                             SidebarView::PumpScenarios => rsx! {
                                 PumpScenarioEditor {}
                             },
+                            SidebarView::Setup => rsx! {
+                                SetupEditor {}
+                            },
                         }
                     }
                 }
@@ -664,14 +667,18 @@ fn TabDragGhost(drag: ReadSignal<Option<TabDrag>>, label: String) -> Element {
 const NODE_CONFIG_ICON: Asset = asset!("/assets/icons/node_config_icon.png");
 #[allow(clippy::volatile_composites)]
 const AMPLIFIER_ICON: Asset = asset!("/assets/icons/amplifier_menu_icon.png");
+#[allow(clippy::volatile_composites)]
+const SETUP_ICON: Asset = asset!("/assets/icons/setup_icon.svg");
 
-/// Which of the sidebar's two views is showing.
+/// Which of the sidebar's views is showing.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum SidebarView {
     /// The existing selection-bound node/analyzer configuration.
     NodeProperties,
     /// The document-wide editor for pump scenarios (operating points / amplifiers).
     PumpScenarios,
+    /// What belongs to the setup as a whole, such as the medium it is aligned in.
+    Setup,
 }
 impl SidebarView {
     /// Icon and tooltip of this view's button in the switcher bar.
@@ -679,6 +686,7 @@ impl SidebarView {
         match self {
             Self::NodeProperties => (NODE_CONFIG_ICON, "Node properties"),
             Self::PumpScenarios => (AMPLIFIER_ICON, "Pump scenarios"),
+            Self::Setup => (SETUP_ICON, "Setup"),
         }
     }
 }
@@ -697,7 +705,7 @@ fn SidebarViewSwitcher() -> Element {
             // Width comes from Rust because the resize drag has to know the collapsed sidebar's
             // total width; see `COLLAPSED_SIDEBAR_WIDTH`.
             style: "width: {SIDEBAR_SWITCHER_WIDTH}px;",
-            for entry in [SidebarView::NodeProperties, SidebarView::PumpScenarios] {
+            for entry in [SidebarView::NodeProperties, SidebarView::PumpScenarios, SidebarView::Setup] {
                 {
                     let (icon, title) = entry.icon_and_title();
                     let is_open = SIDEBAR_VIEW() == entry && !SIDEBAR_COLLAPSED();
