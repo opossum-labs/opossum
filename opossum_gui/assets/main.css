@@ -1425,3 +1425,8 @@ canvas {
 [data-theme="light"] .node-symbol-icon {
   color: #374151;
 }
+
+/* Prevent navbar items like "3D View" from wrapping onto two lines */
+.navbar-nav .nav-link {
+    white-space: nowrap;
+}

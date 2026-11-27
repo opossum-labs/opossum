@@ -3,9 +3,14 @@
 use std::process::Child;
 use std::sync::{Arc, Mutex};
 
-use dioxus::desktop::{WindowBuilder, tao::window::Icon};
+use dioxus::desktop::{LogicalSize, WindowBuilder, tao::window::Icon, use_window};
 use dioxus::prelude::*;
 use directories::ProjectDirs;
+
+/// Default startup window width in logical pixels.
+const DEFAULT_WINDOW_WIDTH: f64 = 1280.0;
+/// Default startup window height in logical pixels.
+const DEFAULT_WINDOW_HEIGHT: f64 = 800.0;
 
 #[derive(Clone, Default)]
 pub struct ProcessHandle {
@@ -134,7 +139,11 @@ fn launch_desktop_window(backend_handle: ProcessHandle, root_component: fn() -> 
     let window = WindowBuilder::new()
         .with_decorations(false)
         .with_window_icon(read_icon())
-        .with_title("Opossum");
+        .with_title("Opossum")
+        .with_inner_size(LogicalSize::new(
+            DEFAULT_WINDOW_WIDTH,
+            DEFAULT_WINDOW_HEIGHT,
+        ));
 
     dioxus::LaunchBuilder::new()
         .with_cfg(
@@ -172,9 +181,28 @@ pub fn launch(root_component: fn() -> Element) {
     }
 }
 
-/// Lifecycle wrapper component to manage backend process shutdown on exit.
+/// Lifecycle wrapper component to manage initial window bounds and backend shutdown on exit.
 #[component]
 pub fn PlatformLifecycle(children: Element) -> Element {
+    let window = use_window();
+
+    // Clamp initial window size to 95% of the active monitor if the screen is smaller than 1280x800
+    use_hook(move || {
+        if let Some(monitor) = window.current_monitor() {
+            let scale_factor = monitor.scale_factor();
+            let logical_monitor = monitor.size().to_logical::<f64>(scale_factor);
+            let max_width = (logical_monitor.width * 0.95).floor();
+            let max_height = (logical_monitor.height * 0.95).floor();
+
+            if DEFAULT_WINDOW_WIDTH > max_width || DEFAULT_WINDOW_HEIGHT > max_height {
+                window.set_inner_size(LogicalSize::new(
+                    DEFAULT_WINDOW_WIDTH.min(max_width),
+                    DEFAULT_WINDOW_HEIGHT.min(max_height),
+                ));
+            }
+        }
+    });
+
     #[cfg(not(debug_assertions))]
     {
         let backend_handle = use_context::<ProcessHandle>();

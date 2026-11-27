@@ -1,3 +1,4 @@
+// src/components/menu_bar/menu_bar_component.rs
 use dioxus::{document::eval, prelude::*};
 use dioxus_free_icons::{
     Icon,
@@ -66,32 +67,33 @@ pub fn MenuBar(
 
     let maximize_symbol: Signal<Result<VNode, RenderError>> = use_signal(|| {
         rsx! {
-            Icon { width: 25, icon: FaWindowMaximize }
+            Icon { width: 22, icon: FaWindowMaximize }
         }
     });
 
     rsx! {
-        nav { class: "navbar navbar-expand-sm navbar-dark bg-dark",
+        nav { class: "navbar navbar-expand-md navbar-dark bg-dark flex-md-nowrap px-2",
             button {
-                class: "navbar-toggler",
+                class: "navbar-toggler flex-shrink-0",
                 "data-mdb-target": "#navbarSupportedContent",
                 "data-mdb-collapse-init": "",
-                Icon { width: 25, icon: FaBars }
+                Icon { width: 22, icon: FaBars }
             }
             div {
-                class: "noselect collapse navbar-collapse flex-grow-0 w-auto",
+                class: "noselect collapse navbar-collapse align-items-center",
                 id: "navbarSupportedContent",
+                style: "flex: 0 1 auto; min-width: 0;",
                 img {
-                    class: "navbar-brand mt-lg-0",
+                    class: "navbar-brand mt-lg-0 flex-shrink-0",
                     src: FAVICON,
-                    height: "40",
+                    height: "36",
                 }
-                ul { class: "navbar-nav me-auto mt-lg-0",
+                ul { class: "navbar-nav flex-shrink-0 mt-lg-0",
                     // --- File Menu ---
                     li { class: "nav-item dropdown",
                         a {
                             "data-mdb-dropdown-init": "",
-                            class: "nav-link dropdown-toggle link-secondary hidden-arrow",
+                            class: "nav-link dropdown-toggle link-secondary hidden-arrow text-nowrap",
                             id: "navbarDropdownFileMenuLink",
                             "data-mdb-toggle": "dropdown",
                             role: "button",
@@ -149,7 +151,7 @@ pub fn MenuBar(
                         a {
                             "data-mdb-dropdown-init": "",
                             "data-mdb-toggle": "dropdown",
-                            class: "nav-link dropdown-toggle link-secondary hidden-arrow",
+                            class: "nav-link dropdown-toggle link-secondary hidden-arrow text-nowrap",
                             id: "navbarDropdownEditMenuLink",
                             role: "button",
                             "Edit"
@@ -173,7 +175,7 @@ pub fn MenuBar(
                             "data-mdb-dropdown-init": "",
                             "data-mdb-toggle": "dropdown",
                             "data-mdb-auto-close": "outside",
-                            class: "nav-link dropdown-toggle link-secondary hidden-arrow",
+                            class: "nav-link dropdown-toggle link-secondary hidden-arrow text-nowrap",
                             id: "navbarDropdownNodeMenuLink",
                             role: "button",
                             "Node"
@@ -233,7 +235,7 @@ pub fn MenuBar(
                         a {
                             "data-mdb-dropdown-init": "",
                             "data-mdb-toggle": "dropdown",
-                            class: "nav-link dropdown-toggle link-secondary hidden-arrow",
+                            class: "nav-link dropdown-toggle link-secondary hidden-arrow text-nowrap",
                             id: "navbarDropdownLayoutMenuLink",
                             role: "button",
                             "Layout"
@@ -265,7 +267,7 @@ pub fn MenuBar(
                         a {
                             "data-mdb-dropdown-init": "",
                             "data-mdb-toggle": "dropdown",
-                            class: "nav-link dropdown-toggle link-secondary hidden-arrow",
+                            class: "nav-link dropdown-toggle link-secondary hidden-arrow text-nowrap",
                             id: "navbarDropdownOptimizationMenuLink",
                             role: "button",
                             "Optimize"
@@ -286,8 +288,8 @@ pub fn MenuBar(
                         a {
                             "data-mdb-dropdown-init": "",
                             "data-mdb-toggle": "dropdown",
-                            class: "nav-link dropdown-toggle link-secondary hidden-arrow",
-                            id: "navbarDropdownHelpMenuLink",
+                            class: "nav-link dropdown-toggle link-secondary hidden-arrow text-nowrap",
+                            id: "navbarDropdownCatalogsMenuLink",
                             role: "button",
                             "Catalogs"
                         }
@@ -325,7 +327,7 @@ pub fn MenuBar(
                         a {
                             "data-mdb-dropdown-init": "",
                             "data-mdb-toggle": "dropdown",
-                            class: "nav-link dropdown-toggle link-secondary hidden-arrow",
+                            class: "nav-link dropdown-toggle link-secondary hidden-arrow text-nowrap",
                             id: "navbarDropdownHelpMenuLink",
                             role: "button",
                             "Help"
@@ -362,9 +364,9 @@ pub fn MenuBar(
                             }
                         }
                     }
-                    // Display File Path
-                    FilePathDisplay { model_file_path, model_modified_sig }
                 }
+                // Dynamically truncates when horizontal space tightens
+                FilePathDisplay { model_file_path, model_modified_sig }
             }
             ExpandOnClick { maximize_symbol }
 
@@ -380,14 +382,13 @@ pub fn MenuBar(
                 };
                 #[cfg(feature = "desktop")]
                 rsx! {
-                    div { class: "d-flex align-items-center",
+                    div { class: "d-flex align-items-center flex-nowrap flex-shrink-0 ms-auto",
                         button {
-                            class: if is_connected { "btn btn-success me-4" } else { "btn btn-secondary me-4 disabled pe-none" },
+                            class: if is_connected { "btn btn-success me-3 text-nowrap flex-shrink-0" } else { "btn btn-secondary me-3 text-nowrap flex-shrink-0 disabled pe-none" },
                             disabled: !is_connected,
                             "data-mdb-ripple-init": "",
                             "data-mdb-tooltip-init": title_str.clone(),
                             "data-mdb-original-title": title_str,
-                            // title: title_str(),
                             onclick: move |_| {
                                 if is_connected {
                                     on_menu_action.call(AppCommand::Simulate);
@@ -467,6 +468,7 @@ fn ExpandOnClick(mut maximize_symbol: Signal<Result<VNode, RenderError>>) -> Ele
     rsx! {
         div {
             class: "d-flex align-items-center flex-grow-1 mx-2 px-2 rounded align-self-stretch my-n2",
+            style: "min-width: 12px;",
             ondragstart: move |e| e.prevent_default(),
             onmousedown: {
                 move |_| {
@@ -476,12 +478,12 @@ fn ExpandOnClick(mut maximize_symbol: Signal<Result<VNode, RenderError>>) -> Ele
                         if window.is_maximized() {
                             window.set_maximized(false);
                             maximize_symbol.set(rsx! {
-                                Icon { width: 25, icon: FaWindowMaximize }
+                                Icon { width: 22, icon: FaWindowMaximize }
                             });
                         } else {
                             window.set_maximized(true);
                             maximize_symbol.set(rsx! {
-                                Icon { width: 25, icon: FaWindowRestore }
+                                Icon { width: 22, icon: FaWindowRestore }
                             });
                         }
                         last_click.set(None);

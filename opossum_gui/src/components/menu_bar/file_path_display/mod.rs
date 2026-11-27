@@ -1,3 +1,4 @@
+// src/components/menu_bar/file_path_display/mod.rs
 use dioxus::prelude::*;
 use std::path::{Path, PathBuf};
 
@@ -16,7 +17,7 @@ pub fn FilePathDisplay(
             },
             |path| {
                 (
-                    abbreviate_path(path, 40),
+                    abbreviate_path(path, 80),
                     path.to_string_lossy().to_string(),
                 )
             },
@@ -24,37 +25,38 @@ pub fn FilePathDisplay(
     });
     let (display_path, full_path) = path_info();
     let modified_marker = if model_modified_sig() { "*" } else { "" };
+
     rsx! {
-        li { class: "nav-item d-flex align-items-center",
-            span { class: "navbar-text text-white-50 ms-3", title: "{full_path}",
-                "{display_path} {modified_marker}"
+        div {
+            class: "d-flex align-items-center ms-3",
+            style: "flex: 0 1 auto; min-width: 0; overflow: hidden;",
+            span {
+                class: "navbar-text text-white-50 text-truncate d-block",
+                title: "{full_path}",
+                "{display_path}{modified_marker}"
             }
         }
     }
 }
 
-/// Abbreviates a path string to a maximum length, inserting '...' in the middle.
+/// Abbreviates a path string to a maximum character length, inserting '...' in the middle.
 fn abbreviate_path(path: &Path, max_len: usize) -> String {
     let path_str = path.to_string_lossy();
-    if path_str.len() <= max_len {
+    let total_chars = path_str.chars().count();
+    if total_chars <= max_len {
         return path_str.to_string();
     }
 
     let ellipsis = "...";
-    // The length of the path string without the ellipsis
     let available_len = max_len.saturating_sub(ellipsis.len());
-    // Allocate roughly half the available space to the prefix
     let prefix_len = available_len / 2;
-    // The rest goes to the suffix
     let suffix_len = available_len - prefix_len;
 
-    // Safely take the prefix using character iterators
     let prefix = path_str.chars().take(prefix_len).collect::<String>();
-
-    // Safely take the suffix from the end of the string
     let suffix = path_str
         .chars()
-        .skip(path_str.chars().count() - suffix_len)
+        .skip(total_chars.saturating_sub(suffix_len))
         .collect::<String>();
+
     format!("{prefix}{ellipsis}{suffix}")
 }

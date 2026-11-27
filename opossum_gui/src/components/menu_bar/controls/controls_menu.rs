@@ -1,3 +1,4 @@
+// src/components/menu_bar/controls/controls_menu.rs
 use dioxus::{desktop::use_window, prelude::*};
 use dioxus_free_icons::{
     Icon,
@@ -12,40 +13,42 @@ pub fn ControlsMenu(
 ) -> Element {
     let window = use_window();
     rsx! {
-        div { class: "menu-group menu-right",
+        div { class: "d-flex align-items-center flex-nowrap flex-shrink-0 menu-group menu-right",
             a {
-                class: "text-secondary me-2",
+                class: "text-secondary me-2 d-flex align-items-center",
                 role: "button",
+                title: "Minimize",
                 onclick: {
                     let window = window.clone();
                     move |_| window.set_minimized(true)
                 },
-                Icon { width: 25, icon: FaWindowMinimize }
+                Icon { width: 22, icon: FaWindowMinimize }
             }
             a {
-                class: "text-secondary me-2",
+                class: "text-secondary me-2 d-flex align-items-center",
                 role: "button",
+                title: "Maximize / Restore",
                 onclick: move |_| {
-
                     if window.is_maximized() {
                         window.set_maximized(false);
                         maximize_symbol.set(rsx! {
-                            Icon { width: 25, icon: FaWindowMaximize }
+                            Icon { width: 22, icon: FaWindowMaximize }
                         });
                     } else {
                         window.set_maximized(true);
                         maximize_symbol.set(rsx! {
-                            Icon { width: 25, icon: FaWindowRestore }
+                            Icon { width: 22, icon: FaWindowRestore }
                         });
                     }
                 },
                 {maximize_symbol()}
             }
             a {
-                class: "text-secondary me-2",
+                class: "text-secondary me-2 d-flex align-items-center",
                 role: "button",
+                title: "Quit",
                 onclick: move |_| on_quit.call(()),
-                Icon { width: 25, icon: FaPowerOff }
+                Icon { width: 22, icon: FaPowerOff }
             }
         }
     }
@@ -53,6 +56,6 @@ pub fn ControlsMenu(
 
 #[cfg(not(feature = "desktop"))]
 #[component]
-fn ControlsMenu() -> Element {
+pub fn ControlsMenu() -> Element {
     rsx! {}
 }
