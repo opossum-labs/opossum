@@ -6,7 +6,7 @@ use actix_web::{
 };
 use nalgebra::Point2;
 use opossum_core::{
-    core_optics::node_attr::HasNodeAttr,
+    core_optics::{NodeAttrExt, node_attr::HasNodeAttr},
     gain::PumpScenario,
     nodes::{GraphDelta, NodeReference, create_node_ref},
     prelude::{AnalyzerType, OpmDocument},
@@ -150,10 +150,31 @@ pub async fn get_node(
     let document = data.document.lock();
     // Retrieve the node info
     let node_ref = document.scenery().node_recursive(uuid)?.0;
-    let node_info = NodeInfo::from_analyzable(&*node_ref, None);
+
+    let mut node_info = NodeInfo::from_analyzable(&*node_ref, None);
+
+    if let Ok(opossum_core::properties::Proptype::Uuid(referenced_node_id)) = node_ref.node_attr().get_property("reference id"){
+        let referenced_node = document.scenery().node_recursive(*referenced_node_id)?.0;
+        node_info.alignment = referenced_node.alignment();
+        node_info.positioning = *referenced_node.positioning();
+    }
     drop(document);
     ron_or_json_response(&req, &node_info)
 }
+
+// pub async fn get_node(
+//     data: web::Data<AppState>,
+//     path: web::Path<Uuid>,
+//     req: HttpRequest,
+// ) -> Result<HttpResponse, BackEndErrorResponse> {
+//     let uuid = path.into_inner();
+//     let document = data.document.lock();
+//     // Retrieve the node info
+//     let node_ref = document.scenery().node_recursive(uuid)?.0;
+//     let node_info = NodeInfo::from_analyzable(&*node_ref, None);
+//     drop(document);
+//     ron_or_json_response(&req, &node_info)
+// }
 
 /// Propagates a name change on `uuid` to every reference node pointing at it, returning one
 /// `Command::PatchNode` per reference. References store their own name copy (`ref (name)`, see
