@@ -1,5 +1,5 @@
 use crate::components::scenery_editor::constants::{EDGE_CORNER_RADIUS, EDGE_PORT_STUB};
-use dioxus::html::geometry::euclid::default::Point2D;
+use dioxus::html::geometry::euclid::default::{Point2D, Rect};
 pub mod edge_component;
 pub mod edge_element;
 pub mod edges_component;
@@ -53,6 +53,25 @@ pub fn edge_path(output_port: Point2D<f64>, input_port: Point2D<f64>) -> String 
         "M{},{} L{from},{} {between} L{},{}",
         start.x, start.y, start.y, end.x, end.y,
     )
+}
+
+/// The box that the path [`edge_path`] draws between two ports covers.
+///
+/// It spans both ports, widened on either side by a straight piece and the largest corner: as far
+/// as a connection reaches that runs back to an input port on its left. An S-curve to the right
+/// stays within it unless it is very steep, and then it bulges only into the span of the two nodes
+/// it joins.
+///
+/// # Arguments
+///
+/// * `output_port` - where the connection starts.
+/// * `input_port` - where it ends.
+///
+/// # Returns
+///
+/// The box; it has no height if both ports are at one height.
+pub fn edge_bounds(output_port: Point2D<f64>, input_port: Point2D<f64>) -> Rect<f64> {
+    Rect::from_points([output_port, input_port]).inflate(EDGE_PORT_STUB + EDGE_CORNER_RADIUS, 0.0)
 }
 
 #[cfg(test)]
@@ -172,5 +191,38 @@ mod tests {
             at_middle && pair[0].x.min(pair[1].x) <= 250.0 && 250.0 <= pair[0].x.max(pair[1].x)
         });
         assert!(runs_through_midpoint, "{d}");
+    }
+
+    #[test]
+    fn edge_bounds_cover_every_point_of_the_path() {
+        let ports = [
+            ((0.0, 0.0), (300.0, 200.0)),
+            ((0.0, 0.0), (130.0, 400.0)),
+            ((600.0, 100.0), (100.0, 300.0)),
+            ((600.0, 300.0), (100.0, 100.0)),
+            ((400.0, 0.0), (100.0, 40.0)),
+        ];
+        for ((start_x, start_y), (end_x, end_y)) in ports {
+            let (start, end) = (Point2D::new(start_x, start_y), Point2D::new(end_x, end_y));
+            let bounds = edge_bounds(start, end);
+            let d = edge_path(start, end);
+            for p in points(&d) {
+                assert!((bounds.min_x()..=bounds.max_x()).contains(&p.x), "{d}");
+                assert!((bounds.min_y()..=bounds.max_y()).contains(&p.y), "{d}");
+            }
+        }
+    }
+
+    /// A backward edge with full corners reaches the bounds on both sides.
+    #[test]
+    fn edge_bounds_are_tight_on_a_backward_edge() {
+        let (start, end) = (Point2D::new(600.0, 100.0), Point2D::new(100.0, 300.0));
+        let bounds = edge_bounds(start, end);
+        let xs: Vec<f64> = points(&edge_path(start, end)).iter().map(|p| p.x).collect();
+
+        assert!((xs.iter().copied().fold(f64::INFINITY, f64::min) - bounds.min_x()).abs() < 1e-9);
+        assert!(
+            (xs.iter().copied().fold(f64::NEG_INFINITY, f64::max) - bounds.max_x()).abs() < 1e-9
+        );
     }
 }

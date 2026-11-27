@@ -4,7 +4,7 @@ use crate::components::scenery_editor::{
         LAYOUT_LINE_GAP, LAYOUT_NODE_GAP, MAX_ZOOM, NODE_WIDTH, SUGIYAMA_VERT_PATH_FACTOR,
         SUGIYAMA_VERTEX_SPACING, VIEW_PADDING_FACTOR,
     },
-    edges::edge_element::EdgeElement,
+    edges::{edge_bounds, edge_element::EdgeElement},
     graph_workspace::{
         EditorState,
         test_registry::{EdgeKey, IndexRegistry},
@@ -418,39 +418,58 @@ impl GraphStore {
 
     /// The box the graph covers on the canvas; see [`covered_box`].
     pub fn get_bounding_box(&self) -> Rect<f64> {
-        covered_box(&self.nodes, &self.mapped_ports)
+        covered_box(
+            &self.nodes,
+            self.edges.iter().map(EdgeElement::info),
+            &self.mapped_ports,
+        )
     }
 }
 
-/// The box that `nodes` cover on the canvas, including the tags of the ports `mapped_ports` maps to
-/// the ports of the group they belong to.
+/// The box that `nodes` and the connections `edges` between them cover on the canvas, including the
+/// tags of the ports `mapped_ports` maps to the ports of the group they belong to.
 ///
 /// Zoom to Fit fits this box, and the auto layout measures its candidates with it, so both agree.
 ///
 /// # Arguments
 ///
 /// * `nodes` - the nodes, at their positions.
+/// * `edges` - the connections; one with an end outside `nodes` is left out.
 /// * `mapped_ports` - the ports of the group, mapped to ports of `nodes`.
 ///
 /// # Returns
 ///
-/// The smallest box around all nodes, or an empty box at the origin if there are none.
-fn covered_box(nodes: &HashMap<Uuid, NodeElement>, mapped_ports: &PortMap) -> Rect<f64> {
-    nodes
-        .values()
-        .map(|node| {
-            let mapped = |ports: &Vec<String>| {
-                ports
-                    .iter()
-                    .any(|port| mapped_ports.contains_port_of_node(node.id(), port))
-            };
-            node.get_bounding_box_with_mapped_ports(
-                mapped(node.input_ports()),
-                mapped(node.output_ports()),
-            )
-        })
-        .reduce(|covered, node_box| covered.union(&node_box))
-        .unwrap_or_else(|| Rect::new(Point2D::zero(), Size2D::zero()))
+/// The smallest box around all of them, or an empty box at the origin if there are no nodes.
+fn covered_box<'a>(
+    nodes: &HashMap<Uuid, NodeElement>,
+    edges: impl IntoIterator<Item = &'a ConnectInfo>,
+    mapped_ports: &PortMap,
+) -> Rect<f64> {
+    let node_boxes = nodes.values().map(|node| {
+        let mapped = |ports: &Vec<String>| {
+            ports
+                .iter()
+                .any(|port| mapped_ports.contains_port_of_node(node.id(), port))
+        };
+        node.get_bounding_box_with_mapped_ports(
+            mapped(node.input_ports()),
+            mapped(node.output_ports()),
+        )
+    });
+    let edge_boxes = edges.into_iter().filter_map(|edge| {
+        let output = nodes.get(&edge.src_uuid())?;
+        let input = nodes.get(&edge.target_uuid())?;
+        Some(edge_bounds(
+            output.abs_port_position(PortType::Output, edge.src_port()),
+            input.abs_port_position(PortType::Input, edge.target_port()),
+        ))
+    });
+    // From the corners rather than by `union`, which drops boxes without height.
+    Rect::from_points(
+        node_boxes
+            .chain(edge_boxes)
+            .flat_map(|covered| [covered.min(), covered.max()]),
+    )
 }
 /// Calculates optimized positions for all nodes in the graph.
 ///
@@ -488,7 +507,7 @@ pub fn optimize_layout(
     let mut best: Option<(f64, HashMap<Uuid, Point2D<f64>>)> = None;
     for line_width in line_widths {
         let positions = stack_blocks(&blocks, nodes, line_width);
-        let zoom = fit_zoom(&positions, nodes, mapped_ports, view);
+        let zoom = fit_zoom(&positions, nodes, edges, mapped_ports, view);
         // The widths ascend, so `>=` hands a tie to the longer lines.
         if best
             .as_ref()
@@ -647,6 +666,7 @@ fn fold_into_lines(
 ///
 /// * `positions` - the layout.
 /// * `nodes` - the nodes it places.
+/// * `edges` - the connections between them.
 /// * `mapped_ports` - the ports of the group, mapped to ports of `nodes`.
 /// * `view` - the size of the canvas in pixels.
 ///
@@ -656,6 +676,7 @@ fn fold_into_lines(
 fn fit_zoom(
     positions: &HashMap<Uuid, Point2D<f64>>,
     nodes: &HashMap<Uuid, NodeElement>,
+    edges: &[ConnectInfo],
     mapped_ports: &PortMap,
     view: Size2D<f64>,
 ) -> f64 {
@@ -667,7 +688,7 @@ fn fit_zoom(
             Some((*id, node))
         })
         .collect();
-    let covered = covered_box(&placed, mapped_ports);
+    let covered = covered_box(&placed, edges, mapped_ports);
     (VIEW_PADDING_FACTOR * view.width / covered.width())
         .min(VIEW_PADDING_FACTOR * view.height / covered.height())
         .min(MAX_ZOOM)
@@ -978,9 +999,10 @@ mod tests {
         (nodes, edges)
     }
 
-    /// With node height H ≈ 80.3, c columns per line and L lines, a chain is (c − 1)·250 + 130 wide
-    /// and L·H + (L − 1)·100 high. Six nodes in a 1200 × 500 view: 3 columns (630 × 261, zoom 1.81)
-    /// beat 4 (880 × 261, zoom 1.30), 2 (380 × 441, zoom 1.08) and 6 (1380 × 80, zoom 0.83).
+    /// With node height H ≈ 80.3, c columns per line and L lines, a chain is (c − 1)·250 + 130 wide,
+    /// 71 more once a connection runs back to the next line, and L·H + (L − 1)·100 high. Six nodes
+    /// in a 1200 × 500 view: 3 columns (701 × 261, zoom 1.63) beat 4 (951 × 261, zoom 1.20),
+    /// 2 (451 × 441, zoom 1.08) and 6 (1380 × 80, zoom 0.83).
     #[test]
     fn long_chain_wraps_into_the_lines_that_fit_the_view_best() {
         let (nodes, edges) = chain(6);
@@ -1063,8 +1085,9 @@ mod tests {
         assert!(placed(1).max_y() <= placed(3).min_y());
     }
 
-    /// A splitter feeding two nodes in a 200 × 1000 view: one column per line wins (130 wide against
-    /// 380). The two fed nodes share a column, so they move to the next line together.
+    /// A splitter feeding two nodes in a 200 × 1000 view: one column per line wins (201 wide with the
+    /// connections running back, against 380). The two fed nodes share a column, so they move to the
+    /// next line together.
     #[test]
     fn nodes_of_one_column_stay_in_one_line() {
         let nodes: HashMap<Uuid, NodeElement> = (1..=3).map(optical).collect();
@@ -1100,7 +1123,7 @@ mod tests {
                 .collect();
         let height = nodes[&Uuid::from_u128(2)].total_height();
 
-        let covered = covered_box(&nodes, &PortMap::default());
+        let covered = covered_box(&nodes, &[], &PortMap::default());
 
         assert!(covered.min_x().abs() < 1e-9);
         assert!(covered.min_y().abs() < 1e-9);
@@ -1123,7 +1146,7 @@ mod tests {
             .add("output_1", Uuid::from_u128(2), "output_1")
             .unwrap();
 
-        let covered = covered_box(&nodes, &mapped_ports);
+        let covered = covered_box(&nodes, &[], &mapped_ports);
 
         assert!((covered.min_x() + PORT_MAP_OVERHANG).abs() < 1e-9);
         assert!((covered.max_x() - (300.0 + NODE_WIDTH + PORT_MAP_OVERHANG)).abs() < 1e-9);
@@ -1131,9 +1154,51 @@ mod tests {
 
     #[test]
     fn covered_box_of_no_nodes_is_empty_at_the_origin() {
-        let covered = covered_box(&HashMap::new(), &PortMap::default());
+        let covered = covered_box(&HashMap::new(), &[], &PortMap::default());
 
         assert!(covered.is_empty());
         assert!(covered.origin.x.abs() < 1e-9 && covered.origin.y.abs() < 1e-9);
+    }
+
+    /// A chain wrapped after its second node: the connection from the end of the first line back to
+    /// the start of the second reaches beyond both, and the box has to hold it.
+    #[test]
+    fn covered_box_holds_a_connection_running_back_to_the_next_line() {
+        let nodes: HashMap<Uuid, NodeElement> = [
+            optical_at(1, 0.0, 0.0),
+            optical_at(2, 250.0, 0.0),
+            optical_at(3, 0.0, 180.0),
+        ]
+        .into_iter()
+        .collect();
+        let [a, b, c] = [1, 2, 3].map(Uuid::from_u128);
+        let edges = [connect(a, b), connect(b, c)];
+
+        let covered = covered_box(&nodes, &edges, &PortMap::default());
+
+        let wrap = edge_bounds(
+            nodes[&b].abs_port_position(PortType::Output, "output_1"),
+            nodes[&c].abs_port_position(PortType::Input, "input_1"),
+        );
+        assert!(covered.contains_rect(&wrap), "{covered:?} misses {wrap:?}");
+    }
+
+    /// A connection running back between two ports at one height has a box without height, which
+    /// still counts.
+    #[test]
+    fn covered_box_holds_a_connection_back_at_one_height() {
+        let nodes: HashMap<Uuid, NodeElement> =
+            [optical_at(1, 300.0, 0.0), optical_at(2, 0.0, 0.0)]
+                .into_iter()
+                .collect();
+        let [a, b] = [1, 2].map(Uuid::from_u128);
+
+        let covered = covered_box(&nodes, &[connect(a, b)], &PortMap::default());
+
+        let back = edge_bounds(
+            nodes[&a].abs_port_position(PortType::Output, "output_1"),
+            nodes[&b].abs_port_position(PortType::Input, "input_1"),
+        );
+        assert!(covered.min_x() <= back.min_x() && back.max_x() <= covered.max_x());
     }
 }
