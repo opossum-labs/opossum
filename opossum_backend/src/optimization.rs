@@ -150,6 +150,17 @@ fn snapshot_blueprint_and_values(
     (doc.clone(), original_values)
 }
 
+/// Writes the optimized parameters into the live document, rebuilds its surfaces and pushes the
+/// command that restores the original values onto the undo stack.
+///
+/// The document is not analyzed: an analysis would place it, and the placement would then stay in
+/// the model (see [`OpmDocument::run_positioning`]).
+///
+/// # Arguments
+///
+/// - `app_state`: the state holding the live document and the undo stack
+/// - `optimized_parameters`: the value the optimization found for each parameter
+/// - `original_values`: each parameter's value before the optimization
 fn apply_results_and_record_undo(
     app_state: &AppState,
     optimized_parameters: &HashMap<ParameterAddress, f64>,
@@ -164,7 +175,6 @@ fn apply_results_and_record_undo(
             let _ = ParameterApplier::set_value(&mut doc, addr, *new_val);
         }
         let _ = ParameterApplier::finalize_update(&mut doc);
-        let _ = doc.analyze_headless();
     }
 
     let inverse_diff: HashMap<_, _> = diff

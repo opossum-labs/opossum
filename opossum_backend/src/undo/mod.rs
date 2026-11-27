@@ -42,12 +42,18 @@ pub struct OptimizationUndo {
 }
 
 impl OptimizationUndo {
+    /// Writes the new value of each parameter into `doc` and rebuilds its surfaces.
+    ///
+    /// `doc` is not analyzed, so that it stays unplaced (see [`OpmDocument::run_positioning`]).
+    ///
+    /// # Errors
+    ///
+    /// This function returns an error if a parameter cannot be set or a surface cannot be rebuilt.
     pub fn apply_new(&self, doc: &mut OpmDocument) -> OpmResult<()> {
         for (addr, (_, new_val)) in &self.parameter_diff {
             ParameterApplier::set_value(doc, addr, *new_val)?;
         }
-        ParameterApplier::finalize_update(doc)?;
-        doc.analyze_headless()
+        ParameterApplier::finalize_update(doc)
     }
 }
 
