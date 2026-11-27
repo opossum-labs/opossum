@@ -928,4 +928,78 @@ mod tests {
         assert!(placing.contains(&(source, ahead)), "{placing:?}");
         Ok(())
     }
+
+    /// Where a run placed `node`, along the axis, in meters; `None` if it did not place it.
+    fn z_placed(run: &PositioningRun, node: Uuid) -> OpmResult<Option<f64>> {
+        run.placements()
+            .into_iter()
+            .find(|(id, _)| *id == node)
+            .map(|(_, placement)| placement.map(|iso| iso.translation().z.value))
+            .ok_or_else(|| OpossumError::Other(format!("node {node} is not listed")))
+    }
+
+    /// A run tells where it placed every node of the model, those inside a group included.
+    #[test]
+    fn a_positioning_run_tells_where_it_placed_every_node() -> OpmResult<()> {
+        let (document, first, second) = source_into_a_group()?;
+        let run = document.run_positioning()?;
+        assert_eq!(
+            run.placements().len(),
+            4,
+            "the source, the group and its two nodes"
+        );
+        assert_relative_eq!(z_placed(&run, first)?.unwrap_or(-1.0), 0.10, epsilon = 1e-9);
+        assert_relative_eq!(
+            z_placed(&run, second)?.unwrap_or(-1.0),
+            0.12,
+            epsilon = 1e-9
+        );
+        Ok(())
+    }
+
+    /// The placement told is the node's own, without its alignment: what an absolute position of
+    /// the node would state. A lens shifted off the axis is placed on it all the same.
+    #[test]
+    fn a_placement_leaves_out_the_alignment_of_the_node() -> OpmResult<()> {
+        let at = nanometer!(1053.0);
+        let (document, _) = a_setup_analyzed_with(decentered_lens()?, at, at, 0.0, None)?;
+        let run = document.run_positioning()?;
+        let lens = run
+            .placements()
+            .into_iter()
+            .nth(1)
+            .and_then(|(_, placement)| placement)
+            .ok_or_else(|| OpossumError::Other("the lens was not placed".into()))?;
+        assert_relative_eq!(lens.translation().y.value, 0.0, epsilon = 1e-12);
+        Ok(())
+    }
+
+    /// A run that stops part way still tells the placements it made before it stopped, and leaves
+    /// the nodes after the stop without one; so does a node no axis reaches.
+    #[test]
+    fn a_stopped_run_tells_the_placements_it_made() -> OpmResult<()> {
+        let mut scenery = NodeGroup::default();
+        let source = scenery.add_node(SourcePort::default())?;
+        let window = scenery.add_node(Dummy::new("window"))?;
+        let again = scenery.add_node(NodeReference::from_node(&scenery.node(window)?)?)?;
+        let screen = scenery.add_node(Dummy::new("screen"))?;
+        let aside = scenery.add_node(Dummy::new("aside"))?;
+        scenery.connect_nodes(source, "output_1", window, "input_1", millimeter!(50.0))?;
+        scenery.connect_nodes(window, "output_1", again, "input_1", millimeter!(10.0))?;
+        scenery.connect_nodes(again, "output_1", screen, "input_1", millimeter!(10.0))?;
+        let run = OpmDocument::new(scenery).run_positioning()?;
+        assert!(
+            run.positioned_scenery().is_err(),
+            "the window is passed twice in a row"
+        );
+
+        assert_relative_eq!(
+            z_placed(&run, window)?.unwrap_or(-1.0),
+            0.05,
+            epsilon = 1e-9
+        );
+        assert_eq!(z_placed(&run, screen)?, None);
+        assert_eq!(z_placed(&run, aside)?, None);
+        Ok(())
+    }
 }

@@ -4,7 +4,9 @@ use crate::{
     error::OpmResult,
     light::Rays,
     nodes::{ConnectionInfo, NodeGroup},
+    utils::geom_transformation::Isometry,
 };
+use uuid::Uuid;
 
 /// The result of one positioning run on a copy of a model's scenery, made by
 /// [`OpmDocument::run_positioning`](super::OpmDocument::run_positioning).
@@ -68,5 +70,14 @@ impl PositioningRun {
     #[must_use]
     pub fn connections_placing_by_distance(&self) -> Vec<ConnectionInfo> {
         self.scenery.connections_placing_by_distance()
+    }
+
+    /// Returns where the run placed each node of the model, or `None` for a node it could not
+    /// place (see [`NodeGroup::placements`]).
+    ///
+    /// A run that stopped part way gives the placements it made before it stopped.
+    #[must_use]
+    pub fn placements(&self) -> Vec<(Uuid, Option<Isometry>)> {
+        self.scenery.placements()
     }
 }

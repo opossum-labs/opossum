@@ -37,6 +37,7 @@ use crate::{
         node_report::{NodeReport, NodeReportResult},
         report_note::{ReportLevel, ReportNote},
     },
+    utils::geom_transformation::Isometry,
 };
 pub use optic_graph::{ConnectionInfo, OpticGraph};
 use serde::{Deserialize, Serialize};
@@ -763,6 +764,28 @@ impl NodeGroup {
         for node_ref in self.nodes() {
             if let Some(group) = node_ref.as_any().downcast_ref::<Self>() {
                 result.extend(group.connections_placing_by_distance());
+            }
+        }
+        result
+    }
+
+    /// Returns where each node of this group and of the groups nested in it is placed: its
+    /// placement without its alignment - what an absolute position of the node states - or `None`
+    /// if it is not placed.
+    ///
+    /// # Returns
+    ///
+    /// One entry per node, in node-index order, the nodes of a nested group right after it.
+    #[must_use]
+    pub fn placements(&self) -> Vec<(Uuid, Option<Isometry>)> {
+        let mut result = Vec::new();
+        for node_ref in self.nodes() {
+            result.push((
+                node_ref.uuid(),
+                node_ref.positioning().effective_position().copied(),
+            ));
+            if let Some(group) = node_ref.as_any().downcast_ref::<Self>() {
+                result.extend(group.placements());
             }
         }
         result
