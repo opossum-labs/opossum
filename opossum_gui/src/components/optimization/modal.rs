@@ -45,6 +45,13 @@ pub fn OptimizationModal(
     let mut show_assistants = use_signal(|| false);
     let mut steps_without_improvement = use_signal(|| 0_u64);
     let mut best_cost = use_signal(|| f64::INFINITY);
+    let mut reset_run_progress = move || {
+        current_iteration.set(0);
+        current_cost.set(0.0);
+        initial_cost.set(0.0);
+        steps_without_improvement.set(0);
+        best_cost.set(f64::INFINITY);
+    };
 
     // Dialog state signals managed at the root level to prevent table stacking context clipping
     let mut show_add_var_dialog = use_signal(|| false);
@@ -54,6 +61,7 @@ pub fn OptimizationModal(
     // Initial schema retrieval when the modal dialog is opened
     use_effect(move || {
         if open() {
+            reset_run_progress();
             spawn(async move {
                 let res = get_optimization_schema().await;
                 eval_action_run(
@@ -82,8 +90,7 @@ pub fn OptimizationModal(
         show_coupling_dialog.set(false);
         show_add_operand_dialog.set(false);
 
-        steps_without_improvement.set(0);
-        best_cost.set(f64::INFINITY);
+        reset_run_progress();
         is_running.set(true);
 
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<OptimizationProgressEvent>();
