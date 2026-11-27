@@ -368,11 +368,11 @@ mod tests {
         let x = [0.050];
         let residuals = merit.evaluate_residuals(&x);
 
-        // 19 ray residuals + 1 parameter bound residual = 20 residuals
-        assert_eq!(residuals.len(), 20);
+        // Hexapolar with 2 rings yields 19 ray residuals (box bounds are enforced via hard clamping)
+        assert_eq!(residuals.len(), 19);
 
         let jacobian = merit.compute_jacobian(&x, &residuals);
-        assert_eq!(jacobian.nrows(), 20);
+        assert_eq!(jacobian.nrows(), 19);
         assert_eq!(jacobian.ncols(), 1);
 
         Ok(())

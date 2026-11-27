@@ -89,7 +89,7 @@ fn verify_opm_v1_schema_up_to_date() {
         let diff = format_line_diff(&committed, &generated);
         panic!(
             "Schema drift detected in `{}`:\n{diff}\n\
-             Run `UPDATE_SCHEMA=1 cargo test -p opossum_core --test opm_schema_drift` if this change is intentional.",
+             Run `$env:UPDATE_SCHEMA=\"1\"; cargo test -p opossum_core --test opm_schema_drift; Remove-Item Env:\\UPDATE_SCHEMA` if this change is intentional.",
             schema_path.display()
         );
     }

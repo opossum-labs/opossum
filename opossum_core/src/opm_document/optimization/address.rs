@@ -2,6 +2,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fmt::{self, Display, Formatter};
 use uuid::Uuid;
+
+use crate::utils::geom_transformation::AlignmentAxis;
 /// Unique address identifying a tunable variable in the optical model.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 pub enum ParameterAddress {
@@ -30,6 +32,13 @@ pub enum ParameterAddress {
         /// Output port name of the source node this connection belongs to.
         src_port: String,
     },
+    /// A local alignment degree of freedom on a node (translation in `[m]`, rotation in `[rad]`).
+    NodeAlignment {
+        /// Unique ID of the target optical node.
+        node_id: Uuid,
+        /// Local translation or rotation axis.
+        axis: AlignmentAxis,
+    },
 }
 impl Display for ParameterAddress {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -48,6 +57,9 @@ impl Display for ParameterAddress {
             }
             Self::ConnectionDistance { src_id, src_port } => {
                 write!(f, "Distance({src_id}:{src_port})")
+            }
+            Self::NodeAlignment { node_id, axis } => {
+                write!(f, "{node_id}.alignment.{axis}")
             }
         }
     }

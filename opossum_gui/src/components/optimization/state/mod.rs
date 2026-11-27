@@ -16,6 +16,7 @@ use opossum_core::{
             OptimizationAlgorithm, ParameterAddress, ParameterCoupling, StandardOperand,
         },
     },
+    utils::geom_transformation::AlignmentAxis,
 };
 use uuid::Uuid;
 use validation::run_validation;
@@ -70,6 +71,13 @@ impl OptimizationModel {
                 ),
                 ParameterAddress::ConnectionDistance { .. } => {
                     ("Distance".to_string(), "Distance".to_string())
+                }
+                ParameterAddress::NodeAlignment { axis, .. } => {
+                    let label = match axis {
+                        AlignmentAxis::Translation(t) => format!("Decenter {t}"),
+                        AlignmentAxis::Rotation(r) => format!("Tilt {r}"),
+                    };
+                    ("Alignment".to_string(), label)
                 }
             };
             let mut row = UiVariableRow {
@@ -186,38 +194,55 @@ impl OptimizationModel {
     }
 
     /// Adds a parameter from the schema as an active variable with sensible initial bounds.
+    /// Adds a parameter from the schema as an active variable with sensible initial bounds.
     pub fn add_variable_from_schema(&mut self, var: &DiscoveredVariable) {
         if self.variable_rows.iter().any(|r| r.address == var.address) {
             return;
         }
-        let is_curv = matches!(var.address, ParameterAddress::SurfaceCurvature { .. });
-        let is_dist = matches!(var.address, ParameterAddress::ConnectionDistance { .. });
-        let (min_b, max_b) = if is_curv {
-            if var.initial_value.abs() > 1e-6 {
-                let r_m = 1.0 / var.initial_value;
-                if r_m > 0.0 {
-                    (Some(r_m * 0.5), Some(r_m * 2.0))
+        let (min_b, max_b) = match &var.address {
+            ParameterAddress::SurfaceCurvature { .. } => {
+                if var.initial_value.abs() > 1e-6 {
+                    let r_m = 1.0 / var.initial_value;
+                    if r_m > 0.0 {
+                        (Some(r_m * 0.5), Some(r_m * 2.0))
+                    } else {
+                        (Some(r_m * 2.0), Some(r_m * 0.5))
+                    }
                 } else {
-                    (Some(r_m * 2.0), Some(r_m * 0.5))
+                    (Some(-0.1), Some(0.1))
                 }
-            } else {
-                (Some(-0.1), Some(0.1))
             }
-        } else if is_dist {
-            (
+            ParameterAddress::ConnectionDistance { .. } => (
                 Some((var.initial_value * 0.7).max(1e-3)),
                 Some(var.initial_value * 1.5),
-            )
-        } else {
-            let val = var.initial_value;
-            if val.abs() > 1e-6 {
-                if val > 0.0 {
-                    (Some(val * 0.7), Some(val * 1.5))
-                } else {
-                    (Some(val * 1.5), Some(val * 0.7))
+            ),
+            ParameterAddress::NodeAlignment { axis, .. } => match axis {
+                AlignmentAxis::Translation(_) => {
+                    let delta_m = 0.01; // ±10 mm
+                    (
+                        Some(var.initial_value - delta_m),
+                        Some(var.initial_value + delta_m),
+                    )
                 }
-            } else {
-                (Some(-0.1), Some(0.1))
+                AlignmentAxis::Rotation(_) => {
+                    let delta_rad = 5.0_f64.to_radians(); // ±5°
+                    (
+                        Some(var.initial_value - delta_rad),
+                        Some(var.initial_value + delta_rad),
+                    )
+                }
+            },
+            ParameterAddress::NodeProperty { .. } => {
+                let val = var.initial_value;
+                if val.abs() > 1e-6 {
+                    if val > 0.0 {
+                        (Some(val * 0.7), Some(val * 1.5))
+                    } else {
+                        (Some(val * 1.5), Some(val * 0.7))
+                    }
+                } else {
+                    (Some(-0.1), Some(0.1))
+                }
             }
         };
         self.variable_rows.push(UiVariableRow {
@@ -332,29 +357,51 @@ impl OptimizationModel {
     }
 
     /// Applies default percentage box bounds (e.g. `0.2` for ±20%) to all variables.
+    /// Applies default percentage box bounds (e.g. `0.2` for ±20%) to all variables.
     pub fn apply_default_bounds(&mut self, factor: f64) {
         for row in &mut self.variable_rows {
-            if row.is_curvature() {
-                if let Some(r_m) = row.current_radius_m() {
-                    if r_m > 0.0 {
-                        row.min_bound = Some(r_m * (1.0 - factor));
-                        row.max_bound = Some(r_m * (1.0 + factor));
-                    } else {
-                        row.min_bound = Some(r_m * (1.0 + factor));
-                        row.max_bound = Some(r_m * (1.0 - factor));
+            match &row.address {
+                ParameterAddress::SurfaceCurvature { .. } => {
+                    if let Some(r_m) = row.current_radius_m() {
+                        if r_m > 0.0 {
+                            row.min_bound = Some(r_m * (1.0 - factor));
+                            row.max_bound = Some(r_m * (1.0 + factor));
+                        } else {
+                            row.min_bound = Some(r_m * (1.0 + factor));
+                            row.max_bound = Some(r_m * (1.0 - factor));
+                        }
                     }
                 }
-            } else if matches!(row.address, ParameterAddress::ConnectionDistance { .. }) {
-                row.min_bound = Some((row.current_value * (1.0 - factor)).max(1e-4));
-                row.max_bound = Some(row.current_value * (1.0 + factor));
-            } else {
-                let val = row.current_value;
-                if val >= 0.0 {
-                    row.min_bound = Some(val * (1.0 - factor));
-                    row.max_bound = Some(val * (1.0 + factor));
-                } else {
-                    row.min_bound = Some(val * (1.0 + factor));
-                    row.max_bound = Some(val * (1.0 - factor));
+                ParameterAddress::ConnectionDistance { .. } => {
+                    row.min_bound = Some((row.current_value * (1.0 - factor)).max(1e-4));
+                    row.max_bound = Some(row.current_value * (1.0 + factor));
+                }
+                ParameterAddress::NodeAlignment { axis, .. } => match axis {
+                    AlignmentAxis::Translation(_) => {
+                        let span = 0.05 * factor; // ±10 mm at 20%, ±25 mm at 50%
+                        row.min_bound = Some(row.current_value - span);
+                        row.max_bound = Some(row.current_value + span);
+                    }
+                    AlignmentAxis::Rotation(_) => {
+                        let span = (25.0 * factor).to_radians(); // ±5° at 20%, ±12.5° at 50%
+                        row.min_bound = Some(row.current_value - span);
+                        row.max_bound = Some(row.current_value + span);
+                    }
+                },
+                ParameterAddress::NodeProperty { .. } => {
+                    let val = row.current_value;
+                    if val.abs() > 1e-6 {
+                        if val >= 0.0 {
+                            row.min_bound = Some(val * (1.0 - factor));
+                            row.max_bound = Some(val * (1.0 + factor));
+                        } else {
+                            row.min_bound = Some(val * (1.0 + factor));
+                            row.max_bound = Some(val * (1.0 - factor));
+                        }
+                    } else {
+                        row.min_bound = Some(-0.1 * factor);
+                        row.max_bound = Some(0.1 * factor);
+                    }
                 }
             }
         }

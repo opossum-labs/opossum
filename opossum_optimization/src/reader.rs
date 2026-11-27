@@ -4,6 +4,7 @@ use opossum_core::{
         OpmDocument,
         optimization::{ObservableAddress, ParameterAddress},
     },
+    utils::geom_transformation::{AlignmentAxis, Isometry},
 };
 
 pub struct MetricReader;
@@ -123,7 +124,6 @@ impl MetricReader {
                     Ok(1.0 / radius_m)
                 }
             }
-
             ParameterAddress::ConnectionDistance { src_id, src_port } => {
                 let (_, parent_group_id) = doc.scenery().node_recursive(*src_id)?;
                 doc.scenery().with_group_node(parent_group_id, |group| {
@@ -138,6 +138,20 @@ impl MetricReader {
                             ))
                         })
                 })?
+            }
+            ParameterAddress::NodeAlignment { node_id, axis } => {
+                let (node_ref, _) = doc.scenery().node_recursive(*node_id)?;
+                let alignment = node_ref
+                    .node_attr()
+                    .alignment()
+                    .unwrap_or_else(Isometry::identity);
+                let val = match axis {
+                    AlignmentAxis::Translation(t_axis) => {
+                        alignment.translation_of_axis(*t_axis).value
+                    }
+                    AlignmentAxis::Rotation(r_axis) => alignment.rotation_of_axis(*r_axis).value,
+                };
+                Ok(val)
             }
         }
     }

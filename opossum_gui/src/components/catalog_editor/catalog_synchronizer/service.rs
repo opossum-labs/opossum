@@ -137,7 +137,7 @@ pub fn resolve_user_catalog_conflict_overwrite(
 /// Saves a conflicting model material as a new entry (new UUID, new name) in the user catalog.
 pub fn resolve_user_catalog_conflict_rename(
     material: &Material,
-    new_name: String,
+    new_name: &str,
     registry: &mut AssetRegistry<Material>,
 ) -> Result<Material, String> {
     let trimmed = new_name.trim();

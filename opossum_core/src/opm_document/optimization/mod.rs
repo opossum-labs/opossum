@@ -19,6 +19,7 @@ mod discovery;
 mod operand;
 mod progress_event;
 mod variable;
+pub use crate::utils::geom_transformation::{AlignmentAxis, RotationAxis, TranslationAxis};
 pub use address::{MetricSource, ObservableAddress, ParameterAddress};
 pub use algorithm::OptimizationAlgorithm;
 pub use config::OptimizationConfig;
